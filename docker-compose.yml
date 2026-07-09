@@ -1,0 +1,19 @@
+services:
+  omnistore:
+    build: .
+    image: omnistore:latest
+    ports:
+      - "8080:8080"
+    environment:
+      OMNISTORE_DATA_DIR: /data
+      OMNISTORE_PUBLIC_URL: https://store.example.com
+      # 生产环境放在 HTTPS 反向代理后时开启
+      OMNISTORE_COOKIE_SECURE: "true"
+    volumes:
+      # 系统数据目录（数据库、密钥），必须备份
+      - ./omnistore-data:/data
+      # 用户存储源：宿主机目录挂载到 /mnt/sources/*，
+      # 后台创建存储源时填写容器内路径，例如 /mnt/sources/photos
+      # - /mnt/photos:/mnt/sources/photos
+      # - /mnt/downloads:/mnt/sources/downloads
+    restart: unless-stopped

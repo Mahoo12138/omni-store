@@ -1,0 +1,39 @@
+// Package models 定义系统数据结构。
+package models
+
+import "time"
+
+// 用户角色。
+const (
+	RoleSuperAdmin = "super_admin"
+	RoleUser       = "user"
+)
+
+// User 对应 users 表。
+type User struct {
+	ID           int64     `json:"id"`
+	UserPublicID string    `json:"user_public_id"`
+	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
+	Role         string    `json:"role"`
+	IsDisabled   bool      `json:"is_disabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// IsAdmin 判断是否超级管理员。
+func (u *User) IsAdmin() bool {
+	return u.Role == RoleSuperAdmin
+}
+
+// Session 对应 sessions 表。
+type Session struct {
+	SessionID     string
+	UserID        int64
+	CSRFTokenHash string
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+	LastSeenAt    time.Time
+	UserAgent     string
+	IPAddress     string
+}
