@@ -27,12 +27,13 @@ type StorageSource struct {
 
 // UserSourceView 是普通用户可见的存储源信息（不含 root_path）。
 type UserSourceView struct {
-	SourceID        string `json:"source_id"`
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	Permission      string `json:"permission"`
-	WebdavEnabled   bool   `json:"webdav_enabled"`
-	ImageBedEnabled bool   `json:"image_bed_enabled"`
+	SourceID          string `json:"source_id"`
+	Name              string `json:"name"`
+	Description       string `json:"description"`
+	Permission        string `json:"permission"`
+	PublicReadEnabled bool   `json:"public_read_enabled"`
+	WebdavEnabled     bool   `json:"webdav_enabled"`
+	ImageBedEnabled   bool   `json:"image_bed_enabled"`
 }
 
 // SourcePermission 对应 user_source_permissions 表。

@@ -28,19 +28,19 @@ var Version = "0.1.0-dev"
 
 // Server 聚合 HTTP 层依赖。
 type Server struct {
-	cfg      *config.Config
-	db       *sql.DB
-	logger   *slog.Logger
-	users    *users.Service
-	sources  *sources.Service
-	files    *files.Service
-	public   *publicdisk.Service
-	sessions *auth.Sessions
-	tokens   *auth.Tokens
+	cfg         *config.Config
+	db          *sql.DB
+	logger      *slog.Logger
+	users       *users.Service
+	sources     *sources.Service
+	files       *files.Service
+	public      *publicdisk.Service
+	sessions    *auth.Sessions
+	tokens      *auth.Tokens
 	imagebed    *imagebed.Service
 	anonLimiter *imagebed.RateLimiter
-	audit    *audit.Logger
-	proxy    *security.ProxyResolver
+	audit       *audit.Logger
+	proxy       *security.ProxyResolver
 }
 
 // New 创建 HTTP Server，同时返回内部 Server 以便 main 启动后台任务。
@@ -83,6 +83,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 用户自助
 	mux.HandleFunc("PATCH /api/v1/me/profile", s.requireAuth(s.handleUpdateProfile))
 	mux.HandleFunc("POST /api/v1/me/password", s.requireAuth(s.handleChangePassword))
+	mux.HandleFunc("GET /api/v1/me/activity", s.requireAuth(s.handleMyActivity))
 	mux.HandleFunc("GET /api/v1/me/tokens", s.requireAuth(s.handleTokenStatus))
 	mux.HandleFunc("POST /api/v1/me/tokens/webdav/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeWebDAV)))
 	mux.HandleFunc("POST /api/v1/me/tokens/image-bed/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeImageBed)))
@@ -93,6 +94,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", s.requireAdmin(s.handleAdminSetUserDisabled(true)))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/enable", s.requireAdmin(s.handleAdminSetUserDisabled(false)))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", s.requireAdmin(s.handleAdminDeleteUser))
+
+	// 管理员：概览（dashboard 聚合数据）
+	mux.HandleFunc("GET /api/v1/admin/overview", s.requireAdmin(s.handleAdminOverview))
 
 	// 登录用户：可访问存储源
 	mux.HandleFunc("GET /api/v1/sources", s.requireAuth(s.handleListMySources))

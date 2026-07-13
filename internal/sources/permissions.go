@@ -116,14 +116,15 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 			}
 			out = append(out, &models.UserSourceView{
 				SourceID: src.SourceID, Name: src.Name, Description: src.Description,
-				Permission:    models.PermissionReadWrite,
-				WebdavEnabled: src.WebdavEnabled, ImageBedEnabled: src.ImageBedEnabled,
+				Permission:        models.PermissionReadWrite,
+				PublicReadEnabled: src.PublicReadEnabled,
+				WebdavEnabled:     src.WebdavEnabled, ImageBedEnabled: src.ImageBedEnabled,
 			})
 		}
 		return out, nil
 	}
 
-	rows, err := s.db.Query(`SELECT s.source_id, s.name, s.description, p.permission, s.webdav_enabled, s.image_bed_enabled
+	rows, err := s.db.Query(`SELECT s.source_id, s.name, s.description, p.permission, s.public_read_enabled, s.webdav_enabled, s.image_bed_enabled
   FROM user_source_permissions p JOIN storage_sources s ON s.source_id = p.source_id
   WHERE p.user_id = ? AND s.is_disabled = 0 ORDER BY s.id`, user.ID)
 	if err != nil {
@@ -135,7 +136,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 	for rows.Next() {
 		var v models.UserSourceView
 		var desc sql.NullString
-		if err := rows.Scan(&v.SourceID, &v.Name, &desc, &v.Permission, &v.WebdavEnabled, &v.ImageBedEnabled); err != nil {
+		if err := rows.Scan(&v.SourceID, &v.Name, &desc, &v.Permission, &v.PublicReadEnabled, &v.WebdavEnabled, &v.ImageBedEnabled); err != nil {
 			return nil, err
 		}
 		v.Description = desc.String
