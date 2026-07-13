@@ -98,6 +98,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 管理员：概览（dashboard 聚合数据）
 	mux.HandleFunc("GET /api/v1/admin/overview", s.requireAdmin(s.handleAdminOverview))
 
+	// 系统功能开关（公开访问，仅返回开关 + 状态文本，docs/home-1.png 右栏"系统状态"）
+	mux.HandleFunc("GET /api/v1/system/status", s.handleSystemStatus)
+
 	// 登录用户：可访问存储源
 	mux.HandleFunc("GET /api/v1/sources", s.requireAuth(s.handleListMySources))
 

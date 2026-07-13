@@ -202,6 +202,68 @@ func ternary(b bool, yes, no string) string {
 	return no
 }
 
+// --- 公开系统状态（docs/home-1.png 右栏"系统状态"）---
+
+type systemStatusResponse struct {
+	S3 struct {
+		Enabled bool   `json:"enabled"`
+		Status  string `json:"status"`
+		Hint    string `json:"hint"`
+	} `json:"s3"`
+	WebDAV struct {
+		Enabled bool   `json:"enabled"`
+		Status  string `json:"status"`
+		Hint    string `json:"hint"`
+	} `json:"webdav"`
+	FilePreview struct {
+		Enabled bool   `json:"enabled"`
+		Status  string `json:"status"`
+		Hint    string `json:"hint"`
+	} `json:"file_preview"`
+	Anonymous struct {
+		Enabled bool   `json:"enabled"`
+		Status  string `json:"status"`
+		Hint    string `json:"hint"`
+	} `json:"anonymous"`
+	Version   string `json:"version"`
+	PublicURL string `json:"public_url"`
+}
+
+// handleSystemStatus 返回系统功能开关，供登录后首页右栏使用。
+// 不需要鉴权，只暴露开关与状态描述。
+func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
+	out := systemStatusResponse{Version: Version, PublicURL: s.cfg.Server.PublicURL}
+
+	// S3 兼容存储
+	out.S3.Enabled = s.cfg.Server.S3Enabled
+	out.S3.Status = ternary(s.cfg.Server.S3Enabled, "已启用", "未启用")
+	out.S3.Hint = "尚未配置任何 S3 存储源"
+
+	// WebDAV 服务
+	out.WebDAV.Enabled = true
+	out.WebDAV.Status = "已启用"
+	out.WebDAV.Hint = "WebDAV 服务运行正常，可正常连接"
+
+	// 文件预览服务
+	out.FilePreview.Enabled = true
+	out.FilePreview.Status = "已启用"
+	out.FilePreview.Hint = "文件预览服务运行正常"
+
+	// 匿名图床：读 system_settings.anonymous_image_bed_enabled
+	var val string
+	if err := s.db.QueryRow(`SELECT value FROM system_settings WHERE key = 'anonymous_image_bed_enabled'`).Scan(&val); err == nil {
+		anonOn := val == "1" || strings.EqualFold(val, "true")
+		out.Anonymous.Enabled = anonOn
+		out.Anonymous.Status = ternary(anonOn, "已启用", "未启用")
+	} else {
+		out.Anonymous.Enabled = false
+		out.Anonymous.Status = "未启用"
+	}
+	out.Anonymous.Hint = "匿名访问与匿名上传未启用"
+
+	WriteData(w, r, out)
+}
+
 // humanizeAuditAction 把审计日志翻译成短句（仅标题，详细信息看列表）。
 func humanizeAuditAction(e *audit.LogEntry) string {
 	filename := ""

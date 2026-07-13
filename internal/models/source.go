@@ -32,6 +32,7 @@ type UserSourceView struct {
 	Description       string `json:"description"`
 	Permission        string `json:"permission"`
 	PublicReadEnabled bool   `json:"public_read_enabled"`
+	PublicMountPath   string `json:"public_mount_path,omitempty"`
 	WebdavEnabled     bool   `json:"webdav_enabled"`
 	ImageBedEnabled   bool   `json:"image_bed_enabled"`
 }
