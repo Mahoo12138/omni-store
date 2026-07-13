@@ -10,16 +10,15 @@ import {
 import { ApiRequestError } from '../api/client'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
-import { formatBytes, formatDate } from '../utils/format'
-import * as fm from './FileManager.css'
+import { IconCopy, IconTrash } from '../components/ui/Icon'
+import { formatBytes } from '../utils/format'
 import * as css from './ImageBed.css'
 
-// 登录用户图床：上传 + 历史墙（README §17/§25.8）。
 export function ImageBedPage() {
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const [selectedTarget, setSelectedTarget] = useState('')
-  const [error, setError] = useState('')
+  const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
   const [page, setPage] = useState(1)
 
@@ -33,8 +32,11 @@ export function ImageBedPage() {
 
   const setDefaultMut = useMutation({
     mutationFn: setDefaultImageBedTarget,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] }),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : '设置失败'),
+    onSuccess: () => {
+      setMsg('默认目标已更新')
+      queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] })
+    },
+    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '设置失败'),
   })
 
   const deleteMut = useMutation({
@@ -45,7 +47,7 @@ export function ImageBedPage() {
 
   async function onUpload(files: FileList | null) {
     if (!files?.length) return
-    setError('')
+    setMsg('')
     setUploading(true)
     try {
       for (const file of Array.from(files)) {
@@ -53,7 +55,7 @@ export function ImageBedPage() {
       }
       queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : '上传失败')
+      setMsg(err instanceof ApiRequestError ? err.message : '上传失败')
     } finally {
       setUploading(false)
       if (fileInput.current) fileInput.current.value = ''
@@ -61,18 +63,18 @@ export function ImageBedPage() {
   }
 
   return (
-    <AppShell>
-      <h1 className={fm.pageTitle}>图床</h1>
-
+    <AppShell title="图床">
       <section className={css.section}>
         <h2 className={css.sectionTitle}>上传图片</h2>
         {targets.isSuccess && targets.data.targets.length === 0 && (
-          <p className={css.muted}>没有可用的图床目标。需要一个你有读写权限且开启了图床能力的存储源。</p>
+          <div className={css.emptyBlock}>
+            <p>没有可用的图床目标。管理者需要为你分配一个支持图床的读写存储源。</p>
+          </div>
         )}
         {targets.isSuccess && targets.data.targets.length > 0 && (
           <>
             <div className={css.row}>
-              <span className={css.muted}>目标存储源：</span>
+              <span className={css.label}>目标存储源：</span>
               <select
                 className={css.select}
                 value={currentTarget}
@@ -100,9 +102,9 @@ export function ImageBedPage() {
                 disabled={uploading}
                 onChange={(e) => onUpload(e.target.files)}
               />
-              {uploading && <span className={css.muted}>上传中…</span>}
+              {uploading && <span className={css.label}>上传中…</span>}
             </div>
-            {error && <p className={css.error}>{error}</p>}
+            {msg && <p className={css.error}>{msg}</p>}
           </>
         )}
       </section>
@@ -110,42 +112,49 @@ export function ImageBedPage() {
       <section className={css.section}>
         <h2 className={css.sectionTitle}>我的图片</h2>
         {history.isSuccess && history.data.items.length === 0 && (
-          <p className={css.muted}>还没有上传过图片。</p>
+          <div className={css.emptyBlock}>
+            <p>还没有上传过图片。</p>
+          </div>
         )}
         <div className={css.grid}>
           {history.data?.items.map((img) => (
             <div key={img.image_id} className={css.imageCard}>
               <a href={img.public_url} target="_blank" rel="noreferrer">
-                <img className={css.imageThumb} src={img.public_url} alt={img.original_filename} loading="lazy" />
+                <img
+                  className={css.imageThumb}
+                  src={img.public_url}
+                  alt={img.original_filename || img.image_id}
+                  loading="lazy"
+                />
               </a>
               <div className={css.imageMeta}>
-                {img.original_filename || img.image_id}
-                <br />
-                {img.width}×{img.height} · {formatBytes(img.size)} · {formatDate(img.created_at)}
+                {img.width}×{img.height} · {formatBytes(img.size)}
               </div>
               <div className={css.imageActions}>
-                <Button
-                  variant="secondary"
+                <button
+                  className={css.actionBtn}
+                  aria-label="复制链接"
                   onClick={() => navigator.clipboard.writeText(img.public_url)}
                 >
-                  复制链接
-                </Button>
-                <Button
-                  variant="danger"
+                  <IconCopy size={15} />
+                </button>
+                <button
+                  className={css.actionBtnDanger}
+                  aria-label="删除"
                   onClick={() => {
                     if (confirm('确定删除这张图片吗？物理文件会一并删除。')) {
                       deleteMut.mutate(img.image_id)
                     }
                   }}
                 >
-                  删除
-                </Button>
+                  <IconTrash size={15} />
+                </button>
               </div>
             </div>
           ))}
         </div>
         {history.isSuccess && history.data.total > 50 && (
-          <div className={fm.pager}>
+          <div className={css.pager}>
             <span>共 {history.data.total} 张</span>
             <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
               上一页

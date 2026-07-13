@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { ApiRequestError } from '../api/client'
-import { Button } from '../components/ui/Button'
+import { LogoMark } from '../components/ui/Icon'
+import { IconCopy } from '../components/ui/Icon'
 import * as css from './AuthForm.css'
+import * as ib from './ImageBed.css'
 
-// 匿名公共图床上传页 /upload（README §24.1，未开启时显示不可用）。
 export function AnonymousUploadPage() {
   const status = useQuery({ queryKey: ['anon-status'], queryFn: fetchAnonymousStatus })
   const [urls, setUrls] = useState<string[]>([])
@@ -32,13 +32,16 @@ export function AnonymousUploadPage() {
   return (
     <div className={css.page}>
       <div className={css.card}>
-        <h1 className={css.title}>公共图床</h1>
+        <div className={css.brand}>
+          <LogoMark size={32} />
+          <span className={css.brandName}>OmniStore</span>
+        </div>
         {status.isPending && <p className={css.subtitle}>加载中…</p>}
         {status.isSuccess && !status.data.enabled && (
           <>
             <p className={css.subtitle}>匿名公共图床当前未开启。</p>
             <p className={css.footer}>
-              <Link to="/">返回首页</Link>
+              <a href="/">返回首页</a>
             </p>
           </>
         )}
@@ -55,21 +58,21 @@ export function AnonymousUploadPage() {
                 disabled={uploading}
                 onChange={(e) => onUpload(e.target.files)}
               />
-              {error && <p className={css.error}>{error}</p>}
               {uploading && <p className={css.subtitle}>上传中…</p>}
+              {error && <p className={ib.error}>{error}</p>}
               {urls.map((url) => (
-                <p key={url} style={{ wordBreak: 'break-all', margin: 0 }}>
-                  <a href={url} target="_blank" rel="noreferrer">
+                <div key={url} className={ib.row} style={{ margin: 0 }}>
+                  <a href={url} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all', fontSize: 12 }}>
                     {url}
-                  </a>{' '}
-                  <Button variant="secondary" onClick={() => navigator.clipboard.writeText(url)}>
-                    复制
-                  </Button>
-                </p>
+                  </a>
+                  <div className={ib.actionBtn} onClick={() => navigator.clipboard.writeText(url)}>
+                    <IconCopy size={15} />
+                  </div>
+                </div>
               ))}
             </div>
             <p className={css.footer}>
-              <Link to="/">返回首页</Link>
+              <a href="/">返回首页</a>
             </p>
           </>
         )}

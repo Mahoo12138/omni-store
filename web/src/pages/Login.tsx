@@ -6,6 +6,7 @@ import { login } from '../api/auth'
 import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { LogoMark } from '../components/ui/Icon'
 import * as css from './AuthForm.css'
 
 export function LoginPage() {
@@ -34,7 +35,10 @@ export function LoginPage() {
   return (
     <div className={css.page}>
       <div className={css.card}>
-        <h1 className={css.title}>OmniStore</h1>
+        <div className={css.brand}>
+          <LogoMark size={32} />
+          <span className={css.brandName}>OmniStore</span>
+        </div>
         <p className={css.subtitle}>登录到你的存储中心</p>
         <form className={css.form} onSubmit={onSubmit}>
           <Input

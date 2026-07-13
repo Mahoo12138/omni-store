@@ -9,10 +9,8 @@ import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { formatDate } from '../utils/format'
-import * as fm from './FileManager.css'
 import * as css from './ImageBed.css'
 
-// /app/settings：显示名、密码、WebDAV Token、图床 API Token（README §24.2）。
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
@@ -31,8 +29,7 @@ export function SettingsPage() {
       setProfileMsg('已保存')
       queryClient.invalidateQueries({ queryKey: ['me'] })
     },
-    onError: (err) =>
-      setProfileMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
+    onError: (err) => setProfileMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
 
   const pwdMut = useMutation({
@@ -70,24 +67,21 @@ export function SettingsPage() {
     return (
       <section className={css.section}>
         <h2 className={css.sectionTitle}>{title}</h2>
-        <p className={css.muted}>{hint}</p>
+        <p className={css.label}>{hint}</p>
         {status?.exists ? (
-          <p className={css.muted}>
+          <p className={css.label}>
             已生成于 {status.created_at ? formatDate(status.created_at) : '-'}
             {status.last_used_at ? `，最近使用 ${formatDate(status.last_used_at)}` : '，从未使用'}
           </p>
         ) : (
-          <p className={css.muted}>尚未生成。</p>
+          <p className={css.label}>尚未生成。</p>
         )}
         {newTokens[type] && (
           <>
             <p className={css.error}>新 Token 只显示这一次，请立即保存：</p>
-            <p className={css.tokenBox}>{newTokens[type]}</p>
             <div className={css.row}>
-              <Button
-                variant="secondary"
-                onClick={() => navigator.clipboard.writeText(newTokens[type])}
-              >
+              <textarea readOnly className={css.tokenBox} rows={2} value={newTokens[type]} />
+              <Button variant="secondary" onClick={() => navigator.clipboard.writeText(newTokens[type])}>
                 复制
               </Button>
             </div>
@@ -96,10 +90,7 @@ export function SettingsPage() {
         <Button
           variant="secondary"
           onClick={() => {
-            if (
-              !status?.exists ||
-              confirm('重置后旧 Token 立即失效，确定继续吗？')
-            ) {
+            if (!status?.exists || confirm('重置后旧 Token 立即失效，确定继续吗？')) {
               resetMut.mutate(type)
             }
           }}
@@ -111,12 +102,10 @@ export function SettingsPage() {
   }
 
   return (
-    <AppShell>
-      <h1 className={fm.pageTitle}>设置</h1>
-
+    <AppShell title="设置">
       <section className={css.section}>
         <h2 className={css.sectionTitle}>个人资料</h2>
-        <p className={css.muted}>用户名：{me.data?.username}（不可修改）</p>
+        <p className={css.label}>用户名：{me.data?.username}（不可修改）</p>
         <form className={css.row} onSubmit={onSaveProfile}>
           <Input
             placeholder={me.data?.display_name ?? '显示名'}
@@ -126,7 +115,7 @@ export function SettingsPage() {
           <Button type="submit" disabled={profileMut.isPending}>
             保存显示名
           </Button>
-          {profileMsg && <span className={css.muted}>{profileMsg}</span>}
+          {profileMsg && <span className={css.label}>{profileMsg}</span>}
         </form>
       </section>
 
@@ -154,20 +143,12 @@ export function SettingsPage() {
               修改密码
             </Button>
           </div>
-          {pwdMsg && <p className={css.muted}>{pwdMsg}</p>}
+          {pwdMsg && <p className={css.label}>{pwdMsg}</p>}
         </form>
       </section>
 
-      {tokenSection(
-        'webdav',
-        'WebDAV Token',
-        'WebDAV 挂载地址为 /dav，用户名为登录名，密码为此 Token（不是登录密码）。',
-      )}
-      {tokenSection(
-        'image-bed',
-        '图床 API Token',
-        'PicGo 等工具上传接口为 POST /api/v1/image-bed/upload，使用 Bearer Token 鉴权，只能用于图床上传。',
-      )}
+      {tokenSection('webdav', 'WebDAV Token', 'WebDAV 挂载地址为 /dav，用户名为登录名，密码为此 Token。')}
+      {tokenSection('image-bed', '图床 API Token', 'PicGo 上传接口 POST /api/v1/image-bed/upload，Bearer Token，只能用于图床上传。')}
     </AppShell>
   )
 }

@@ -14,15 +14,24 @@ export const label = style({
 
 export const input = style({
   width: '100%',
-  padding: `${vars.space.sm} ${vars.space.md}`,
+  height: '36px',
+  padding: `0 ${vars.space.md}`,
   fontSize: vars.fontSize.md,
   fontFamily: vars.font.body,
   color: vars.color.text,
   backgroundColor: vars.color.surface,
   border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.sm,
+  borderRadius: vars.radius.md,
   outline: 'none',
+  transition: `border-color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
+    '&::placeholder': {
+      // 占位文本同样满足对比度要求
+      color: vars.color.textSecondary,
+    },
+    '&:hover:not(:disabled)': {
+      borderColor: vars.color.borderStrong,
+    },
     '&:focus': {
       borderColor: vars.color.primary,
     },

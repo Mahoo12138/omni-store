@@ -170,6 +170,59 @@ export async function adminFetchAuditLogs(): Promise<AuditLog[]> {
   return data.items ?? []
 }
 
+// 概览 dashboard
+export interface OverviewSystem {
+  version: string
+  data_dir: string
+  http_addr: string
+  public_url: string
+  s3_enabled: boolean
+  s3_status: string
+  webdav_status: string
+}
+export interface OverviewSource {
+  source_id: string
+  name: string
+  root_path: string
+  public_mount_path?: string
+  webdav_enabled: boolean
+  image_bed_enabled: boolean
+  public_read_enabled: boolean
+  is_disabled: boolean
+}
+export interface OverviewUser {
+  id: number
+  username: string
+  display_name: string
+  role: string
+  is_disabled: boolean
+  permission_count: number // -1 表示全部
+  permission_all: boolean
+}
+export interface OverviewAudit {
+  id: number
+  action: string
+  status: string
+  actor_name: string
+  actor_type: string
+  source_id?: string
+  created_at: string
+  title: string
+}
+export interface AdminOverview {
+  source_count: number
+  user_count: number
+  public_mount_count: number
+  anonymous_image_bed_on: boolean
+  sources: OverviewSource[]
+  users: OverviewUser[]
+  recent_audits: OverviewAudit[]
+  system: OverviewSystem
+}
+export async function fetchAdminOverview(): Promise<AdminOverview> {
+  return apiFetch<AdminOverview>('/api/v1/admin/overview')
+}
+
 // 用户自助
 export async function updateProfile(displayName: string): Promise<User> {
   return apiFetch('/api/v1/me/profile', {

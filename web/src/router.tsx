@@ -13,10 +13,12 @@ import { PublicBrowsePage } from './pages/PublicBrowse'
 import { AnonymousUploadPage } from './pages/AnonymousUpload'
 import { ImageBedPage } from './pages/ImageBed'
 import { SettingsPage } from './pages/Settings'
+import { AboutPage } from './pages/About'
 import { AdminSourcesPage } from './pages/admin/AdminSources'
 import { AdminUsersPage } from './pages/admin/AdminUsers'
 import { AdminAuditPage } from './pages/admin/AdminAudit'
 import { AdminSettingsPage } from './pages/admin/AdminSettings'
+import { AdminOverviewPage } from './pages/admin/AdminOverview'
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -39,6 +41,12 @@ const anonymousUploadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/upload',
   component: AnonymousUploadPage,
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: AboutPage,
 })
 
 const loginRoute = createRoute({
@@ -91,6 +99,12 @@ const settingsRoute = createRoute({
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
+  component: AdminOverviewPage,
+})
+
+const adminSourcesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/sources',
   component: AdminSourcesPage,
 })
 
@@ -116,6 +130,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
   anonymousUploadRoute,
+  aboutRoute,
   loginRoute,
   setupRoute,
   appRoute,
@@ -123,6 +138,7 @@ const routeTree = rootRoute.addChildren([
   imageBedRoute,
   settingsRoute,
   adminRoute,
+  adminSourcesRoute,
   adminUsersRoute,
   adminAuditRoute,
   adminSettingsRoute,

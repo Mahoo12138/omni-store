@@ -15,16 +15,22 @@ export const card = style({
   backgroundColor: vars.color.surface,
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
-  boxShadow: vars.shadow.md,
+  boxShadow: vars.shadow.sm,
   padding: vars.space.xl,
 })
 
-export const title = style({
+export const brand = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '10px',
+  marginBottom: vars.space.lg,
+})
+
+export const brandName = style({
   fontSize: vars.fontSize.xl,
-  fontWeight: 600,
-  margin: 0,
-  marginBottom: vars.space.sm,
-  textAlign: 'center',
+  fontWeight: 700,
+  color: vars.color.text,
 })
 
 export const subtitle = style({

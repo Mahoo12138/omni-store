@@ -6,9 +6,9 @@ import { createFirstAdmin, fetchSetupStatus } from '../api/auth'
 import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { LogoMark } from '../components/ui/Icon'
 import * as css from './AuthForm.css'
 
-// 初始化模式：数据库没有任何用户时创建第一个超级管理员（README §8.2）。
 export function SetupPage() {
   const navigate = useNavigate()
   const status = useQuery({ queryKey: ['setup-status'], queryFn: fetchSetupStatus })
@@ -38,14 +38,15 @@ export function SetupPage() {
     }
   }
 
-  if (status.isPending) {
-    return null
-  }
+  if (status.isPending) return null
   if (status.data?.initialized) {
     return (
       <div className={css.page}>
         <div className={css.card}>
-          <h1 className={css.title}>OmniStore</h1>
+          <div className={css.brand}>
+            <LogoMark size={32} />
+            <span className={css.brandName}>OmniStore</span>
+          </div>
           <p className={css.subtitle}>系统已初始化，初始化入口已关闭。</p>
           <p className={css.footer}>
             <a href="/login">前往登录</a>
@@ -58,7 +59,10 @@ export function SetupPage() {
   return (
     <div className={css.page}>
       <div className={css.card}>
-        <h1 className={css.title}>初始化 OmniStore</h1>
+        <div className={css.brand}>
+          <LogoMark size={32} />
+          <span className={css.brandName}>OmniStore</span>
+        </div>
         <p className={css.subtitle}>创建第一个超级管理员账号</p>
         <form className={css.form} onSubmit={onSubmit}>
           <Input
