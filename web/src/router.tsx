@@ -12,12 +12,7 @@ import { FileManagerPage } from './pages/FileManager'
 import { PublicBrowsePage } from './pages/PublicBrowse'
 import { AnonymousUploadPage } from './pages/AnonymousUpload'
 import { ImageBedPage } from './pages/ImageBed'
-import { SettingsPage } from './pages/Settings'
 import { AboutPage } from './pages/About'
-import { AdminSourcesPage } from './pages/admin/AdminSources'
-import { AdminUsersPage } from './pages/admin/AdminUsers'
-import { AdminAuditPage } from './pages/admin/AdminAudit'
-import { AdminSettingsPage } from './pages/admin/AdminSettings'
 import { AdminOverviewPage } from './pages/admin/AdminOverview'
 
 const rootRoute = createRootRoute({
@@ -89,41 +84,12 @@ const imageBedRoute = createRoute({
   component: ImageBedPage,
 })
 
-const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/app/settings',
-  component: SettingsPage,
-})
-
 // 管理员侧（README §24.3）
+// 系统设置页（多 section 布局）：侧边栏"系统设置"入口，左侧分组导航 + 右侧内容。
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/admin',
+  path: '/app/admin',
   component: AdminOverviewPage,
-})
-
-const adminSourcesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/admin/sources',
-  component: AdminSourcesPage,
-})
-
-const adminUsersRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/admin/users',
-  component: AdminUsersPage,
-})
-
-const adminAuditRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/admin/audit-logs',
-  component: AdminAuditPage,
-})
-
-const adminSettingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/admin/settings',
-  component: AdminSettingsPage,
 })
 
 const routeTree = rootRoute.addChildren([
@@ -136,12 +102,7 @@ const routeTree = rootRoute.addChildren([
   appRoute,
   fileManagerRoute,
   imageBedRoute,
-  settingsRoute,
   adminRoute,
-  adminSourcesRoute,
-  adminUsersRoute,
-  adminAuditRoute,
-  adminSettingsRoute,
 ])
 
 export const router = createRouter({ routeTree })

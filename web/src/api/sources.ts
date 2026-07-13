@@ -6,6 +6,7 @@ export interface UserSource {
   description: string
   permission: 'read_only' | 'read_write'
   public_read_enabled: boolean
+  public_mount_path: string
   webdav_enabled: boolean
   image_bed_enabled: boolean
 }

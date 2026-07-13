@@ -11,7 +11,6 @@ import {
   IconLogout,
   IconSearch,
   IconSettings,
-  IconShield,
   LogoMark,
 } from '../ui/Icon'
 import { formatBytes } from '../../utils/format'
@@ -43,8 +42,11 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const navItems = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
-    { to: '/app/settings', label: '设置', icon: <IconSettings />, active: pathname.startsWith('/app/settings') },
   ]
+  // 仅 super_admin 显示"系统设置"入口。
+  const showAdmin = user.role === 'super_admin'
+  const adminActive =
+    pathname === '/app/admin' || pathname.startsWith('/app/admin/') || pathname.startsWith('/app/admin?')
 
   return (
     <div className={css.shell}>
@@ -60,17 +62,17 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               {item.label}
             </Link>
           ))}
+          {showAdmin && (
+            <Link
+              to="/app/admin"
+              className={adminActive ? css.navLinkActive : css.navLink}
+            >
+              <IconSettings />
+              设置
+            </Link>
+          )}
         </nav>
         <div className={css.sidebarSpacer} />
-        {user.role === 'super_admin' && (
-          <Link
-            to="/admin"
-            className={pathname.startsWith('/admin') ? css.navLinkActive : css.navLink}
-          >
-            <IconShield />
-            管理员
-          </Link>
-        )}
         <span className={css.mobileUser}>
           <Button variant="ghost" onClick={onLogout} aria-label="退出登录">
             <IconLogout />
@@ -169,7 +171,8 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
       {open && (
         <div role="menu" className={css.userDropdown}>
           <Link
-            to="/app/settings"
+            to="/app/admin"
+            search={{ section: 'profile' }}
             role="menuitem"
             className={css.userDropdownItem}
             onClick={() => setOpen(false)}

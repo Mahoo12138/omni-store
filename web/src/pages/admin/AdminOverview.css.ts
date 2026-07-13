@@ -173,3 +173,182 @@ export const statusDot = style({
   marginRight: '6px',
   verticalAlign: '1px',
 })
+
+// --- 系统设置页布局：左侧分组的子导航 + 右侧内容（docs/settings-layout.png）---
+
+export const settingsLayout = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(160px, 200px) minmax(0, 1fr)',
+  gap: vars.space.lg,
+  alignItems: 'start',
+  marginTop: vars.space.lg,
+  '@media': {
+    'screen and (max-width: 820px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
+  },
+})
+
+export const settingsSide = style({
+  position: 'sticky',
+  top: '88px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+  fontSize: vars.fontSize.sm,
+})
+
+export const settingsGroup = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+})
+
+export const settingsGroupTitle = style({
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  userSelect: 'none',
+})
+
+export const settingsNavLink = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  padding: `6px ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  color: vars.color.textSecondary,
+  textDecoration: 'none',
+  cursor: 'pointer',
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: {
+    '&:hover': {
+      backgroundColor: vars.color.surfaceHover,
+      color: vars.color.text,
+    },
+  },
+})
+
+export const settingsNavLinkActive = style([
+  settingsNavLink,
+  {
+    backgroundColor: vars.color.primarySubtle,
+    color: vars.color.primary,
+    fontWeight: 500,
+  },
+])
+
+export const settingsContent = style({
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.lg,
+})
+
+export const settingsFooter = style({
+  marginTop: vars.space.xl,
+  paddingTop: vars.space.md,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  whiteSpace: 'pre-line',
+  lineHeight: 1.5,
+})
+
+// 设置区块（标题 + 卡片）
+export const section = style({
+  backgroundColor: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  overflow: 'hidden',
+})
+
+export const sectionHeader = style({
+  padding: `${vars.space.md} ${vars.space.lg}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+})
+
+export const sectionTitle = style({
+  margin: 0,
+  fontSize: vars.fontSize.md,
+  fontWeight: 600,
+  color: vars.color.text,
+})
+
+export const sectionHint = style({
+  margin: `${vars.space.xs} 0 0`,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const sectionBody = style({
+  padding: vars.space.lg,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+})
+
+// 单行 key-value 列表
+export const kvRow = style({
+  display: 'grid',
+  gridTemplateColumns: '120px 1fr',
+  gap: vars.space.md,
+  alignItems: 'center',
+  fontSize: vars.fontSize.sm,
+})
+
+export const kvLabel = style({
+  color: vars.color.textSecondary,
+})
+
+export const kvValue = style({
+  color: vars.color.text,
+  fontFamily: vars.font.mono,
+  wordBreak: 'break-all',
+})
+
+// 危险操作卡
+export const dangerBox = style({
+  backgroundColor: vars.color.dangerSubtle,
+  border: `1px solid ${vars.color.danger}`,
+  borderRadius: vars.radius.md,
+  padding: vars.space.md,
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.md,
+  color: vars.color.danger,
+  fontSize: vars.fontSize.sm,
+})
+
+export const dangerIcon = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '24px',
+  height: '24px',
+  flexShrink: 0,
+  color: vars.color.danger,
+})
+
+export const dangerText = style({
+  flex: 1,
+  color: vars.color.text,
+})
+
+// 表单行
+export const formRow = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: vars.space.sm,
+  alignItems: 'center',
+})
+
+export const formRowLabel = style({
+  display: 'block',
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  marginBottom: '4px',
+})

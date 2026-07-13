@@ -103,6 +103,20 @@ export const IconChevronRight = (p: IconProps) => (
   </Svg>
 )
 
+export const IconChevronLeft = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Svg>
+)
+
+export const IconExternalLink = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M14 4h6v6" />
+    <path d="M20 4l-8 8" />
+    <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
+  </Svg>
+)
+
 export const IconChevronDown = (p: IconProps) => (
   <Svg {...p}>
     <path d="M6 9l6 6 6-6" />

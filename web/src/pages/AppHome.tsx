@@ -1,40 +1,79 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMe } from '../api/auth'
-import { fetchMySources } from '../api/sources'
-import { fetchMyActivity } from '../api/activity'
+import { fetchMySources, type UserSource } from '../api/sources'
+import { fetchMyActivity, type ActivityItem } from '../api/activity'
+import { fetchSystemStatus, type SystemStatus, type SystemStatusFlag } from '../api/system'
 import { AppShell } from '../components/layout/AppShell'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { IconTile } from '../components/ui/Icon'
 import {
-  IconChevronRight,
+  IconActivity,
   IconCloud,
   IconFolderPlus,
   IconGlobe,
+  IconHardDrive,
   IconImage,
+  IconLink,
   IconPlus,
   IconServer,
-  IconUpload,
+  IconUserPlus,
 } from '../components/ui/Icon'
-import { IconTile } from '../components/ui/Icon'
-import { tileOf } from '../styles/tiles'
+import { formatBytes } from '../utils/format'
 import { vars } from '../styles/theme.css'
 import * as css from './Dashboard.css'
 
-// /app 仪表盘（docs/home.png）：欢迎区 + 存储源卡片网格 + 右栏快速操作 / 最近活动。
+// /app 仪表盘（docs/home-1.png）：欢迎区 + 4 个统计卡 + 存储源概览 + 右栏（系统状态 / 最近审计日志）
 export function AppHomePage() {
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
   const activity = useQuery({
     queryKey: ['my-activity'],
-    queryFn: () => fetchMyActivity(8),
+    queryFn: () => fetchMyActivity(6),
     retry: false,
   })
+  const system = useQuery({
+    queryKey: ['system-status'],
+    queryFn: fetchSystemStatus,
+    staleTime: 60_000,
+  })
+
+  const sourceList = sources.data ?? []
+  const publicMountCount = sourceList.filter((s) => s.public_read_enabled).length
+  // 匿名图床状态取自 /system/status，user 视图用
+  const anonOn = system.data?.anonymous.enabled ?? false
+  // 存储使用量：MVP 没有真实配额统计，按"已分配存储源数"展示一个轻量值
+  const usageBytes = 0
 
   return (
     <AppShell title="我的存储源">
+      {/* 页面头：标题 + 右上操作按钮（docs/home-1.png） */}
+      <div className={css.pageHeader}>
+        <h1 className={css.pageTitle}>我的存储源</h1>
+        <div className={css.pageActions}>
+          <Button
+            variant="primary"
+            onClick={() => navigate({ to: '/app/admin', search: { section: 'sources' } })}
+          >
+            <IconPlus size={16} />
+            新建存储源
+          </Button>
+          {me.data?.role === 'super_admin' && (
+            <Button
+              variant="secondary"
+              onClick={() => navigate({ to: '/app/admin', search: { section: 'users' } })}
+            >
+              <IconUserPlus size={16} />
+              创建用户
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className={css.layout}>
-        {/* 左中：欢迎 + 存储源网格 */}
+        {/* 左中：欢迎 + 4 统计卡 + 存储源概览 */}
         <div className={css.mainCol}>
           <section className={css.welcome}>
             <div className={css.welcomeIcon}>
@@ -42,206 +81,337 @@ export function AppHomePage() {
             </div>
             <div className={css.welcomeText}>
               <h2 className={css.welcomeTitle}>
-                欢迎回来，{me.data?.display_name ?? '访客'}
+                欢迎回来，{me.data?.display_name ?? me.data?.username ?? '用户'}
               </h2>
               <p className={css.welcomeSub}>
-                快速访问你所有权限的存储源，并开始管理文件和图片。
+                {sourceList.length === 0
+                  ? '当前还没有任何存储源，创建存储源后即可管理文件与访问权限。'
+                  : `共 ${sourceList.length} 个存储源，开始管理文件与图片。`}
               </p>
             </div>
           </section>
 
-          <div>
-            <div className={css.sectionHeader}>
-              <h3 className={css.sectionTitle}>
-                我的存储源
-                <span className={css.sectionCount}>({sources.data?.length ?? 0})</span>
-              </h3>
-            </div>
-
-            {sources.isSuccess && sources.data.length === 0 && (
-              <div className={css.emptyBox}>
-                <div className={css.emptyBoxTitle}>还没有可访问的存储源</div>
-                <div>请联系管理员为你的账号分配存储源权限。</div>
-              </div>
-            )}
-
-            <div className={css.sourceGrid}>
-              {sources.data?.map((s) => {
-                const tile = tileOf(s.source_id)
-                return (
-                  <Link
-                    key={s.source_id}
-                    to="/app/sources/$sourceId"
-                    params={{ sourceId: s.source_id }}
-                    search={{ path: '/', page: 1 }}
-                    className={css.sourceCard}
-                  >
-                    <div className={css.sourceHead}>
-                      <IconTile bg={tile.bg} fg={tile.fg}>
-                        <IconServer size={22} />
-                      </IconTile>
-                      <div className={css.sourceInfo}>
-                        <h4 className={css.sourceName}>{s.name}</h4>
-                        {s.description && (
-                          <p className={css.sourceDesc}>{s.description}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className={css.sourceFoot}>
-                      <div className={css.badgeRow}>
-                        <Badge color={s.permission === 'read_write' ? 'blue' : 'gray'}>
-                          {s.permission === 'read_write' ? '读写' : '只读'}
-                        </Badge>
-                        {s.webdav_enabled && <Badge color="gray">WebDAV</Badge>}
-                        {s.image_bed_enabled && <Badge color="purple">图床</Badge>}
-                        {s.public_read_enabled && <Badge color="green">公开</Badge>}
-                      </div>
-                      <IconChevronRight className={css.chevron} size={16} />
-                    </div>
-                  </Link>
-                )
-              })}
-              {/* 管理员入口：跳到存储源管理 */}
-              {me.data?.role === 'super_admin' && (
-                <button
-                  type="button"
-                  className={css.addCard}
-                  onClick={() => navigate({ to: '/admin' })}
-                >
-                  <IconPlus size={20} />
-                  <span className={css.addCardLabel}>添加存储源</span>
-                  <span className={css.addCardHint}>连接新的存储位置以集中管理</span>
-                </button>
-              )}
-            </div>
+          <div className={css.statRow}>
+            <StatCard
+              label="存储源"
+              value={sourceList.length}
+              unit="个"
+              iconBg={vars.color.tileBlueBg}
+              iconFg={vars.color.tileBlueFg}
+            >
+              <IconServer size={22} />
+            </StatCard>
+            <StatCard
+              label="公开挂载"
+              value={publicMountCount}
+              unit="个"
+              iconBg={vars.color.tileGreenBg}
+              iconFg={vars.color.tileGreenFg}
+            >
+              <IconGlobe size={22} />
+            </StatCard>
+            <StatCard
+              label="匿名图床"
+              value={anonOn ? '已启用' : '未启用'}
+              iconBg={vars.color.tilePurpleBg}
+              iconFg={vars.color.tilePurpleFg}
+            >
+              <IconImage size={22} />
+            </StatCard>
+            <StatCard
+              label="存储使用量"
+              value={formatBytes(usageBytes)}
+              iconBg={vars.color.tileAmberBg}
+              iconFg={vars.color.tileAmberFg}
+            >
+              <IconHardDrive size={22} />
+            </StatCard>
           </div>
-        </div>
 
-        {/* 右栏：快速操作 + 最近活动 */}
-        <aside className={css.sideCol}>
+          {/* 存储源概览（核心面板） */}
           <section className={css.panel}>
             <div className={css.panelHeader}>
-              <h3 className={css.panelTitle}>快速操作</h3>
-            </div>
-            <button
-              type="button"
-              className={css.quickAction}
-              onClick={() => {
-                const first = sources.data?.find((s) => s.permission === 'read_write')
-                if (first) {
-                  navigate({
-                    to: '/app/sources/$sourceId',
-                    params: { sourceId: first.source_id },
-                    search: { path: '/', page: 1 },
-                  })
-                } else {
-                  navigate({ to: '/app/image-bed' })
-                }
-              }}
-            >
-              <IconTile bg={vars.color.tileBlueBg} fg={vars.color.tileBlueFg}>
-                <IconUpload size={18} />
-              </IconTile>
-              <span className={css.quickActionBody}>
-                <span className={css.quickActionTitle}>上传文件</span>
-                <span className={css.quickActionDesc}>将文件上传到你的存储源</span>
-              </span>
-              <IconChevronRight className={css.chevron} size={16} />
-            </button>
-            <button
-              type="button"
-              className={css.quickAction}
-              onClick={() => {
-                const first = sources.data?.find((s) => s.permission === 'read_write')
-                if (first) {
-                  navigate({
-                    to: '/app/sources/$sourceId',
-                    params: { sourceId: first.source_id },
-                    search: { path: '/', page: 1 },
-                  })
-                } else {
-                  navigate({ to: '/app/image-bed' })
-                }
-              }}
-            >
-              <IconTile bg={vars.color.tileGreenBg} fg={vars.color.tileGreenFg}>
-                <IconFolderPlus size={18} />
-              </IconTile>
-              <span className={css.quickActionBody}>
-                <span className={css.quickActionTitle}>创建文件夹</span>
-                <span className={css.quickActionDesc}>在选定的存储源中创建新目录</span>
-              </span>
-              <IconChevronRight className={css.chevron} size={16} />
-            </button>
-            <Link to="/app/image-bed" className={css.quickAction}>
-              <IconTile bg={vars.color.tilePurpleBg} fg={vars.color.tilePurpleFg}>
-                <IconImage size={18} />
-              </IconTile>
-              <span className={css.quickActionBody}>
-                <span className={css.quickActionTitle}>打开图床</span>
-                <span className={css.quickActionDesc}>管理你的图片并获取外链</span>
-              </span>
-              <IconChevronRight className={css.chevron} size={16} />
-            </Link>
-            <Link to="/" className={css.quickAction}>
-              <IconTile bg={vars.color.tileTealBg} fg={vars.color.tileTealFg}>
-                <IconGlobe size={18} />
-              </IconTile>
-              <span className={css.quickActionBody}>
-                <span className={css.quickActionTitle}>查看公开网盘</span>
-                <span className={css.quickActionDesc}>浏览已公开的文件与目录</span>
-              </span>
-              <IconChevronRight className={css.chevron} size={16} />
-            </Link>
-          </section>
-
-          <section className={css.panel}>
-            <div className={css.panelHeader}>
-              <h3 className={css.panelTitle}>最近活动</h3>
-              {activity.data && activity.data.length > 0 && (
-                <Link to="/admin/audit-logs" className={css.panelLink}>
-                  查看全部
+              <h3 className={css.panelTitle}>存储源概览</h3>
+              {sourceList.length > 0 && (
+                <Link
+                  to="/app/admin"
+                  search={{ section: 'sources' }}
+                  className={css.sidePanelLink}
+                  style={{ fontSize: vars.fontSize.xs }}
+                >
+                  管理
                 </Link>
               )}
             </div>
-            {activity.isPending && <div className={css.activityEmpty}>加载中…</div>}
-            {activity.isError && <div className={css.activityEmpty}>暂无活动记录</div>}
-            {activity.isSuccess && activity.data.length === 0 && (
-              <div className={css.activityEmpty}>最近还没有操作记录</div>
-            )}
-            {activity.isSuccess && activity.data.length > 0 && (
-              <div className={css.activityList}>
-                {activity.data.map((a) => {
-                  const tone = tileOf(a.id + a.action)
-                  return (
-                    <div key={a.id} className={css.activityRow}>
-                      <IconTile bg={tone.bg} fg={tone.fg} size={32}>
-                        {activityIcon(a.action)}
-                      </IconTile>
-                      <span className={css.activityBody}>
-                        <span className={css.activityTitle}>{a.title}</span>
-                        <span className={css.activityMeta}>
-                          {a.source_name ? `在 ${a.source_name}` : ''}
-                        </span>
-                      </span>
-                      <span className={css.activityTime}>{formatRelative(a.created_at)}</span>
-                    </div>
-                  )
-                })}
+            {sourceList.length === 0 ? (
+              <div className={css.sourceEmpty}>
+                <div className={css.sourceEmptyIcon}>
+                  <IconFolderPlus size={32} />
+                </div>
+                <h4 className={css.sourceEmptyTitle}>还没有存储源</h4>
+                <p className={css.sourceEmptyDesc}>
+                  请先创建第一个存储源，开始管理文件和权限。
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={() => navigate({ to: '/app/admin', search: { section: 'sources' } })}
+                >
+                  <IconPlus size={16} />
+                  新建存储源
+                </Button>
               </div>
+            ) : (
+              <SourceTable sources={sourceList} />
             )}
           </section>
+        </div>
+
+        {/* 右栏：系统状态 + 最近审计日志 */}
+        <aside className={css.sideCol}>
+          <SystemStatusPanel data={system.data} loading={system.isPending} />
+          <RecentAuditPanel items={activity.data ?? []} loading={activity.isPending} />
         </aside>
       </div>
+
+      <footer className={css.footer}>© 2024 OmniStore. All rights reserved.</footer>
     </AppShell>
   )
 }
 
-function activityIcon(action: string) {
-  if (action.startsWith('image')) return <IconImage size={16} />
-  if (action.startsWith('folder')) return <IconFolderPlus size={16} />
-  if (action.startsWith('file')) return <IconUpload size={16} />
-  return <IconServer size={16} />
+// --- 4 统计卡 ---
+
+function StatCard({
+  label,
+  value,
+  unit,
+  iconBg,
+  iconFg,
+  children,
+}: {
+  label: string
+  value: string | number
+  unit?: string
+  iconBg: string
+  iconFg: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={css.statCard}>
+      <div
+        className={css.statIcon}
+        style={{ backgroundColor: iconBg, color: iconFg }}
+      >
+        {children}
+      </div>
+      <div className={css.statBody}>
+        <span className={css.statLabel}>{label}</span>
+        <span className={css.statValue}>
+          {value}
+          {unit && <span className={css.statUnit}>{unit}</span>}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// --- 存储源表格 ---
+
+function SourceTable({ sources }: { sources: UserSource[] }) {
+  const navigate = useNavigate()
+  return (
+    <table className={css.compactTable}>
+      <thead>
+        <tr>
+          <th className={css.compactTh}>名称</th>
+          <th className={css.compactTh}>权限</th>
+          <th className={css.compactTh}>功能</th>
+          <th className={css.compactTh}>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sources.map((s) => (
+          <tr
+            key={s.source_id}
+            className={css.compactTr}
+            onClick={() =>
+              navigate({
+                to: '/app/sources/$sourceId',
+                params: { sourceId: s.source_id },
+                search: { path: '/', page: 1 },
+              })
+            }
+          >
+            <td className={css.compactTd}>
+              <span className={css.compactName}>
+                <IconServer size={16} style={{ color: vars.color.textSecondary }} />
+                {s.name}
+              </span>
+            </td>
+            <td className={css.compactTd}>
+              <Badge color={s.permission === 'read_write' ? 'blue' : 'gray'}>
+                {s.permission === 'read_write' ? '读写' : '只读'}
+              </Badge>
+            </td>
+            <td className={css.compactTd}>
+              <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                {s.webdav_enabled && <Badge color="gray">WebDAV</Badge>}
+                {s.image_bed_enabled && <Badge color="purple">图床</Badge>}
+                {s.public_read_enabled && <Badge color="green">公开</Badge>}
+                {!s.webdav_enabled && !s.image_bed_enabled && !s.public_read_enabled && (
+                  <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.xs }}>
+                    —
+                  </span>
+                )}
+              </span>
+            </td>
+            <td className={css.compactTd}>
+              <Badge color="green">正常</Badge>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// --- 系统状态面板 ---
+
+function SystemStatusPanel({
+  data,
+  loading,
+}: {
+  data: SystemStatus | undefined
+  loading: boolean
+}) {
+  if (loading || !data) {
+    return (
+      <section className={css.sidePanel}>
+        <div className={css.sidePanelHeader}>
+          <h3 className={css.sidePanelTitle}>系统状态</h3>
+        </div>
+        <div className={css.activityEmpty}>加载中…</div>
+      </section>
+    )
+  }
+  return (
+    <section className={css.sidePanel}>
+      <div className={css.sidePanelHeader}>
+        <h3 className={css.sidePanelTitle}>系统状态</h3>
+      </div>
+      <div className={css.statusList}>
+        <StatusRow
+          title="S3 兼容存储"
+          flag={data.s3}
+          iconBg={vars.color.tileGreenBg}
+          iconFg={vars.color.tileGreenFg}
+        >
+          <IconHardDrive size={18} />
+        </StatusRow>
+        <StatusRow
+          title="WebDAV 服务"
+          flag={data.webdav}
+          iconBg={vars.color.tileBlueBg}
+          iconFg={vars.color.tileBlueFg}
+        >
+          <IconLink size={18} />
+        </StatusRow>
+        <StatusRow
+          title="文件预览服务"
+          flag={data.file_preview}
+          iconBg={vars.color.tilePurpleBg}
+          iconFg={vars.color.tilePurpleFg}
+        >
+          <IconImage size={18} />
+        </StatusRow>
+        <StatusRow
+          title="匿名访问"
+          flag={data.anonymous}
+          iconBg={vars.color.tileAmberBg}
+          iconFg={vars.color.tileAmberFg}
+        >
+          <IconGlobe size={18} />
+        </StatusRow>
+      </div>
+    </section>
+  )
+}
+
+function StatusRow({
+  title,
+  flag,
+  iconBg,
+  iconFg,
+  children,
+}: {
+  title: string
+  flag: SystemStatusFlag
+  iconBg: string
+  iconFg: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={css.statusRow}>
+      <IconTile bg={iconBg} fg={iconFg} size={32}>
+        {children}
+      </IconTile>
+      <div className={css.statusBody}>
+        <span className={css.statusTitle}>{title}</span>
+        <span className={css.statusDesc}>{flag.hint}</span>
+      </div>
+      <Badge color={flag.enabled ? 'green' : 'gray'}>{flag.status}</Badge>
+    </div>
+  )
+}
+
+// --- 最近审计日志 ---
+
+function RecentAuditPanel({
+  items,
+  loading,
+}: {
+  items: ActivityItem[]
+  loading: boolean
+}) {
+  return (
+    <section className={css.sidePanel}>
+      <div className={css.sidePanelHeader}>
+        <h3 className={css.sidePanelTitle}>最近审计日志</h3>
+        {items.length > 0 && (
+          <Link to="/app/admin" search={{ section: 'audit' }} className={css.sidePanelLink}>
+            查看全部
+          </Link>
+        )}
+      </div>
+      {loading && <div className={css.activityEmpty}>加载中…</div>}
+      {!loading && items.length === 0 && (
+        <div className={css.activityEmpty}>最近还没有操作记录</div>
+      )}
+      {!loading && items.length > 0 && (
+        <div className={css.activityList}>
+          {items.map((a) => (
+            <div key={a.id} className={css.activityRow}>
+              <div
+                className={css.activityIcon}
+                style={{
+                  backgroundColor: vars.color.primarySubtle,
+                  color: vars.color.primary,
+                }}
+              >
+                <IconActivity size={16} />
+              </div>
+              <div className={css.activityBody}>
+                <span className={css.activityTitle}>{a.title}</span>
+                <span className={css.activityMeta}>
+                  {a.source_name ? `在 ${a.source_name}` : '系统操作'}
+                </span>
+              </div>
+              <span className={css.activityTime}>{formatRelative(a.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
 }
 
 // 时间格式化为"2 分钟前 / 1 小时前 / 昨天 / 3 天前 / 直接显示日期"
