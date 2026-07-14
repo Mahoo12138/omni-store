@@ -270,6 +270,12 @@ export const IconArrowUp = (p: IconProps) => (
   </Svg>
 )
 
+export const IconArrowLeft = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M19 12H5M12 5l-7 7 7 7" />
+  </Svg>
+)
+
 export const IconActivity = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 12h4l3-8 4 16 3-8h4" />

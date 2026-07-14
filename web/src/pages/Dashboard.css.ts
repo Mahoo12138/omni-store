@@ -1,7 +1,6 @@
 import { style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
-// 仪表盘主区：左中（欢迎 + 统计卡 + 存储源概览）+ 右（系统状态 / 最近审计日志）
 export const layout = style({
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1fr) 320px',
@@ -406,4 +405,164 @@ export const footer = style({
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
   borderTop: `1px solid ${vars.color.border}`,
+})
+
+// --- file-1.png 无存储源空状态 ---
+
+import { keyframes } from '@vanilla-extract/css'
+
+const float = keyframes({
+  '0%, 100%': { transform: 'translateY(0)' },
+  '50%': { transform: 'translateY(-6px)' },
+})
+
+// 与 FileManager 相同的整体布局（左主区 + 右栏 320px）
+export const fileEmptyShell = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) 320px',
+  gap: vars.space.lg,
+  alignItems: 'start',
+  '@media': {
+    'screen and (max-width: 980px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
+  },
+})
+
+// 居中插画 + 文案 + 按钮
+export const fileEmptyMain = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: `${vars.space.xl} ${vars.space.lg}`,
+  textAlign: 'center',
+  minHeight: '60vh',
+})
+
+export const fileEmptyIllustration = style({
+  width: '180px',
+  height: '180px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'oklch(0.75 0.12 230)',
+  marginBottom: vars.space.lg,
+  animation: `${float} 4s ease-in-out infinite`,
+})
+
+export const fileEmptyTitle = style({
+  margin: 0,
+  fontSize: vars.fontSize.lg,
+  fontWeight: 600,
+  color: vars.color.text,
+  marginBottom: vars.space.xs,
+})
+
+export const fileEmptyHint = style({
+  margin: 0,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  maxWidth: '420px',
+  marginBottom: vars.space.lg,
+})
+
+export const fileEmptyActions = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+})
+
+// 右栏：暂无可用存储源
+export const fileEmptySideTitle = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: `${vars.space.lg} 0`,
+})
+
+export const fileEmptySideIcon = style({
+  width: '100px',
+  height: '100px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'oklch(0.75 0.12 230)',
+  margin: '0 auto',
+})
+
+export const fileEmptySideName = style({
+  textAlign: 'center',
+  fontSize: vars.fontSize.md,
+  fontWeight: 500,
+  color: vars.color.text,
+  margin: `${vars.space.sm} 0 ${vars.space.xs}`,
+})
+
+export const fileEmptySideDesc = style({
+  textAlign: 'center',
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  lineHeight: 1.6,
+  marginBottom: vars.space.md,
+})
+
+export const fileEmptySideList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.text,
+  borderTop: `1px solid ${vars.color.border}`,
+  paddingTop: vars.space.md,
+})
+
+export const fileEmptySideListTitle = style({
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  marginBottom: '2px',
+})
+
+export const fileEmptySideItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  color: vars.color.text,
+})
+
+export const fileEmptyHelpLink = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  marginTop: vars.space.md,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  border: `1px solid ${vars.color.border}`,
+  color: vars.color.primary,
+  textDecoration: 'none',
+  fontSize: vars.fontSize.sm,
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: {
+    '&:hover': { backgroundColor: vars.color.primarySubtle },
+  },
+})
+
+// file-1.png 风格页面头：标题在左，4 个操作按钮在右
+export const filePageHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: vars.space.md,
+  marginBottom: vars.space.md,
+})
+
+export const filePageTitle = style({
+  flex: 1,
+  fontSize: vars.fontSize.xl,
+  fontWeight: 700,
+  margin: 0,
+  color: vars.color.text,
 })

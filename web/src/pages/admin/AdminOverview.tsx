@@ -72,7 +72,7 @@ const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'stats', label: '统计', icon: <IconInfo size={15} /> },
+  { key: 'stats', label: '仪表盘', icon: <IconInfo size={15} /> },
   { key: 'sources', label: '存储源', icon: <IconServer size={15} /> },
   { key: 'users', label: '用户', icon: <IconUser size={15} /> },
   { key: 'audit', label: '审计日志', icon: <IconActivity size={15} /> },

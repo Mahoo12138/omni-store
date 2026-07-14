@@ -24,8 +24,32 @@ import { formatBytes } from '../utils/format'
 import { vars } from '../styles/theme.css'
 import * as css from './Dashboard.css'
 
-// /app 仪表盘（docs/home-1.png）：欢迎区 + 4 个统计卡 + 存储源概览 + 右栏（系统状态 / 最近审计日志）
+// /app 入口（docs/home-1.png / file-1.png）：
+//   - 有存储源：欢迎区 + 4 统计卡 + 存储源概览 + 右栏（系统状态 / 最近审计日志）
+//   - 无存储源：file-1.png 风格的简洁空状态（仅居中插画 + 标题 + 描述；管理员/普通用户文案不同）
 export function AppHomePage() {
+  const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
+  const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
+  if (sources.isPending) {
+    return (
+      <AppShell title="文件">
+        <div style={{ padding: 32, color: vars.color.textSecondary, textAlign: 'center' }}>加载中…</div>
+      </AppShell>
+    )
+  }
+  if (sources.isSuccess && sources.data.length === 0) {
+    return (
+      <AppShell title="文件管理">
+        <NoSourceView isAdmin={me.data?.role === 'super_admin'} />
+      </AppShell>
+    )
+  }
+  return <WithSourcesView />
+}
+
+// --- 有存储源（docs/home-1.png）---
+
+function WithSourcesView() {
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
@@ -42,14 +66,11 @@ export function AppHomePage() {
 
   const sourceList = sources.data ?? []
   const publicMountCount = sourceList.filter((s) => s.public_read_enabled).length
-  // 匿名图床状态取自 /system/status，user 视图用
   const anonOn = system.data?.anonymous.enabled ?? false
-  // 存储使用量：MVP 没有真实配额统计，按"已分配存储源数"展示一个轻量值
   const usageBytes = 0
 
   return (
     <AppShell title="我的存储源">
-      {/* 页面头：标题 + 右上操作按钮（docs/home-1.png） */}
       <div className={css.pageHeader}>
         <h1 className={css.pageTitle}>我的存储源</h1>
         <div className={css.pageActions}>
@@ -73,7 +94,6 @@ export function AppHomePage() {
       </div>
 
       <div className={css.layout}>
-        {/* 左中：欢迎 + 4 统计卡 + 存储源概览 */}
         <div className={css.mainCol}>
           <section className={css.welcome}>
             <div className={css.welcomeIcon}>
@@ -128,7 +148,6 @@ export function AppHomePage() {
             </StatCard>
           </div>
 
-          {/* 存储源概览（核心面板） */}
           <section className={css.panel}>
             <div className={css.panelHeader}>
               <h3 className={css.panelTitle}>存储源概览</h3>
@@ -166,7 +185,6 @@ export function AppHomePage() {
           </section>
         </div>
 
-        {/* 右栏：系统状态 + 最近审计日志 */}
         <aside className={css.sideCol}>
           <SystemStatusPanel data={system.data} loading={system.isPending} />
           <RecentAuditPanel items={activity.data ?? []} loading={activity.isPending} />
@@ -178,7 +196,27 @@ export function AppHomePage() {
   )
 }
 
-// --- 4 统计卡 ---
+// --- 无存储源（docs/file-1.png）：仅居中插画 + 标题 + 描述（无任何操作按钮、无右侧栏）---
+
+function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className={css.fileEmptyMain}>
+      <div className={css.fileEmptyIllustration}>
+        <NoSourceIllustration />
+      </div>
+      <h2 className={css.fileEmptyTitle}>
+        {isAdmin ? '你还没有创建存储源' : '你还没有被分配存储源'}
+      </h2>
+      <p className={css.fileEmptyHint}>
+        {isAdmin
+          ? '请前往系统设置创建一个存储源，开始管理文件、图床与权限。'
+          : '请联系系统管理员为你分配存储源，或切换到已有访问权限的存储源。'}
+      </p>
+    </div>
+  )
+}
+
+// --- 复用 / 共享组件 ---
 
 function StatCard({
   label,
@@ -197,10 +235,7 @@ function StatCard({
 }) {
   return (
     <div className={css.statCard}>
-      <div
-        className={css.statIcon}
-        style={{ backgroundColor: iconBg, color: iconFg }}
-      >
+      <div className={css.statIcon} style={{ backgroundColor: iconBg, color: iconFg }}>
         {children}
       </div>
       <div className={css.statBody}>
@@ -213,8 +248,6 @@ function StatCard({
     </div>
   )
 }
-
-// --- 存储源表格 ---
 
 function SourceTable({ sources }: { sources: UserSource[] }) {
   const navigate = useNavigate()
@@ -258,9 +291,7 @@ function SourceTable({ sources }: { sources: UserSource[] }) {
                 {s.image_bed_enabled && <Badge color="purple">图床</Badge>}
                 {s.public_read_enabled && <Badge color="green">公开</Badge>}
                 {!s.webdav_enabled && !s.image_bed_enabled && !s.public_read_enabled && (
-                  <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.xs }}>
-                    —
-                  </span>
+                  <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.xs }}>—</span>
                 )}
               </span>
             </td>
@@ -273,8 +304,6 @@ function SourceTable({ sources }: { sources: UserSource[] }) {
     </table>
   )
 }
-
-// --- 系统状态面板 ---
 
 function SystemStatusPanel({
   data,
@@ -299,20 +328,10 @@ function SystemStatusPanel({
         <h3 className={css.sidePanelTitle}>系统状态</h3>
       </div>
       <div className={css.statusList}>
-        <StatusRow
-          title="S3 兼容存储"
-          flag={data.s3}
-          iconBg={vars.color.tileGreenBg}
-          iconFg={vars.color.tileGreenFg}
-        >
+        <StatusRow title="S3 兼容存储" flag={data.s3} iconBg={vars.color.tileGreenBg} iconFg={vars.color.tileGreenFg}>
           <IconHardDrive size={18} />
         </StatusRow>
-        <StatusRow
-          title="WebDAV 服务"
-          flag={data.webdav}
-          iconBg={vars.color.tileBlueBg}
-          iconFg={vars.color.tileBlueFg}
-        >
+        <StatusRow title="WebDAV 服务" flag={data.webdav} iconBg={vars.color.tileBlueBg} iconFg={vars.color.tileBlueFg}>
           <IconLink size={18} />
         </StatusRow>
         <StatusRow
@@ -323,12 +342,7 @@ function SystemStatusPanel({
         >
           <IconImage size={18} />
         </StatusRow>
-        <StatusRow
-          title="匿名访问"
-          flag={data.anonymous}
-          iconBg={vars.color.tileAmberBg}
-          iconFg={vars.color.tileAmberFg}
-        >
+        <StatusRow title="匿名访问" flag={data.anonymous} iconBg={vars.color.tileAmberBg} iconFg={vars.color.tileAmberFg}>
           <IconGlobe size={18} />
         </StatusRow>
       </div>
@@ -363,15 +377,7 @@ function StatusRow({
   )
 }
 
-// --- 最近审计日志 ---
-
-function RecentAuditPanel({
-  items,
-  loading,
-}: {
-  items: ActivityItem[]
-  loading: boolean
-}) {
+function RecentAuditPanel({ items, loading }: { items: ActivityItem[]; loading: boolean }) {
   return (
     <section className={css.sidePanel}>
       <div className={css.sidePanelHeader}>
@@ -383,19 +389,14 @@ function RecentAuditPanel({
         )}
       </div>
       {loading && <div className={css.activityEmpty}>加载中…</div>}
-      {!loading && items.length === 0 && (
-        <div className={css.activityEmpty}>最近还没有操作记录</div>
-      )}
+      {!loading && items.length === 0 && <div className={css.activityEmpty}>最近还没有操作记录</div>}
       {!loading && items.length > 0 && (
         <div className={css.activityList}>
           {items.map((a) => (
             <div key={a.id} className={css.activityRow}>
               <div
                 className={css.activityIcon}
-                style={{
-                  backgroundColor: vars.color.primarySubtle,
-                  color: vars.color.primary,
-                }}
+                style={{ backgroundColor: vars.color.primarySubtle, color: vars.color.primary }}
               >
                 <IconActivity size={16} />
               </div>
@@ -414,7 +415,6 @@ function RecentAuditPanel({
   )
 }
 
-// 时间格式化为"2 分钟前 / 1 小时前 / 昨天 / 3 天前 / 直接显示日期"
 function formatRelative(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '-'
@@ -426,4 +426,23 @@ function formatRelative(iso: string): string {
   if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)} 天前`
   const pad = (x: number) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// --- 空状态插画（行内 SVG） ---
+
+function NoSourceIllustration() {
+  return (
+    <svg width="180" height="180" viewBox="0 0 180 180" fill="none" aria-hidden="true">
+      <ellipse cx="90" cy="156" rx="58" ry="6" fill="oklch(0.92 0.01 240)" />
+      <rect x="56" y="56" width="68" height="80" rx="6" fill="oklch(0.95 0.04 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
+      <rect x="56" y="56" width="68" height="14" rx="6" fill="oklch(0.88 0.08 230)" />
+      <rect x="68" y="84" width="44" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
+      <rect x="68" y="98" width="36" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
+      <rect x="68" y="112" width="28" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
+      <circle cx="120" cy="50" r="16" fill="oklch(0.93 0.06 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
+      <text x="120" y="56" textAnchor="middle" fontSize="20" fontWeight="700" fill="oklch(0.55 0.15 230)">?</text>
+      <path d="M30 110 q-12 -8 -4 -20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d="M150 110 q12 -8 4-20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
+    </svg>
+  )
 }
