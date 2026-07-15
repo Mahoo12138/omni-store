@@ -1,5 +1,10 @@
-import { style } from '@vanilla-extract/css'
+import { keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
+
+const float = keyframes({
+  '0%, 100%': { transform: 'translateY(0)' },
+  '50%': { transform: 'translateY(-6px)' },
+})
 
 export const section = style({
   backgroundColor: vars.color.surface,
@@ -131,4 +136,43 @@ export const tokenBox = style({
 export const error = style({
   color: vars.color.danger,
   fontSize: vars.fontSize.sm,
+})
+
+// --- 空状态：没有可用的图床目标 ---
+
+export const emptyMain = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: `${vars.space.xl} ${vars.space.lg}`,
+  textAlign: 'center',
+  minHeight: '60vh',
+})
+
+export const emptyIllustration = style({
+  width: '260px',
+  height: '180px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'oklch(0.75 0.12 230)',
+  marginBottom: vars.space.lg,
+  animation: `${float} 4s ease-in-out infinite`,
+})
+
+export const emptyTitle = style({
+  margin: 0,
+  fontSize: vars.fontSize.lg,
+  fontWeight: 600,
+  color: vars.color.text,
+  marginBottom: vars.space.xs,
+})
+
+export const emptyHint = style({
+  margin: 0,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  maxWidth: '480px',
+  lineHeight: 1.6,
 })
