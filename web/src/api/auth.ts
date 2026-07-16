@@ -22,6 +22,10 @@ export async function fetchMe(): Promise<User> {
   return data.user
 }
 
+export async function fetchAuthStatus(): Promise<{ authenticated: boolean }> {
+  return apiFetch('/api/v1/auth/status')
+}
+
 export async function login(username: string, password: string): Promise<User> {
   const data = await apiFetch<AuthPayload>('/api/v1/auth/login', {
     method: 'POST',

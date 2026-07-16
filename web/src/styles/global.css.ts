@@ -12,6 +12,15 @@ globalStyle('body', {
   color: vars.color.text,
   backgroundColor: vars.color.background,
   WebkitFontSmoothing: 'antialiased',
+  minWidth: '320px',
+})
+
+globalStyle('html', {
+  scrollBehavior: 'smooth',
+})
+
+globalStyle('button, input, select, textarea', {
+  font: 'inherit',
 })
 
 globalStyle('a', {
@@ -21,6 +30,7 @@ globalStyle('a', {
 
 globalStyle('h1, h2, h3', {
   textWrap: 'balance',
+  letterSpacing: '-0.025em',
 })
 
 globalStyle(':focus-visible', {

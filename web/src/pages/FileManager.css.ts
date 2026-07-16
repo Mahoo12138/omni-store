@@ -39,24 +39,37 @@ export const sideCol = style({
 
 export const pageHeader = style({
   display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.md,
-  padding: `${vars.space.md} 0`,
+  alignItems: 'flex-end',
+  justifyContent: 'space-between',
+  gap: vars.space.lg,
+  padding: `0 0 34px`,
+  '@media': {
+    'screen and (max-width: 720px)': {
+      alignItems: 'flex-start',
+      flexDirection: 'column',
+      paddingBottom: vars.space.lg,
+    },
+  },
+})
+
+export const headerIntro = style({
+  minWidth: 0,
 })
 
 export const pageTitle = style({
   margin: 0,
-  fontSize: vars.fontSize.lg,
-  fontWeight: 600,
+  fontSize: vars.fontSize.display,
+  lineHeight: 1.1,
+  fontWeight: 720,
+  letterSpacing: '-0.045em',
   color: vars.color.text,
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
 })
 
-export const pageTitleMuted = style({
+export const pageDescription = style({
+  margin: '11px 0 0',
   color: vars.color.textSecondary,
-  fontWeight: 400,
+  fontSize: vars.fontSize.md,
+  lineHeight: 1.6,
 })
 
 // 状态行：Source ID / 真实路径 / 公开挂载路径
@@ -96,7 +109,10 @@ export const statusRow = style({
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
-  gap: '6px',
+  gap: '8px 16px',
+  marginTop: '14px',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
 })
 
 // 顶部操作按钮
@@ -105,7 +121,38 @@ export const headerActions = style({
   flexWrap: 'wrap',
   alignItems: 'center',
   gap: vars.space.sm,
+  flexShrink: 0,
 })
+
+const noticeBase = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+  padding: '11px 14px',
+  marginBottom: vars.space.md,
+  borderRadius: vars.radius.md,
+  fontSize: vars.fontSize.sm,
+})
+
+globalStyle(`${noticeBase} button`, {
+  border: 0,
+  padding: '3px 5px',
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'pointer',
+  fontWeight: 600,
+})
+
+export const noticeSuccess = style([noticeBase, {
+  color: vars.color.success,
+  backgroundColor: vars.color.successSubtle,
+}])
+
+export const noticeError = style([noticeBase, {
+  color: vars.color.danger,
+  backgroundColor: vars.color.dangerSubtle,
+}])
 
 // --- 面包屑 ---
 
@@ -156,7 +203,7 @@ export const toolbar = style({
   flexWrap: 'wrap',
   gap: vars.space.sm,
   padding: `${vars.space.sm} ${vars.space.md}`,
-  backgroundColor: vars.color.surface,
+  backgroundColor: 'oklch(1 0 0 / 0.7)',
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
 })
@@ -390,7 +437,7 @@ export const pagerSelectNative = style({
 export const sidePanel = style({
   backgroundColor: vars.color.surface,
   border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
+  borderRadius: vars.radius.md,
   overflow: 'hidden',
 })
 

@@ -1,7 +1,7 @@
 # 多阶段构建：前端 -> 后端 -> 运行镜像
 FROM node:24-alpine AS web
 WORKDIR /src/web
-COPY web/package.json web/package-lock.json ./
+COPY web/package.json web/pnpm-lock.yaml ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build

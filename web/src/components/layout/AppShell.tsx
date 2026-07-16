@@ -3,17 +3,15 @@ import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMe, logout } from '../../api/auth'
-import { Button } from '../ui/Button'
 import {
   IconChevronDown,
   IconFolder,
   IconImage,
   IconLogout,
-  IconSearch,
+  IconQuestion,
   IconSettings,
   LogoMark,
 } from '../ui/Icon'
-import { formatBytes } from '../../utils/format'
 import * as css from './AppShell.css'
 
 // 登录侧布局（docs/home.png）：左侧白色侧栏 + 内容区顶栏。
@@ -24,11 +22,14 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const { pathname } = useLocation()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
+  useEffect(() => {
+    if (me.isError) navigate({ to: '/login' })
+  }, [me.isError, navigate])
+
   if (me.isPending) {
-    return null
+    return <AppShellLoading />
   }
   if (me.isError) {
-    navigate({ to: '/login' })
     return null
   }
   const user = me.data
@@ -68,34 +69,28 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               className={adminActive ? css.navLinkActive : css.navLink}
             >
               <IconSettings />
-              设置
+              系统设置
             </Link>
           )}
         </nav>
         <div className={css.sidebarSpacer} />
-        <span className={css.mobileUser}>
-          <Button variant="ghost" onClick={onLogout} aria-label="退出登录">
-            <IconLogout />
-          </Button>
-        </span>
-        <QuotaCard />
+        <button className={css.mobileUser} type="button" onClick={onLogout} aria-label="退出登录">
+          <IconLogout size={18} />
+        </button>
+        <div className={css.sidebarMeta}>
+          <span>自托管存储</span>
+          <span>数据留在你的设备</span>
+        </div>
       </aside>
 
       <div className={css.content}>
         <header className={css.topbar}>
           <h1 className={css.topbarTitle}>{title}</h1>
           <div className={css.topbarSpacer} />
-          <div className={css.topbarSearch}>
-            <span className={css.topbarSearchIcon}>
-              <IconSearch size={16} />
-            </span>
-            <input
-              className={css.topbarSearchInput}
-              placeholder="搜索存储源、文件或功能"
-              aria-label="全局搜索"
-            />
-            <span className={css.topbarKbd}>⌘K</span>
-          </div>
+          <Link to="/about" className={css.helpLink}>
+            <IconQuestion size={16} />
+            使用帮助
+          </Link>
           <UserMenu displayName={user.display_name} onLogout={onLogout} />
         </header>
         <main className={css.main}>{children}</main>
@@ -104,30 +99,14 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   )
 }
 
-// 配额卡：侧栏底部，固定显示 268.4 GB / 2 TB（设计稿示意值；后端无真实配额接口）。
-function QuotaCard() {
-  const used = 268.4
-  const total = 2 * 1024 // 2 TB → GB
-  const percent = Math.min(100, Math.round((used / total) * 100))
+function AppShellLoading() {
   return (
-    <div className={css.quotaCard}>
-      <div className={css.quotaHeader}>
-        <span className={css.quotaTitle}>存储空间使用</span>
-        <span className={css.quotaInfo} aria-label="说明">i</span>
+    <div className={css.loadingShell} aria-busy="true" aria-label="正在加载工作区">
+      <div className={css.loadingSidebar} />
+      <div className={css.loadingContent}>
+        <div className={css.loadingBar} />
+        <div className={css.loadingBlock} />
       </div>
-      <div className={css.quotaUsage}>
-        {formatBytes(used * 1024 * 1024 * 1024)}
-        <span className={css.quotaCapacity}> / {formatBytes(total * 1024 * 1024 * 1024)}</span>
-      </div>
-      <div className={css.quotaBar} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-        <span className={css.quotaBarFill} style={{ width: `${percent}%` }} />
-      </div>
-      <div className={css.quotaMeta}>
-        <span>{percent}%</span>
-      </div>
-      <button className={css.quotaLink} type="button">
-        管理存储配额
-      </button>
     </div>
   )
 }

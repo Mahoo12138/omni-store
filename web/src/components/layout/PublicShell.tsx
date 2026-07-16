@@ -1,12 +1,19 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { Button } from '../ui/Button'
+import { useQuery } from '@tanstack/react-query'
+import { fetchAuthStatus } from '../../api/auth'
 import { IconHome, IconInfo, LogoMark } from '../ui/Icon'
 import * as css from './PublicShell.css'
 
 // 公开侧布局（docs/index.png）：顶栏 = 品牌 / 中央导航 / 登录入口。
 export function PublicShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
+  const authStatus = useQuery({
+    queryKey: ['auth-status'],
+    queryFn: fetchAuthStatus,
+    retry: false,
+    staleTime: 60_000,
+  })
   const isDisk = pathname === '/' || pathname.startsWith('/p')
   const isUpload = pathname.startsWith('/upload')
   const isAbout = pathname.startsWith('/about')
@@ -30,9 +37,17 @@ export function PublicShell({ children }: { children: ReactNode }) {
             关于我们
           </Link>
         </nav>
-        <Link to="/login">
-          <Button>登录</Button>
-        </Link>
+        {authStatus.isPending ? (
+          <span className={css.authPlaceholder} aria-label="正在检查登录状态" />
+        ) : authStatus.data?.authenticated ? (
+          <Link to="/app" className={css.headerCta}>
+            进入工作台
+          </Link>
+        ) : (
+          <Link to="/login" className={css.headerCta}>
+            登录
+          </Link>
+        )}
       </header>
       <main className={css.main}>{children}</main>
       <footer className={css.footer}>OmniStore · 自部署存储中心</footer>

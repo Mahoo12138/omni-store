@@ -1,568 +1,116 @@
-import { style } from '@vanilla-extract/css'
+import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
-export const layout = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 320px',
-  gap: vars.space.lg,
-  alignItems: 'start',
-  '@media': {
-    'screen and (max-width: 1080px)': {
-      gridTemplateColumns: 'minmax(0, 1fr)',
-    },
-  },
-})
-
-export const mainCol = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.lg,
-  minWidth: 0,
-})
-
-export const sideCol = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.lg,
-  minWidth: 0,
-})
-
-// --- 页面头：标题 + 右上操作按钮 ---
-
 export const pageHeader = style({
-  display: 'flex',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: vars.space.md,
+  display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: vars.space.lg,
+  marginBottom: '52px',
+  '@media': { 'screen and (max-width: 640px)': { alignItems: 'flex-start', flexDirection: 'column', marginBottom: '36px' } },
 })
+export const pageTitle = style({ margin: 0, fontSize: vars.fontSize.display, lineHeight: 1.1, fontWeight: 720, letterSpacing: '-0.045em', color: vars.color.text })
+export const pageLead = style({ margin: '13px 0 0', color: vars.color.textSecondary, fontSize: vars.fontSize.lg, lineHeight: 1.6 })
 
-export const pageTitle = style({
-  flex: 1,
-  fontSize: vars.fontSize.xl,
-  fontWeight: 700,
-  margin: 0,
-  color: vars.color.text,
+export const workspace = style({
+  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 294px', gap: '56px', alignItems: 'start',
+  '@media': { 'screen and (max-width: 1080px)': { gridTemplateColumns: 'minmax(0, 1fr)', gap: '44px' } },
 })
+export const mainCol = style({ display: 'flex', flexDirection: 'column', gap: '52px', minWidth: 0 })
+export const sectionHeader = style({ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: vars.space.md, marginBottom: '14px' })
+export const sectionTitle = style({ margin: 0, fontSize: vars.fontSize.sm, fontWeight: 600, letterSpacing: '0.035em', color: vars.color.text })
+export const sectionMeta = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontVariantNumeric: 'tabular-nums' })
 
-export const pageActions = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  flexWrap: 'wrap',
+export const sourceList = style({ borderTop: `1px solid ${vars.color.border}` })
+export const sourceListHead = style({
+  display: 'grid', gridTemplateColumns: 'minmax(220px, 1.35fr) minmax(180px, 1fr) 72px', gap: vars.space.md,
+  padding: '11px 16px', borderBottom: `1px solid ${vars.color.border}`, color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+  '@media': { 'screen and (max-width: 720px)': { display: 'none' } },
 })
-
-// --- 欢迎区（docs/home-1.png）---
-
-export const welcome = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.md,
-  padding: vars.space.lg,
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
-})
-
-export const welcomeIcon = style({
-  width: '56px',
-  height: '56px',
-  borderRadius: vars.radius.lg,
-  backgroundColor: vars.color.primarySubtle,
-  color: vars.color.primary,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexShrink: 0,
-})
-
-export const welcomeText = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  minWidth: 0,
-  flex: 1,
-})
-
-export const welcomeTitle = style({
-  fontSize: vars.fontSize.lg,
-  fontWeight: 600,
-  margin: 0,
-  color: vars.color.text,
-})
-
-export const welcomeSub = style({
-  margin: 0,
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.sm,
-})
-
-// --- 统计卡 4 个并排（docs/home-1.png）---
-
-export const statRow = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  gap: vars.space.md,
+export const sourceRow = style({
+  width: '100%', display: 'grid', gridTemplateColumns: 'minmax(220px, 1.35fr) minmax(180px, 1fr) 72px',
+  alignItems: 'center', gap: vars.space.md, padding: '22px 16px', border: 0, borderBottom: `1px solid ${vars.color.border}`,
+  background: 'transparent', color: vars.color.text, textAlign: 'left', cursor: 'pointer',
+  transition: `background-color ${vars.motion.base} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: { '&:hover': { backgroundColor: vars.color.surfaceHover }, '&:active': { transform: 'translateY(1px)' } },
   '@media': {
-    'screen and (max-width: 1080px)': {
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-    'screen and (max-width: 480px)': {
-      gridTemplateColumns: 'minmax(0, 1fr)',
-    },
+    'screen and (max-width: 720px)': { gridTemplateColumns: 'minmax(0, 1fr) auto', padding: '18px 8px' },
   },
 })
-
-export const statCard = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.md,
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
-  padding: vars.space.md,
+export const sourceRowHighlighted = style([sourceRow, { backgroundColor: 'oklch(0.975 0.01 250)' }])
+export const sourceIdentity = style({ display: 'flex', alignItems: 'center', gap: '15px', minWidth: 0 })
+export const sourceIcon = style({ color: 'oklch(0.72 0.15 82)', display: 'inline-flex', flexShrink: 0 })
+export const sourceText = style({
+  display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0,
+})
+globalStyle(`${sourceText} strong`, { fontSize: vars.fontSize.lg, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+globalStyle(`${sourceText} span`, { color: vars.color.textSecondary, fontSize: vars.fontSize.sm, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+export const sourceCapabilities = style({
+  color: vars.color.textSecondary, fontSize: vars.fontSize.sm,
+  '@media': { 'screen and (max-width: 720px)': { gridColumn: 1, paddingLeft: 43, marginTop: -7 } },
+})
+export const openAction = style({
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3, color: vars.color.primary, fontSize: vars.fontSize.sm, fontWeight: 600,
+  '@media': { 'screen and (max-width: 720px)': { gridColumn: 2, gridRow: '1 / span 2' } },
 })
 
-export const statIcon = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '44px',
-  height: '44px',
-  borderRadius: vars.radius.md,
-  flexShrink: 0,
+const pulse = keyframes({ '0%, 100%': { opacity: .45 }, '50%': { opacity: .8 } })
+export const sourceSkeleton = style({ height: 82, borderBottom: `1px solid ${vars.color.border}`, background: vars.color.surfaceHover, animation: `${pulse} 1.25s ease-in-out infinite` })
+export const inlineState = style({ display: 'flex', flexDirection: 'column', gap: 5, padding: '32px 16px', borderTop: `1px solid ${vars.color.border}`, borderBottom: `1px solid ${vars.color.border}`, color: vars.color.textSecondary })
+globalStyle(`${inlineState} strong`, { color: vars.color.text })
+
+export const emptyState = style({
+  display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: vars.space.md,
+  padding: '30px 16px', borderTop: `1px solid ${vars.color.border}`, borderBottom: `1px solid ${vars.color.border}`,
+  '@media': { 'screen and (max-width: 640px)': { gridTemplateColumns: 'auto 1fr' } },
 })
+globalStyle(`${emptyState} h3`, { margin: 0, fontSize: vars.fontSize.lg, fontWeight: 600 })
+globalStyle(`${emptyState} p`, { margin: '5px 0 0', color: vars.color.textSecondary, lineHeight: 1.5 })
+globalStyle(`${emptyState} a`, { '@media': { 'screen and (max-width: 640px)': { gridColumn: '2' } } })
+export const emptyIcon = style({ display: 'inline-flex', color: 'oklch(0.72 0.15 82)' })
 
-export const statBody = style({
-  display: 'flex',
-  flexDirection: 'column',
-  minWidth: 0,
+export const utilityRail = style({
+  display: 'flex', flexDirection: 'column', gap: '30px', paddingLeft: '30px', borderLeft: `1px solid ${vars.color.border}`,
+  position: 'sticky', top: '112px',
+  '@media': { 'screen and (max-width: 1080px)': { position: 'static', paddingLeft: 0, borderLeft: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, 'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' } },
 })
-
-export const statLabel = style({
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-})
-
-export const statValue = style({
-  fontSize: vars.fontSize.xl,
-  fontWeight: 700,
-  color: vars.color.text,
-  lineHeight: 1.1,
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: '4px',
-})
-
-export const statUnit = style({
-  fontSize: vars.fontSize.sm,
-  fontWeight: 500,
-  color: vars.color.textSecondary,
-})
-
-// --- 区块标题（用于"存储源概览"面板）---
-
-export const panel = style({
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
-  overflow: 'hidden',
-})
-
-export const panelHeader = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${vars.space.md} ${vars.space.lg}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-})
-
-export const panelTitle = style({
-  fontSize: vars.fontSize.md,
-  fontWeight: 600,
-  margin: 0,
-  color: vars.color.text,
-})
-
-// --- 存储源概览：无存储源 empty state + 有存储源表格 ---
-
-export const sourceEmpty = style({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: vars.space.md,
-  padding: `${vars.space.xl} ${vars.space.lg}`,
-  textAlign: 'center',
-})
-
-export const sourceEmptyIcon = style({
-  width: '72px',
-  height: '72px',
-  borderRadius: vars.radius.lg,
-  backgroundColor: vars.color.primarySubtle,
-  color: vars.color.primary,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-})
-
-export const sourceEmptyTitle = style({
-  fontSize: vars.fontSize.lg,
-  fontWeight: 600,
-  color: vars.color.text,
-  margin: 0,
-})
-
-export const sourceEmptyDesc = style({
-  margin: 0,
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.md,
-})
-
-// --- 存储源表格（紧凑） ---
-
-export const compactTable = style({
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: vars.fontSize.sm,
-})
-
-export const compactTh = style({
-  textAlign: 'left',
-  padding: `10px ${vars.space.md}`,
-  color: vars.color.textSecondary,
-  fontWeight: 500,
-  backgroundColor: vars.color.surface,
-  borderBottom: `1px solid ${vars.color.border}`,
-  whiteSpace: 'nowrap',
-})
-
-export const compactTd = style({
-  padding: `10px ${vars.space.md}`,
-  color: vars.color.text,
-  borderBottom: `1px solid ${vars.color.border}`,
-  verticalAlign: 'middle',
-})
-
-export const compactTr = style({
-  cursor: 'pointer',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
+export const utilitySection = style({})
+export const utilityTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 650, letterSpacing: '-0.015em', color: vars.color.text })
+export const quickActions = style({ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 })
+export const quickAction = style({
+  display: 'grid', gridTemplateColumns: '34px minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
+  width: '100%', padding: '15px 14px', border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.md,
+  background: vars.color.surface, color: vars.color.text, textAlign: 'left', cursor: 'pointer',
+  transition: `border-color ${vars.motion.base} ${vars.motion.ease}, box-shadow ${vars.motion.base} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
-    '&:hover': { backgroundColor: vars.color.surfaceHover },
+    '&:hover:not(:disabled)': { borderColor: vars.color.borderStrong, boxShadow: vars.shadow.sm },
+    '&:active:not(:disabled)': { transform: 'translateY(1px)' },
+    '&:disabled': { opacity: .5, cursor: 'not-allowed' },
   },
 })
+globalStyle(`${quickAction} strong`, { display: 'block', fontSize: vars.fontSize.sm, fontWeight: 600 })
+globalStyle(`${quickAction} small`, { display: 'block', marginTop: 3, color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const quickIcon = style({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary })
 
-export const compactName = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  fontWeight: 500,
-})
+export const statusSection = style({ paddingTop: 26, borderTop: `1px solid ${vars.color.border}` })
+export const statusHeader = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.sm })
+export const running = style({ display: 'inline-flex', alignItems: 'center', gap: 6, color: vars.color.success, fontSize: vars.fontSize.xs })
+globalStyle(`${running} i`, { width: 7, height: 7, borderRadius: '50%', background: vars.color.success })
+export const statusList = style({ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 })
+export const statusRow = style({ display: 'flex', justifyContent: 'space-between', gap: vars.space.md, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+globalStyle(`${statusRow} > span:last-child`, { display: 'inline-flex', alignItems: 'center', gap: 7 })
+export const dotOn = style({ width: 7, height: 7, borderRadius: '50%', background: vars.color.success })
+export const dotOff = style({ width: 7, height: 7, borderRadius: '50%', background: vars.color.borderStrong })
+export const statusLoading = style({ marginTop: 18, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
 
-// --- 右栏通用卡 ---
-
-export const sidePanel = style({
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
-  overflow: 'hidden',
-})
-
-export const sidePanelHeader = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${vars.space.md} ${vars.space.lg}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-})
-
-export const sidePanelTitle = style({
-  fontSize: vars.fontSize.md,
-  fontWeight: 600,
-  margin: 0,
-  color: vars.color.text,
-})
-
-export const sidePanelLink = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.primary,
-  textDecoration: 'none',
-  selectors: {
-    '&:hover': { textDecoration: 'underline' },
-  },
-})
-
-// --- 系统状态：图标 + 标题 + 副标题 + 右上徽章 ---
-
-export const statusList = style({
-  display: 'flex',
-  flexDirection: 'column',
-  padding: `${vars.space.sm} 0`,
-})
-
-export const statusRow = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  padding: `${vars.space.sm} ${vars.space.lg}`,
-})
-
-export const statusIcon = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '32px',
-  height: '32px',
-  borderRadius: vars.radius.md,
-  flexShrink: 0,
-})
-
-export const statusBody = style({
-  flex: 1,
-  minWidth: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1px',
-})
-
-export const statusTitle = style({
-  fontSize: vars.fontSize.sm,
-  fontWeight: 500,
-  color: vars.color.text,
-})
-
-export const statusDesc = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
-})
-
-// --- 最近审计日志 ---
-
-export const activityList = style({
-  display: 'flex',
-  flexDirection: 'column',
-  padding: `${vars.space.sm} 0`,
-})
-
+export const activitySection = style({})
+export const activityList = style({ borderTop: `1px solid ${vars.color.border}` })
 export const activityRow = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  padding: `${vars.space.sm} ${vars.space.lg}`,
+  display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
+  padding: '13px 8px', borderBottom: `1px solid ${vars.color.border}`,
 })
-
-export const activityIcon = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '32px',
-  height: '32px',
-  borderRadius: vars.radius.full,
-  flexShrink: 0,
-})
-
-export const activityBody = style({
-  flex: 1,
-  minWidth: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1px',
-})
-
-export const activityTitle = style({
-  fontSize: vars.fontSize.sm,
-  fontWeight: 500,
-  color: vars.color.text,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-})
-
-export const activityMeta = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
-})
-
-export const activityTime = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
-  flexShrink: 0,
-})
-
-export const activityEmpty = style({
-  padding: `${vars.space.lg} ${vars.space.md}`,
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-  textAlign: 'center',
-})
-
-// --- 页脚 ---
-
-export const footer = style({
-  marginTop: vars.space.xl,
-  padding: `${vars.space.md} 0`,
-  textAlign: 'center',
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
-  borderTop: `1px solid ${vars.color.border}`,
-})
-
-// --- file-1.png 无存储源空状态 ---
-
-import { keyframes } from '@vanilla-extract/css'
-
-const float = keyframes({
-  '0%, 100%': { transform: 'translateY(0)' },
-  '50%': { transform: 'translateY(-6px)' },
-})
-
-// 与 FileManager 相同的整体布局（左主区 + 右栏 320px）
-export const fileEmptyShell = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 320px',
-  gap: vars.space.lg,
-  alignItems: 'start',
-  '@media': {
-    'screen and (max-width: 980px)': {
-      gridTemplateColumns: 'minmax(0, 1fr)',
-    },
-  },
-})
-
-// 居中插画 + 文案 + 按钮
-export const fileEmptyMain = style({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: `${vars.space.xl} ${vars.space.lg}`,
-  textAlign: 'center',
-  minHeight: '60vh',
-})
-
-export const fileEmptyIllustration = style({
-  width: '180px',
-  height: '180px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'oklch(0.75 0.12 230)',
-  marginBottom: vars.space.lg,
-  animation: `${float} 4s ease-in-out infinite`,
-})
-
-export const fileEmptyTitle = style({
-  margin: 0,
-  fontSize: vars.fontSize.lg,
-  fontWeight: 600,
-  color: vars.color.text,
-  marginBottom: vars.space.xs,
-})
-
-export const fileEmptyHint = style({
-  margin: 0,
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-  maxWidth: '420px',
-  marginBottom: vars.space.lg,
-})
-
-export const fileEmptyActions = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  flexWrap: 'wrap',
-  justifyContent: 'center',
-})
-
-// 右栏：暂无可用存储源
-export const fileEmptySideTitle = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: `${vars.space.lg} 0`,
-})
-
-export const fileEmptySideIcon = style({
-  width: '100px',
-  height: '100px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'oklch(0.75 0.12 230)',
-  margin: '0 auto',
-})
-
-export const fileEmptySideName = style({
-  textAlign: 'center',
-  fontSize: vars.fontSize.md,
-  fontWeight: 500,
-  color: vars.color.text,
-  margin: `${vars.space.sm} 0 ${vars.space.xs}`,
-})
-
-export const fileEmptySideDesc = style({
-  textAlign: 'center',
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-  lineHeight: 1.6,
-  marginBottom: vars.space.md,
-})
-
-export const fileEmptySideList = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.sm,
-  fontSize: vars.fontSize.sm,
-  color: vars.color.text,
-  borderTop: `1px solid ${vars.color.border}`,
-  paddingTop: vars.space.md,
-})
-
-export const fileEmptySideListTitle = style({
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-  marginBottom: '2px',
-})
-
-export const fileEmptySideItem = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  color: vars.color.text,
-})
-
-export const fileEmptyHelpLink = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '4px',
-  marginTop: vars.space.md,
-  padding: `${vars.space.sm} ${vars.space.md}`,
-  borderRadius: vars.radius.md,
-  border: `1px solid ${vars.color.border}`,
-  color: vars.color.primary,
-  textDecoration: 'none',
-  fontSize: vars.fontSize.sm,
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { backgroundColor: vars.color.primarySubtle },
-  },
-})
-
-// file-1.png 风格页面头：标题在左，4 个操作按钮在右
-export const filePageHeader = style({
-  display: 'flex',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: vars.space.md,
-  marginBottom: vars.space.md,
-})
-
-export const filePageTitle = style({
-  flex: 1,
-  fontSize: vars.fontSize.xl,
-  fontWeight: 700,
-  margin: 0,
-  color: vars.color.text,
-})
+globalStyle(`${activityRow} time`, { color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontVariantNumeric: 'tabular-nums' })
+export const activityIcon = style({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary })
+export const activityBody = style({ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 })
+globalStyle(`${activityBody} strong`, { fontSize: vars.fontSize.sm, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+globalStyle(`${activityBody} small`, { color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const activityEmpty = style({ padding: '24px 8px', borderTop: `1px solid ${vars.color.border}`, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+export const textAction = style({ display: 'inline-flex', alignItems: 'center', gap: 3, color: vars.color.primary, fontSize: vars.fontSize.sm, fontWeight: 550, selectors: { '&:hover': { textDecoration: 'underline' } } })

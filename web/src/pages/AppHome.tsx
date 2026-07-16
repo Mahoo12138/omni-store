@@ -5,57 +5,24 @@ import { fetchMySources, type UserSource } from '../api/sources'
 import { fetchMyActivity, type ActivityItem } from '../api/activity'
 import { fetchSystemStatus, type SystemStatus, type SystemStatusFlag } from '../api/system'
 import { AppShell } from '../components/layout/AppShell'
-import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
-import { IconTile } from '../components/ui/Icon'
 import {
   IconActivity,
-  IconCloud,
-  IconFolderPlus,
-  IconGlobe,
-  IconHardDrive,
+  IconChevronRight,
+  IconFolderFilled,
   IconImage,
-  IconLink,
   IconPlus,
-  IconServer,
-  IconUserPlus,
+  IconUpload,
 } from '../components/ui/Icon'
-import { formatBytes } from '../utils/format'
-import { vars } from '../styles/theme.css'
 import * as css from './Dashboard.css'
 
-// /app 入口（docs/home-1.png / file-1.png）：
-//   - 有存储源：欢迎区 + 4 统计卡 + 存储源概览 + 右栏（系统状态 / 最近审计日志）
-//   - 无存储源：file-1.png 风格的简洁空状态（仅居中插画 + 标题 + 描述；管理员/普通用户文案不同）
 export function AppHomePage() {
-  const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
-  const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
-  if (sources.isPending) {
-    return (
-      <AppShell title="文件">
-        <div style={{ padding: 32, color: vars.color.textSecondary, textAlign: 'center' }}>加载中…</div>
-      </AppShell>
-    )
-  }
-  if (sources.isSuccess && sources.data.length === 0) {
-    return (
-      <AppShell title="文件管理">
-        <NoSourceView isAdmin={me.data?.role === 'super_admin'} />
-      </AppShell>
-    )
-  }
-  return <WithSourcesView />
-}
-
-// --- 有存储源（docs/home-1.png）---
-
-function WithSourcesView() {
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
   const activity = useQuery({
     queryKey: ['my-activity'],
-    queryFn: () => fetchMyActivity(6),
+    queryFn: () => fetchMyActivity(5),
     retry: false,
   })
   const system = useQuery({
@@ -65,15 +32,24 @@ function WithSourcesView() {
   })
 
   const sourceList = sources.data ?? []
-  const publicMountCount = sourceList.filter((s) => s.public_read_enabled).length
-  const anonOn = system.data?.anonymous.enabled ?? false
-  const usageBytes = 0
+  const isAdmin = me.data?.role === 'super_admin'
+
+  function openSource(sourceId: string) {
+    navigate({
+      to: '/app/sources/$sourceId',
+      params: { sourceId },
+      search: { path: '/', page: 1 },
+    })
+  }
 
   return (
-    <AppShell title="我的存储源">
-      <div className={css.pageHeader}>
-        <h1 className={css.pageTitle}>我的存储源</h1>
-        <div className={css.pageActions}>
+    <AppShell title="文件">
+      <header className={css.pageHeader}>
+        <div>
+          <h1 className={css.pageTitle}>我的文件</h1>
+          <p className={css.pageLead}>选择一个存储源，开始管理文件。</p>
+        </div>
+        {isAdmin && (
           <Button
             variant="primary"
             onClick={() => navigate({ to: '/app/admin', search: { section: 'sources' } })}
@@ -81,332 +57,187 @@ function WithSourcesView() {
             <IconPlus size={16} />
             新建存储源
           </Button>
-          {me.data?.role === 'super_admin' && (
-            <Button
-              variant="secondary"
-              onClick={() => navigate({ to: '/app/admin', search: { section: 'users' } })}
-            >
-              <IconUserPlus size={16} />
-              创建用户
-            </Button>
-          )}
-        </div>
-      </div>
+        )}
+      </header>
 
-      <div className={css.layout}>
+      <div className={css.workspace}>
         <div className={css.mainCol}>
-          <section className={css.welcome}>
-            <div className={css.welcomeIcon}>
-              <IconCloud size={32} />
-            </div>
-            <div className={css.welcomeText}>
-              <h2 className={css.welcomeTitle}>
-                欢迎回来，{me.data?.display_name ?? me.data?.username ?? '用户'}
-              </h2>
-              <p className={css.welcomeSub}>
-                {sourceList.length === 0
-                  ? '当前还没有任何存储源，创建存储源后即可管理文件与访问权限。'
-                  : `共 ${sourceList.length} 个存储源，开始管理文件与图片。`}
-              </p>
-            </div>
-          </section>
-
-          <div className={css.statRow}>
-            <StatCard
-              label="存储源"
-              value={sourceList.length}
-              unit="个"
-              iconBg={vars.color.tileBlueBg}
-              iconFg={vars.color.tileBlueFg}
-            >
-              <IconServer size={22} />
-            </StatCard>
-            <StatCard
-              label="公开挂载"
-              value={publicMountCount}
-              unit="个"
-              iconBg={vars.color.tileGreenBg}
-              iconFg={vars.color.tileGreenFg}
-            >
-              <IconGlobe size={22} />
-            </StatCard>
-            <StatCard
-              label="匿名图床"
-              value={anonOn ? '已启用' : '未启用'}
-              iconBg={vars.color.tilePurpleBg}
-              iconFg={vars.color.tilePurpleFg}
-            >
-              <IconImage size={22} />
-            </StatCard>
-            <StatCard
-              label="存储使用量"
-              value={formatBytes(usageBytes)}
-              iconBg={vars.color.tileAmberBg}
-              iconFg={vars.color.tileAmberFg}
-            >
-              <IconHardDrive size={22} />
-            </StatCard>
-          </div>
-
-          <section className={css.panel}>
-            <div className={css.panelHeader}>
-              <h3 className={css.panelTitle}>存储源概览</h3>
-              {sourceList.length > 0 && (
-                <Link
-                  to="/app/admin"
-                  search={{ section: 'sources' }}
-                  className={css.sidePanelLink}
-                  style={{ fontSize: vars.fontSize.xs }}
-                >
-                  管理
-                </Link>
+          <section aria-labelledby="sources-title">
+            <div className={css.sectionHeader}>
+              <h2 id="sources-title" className={css.sectionTitle}>存储源</h2>
+              {sources.isSuccess && sourceList.length > 0 && (
+                <span className={css.sectionMeta}>{sourceList.length} 个可用</span>
               )}
             </div>
-            {sourceList.length === 0 ? (
-              <div className={css.sourceEmpty}>
-                <div className={css.sourceEmptyIcon}>
-                  <IconFolderPlus size={32} />
-                </div>
-                <h4 className={css.sourceEmptyTitle}>还没有存储源</h4>
-                <p className={css.sourceEmptyDesc}>
-                  请先创建第一个存储源，开始管理文件和权限。
-                </p>
-                <Button
-                  variant="primary"
-                  onClick={() => navigate({ to: '/app/admin', search: { section: 'sources' } })}
-                >
-                  <IconPlus size={16} />
-                  新建存储源
-                </Button>
+
+            {sources.isPending ? (
+              <SourceListLoading />
+            ) : sources.isError ? (
+              <div className={css.inlineState} role="alert">
+                <strong>无法加载存储源</strong>
+                <span>请检查连接后刷新页面。</span>
               </div>
+            ) : sourceList.length === 0 ? (
+              <NoSourceView isAdmin={isAdmin} />
             ) : (
-              <SourceTable sources={sourceList} />
+              <div className={css.sourceList}>
+                <div className={css.sourceListHead} aria-hidden="true">
+                  <span>存储源名称</span>
+                  <span>权限与服务</span>
+                  <span>操作</span>
+                </div>
+                {sourceList.map((source, index) => (
+                  <button
+                    type="button"
+                    key={source.source_id}
+                    className={index === 1 ? css.sourceRowHighlighted : css.sourceRow}
+                    onClick={() => openSource(source.source_id)}
+                    aria-label={`打开存储源 ${source.name}`}
+                  >
+                    <span className={css.sourceIdentity}>
+                      <span className={css.sourceIcon}><IconFolderFilled size={28} /></span>
+                      <span className={css.sourceText}>
+                        <strong>{source.name}</strong>
+                        <span>{source.description || '本地目录'}</span>
+                      </span>
+                    </span>
+                    <span className={css.sourceCapabilities}>{capabilities(source)}</span>
+                    <span className={css.openAction}>
+                      打开 <IconChevronRight size={16} />
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </section>
+
+          <RecentActivity
+            items={activity.data ?? []}
+            loading={activity.isPending}
+            showAll={isAdmin}
+          />
         </div>
 
-        <aside className={css.sideCol}>
+        <aside className={css.utilityRail} aria-label="快捷操作与服务状态">
+          <section className={css.utilitySection}>
+            <h2 className={css.utilityTitle}>继续操作</h2>
+            <div className={css.quickActions}>
+              <button
+                type="button"
+                className={css.quickAction}
+                disabled={sourceList.length === 0}
+                onClick={() => sourceList[0] && openSource(sourceList[0].source_id)}
+              >
+                <span className={css.quickIcon}><IconUpload size={20} /></span>
+                <span>
+                  <strong>上传文件</strong>
+                  <small>{sourceList[0] ? `进入 ${sourceList[0].name}` : '需要先创建存储源'}</small>
+                </span>
+                <IconChevronRight size={16} />
+              </button>
+              <Link to="/app/image-bed" className={css.quickAction}>
+                <span className={css.quickIcon}><IconImage size={20} /></span>
+                <span>
+                  <strong>打开图床</strong>
+                  <small>上传图片并复制外链</small>
+                </span>
+                <IconChevronRight size={16} />
+              </Link>
+            </div>
+          </section>
           <SystemStatusPanel data={system.data} loading={system.isPending} />
-          <RecentAuditPanel items={activity.data ?? []} loading={activity.isPending} />
         </aside>
       </div>
-
-      <footer className={css.footer}>© 2024 OmniStore. All rights reserved.</footer>
     </AppShell>
   )
 }
 
-// --- 无存储源（docs/file-1.png）：仅居中插画 + 标题 + 描述（无任何操作按钮、无右侧栏）---
+function capabilities(source: UserSource): string {
+  const parts = [source.permission === 'read_write' ? '读写' : '只读']
+  if (source.webdav_enabled) parts.push('WebDAV')
+  if (source.image_bed_enabled) parts.push('图床')
+  if (source.public_read_enabled) parts.push('公开')
+  return parts.join(' · ')
+}
+
+function SourceListLoading() {
+  return (
+    <div className={css.sourceList} aria-busy="true" aria-label="正在加载存储源">
+      {[0, 1, 2].map((item) => <div className={css.sourceSkeleton} key={item} />)}
+    </div>
+  )
+}
 
 function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
   return (
-    <div className={css.fileEmptyMain}>
-      <div className={css.fileEmptyIllustration}>
-        <NoSourceIllustration />
+    <div className={css.emptyState}>
+      <span className={css.emptyIcon}><IconFolderFilled size={34} /></span>
+      <div>
+        <h3>{isAdmin ? '创建第一个存储源' : '还没有可用的存储源'}</h3>
+        <p>{isAdmin ? '连接服务器上的目录后，就可以上传、整理和共享文件。' : '请联系系统管理员分配访问权限。'}</p>
       </div>
-      <h2 className={css.fileEmptyTitle}>
-        {isAdmin ? '你还没有创建存储源' : '你还没有被分配存储源'}
-      </h2>
-      <p className={css.fileEmptyHint}>
-        {isAdmin
-          ? '请前往系统设置创建一个存储源，开始管理文件、图床与权限。'
-          : '请联系系统管理员为你分配存储源，或切换到已有访问权限的存储源。'}
-      </p>
+      {isAdmin && (
+        <Link to="/app/admin" search={{ section: 'sources' }} className={css.textAction}>
+          前往设置 <IconChevronRight size={15} />
+        </Link>
+      )}
     </div>
   )
 }
 
-// --- 复用 / 共享组件 ---
-
-function StatCard({
-  label,
-  value,
-  unit,
-  iconBg,
-  iconFg,
-  children,
-}: {
-  label: string
-  value: string | number
-  unit?: string
-  iconBg: string
-  iconFg: string
-  children: React.ReactNode
-}) {
+function SystemStatusPanel({ data, loading }: { data: SystemStatus | undefined; loading: boolean }) {
+  const flags: Array<{ label: string; value: SystemStatusFlag | undefined }> = [
+    { label: 'WebDAV', value: data?.webdav },
+    { label: '图床服务', value: data?.file_preview },
+    { label: '匿名访问', value: data?.anonymous },
+  ]
   return (
-    <div className={css.statCard}>
-      <div className={css.statIcon} style={{ backgroundColor: iconBg, color: iconFg }}>
-        {children}
+    <section className={css.statusSection} aria-labelledby="status-title">
+      <div className={css.statusHeader}>
+        <h2 id="status-title" className={css.utilityTitle}>服务状态</h2>
+        {!loading && data && <span className={css.running}><i />运行中</span>}
       </div>
-      <div className={css.statBody}>
-        <span className={css.statLabel}>{label}</span>
-        <span className={css.statValue}>
-          {value}
-          {unit && <span className={css.statUnit}>{unit}</span>}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function SourceTable({ sources }: { sources: UserSource[] }) {
-  const navigate = useNavigate()
-  return (
-    <table className={css.compactTable}>
-      <thead>
-        <tr>
-          <th className={css.compactTh}>名称</th>
-          <th className={css.compactTh}>权限</th>
-          <th className={css.compactTh}>功能</th>
-          <th className={css.compactTh}>状态</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sources.map((s) => (
-          <tr
-            key={s.source_id}
-            className={css.compactTr}
-            onClick={() =>
-              navigate({
-                to: '/app/sources/$sourceId',
-                params: { sourceId: s.source_id },
-                search: { path: '/', page: 1 },
-              })
-            }
-          >
-            <td className={css.compactTd}>
-              <span className={css.compactName}>
-                <IconServer size={16} style={{ color: vars.color.textSecondary }} />
-                {s.name}
-              </span>
-            </td>
-            <td className={css.compactTd}>
-              <Badge color={s.permission === 'read_write' ? 'blue' : 'gray'}>
-                {s.permission === 'read_write' ? '读写' : '只读'}
-              </Badge>
-            </td>
-            <td className={css.compactTd}>
-              <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                {s.webdav_enabled && <Badge color="gray">WebDAV</Badge>}
-                {s.image_bed_enabled && <Badge color="purple">图床</Badge>}
-                {s.public_read_enabled && <Badge color="green">公开</Badge>}
-                {!s.webdav_enabled && !s.image_bed_enabled && !s.public_read_enabled && (
-                  <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.xs }}>—</span>
-                )}
-              </span>
-            </td>
-            <td className={css.compactTd}>
-              <Badge color="green">正常</Badge>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function SystemStatusPanel({
-  data,
-  loading,
-}: {
-  data: SystemStatus | undefined
-  loading: boolean
-}) {
-  if (loading || !data) {
-    return (
-      <section className={css.sidePanel}>
-        <div className={css.sidePanelHeader}>
-          <h3 className={css.sidePanelTitle}>系统状态</h3>
+      {loading ? (
+        <div className={css.statusLoading}>正在检查…</div>
+      ) : !data ? (
+        <div className={css.statusLoading}>暂时无法读取状态</div>
+      ) : (
+        <div className={css.statusList}>
+          {flags.map(({ label, value }) => (
+            <div className={css.statusRow} key={label}>
+              <span>{label}</span>
+              <span>{value?.status ?? '未知'} <i className={value?.enabled ? css.dotOn : css.dotOff} /></span>
+            </div>
+          ))}
         </div>
-        <div className={css.activityEmpty}>加载中…</div>
-      </section>
-    )
-  }
-  return (
-    <section className={css.sidePanel}>
-      <div className={css.sidePanelHeader}>
-        <h3 className={css.sidePanelTitle}>系统状态</h3>
-      </div>
-      <div className={css.statusList}>
-        <StatusRow title="S3 兼容存储" flag={data.s3} iconBg={vars.color.tileGreenBg} iconFg={vars.color.tileGreenFg}>
-          <IconHardDrive size={18} />
-        </StatusRow>
-        <StatusRow title="WebDAV 服务" flag={data.webdav} iconBg={vars.color.tileBlueBg} iconFg={vars.color.tileBlueFg}>
-          <IconLink size={18} />
-        </StatusRow>
-        <StatusRow
-          title="文件预览服务"
-          flag={data.file_preview}
-          iconBg={vars.color.tilePurpleBg}
-          iconFg={vars.color.tilePurpleFg}
-        >
-          <IconImage size={18} />
-        </StatusRow>
-        <StatusRow title="匿名访问" flag={data.anonymous} iconBg={vars.color.tileAmberBg} iconFg={vars.color.tileAmberFg}>
-          <IconGlobe size={18} />
-        </StatusRow>
-      </div>
+      )}
     </section>
   )
 }
 
-function StatusRow({
-  title,
-  flag,
-  iconBg,
-  iconFg,
-  children,
-}: {
-  title: string
-  flag: SystemStatusFlag
-  iconBg: string
-  iconFg: string
-  children: React.ReactNode
-}) {
+function RecentActivity({ items, loading, showAll }: { items: ActivityItem[]; loading: boolean; showAll: boolean }) {
   return (
-    <div className={css.statusRow}>
-      <IconTile bg={iconBg} fg={iconFg} size={32}>
-        {children}
-      </IconTile>
-      <div className={css.statusBody}>
-        <span className={css.statusTitle}>{title}</span>
-        <span className={css.statusDesc}>{flag.hint}</span>
-      </div>
-      <Badge color={flag.enabled ? 'green' : 'gray'}>{flag.status}</Badge>
-    </div>
-  )
-}
-
-function RecentAuditPanel({ items, loading }: { items: ActivityItem[]; loading: boolean }) {
-  return (
-    <section className={css.sidePanel}>
-      <div className={css.sidePanelHeader}>
-        <h3 className={css.sidePanelTitle}>最近审计日志</h3>
-        {items.length > 0 && (
-          <Link to="/app/admin" search={{ section: 'audit' }} className={css.sidePanelLink}>
-            查看全部
-          </Link>
+    <section className={css.activitySection} aria-labelledby="activity-title">
+      <div className={css.sectionHeader}>
+        <h2 id="activity-title" className={css.sectionTitle}>最近活动</h2>
+        {showAll && items.length > 0 && (
+          <Link to="/app/admin" search={{ section: 'audit' }} className={css.textAction}>查看全部</Link>
         )}
       </div>
-      {loading && <div className={css.activityEmpty}>加载中…</div>}
-      {!loading && items.length === 0 && <div className={css.activityEmpty}>最近还没有操作记录</div>}
-      {!loading && items.length > 0 && (
+      {loading ? (
+        <div className={css.activityEmpty}>正在加载…</div>
+      ) : items.length === 0 ? (
+        <div className={css.activityEmpty}>还没有操作记录</div>
+      ) : (
         <div className={css.activityList}>
-          {items.map((a) => (
-            <div key={a.id} className={css.activityRow}>
-              <div
-                className={css.activityIcon}
-                style={{ backgroundColor: vars.color.primarySubtle, color: vars.color.primary }}
-              >
-                <IconActivity size={16} />
-              </div>
-              <div className={css.activityBody}>
-                <span className={css.activityTitle}>{a.title}</span>
-                <span className={css.activityMeta}>
-                  {a.source_name ? `在 ${a.source_name}` : '系统操作'}
-                </span>
-              </div>
-              <span className={css.activityTime}>{formatRelative(a.created_at)}</span>
+          {items.map((item) => (
+            <div className={css.activityRow} key={item.id}>
+              <span className={css.activityIcon}><IconActivity size={16} /></span>
+              <span className={css.activityBody}>
+                <strong>{item.title}</strong>
+                <small>{item.source_name ? `在 ${item.source_name}` : '系统操作'}</small>
+              </span>
+              <time>{formatRelative(item.created_at)}</time>
             </div>
           ))}
         </div>
@@ -416,33 +247,12 @@ function RecentAuditPanel({ items, loading }: { items: ActivityItem[]; loading: 
 }
 
 function formatRelative(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
-  if (diffSec < 60) return '刚刚'
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
-  if (diffSec < 86400 * 2) return '昨天'
-  if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)} 天前`
-  const pad = (x: number) => String(x).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-// --- 空状态插画（行内 SVG） ---
-
-function NoSourceIllustration() {
-  return (
-    <svg width="180" height="180" viewBox="0 0 180 180" fill="none" aria-hidden="true">
-      <ellipse cx="90" cy="156" rx="58" ry="6" fill="oklch(0.92 0.01 240)" />
-      <rect x="56" y="56" width="68" height="80" rx="6" fill="oklch(0.95 0.04 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
-      <rect x="56" y="56" width="68" height="14" rx="6" fill="oklch(0.88 0.08 230)" />
-      <rect x="68" y="84" width="44" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <rect x="68" y="98" width="36" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <rect x="68" y="112" width="28" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <circle cx="120" cy="50" r="16" fill="oklch(0.93 0.06 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
-      <text x="120" y="56" textAnchor="middle" fontSize="20" fontWeight="700" fill="oklch(0.55 0.15 230)">?</text>
-      <path d="M30 110 q-12 -8 -4 -20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M150 110 q12 -8 4-20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
-    </svg>
-  )
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '—'
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return '刚刚'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`
+  if (seconds < 86400 * 7) return `${Math.floor(seconds / 86400)} 天前`
+  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(date)
 }

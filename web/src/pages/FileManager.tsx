@@ -106,6 +106,7 @@ function FileManagerView({ source }: { source: UserSource }) {
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
   const [moveTarget, setMoveTarget] = useState<{ name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const canWrite = source.permission === 'read_write'
 
@@ -149,73 +150,62 @@ function FileManagerView({ source }: { source: UserSource }) {
     [filesQuery.data, filter],
   )
 
-  const onError = (err: unknown) => alert(err instanceof ApiRequestError ? err.message : '操作失败')
+  const onError = (err: unknown) => {
+    setNotice({ kind: 'error', message: err instanceof ApiRequestError ? err.message : '操作失败，请重试。' })
+  }
 
   async function onUpload(files: FileList | null) {
     if (!files?.length) return
+    let completed = 0
+    let failed = false
     for (const file of Array.from(files)) {
       try {
         await uploadFile(sourceId, currentPath, file)
+        completed += 1
       } catch (err) {
         if (err instanceof ApiRequestError && err.code === 'FILE_ALREADY_EXISTS') {
           if (confirm(`文件 ${file.name} 已存在，是否覆盖？`)) {
-            try { await uploadFile(sourceId, currentPath, file, true) } catch (e) { onError(e) }
+            try {
+              await uploadFile(sourceId, currentPath, file, true)
+              completed += 1
+            } catch (e) {
+              failed = true
+              onError(e)
+            }
           }
         } else {
+          failed = true
           onError(err)
         }
       }
     }
     refresh()
+    if (!failed && completed > 0) {
+      setNotice({ kind: 'success', message: `已上传 ${completed} 个文件。` })
+    }
     if (fileInput.current) fileInput.current.value = ''
   }
 
   return (
     <AppShell title={source.name}>
-      {/* 页面头：标题 / 状态行 / 顶部操作按钮 */}
+      {/* 页面头：只保留当前任务、能力与主要操作，技术信息放在右栏。 */}
       <div className={css.pageHeader}>
-        <h1 className={css.pageTitle}>
-          {source.name}
-          <span className={css.pageTitleMuted}>/ 文件管理</span>
-        </h1>
-
-        <div className={css.metaRow}>
-          <span className={css.metaItem}>
-            <span className={css.metaLabel}>Source ID:</span>
-            <span className={css.metaValue}>{sourceId}</span>
-          </span>
-          <span className={css.metaItem}>
-            <span className={css.metaLabel}>真实路径:</span>
-            <span className={css.metaValue} title={sourceId}>
-              {/* 普通用户不可见真实路径；管理员视图在管理后台展示 */}
-              {canWrite ? `…/${sourceId}` : '（仅管理员可见）'}
-            </span>
-          </span>
-          {source.public_read_enabled && source.public_mount_path && (
-            <span className={css.metaItem}>
-              <span className={css.metaLabel}>公开挂载路径:</span>
-              <a
-                className={css.sideLink}
-                href={`/public${source.public_mount_path}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {source.public_mount_path}
-                <IconExternalLink size={12} />
-              </a>
-            </span>
-          )}
+        <div className={css.headerIntro}>
+          <h1 className={css.pageTitle}>{source.name}</h1>
+          <p className={css.pageDescription}>{source.description || '管理此存储源中的文件。'}</p>
           <div className={css.statusRow}>
-            <Badge color="green">正常</Badge>
+            <span>{source.permission === 'read_write' ? '读写权限' : '只读权限'}</span>
+            {source.webdav_enabled && <span>WebDAV</span>}
+            {source.image_bed_enabled && <span>图床</span>}
             {source.public_read_enabled && source.public_mount_path && (
-              <Badge color="green">已公开</Badge>
+              <a href={`/p${source.public_mount_path}`} target="_blank" rel="noreferrer">
+                公开访问 <IconExternalLink size={12} />
+              </a>
             )}
-            {source.webdav_enabled && <Badge color="gray">WebDAV 已启用</Badge>}
-            {source.image_bed_enabled && <Badge color="purple">图床 已启用</Badge>}
           </div>
         </div>
 
-        <div className={css.headerActions} style={{ marginLeft: 'auto' }}>
+        <div className={css.headerActions}>
           {canWrite && (
             <>
               <Button onClick={() => fileInput.current?.click()}>
@@ -233,14 +223,15 @@ function FileManagerView({ source }: { source: UserSource }) {
               />
             </>
           )}
-          <Button
-            variant="secondary"
-            onClick={() => navigate({ to: '/app' })}
-          >
-            返回存储源列表
-          </Button>
         </div>
       </div>
+
+      {notice && (
+        <div className={notice.kind === 'error' ? css.noticeError : css.noticeSuccess} role={notice.kind === 'error' ? 'alert' : 'status'}>
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)}>关闭</button>
+        </div>
+      )}
 
       <div className={css.layout}>
         <div className={css.main}>
@@ -501,7 +492,11 @@ function FileManagerView({ source }: { source: UserSource }) {
           currentPath={currentPath}
           target={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onChanged={refresh}
+          onChanged={() => {
+            refresh()
+            setNotice({ kind: 'success', message: `已删除 ${deleteTarget.name}。` })
+          }}
+          onError={onError}
         />
       )}
     </AppShell>
@@ -659,7 +654,11 @@ function SourceInfoCard({ source }: { source: UserSource }) {
         <div className={css.sidePanelBody}>
           <Row label="存储源名称" value={source.name} />
           <Row label="Source ID" value={source.source_id} mono />
-          <Row label="真实路径" value="（仅管理员可见）" muted />
+          <Row
+            label="权限"
+            value={source.permission === 'read_write' ? '读写' : '只读'}
+            badge={source.permission === 'read_write' ? 'blue' : 'gray'}
+          />
           <Row
             label="公开挂载路径"
             value={source.public_read_enabled && source.public_mount_path ? source.public_mount_path : '—'}
@@ -976,19 +975,21 @@ function DeleteDialog({
   target,
   onClose,
   onChanged,
+  onError,
 }: {
   sourceId: string
   currentPath: string
   target: { name: string; type: string }
   onClose: () => void
   onChanged: () => void
+  onError: (error: unknown) => void
 }) {
   const fullPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
   const isDir = target.type === 'dir'
   const mut = useMutation({
     mutationFn: () => deleteFile(sourceId, fullPath),
     onSuccess: () => { onClose(); onChanged() },
-    onError: (e) => alert(e instanceof ApiRequestError ? e.message : '删除失败'),
+    onError,
   })
 
   return (

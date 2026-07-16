@@ -77,6 +77,34 @@ export const navLinkActive = style([
   },
 ])
 
+export const headerCta = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '84px',
+  height: '38px',
+  padding: '0 14px',
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.primary,
+  color: vars.color.textOnPrimary,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: {
+    '&:hover': { backgroundColor: vars.color.primaryHover },
+    '&:active': { backgroundColor: vars.color.primaryActive, transform: 'translateY(1px)' },
+  },
+})
+
+export const authPlaceholder = style({
+  width: '84px',
+  height: '38px',
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.surfaceHover,
+  flexShrink: 0,
+})
+
 export const main = style({
   flex: 1,
   width: '100%',
