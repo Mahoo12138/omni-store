@@ -105,6 +105,11 @@ export const main = style({
   flex: 1, width: '100%', maxWidth: '1360px', margin: '0 auto', padding: '48px clamp(24px, 4vw, 64px) 64px',
   '@media': { 'screen and (max-width: 820px)': { padding: '32px 18px 48px' }, 'screen and (max-width: 480px)': { padding: '24px 14px 40px' } },
 })
+export const mainWide = style([main, {
+  maxWidth: '1600px',
+  padding: '20px clamp(20px, 2vw, 32px) 48px',
+  '@media': { 'screen and (max-width: 820px)': { padding: '24px 18px 42px' }, 'screen and (max-width: 480px)': { padding: '20px 14px 36px' } },
+}])
 
 const pulse = keyframes({ '0%, 100%': { opacity: .5 }, '50%': { opacity: .85 } })
 export const loadingShell = style({ minHeight: '100dvh', display: 'grid', gridTemplateColumns: '224px 1fr', background: vars.color.background })

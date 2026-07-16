@@ -13,3 +13,7 @@ web/dist/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 本地浏览器验收产物
+.playwright-cli/
+output/

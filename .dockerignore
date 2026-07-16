@@ -1,0 +1,9 @@
+.git
+.codegraph
+
+web/node_modules
+web/dist
+web/tsconfig.tsbuildinfo
+
+omnistore.exe
+omnistore-data

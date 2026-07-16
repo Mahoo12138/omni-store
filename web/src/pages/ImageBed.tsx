@@ -1,19 +1,42 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { DragEvent, ReactNode } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteImage,
   fetchImageBedTargets,
   fetchImageHistory,
+  fetchTokenStatus,
   setDefaultImageBedTarget,
   uploadImage,
 } from '../api/imagebed'
+import type { ImageRecord } from '../api/imagebed'
 import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
-import { IconCopy, IconTrash } from '../components/ui/Icon'
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconCloud,
+  IconCopy,
+  IconExternalLink,
+  IconGrid,
+  IconImage,
+  IconInfo,
+  IconLink,
+  IconList,
+  IconRefresh,
+  IconSettings,
+  IconTrash,
+} from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
+import { resolveImageBedTarget } from './imageBedTarget'
 import * as css from './ImageBed.css'
+
+type TargetData = Awaited<ReturnType<typeof fetchImageBedTargets>>
+type TimeFilter = 'all' | 'today' | 'month'
+type ViewMode = 'grid' | 'list'
 
 export function ImageBedPage() {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
@@ -22,279 +45,483 @@ export function ImageBedPage() {
 
   if (targets.isPending) {
     return (
-      <AppShell title="图床">
-        <div style={{ padding: 32, color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          加载中…
-        </div>
+      <AppShell title="图床" wide>
+        <div className={css.loadingState} aria-busy="true">正在加载图床…</div>
       </AppShell>
     )
   }
 
-  // 没有可用图床目标 → 全屏空状态
   if (targets.isSuccess && targets.data.targets.length === 0) {
     return (
-      <AppShell title="图床">
+      <AppShell title="图床" wide>
         <NoTargetView isAdmin={isAdmin} />
       </AppShell>
     )
   }
 
-  return <ImageBedContent />
-}
+  if (!targets.data) return null
 
-// --- 无图床目标空状态 ---
+  return <ImageBedContent targetData={targets.data} />
+}
 
 function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
   return (
-    <div className={css.emptyMain}>
-      <div className={css.emptyIllustration}>
-        <ImageBedEmptyIllustration />
-      </div>
-      <h2 className={css.emptyTitle}>
-        {isAdmin ? '你还没有创建图床存储源' : '你还没有可用的图床目标'}
-      </h2>
-      <p className={css.emptyHint}>
+    <div className={css.noTargetPage}>
+      <div className={css.noTargetIcon}><IconCloud size={42} /></div>
+      <h1 className={css.noTargetTitle}>
+        {isAdmin ? '还没有可用的图床存储源' : '还没有可用的图床目标'}
+      </h1>
+      <p className={css.noTargetHint}>
         {isAdmin
-          ? '请前往系统设置创建一个启用了图床功能的存储源，开始上传与管理图片。'
-          : '当前没有可用于上传图片的存储源，请联系管理员分配具备图床权限的存储源，或切换到已有权限的存储源。'}
+          ? '创建存储源并启用图床功能后，即可在这里上传和管理图片。'
+          : '请联系管理员分配一个具备读写权限且已启用图床的存储源。'}
       </p>
+      {isAdmin ? (
+        <Link to="/app/admin" search={{ section: 'sources' }} className={css.primaryLink}>
+          前往系统设置 <IconChevronRight size={15} />
+        </Link>
+      ) : null}
     </div>
   )
 }
 
-// 云 + 图片 + 加号的空状态插画（对应设计稿）
-function ImageBedEmptyIllustration() {
-  return (
-    <svg width="260" height="180" viewBox="0 0 260 180" fill="none" aria-hidden="true">
-      {/* 大云 */}
-      <path
-        d="M70 50 c0 -14 12 -24 26 -24 c4 -10 14 -18 26 -18 c16 0 28 12 30 26 c2 -1 5 -2 8 -2 c10 0 18 8 18 18 c0 10 -8 18 -18 18 H72 c-12 0 -20 -8 -20 -18 z"
-        fill="oklch(0.92 0.04 230)"
-      />
-      {/* 装饰小云 */}
-      <ellipse cx="20" cy="42" rx="14" ry="6" fill="oklch(0.95 0.03 230)" />
-      <ellipse cx="232" cy="36" rx="18" ry="7" fill="oklch(0.95 0.03 230)" />
-      <ellipse cx="40" cy="78" rx="10" ry="4" fill="oklch(0.96 0.02 230)" />
-      <ellipse cx="218" cy="86" rx="12" ry="5" fill="oklch(0.96 0.02 230)" />
-      {/* 漂浮小点 */}
-      <circle cx="50" cy="22" r="2" fill="oklch(0.86 0.06 230)" />
-      <circle cx="210" cy="60" r="2.5" fill="oklch(0.86 0.06 230)" />
-      <circle cx="12" cy="100" r="2" fill="oklch(0.86 0.06 230)" />
-      <circle cx="248" cy="118" r="2" fill="oklch(0.86 0.06 230)" />
-      {/* 主图片框 */}
-      <rect
-        x="50"
-        y="68"
-        width="120"
-        height="92"
-        rx="8"
-        fill="oklch(0.95 0.04 230)"
-        stroke="oklch(0.78 0.1 230)"
-        strokeWidth="2"
-      />
-      <rect
-        x="50"
-        y="68"
-        width="120"
-        height="20"
-        rx="8"
-        fill="oklch(0.88 0.07 230)"
-      />
-      {/* 圆孔 */}
-      <circle cx="62" cy="78" r="2" fill="oklch(0.78 0.1 230)" />
-      <circle cx="70" cy="78" r="2" fill="oklch(0.78 0.1 230)" />
-      {/* 太阳 */}
-      <circle cx="140" cy="108" r="6" fill="oklch(0.92 0.09 80)" />
-      {/* 山 */}
-      <path d="M60 154 L92 116 L116 138 L140 108 L160 154 Z" fill="oklch(0.82 0.1 230)" />
-      <path d="M84 154 L108 124 L130 154 Z" fill="oklch(0.88 0.08 230)" />
-      {/* 第二个小相框（虚线 + 加号）*/}
-      <rect
-        x="168"
-        y="108"
-        width="60"
-        height="52"
-        rx="6"
-        fill="oklch(0.97 0.02 230)"
-        stroke="oklch(0.8 0.08 230)"
-        strokeWidth="1.5"
-        strokeDasharray="4 3"
-      />
-      <path
-        d="M198 122 v12 M192 128 h12"
-        stroke="oklch(0.7 0.12 230)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      {/* 底部投影 */}
-      <ellipse cx="125" cy="170" rx="80" ry="4" fill="oklch(0.94 0.02 230)" />
-      {/* 装饰叶子 */}
-      <path
-        d="M178 156 q4 -10 14 -12 q-2 10 -14 12 z"
-        fill="oklch(0.86 0.08 150)"
-        opacity="0.7"
-      />
-      <path
-        d="M30 158 q-6 -8 -2 -16 q8 4 2 16 z"
-        fill="oklch(0.86 0.08 150)"
-        opacity="0.6"
-      />
-    </svg>
-  )
-}
-
-// --- 正常图床内容（已有目标）---
-
-function ImageBedContent() {
+function ImageBedContent({ targetData }: { targetData: TargetData }) {
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const [selectedTarget, setSelectedTarget] = useState('')
-  const [msg, setMsg] = useState('')
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState(1)
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [copied, setCopied] = useState('')
 
-  const targets = useQuery({ queryKey: ['imagebed-targets'], queryFn: fetchImageBedTargets })
   const history = useQuery({
     queryKey: ['imagebed-history', page],
     queryFn: () => fetchImageHistory(page),
   })
+  const tokenStatus = useQuery({ queryKey: ['token-status'], queryFn: fetchTokenStatus })
 
-  const currentTarget = selectedTarget || targets.data?.default_source_id || ''
+  const currentTarget = resolveImageBedTarget(
+    selectedTarget,
+    targetData.default_source_id,
+    targetData.targets,
+  )
+  const currentTargetData = targetData.targets.find((target) => target.source_id === currentTarget)
+  const apiEndpoint = `${window.location.origin}/api/v1/image-bed/upload`
+
+  const visibleImages = useMemo(
+    () => filterImages(history.data?.items ?? [], timeFilter),
+    [history.data?.items, timeFilter],
+  )
+  const stats = useMemo(() => buildStats(history.data?.items ?? []), [history.data?.items])
 
   const setDefaultMut = useMutation({
     mutationFn: setDefaultImageBedTarget,
-    onSuccess: () => {
-      setMsg('默认目标已更新')
-      queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] })
+    onSuccess: async () => {
+      setNotice({ tone: 'success', text: '默认图床目标已更新' })
+      await queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] })
     },
-    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '设置失败'),
+    onError: (error) => setNotice({ tone: 'error', text: errorMessage(error, '设置默认目标失败') }),
   })
 
   const deleteMut = useMutation({
     mutationFn: deleteImage,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['imagebed-history'] }),
-    onError: (err) => alert(err instanceof ApiRequestError ? err.message : '删除失败'),
+    onSuccess: async () => {
+      setNotice({ tone: 'success', text: '图片已删除' })
+      await queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
+    },
+    onError: (error) => setNotice({ tone: 'error', text: errorMessage(error, '删除失败') }),
   })
 
-  async function onUpload(files: FileList | null) {
-    if (!files?.length) return
-    setMsg('')
+  async function onUpload(files: FileList | File[]) {
+    const queuedFiles = Array.from(files)
+    if (queuedFiles.length === 0 || !currentTarget) return
+    setNotice(null)
     setUploading(true)
     try {
-      for (const file of Array.from(files)) {
-        await uploadImage(file, currentTarget || undefined)
-      }
-      queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
-    } catch (err) {
-      setMsg(err instanceof ApiRequestError ? err.message : '上传失败')
+      for (const file of queuedFiles) await uploadImage(file, currentTarget)
+      setNotice({ tone: 'success', text: `${queuedFiles.length} 张图片上传成功` })
+      await queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
+    } catch (error) {
+      setNotice({ tone: 'error', text: errorMessage(error, '上传失败') })
     } finally {
       setUploading(false)
       if (fileInput.current) fileInput.current.value = ''
     }
   }
 
+  function onDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    setDragging(false)
+    if (!uploading) void onUpload(event.dataTransfer.files)
+  }
+
+  async function copyText(value: string, key: string) {
+    await navigator.clipboard.writeText(value)
+    setCopied(key)
+    window.setTimeout(() => setCopied(''), 1600)
+  }
+
   return (
-    <AppShell title="图床">
-      <section className={css.section}>
-        <h2 className={css.sectionTitle}>上传图片</h2>
-        {targets.isSuccess && targets.data.targets.length > 0 && (
-          <>
-            <div className={css.row}>
-              <span className={css.label}>目标存储源：</span>
-              <select
-                className={css.select}
-                value={currentTarget}
-                onChange={(e) => setSelectedTarget(e.target.value)}
+    <AppShell title="图床" wide>
+      <div className={css.pageHeader}>
+        <h1 className={css.pageTitle}>图床</h1>
+        {notice ? (
+          <div className={notice.tone === 'success' ? css.successNotice : css.errorNotice} role="status">
+            {notice.text}
+          </div>
+        ) : null}
+      </div>
+
+      <div className={css.workspace}>
+        <div className={css.mainColumn}>
+          <div className={css.uploadRow}>
+            <section className={css.panel} aria-labelledby="upload-title">
+              <button
+                type="button"
+                className={dragging ? css.dropZoneActive : css.dropZone}
+                disabled={uploading}
+                onClick={() => fileInput.current?.click()}
+                onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+                }}
+                onDrop={onDrop}
               >
-                {targets.data.targets.map((t) => (
-                  <option key={t.source_id} value={t.source_id}>
-                    {t.name}
-                    {t.source_id === targets.data.default_source_id ? '（默认）' : ''}
-                  </option>
-                ))}
-              </select>
-              {currentTarget && currentTarget !== targets.data.default_source_id && (
-                <Button variant="secondary" onClick={() => setDefaultMut.mutate(currentTarget)}>
-                  设为默认
-                </Button>
-              )}
-            </div>
-            <div className={css.row}>
+                <span className={css.uploadIcon}><IconCloud size={46} /></span>
+                <strong id="upload-title" className={css.uploadTitle}>
+                  {uploading ? '正在上传图片…' : '拖拽图片到这里，或点击上传'}
+                </strong>
+                <span className={css.uploadHint}>支持 JPG、PNG、WEBP、GIF，单张不超过 10MB</span>
+              </button>
               <input
                 ref={fileInput}
+                className={css.hiddenInput}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
                 disabled={uploading}
-                onChange={(e) => onUpload(e.target.files)}
+                onChange={(event) => void onUpload(event.target.files ?? [])}
               />
-              {uploading && <span className={css.label}>上传中…</span>}
-            </div>
-            {msg && <p className={css.error}>{msg}</p>}
-          </>
-        )}
-      </section>
+            </section>
 
-      <section className={css.section}>
-        <h2 className={css.sectionTitle}>我的图片</h2>
-        {history.isSuccess && history.data.items.length === 0 && (
-          <div className={css.emptyBlock}>
-            <p>还没有上传过图片。</p>
-          </div>
-        )}
-        <div className={css.grid}>
-          {history.data?.items.map((img) => (
-            <div key={img.image_id} className={css.imageCard}>
-              <a href={img.public_url} target="_blank" rel="noreferrer">
-                <img
-                  className={css.imageThumb}
-                  src={img.public_url}
-                  alt={img.original_filename || img.image_id}
-                  loading="lazy"
-                />
-              </a>
-              <div className={css.imageMeta}>
-                {img.width}×{img.height} · {formatBytes(img.size)}
+            <section className={css.panel} aria-labelledby="target-title">
+              <div className={css.panelHeading}>
+                <h2 id="target-title" className={css.sectionTitle}>图床目标</h2>
+                <span className={css.statusBadge}>正常</span>
               </div>
-              <div className={css.imageActions}>
-                <button
-                  className={css.actionBtn}
-                  aria-label="复制链接"
-                  onClick={() => navigator.clipboard.writeText(img.public_url)}
+
+              <div className={css.targetSelectWrap}>
+                <span className={css.targetIcon}><IconImage size={19} /></span>
+                <select
+                  className={css.targetSelect}
+                  value={currentTarget}
+                  onChange={(event) => setSelectedTarget(event.target.value)}
+                  aria-label="选择图床目标"
                 >
-                  <IconCopy size={15} />
-                </button>
+                  {targetData.targets.map((target) => (
+                    <option key={target.source_id} value={target.source_id}>
+                      {target.name}{target.source_id === targetData.default_source_id ? '（默认）' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className={css.selectChevron}><IconChevronDown size={14} /></span>
+              </div>
+              <div className={css.targetMetaRow}>
+                <span>{currentTargetData?.description || `存储源 ID：${currentTarget}`}</span>
+                {currentTarget !== targetData.default_source_id ? (
+                  <button
+                    type="button"
+                    className={css.textButton}
+                    disabled={setDefaultMut.isPending}
+                    onClick={() => setDefaultMut.mutate(currentTarget)}
+                  >
+                    设为默认
+                  </button>
+                ) : <span className={css.defaultLabel}>默认目标</span>}
+              </div>
+
+              <div className={css.interfaceHeading}>
+                <span>接口信息</span>
+                <IconInfo size={14} />
+              </div>
+              <InfoRow
+                label="PicGo API Token"
+                value={tokenStatus.data?.image_bed.exists ? '已配置 · 明文仅在重置时显示' : '尚未配置'}
+                action={
+                  <Link to="/app/admin" search={{ section: 'profile' }} className={css.inlineLink}>
+                    管理
+                  </Link>
+                }
+              />
+              <InfoRow
+                label="API 接口地址"
+                value={apiEndpoint}
+                action={
+                  <CopyButton copied={copied === 'api'} onClick={() => void copyText(apiEndpoint, 'api')} />
+                }
+              />
+              <InfoRow
+                label="Markdown 示例"
+                value="![图片](https://your-domain/i/xxx.jpg)"
+                action={
+                  <CopyButton
+                    copied={copied === 'markdown-example'}
+                    onClick={() => void copyText('![图片](https://your-domain/i/xxx.jpg)', 'markdown-example')}
+                  />
+                }
+              />
+            </section>
+          </div>
+
+          <section className={css.historySection} aria-labelledby="history-title">
+            <div className={css.historyHeader}>
+              <div className={css.historyTitleWrap}>
+                <h2 id="history-title" className={css.historyTitle}>图片历史</h2>
                 <button
-                  className={css.actionBtnDanger}
-                  aria-label="删除"
-                  onClick={() => {
-                    if (confirm('确定删除这张图片吗？物理文件会一并删除。')) {
-                      deleteMut.mutate(img.image_id)
+                  type="button"
+                  className={css.iconButton}
+                  aria-label="刷新图片历史"
+                  onClick={() => void history.refetch()}
+                >
+                  <IconRefresh size={15} />
+                </button>
+                <span className={css.historyCount}>{history.data?.total ?? 0} 张</span>
+              </div>
+              <div className={css.historyTools}>
+                <select
+                  className={css.filterSelect}
+                  value={timeFilter}
+                  onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                  aria-label="按时间筛选"
+                >
+                  <option value="all">全部时间</option>
+                  <option value="today">今天</option>
+                  <option value="month">本月</option>
+                </select>
+                <div className={css.viewSwitch} aria-label="显示方式">
+                  <button
+                    type="button"
+                    className={viewMode === 'grid' ? css.viewButtonActive : css.viewButton}
+                    aria-label="网格视图"
+                    onClick={() => setViewMode('grid')}
+                  ><IconGrid size={16} /></button>
+                  <button
+                    type="button"
+                    className={viewMode === 'list' ? css.viewButtonActive : css.viewButton}
+                    aria-label="列表视图"
+                    onClick={() => setViewMode('list')}
+                  ><IconList size={16} /></button>
+                </div>
+              </div>
+            </div>
+
+            {history.isPending ? <div className={css.historyEmpty}>正在加载图片…</div> : null}
+            {history.isSuccess && visibleImages.length === 0 ? (
+              <div className={css.historyEmpty}>
+                <span className={css.emptyImageIcon}><IconImage size={26} /></span>
+                <strong>{timeFilter === 'all' ? '还没有上传过图片' : '这个时间范围内没有图片'}</strong>
+                <span>上传后的图片会出现在这里，方便复制链接和管理。</span>
+              </div>
+            ) : null}
+
+            <div className={viewMode === 'grid' ? css.imageGrid : css.imageList}>
+              {visibleImages.map((image) => (
+                <ImageCard
+                  key={image.image_id}
+                  image={image}
+                  list={viewMode === 'list'}
+                  copied={copied}
+                  onCopy={copyText}
+                  onDelete={(imageId) => {
+                    if (window.confirm('确定删除这张图片吗？物理文件会一并删除。')) {
+                      deleteMut.mutate(imageId)
                     }
                   }}
-                >
-                  <IconTrash size={15} />
-                </button>
-              </div>
+                />
+              ))}
             </div>
-          ))}
+
+            {history.isSuccess && history.data.total > 50 ? (
+              <div className={css.pager}>
+                <span>第 {page} 页</span>
+                <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+                  上一页
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={page * 50 >= history.data.total}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  下一页
+                </Button>
+              </div>
+            ) : null}
+          </section>
         </div>
-        {history.isSuccess && history.data.total > 50 && (
-          <div className={css.pager}>
-            <span>共 {history.data.total} 张</span>
-            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              上一页
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={page * 50 >= history.data.total}
-              onClick={() => setPage(page + 1)}
-            >
-              下一页
-            </Button>
-          </div>
-        )}
-      </section>
+
+        <aside className={css.sideColumn}>
+          <section className={css.sidePanel}>
+            <div className={css.panelHeading}>
+              <h2 className={css.sectionTitle}>图床信息</h2>
+              <span className={css.sidePanelIcon}><IconInfo size={16} /></span>
+            </div>
+            <p className={css.sideLabel}>当前图床目标</p>
+            <div className={css.targetSummary}>
+              <span className={css.targetIcon}><IconImage size={18} /></span>
+              <div className={css.targetSummaryText}>
+                <strong>{currentTargetData?.name ?? currentTarget}</strong>
+                <span>{currentTarget}</span>
+              </div>
+              <span className={css.statusBadge}>正常</span>
+            </div>
+            <dl className={css.statList}>
+              <Stat label="已上传图片" value={`${history.data?.total ?? 0} 张`} />
+              <Stat label="今日上传" value={`${stats.today} 张`} />
+              <Stat label="本月上传" value={`${stats.month} 张`} />
+              <Stat label="当前页图片体积" value={formatBytes(stats.bytes)} />
+            </dl>
+            <Link to="/app/admin" search={{ section: 'sources' }} className={css.settingsLink}>
+              <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
+            </Link>
+          </section>
+
+          <section className={css.sidePanel}>
+            <div className={css.tutorialHeading}>
+              <h2 className={css.sectionTitle}>如何在 PicGo 中使用</h2>
+            </div>
+            <ol className={css.steps}>
+              <li>在个人设置中重置并复制图床 API Token。</li>
+              <li>在 PicGo 中选择“自定义 Web 图床”。</li>
+              <li>将接口地址填为上方 API 地址，并添加 Bearer Token。</li>
+              <li>保存配置后即可直接上传到当前默认目标。</li>
+            </ol>
+            <Link to="/about" className={css.tutorialLink}>
+              查看使用说明 <IconExternalLink size={14} />
+            </Link>
+          </section>
+        </aside>
+      </div>
     </AppShell>
   )
+}
+
+function InfoRow({ label, value, action }: { label: string; value: string; action: ReactNode }) {
+  return (
+    <div className={css.infoRow}>
+      <div className={css.infoText}>
+        <span>{label}</span>
+        <strong title={value}>{value}</strong>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function CopyButton({ copied, onClick }: { copied: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={css.copyButton} onClick={onClick} aria-label="复制">
+      <IconCopy size={14} /> {copied ? '已复制' : '复制'}
+    </button>
+  )
+}
+
+function ImageCard({
+  image,
+  list,
+  copied,
+  onCopy,
+  onDelete,
+}: {
+  image: ImageRecord
+  list: boolean
+  copied: string
+  onCopy: (value: string, key: string) => Promise<void>
+  onDelete: (imageId: string) => void
+}) {
+  const name = image.original_filename || `${image.image_id}.${image.ext}`
+  const markdown = `![${name}](${image.public_url})`
+  return (
+    <article className={list ? css.imageCardList : css.imageCard}>
+      <a href={image.public_url} target="_blank" rel="noreferrer" className={list ? css.thumbLinkList : css.thumbLink}>
+        <img className={list ? css.imageThumbList : css.imageThumb} src={image.public_url} alt={name} loading="lazy" />
+      </a>
+      <div className={css.imageBody}>
+        <strong className={css.imageName} title={name}>{name}</strong>
+        <div className={css.imageMeta}>
+          <span>{formatImageDate(image.created_at)}</span>
+          <span>{image.width}×{image.height}</span>
+          <span>{formatBytes(image.size)}</span>
+        </div>
+      </div>
+      <div className={css.imageActions}>
+        <button
+          type="button"
+          className={css.actionButton}
+          aria-label="复制 Markdown"
+          title={copied === `md-${image.image_id}` ? '已复制' : '复制 Markdown'}
+          onClick={() => void onCopy(markdown, `md-${image.image_id}`)}
+        ><IconLink size={15} /></button>
+        <button
+          type="button"
+          className={css.actionButton}
+          aria-label="复制图片链接"
+          title={copied === `url-${image.image_id}` ? '已复制' : '复制链接'}
+          onClick={() => void onCopy(image.public_url, `url-${image.image_id}`)}
+        ><IconCopy size={15} /></button>
+        <button
+          type="button"
+          className={css.deleteButton}
+          aria-label="删除图片"
+          onClick={() => onDelete(image.image_id)}
+        ><IconTrash size={15} /></button>
+      </div>
+    </article>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return <div className={css.statRow}><dt>{label}</dt><dd>{value}</dd></div>
+}
+
+function filterImages(images: ImageRecord[], filter: TimeFilter) {
+  if (filter === 'all') return images
+  const now = new Date()
+  return images.filter((image) => {
+    const date = new Date(image.created_at)
+    if (filter === 'today') return date.toDateString() === now.toDateString()
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+  })
+}
+
+function buildStats(images: ImageRecord[]) {
+  const now = new Date()
+  let today = 0
+  let month = 0
+  let bytes = 0
+  for (const image of images) {
+    const date = new Date(image.created_at)
+    bytes += image.size
+    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
+      month += 1
+      if (date.toDateString() === now.toDateString()) today += 1
+    }
+  }
+  return { today, month, bytes }
+}
+
+function formatImageDate(value: string) {
+  const date = new Date(value)
+  const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60_000)
+  if (diffMinutes < 1) return '刚刚'
+  if (diffMinutes < 60) return `${diffMinutes} 分钟前`
+  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} 小时前`
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiRequestError ? error.message : fallback
 }

@@ -1,10 +1,11 @@
 # 多阶段构建：前端 -> 后端 -> 运行镜像
 FROM node:24-alpine AS web
 WORKDIR /src/web
-COPY web/package.json web/pnpm-lock.yaml ./
-RUN npm ci
+RUN corepack enable && corepack install --global pnpm@10.22.0
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY web/ ./
-RUN npm run build
+RUN pnpm run build
 
 FROM golang:1.25-alpine AS build
 WORKDIR /src

@@ -16,7 +16,15 @@ import * as css from './AppShell.css'
 
 // 登录侧布局（docs/home.png）：左侧白色侧栏 + 内容区顶栏。
 // 未登录自动跳转 /login；<820px 时侧栏折叠为顶部横向导航。
-export function AppShell({ title, children }: { title: string; children: ReactNode }) {
+export function AppShell({
+  title,
+  children,
+  wide = false,
+}: {
+  title: string
+  children: ReactNode
+  wide?: boolean
+}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { pathname } = useLocation()
@@ -93,7 +101,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           </Link>
           <UserMenu displayName={user.display_name} onLogout={onLogout} />
         </header>
-        <main className={css.main}>{children}</main>
+        <main className={wide ? css.mainWide : css.main}>{children}</main>
       </div>
     </div>
   )
