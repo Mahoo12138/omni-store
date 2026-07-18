@@ -201,24 +201,31 @@ function ProfileSection() {
   }
 
   return (
-    <>
-      <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>账号信息</h2>
-          <p className={css.sectionHint}>
-            用户名：{me.data?.username ?? '-'}（不可修改） · 当前显示名：
-            {me.data?.display_name || me.data?.username || '-'}
-          </p>
-        </div>
-        <div className={css.sectionBody}>
-          <div className={css.formRow}>
-            <Button variant="secondary" onClick={() => setProfileOpen(true)}>
-              修改显示名
-            </Button>
-            <Button variant="secondary" onClick={() => setPwdOpen(true)}>
-              修改密码
-            </Button>
+    <div className={css.profilePage}>
+      <section className={css.accountPanel}>
+        <div className={css.accountIdentity}>
+          <span className={css.accountAvatar} aria-hidden="true">
+            {(me.data?.display_name || me.data?.username || 'U').slice(0, 1).toUpperCase()}
+          </span>
+          <div className={css.accountCopy}>
+            <span className={css.eyebrow}>个人账户</span>
+            <h2 className={css.accountName}>
+              {me.data?.display_name || me.data?.username || '加载中…'}
+            </h2>
+            <p className={css.accountMeta}>
+              <span>@{me.data?.username ?? '-'}</span>
+              <span className={css.metaDivider} aria-hidden="true" />
+              <span>用户名不可修改</span>
+            </p>
           </div>
+        </div>
+        <div className={css.accountActions}>
+          <Button variant="secondary" onClick={() => setProfileOpen(true)}>
+            修改显示名
+          </Button>
+          <Button variant="secondary" onClick={() => setPwdOpen(true)}>
+            修改密码
+          </Button>
         </div>
       </section>
 
@@ -296,37 +303,46 @@ function ProfileSection() {
         </Field>
       </DialogWrap>
 
-      {/* Token 段 */}
-      <TokenBlock
-        type="webdav"
-        title="WebDAV Token"
-        hint="WebDAV 挂载地址为 /dav，用户名为登录名，密码为此 Token。"
-        status={tokens.data?.webdav}
-        newToken={newTokens.webdav}
-        onReset={(t) => resetMut.mutate(t)}
-      />
-      <TokenBlock
-        type="image-bed"
-        title="图床 API Token"
-        hint="PicGo 上传接口 POST /api/v1/image-bed/upload，Bearer Token，只能用于图床上传。"
-        status={tokens.data?.image_bed}
-        newToken={newTokens['image-bed']}
-        onReset={(t) => resetMut.mutate(t)}
-      />
+      <section className={css.credentialsPanel}>
+        <header className={css.credentialsHeader}>
+          <div>
+            <span className={css.eyebrow}>访问凭据</span>
+            <h2 className={css.credentialsTitle}>应用与客户端连接</h2>
+          </div>
+          <p className={css.credentialsHint}>Token 仅在生成时展示一次，请妥善保存。</p>
+        </header>
+        <div className={css.tokenList}>
+          <TokenBlock
+            type="webdav"
+            title="WebDAV"
+            hint="通过 /dav 挂载文件，使用登录名与此 Token 认证。"
+            status={tokens.data?.webdav}
+            newToken={newTokens.webdav}
+            onReset={(t) => resetMut.mutate(t)}
+          />
+          <TokenBlock
+            type="image-bed"
+            title="图床 API"
+            hint="用于 PicGo 等客户端上传图片，仅授予图床上传权限。"
+            status={tokens.data?.image_bed}
+            newToken={newTokens['image-bed']}
+            onReset={(t) => resetMut.mutate(t)}
+          />
+        </div>
+      </section>
 
       {/* 危险操作 */}
       <div className={css.dangerBox}>
-        <span className={css.dangerIcon}>
-          <IconInfo size={18} />
-        </span>
+        <span className={css.dangerIcon}><IconInfo size={18} /></span>
         <span className={css.dangerText}>
-          永久删除当前账号，并移除在这个实例内的全部访问权限。
+          <strong className={css.dangerTitle}>撤销账号</strong>
+          <small className={css.dangerHint}>永久删除账号及其在当前实例内的全部访问权限。</small>
         </span>
         <Button variant="danger" disabled title="即将开放">
           撤销账号
         </Button>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -348,35 +364,27 @@ function TokenBlock({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
   return (
-    <section className={css.section}>
-      <div className={css.sectionHeader}>
-        <h2 className={css.sectionTitle}>{title}</h2>
-        <p className={css.sectionHint}>{hint}</p>
+    <article className={css.tokenRow}>
+      <div className={css.tokenIcon} aria-hidden="true"><IconKey size={17} /></div>
+      <div className={css.tokenCopy}>
+        <h3 className={css.tokenTitle}>{title}</h3>
+        <p className={css.tokenHint}>{hint}</p>
       </div>
-      <div className={css.sectionBody}>
+      <div className={css.tokenStatus}>
         {status?.exists ? (
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>已生成</span>
-            <span className={css.kvValue}>
-              {status.created_at ? formatDate(status.created_at) : '-'}
-              {status.last_used_at ? `（最近使用 ${formatDate(status.last_used_at)}）` : '（从未使用）'}
-            </span>
-          </div>
+          <>
+            <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用</span>
+            <span className={css.tokenDate}>{status.created_at ? formatDate(status.created_at) : '-'}</span>
+            <span className={css.lastUsed}>{status.last_used_at ? `最近使用 ${formatDate(status.last_used_at)}` : '从未使用'}</span>
+          </>
         ) : (
-          <span className={css.kvLabel}>尚未生成。</span>
+          <span className={css.statusBadgeMuted}>未生成</span>
         )}
-        <div>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              if (!status?.exists) onReset(type)
-              else setConfirmOpen(true)
-            }}
-          >
-            <IconKey size={14} />
-            {status?.exists ? '重置 Token' : '生成 Token'}
-          </Button>
-        </div>
+      </div>
+      <div className={css.tokenAction}>
+        <Button variant="secondary" onClick={() => status?.exists ? setConfirmOpen(true) : onReset(type)}>
+          {status?.exists ? '重置 Token' : '生成 Token'}
+        </Button>
       </div>
 
       {/* 重置 Token 确认弹窗 */}
@@ -432,7 +440,7 @@ function TokenBlock({
         {/* 当 newToken 出现时自动打开 */}
         <TokenAutoOpen token={newToken} onOpen={setShowOpen} />
       </DialogWrap>
-    </section>
+    </article>
   )
 }
 

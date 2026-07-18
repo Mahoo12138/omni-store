@@ -66,7 +66,12 @@ export function AppShell({
         </Link>
         <nav className={css.nav} aria-label="主导航">
           {navItems.map((item) => (
-            <Link key={item.to} to={item.to} className={item.active ? css.navLinkActive : css.navLink}>
+            <Link
+              key={item.to}
+              to={item.to}
+              className={item.active ? css.navLinkActive : css.navLink}
+              aria-current={item.active ? 'page' : undefined}
+            >
               {item.icon}
               {item.label}
             </Link>
@@ -75,6 +80,7 @@ export function AppShell({
             <Link
               to="/app/admin"
               className={adminActive ? css.navLinkActive : css.navLink}
+              aria-current={adminActive ? 'page' : undefined}
             >
               <IconSettings />
               系统设置
@@ -93,7 +99,7 @@ export function AppShell({
 
       <div className={css.content}>
         <header className={css.topbar}>
-          <h1 className={css.topbarTitle}>{title}</h1>
+          <div className={css.topbarTitle}>{title}</div>
           <div className={css.topbarSpacer} />
           <Link to="/about" className={css.helpLink}>
             <IconQuestion size={16} />

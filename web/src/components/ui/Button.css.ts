@@ -15,11 +15,19 @@ const base = style({
   fontWeight: 500,
   cursor: 'pointer',
   whiteSpace: 'nowrap',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
     '&:disabled': {
       opacity: 0.5,
       cursor: 'not-allowed',
+    },
+    '&:active:not(:disabled)': {
+      transform: 'translateY(1px)',
+    },
+  },
+  '@media': {
+    'screen and (max-width: 820px)': {
+      height: '44px',
     },
   },
 })

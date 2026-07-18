@@ -248,6 +248,76 @@ export const settingsContent = style({
   gap: vars.space.lg,
 })
 
+export const profilePage = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.lg,
+})
+
+export const accountPanel = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: vars.space.lg,
+  padding: '28px 30px',
+  backgroundColor: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+  '@media': {
+    'screen and (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)', padding: vars.space.lg },
+  },
+})
+
+export const accountIdentity = style({ display: 'flex', alignItems: 'center', gap: vars.space.md, minWidth: 0 })
+export const accountAvatar = style({
+  display: 'grid', placeItems: 'center', width: '52px', height: '52px', flexShrink: 0,
+  borderRadius: vars.radius.tile, backgroundColor: vars.color.primarySubtle,
+  color: vars.color.primarySubtleInk, fontSize: vars.fontSize.xl, fontWeight: 700,
+})
+export const accountCopy = style({ minWidth: 0 })
+export const eyebrow = style({
+  display: 'block', marginBottom: '5px', color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+})
+export const accountName = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.xl, lineHeight: 1.25, letterSpacing: '-0.02em' })
+export const accountMeta = style({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: vars.space.sm, margin: '6px 0 0', color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+export const metaDivider = style({ width: '3px', height: '3px', borderRadius: vars.radius.full, backgroundColor: vars.color.borderStrong })
+export const accountActions = style({ display: 'flex', flexWrap: 'wrap', gap: vars.space.sm })
+
+export const credentialsPanel = style({
+  backgroundColor: vars.color.surface, border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg, overflow: 'hidden', boxShadow: vars.shadow.sm,
+})
+export const credentialsHeader = style({
+  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(220px, 0.7fr)', gap: vars.space.lg,
+  alignItems: 'end', padding: '24px 30px 20px', borderBottom: `1px solid ${vars.color.border}`,
+  '@media': { 'screen and (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)', padding: vars.space.lg } },
+})
+export const credentialsTitle = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.lg, letterSpacing: '-0.01em' })
+export const credentialsHint = style({ margin: 0, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.6 })
+export const tokenList = style({ padding: '0 30px', '@media': { 'screen and (max-width: 640px)': { padding: `0 ${vars.space.lg}` } } })
+export const tokenRow = style({
+  display: 'grid', gridTemplateColumns: '40px minmax(180px, 1fr) minmax(150px, 0.7fr) auto',
+  gap: vars.space.md, alignItems: 'center', padding: '22px 0', borderBottom: `1px solid ${vars.color.border}`,
+  selectors: { '&:last-child': { borderBottom: 'none' } },
+  '@media': {
+    'screen and (max-width: 760px)': { gridTemplateColumns: '40px minmax(0, 1fr) auto' },
+    'screen and (max-width: 520px)': { gridTemplateColumns: '40px minmax(0, 1fr)', alignItems: 'start' },
+  },
+})
+export const tokenIcon = style({ display: 'grid', placeItems: 'center', width: '40px', height: '40px', borderRadius: vars.radius.md, backgroundColor: vars.color.primarySubtle, color: vars.color.primary })
+export const tokenCopy = style({ minWidth: 0 })
+export const tokenTitle = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.md, fontWeight: 600 })
+export const tokenHint = style({ margin: '5px 0 0', maxWidth: '48ch', color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.55 })
+export const tokenStatus = style({ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', '@media': { 'screen and (max-width: 760px)': { gridColumn: '2 / -1' } } })
+export const statusBadge = style({ display: 'inline-flex', alignItems: 'center', gap: '6px', color: vars.color.success, fontSize: vars.fontSize.xs, fontWeight: 600 })
+export const statusDotSmall = style({ width: '6px', height: '6px', borderRadius: vars.radius.full, backgroundColor: vars.color.success })
+export const statusBadgeMuted = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontWeight: 600 })
+export const tokenDate = style({ color: vars.color.text, fontFamily: vars.font.mono, fontSize: vars.fontSize.xs })
+export const lastUsed = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const tokenAction = style({ '@media': { 'screen and (max-width: 520px)': { gridColumn: '2 / -1' } } })
+
 export const settingsFooter = style({
   marginTop: vars.space.xl,
   paddingTop: vars.space.md,
@@ -312,8 +382,8 @@ export const kvValue = style({
 
 // 危险操作卡
 export const dangerBox = style({
-  backgroundColor: vars.color.dangerSubtle,
-  border: `1px solid ${vars.color.danger}`,
+  backgroundColor: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.md,
   padding: vars.space.md,
   display: 'flex',
@@ -336,7 +406,12 @@ export const dangerIcon = style({
 export const dangerText = style({
   flex: 1,
   color: vars.color.text,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
 })
+export const dangerTitle = style({ fontWeight: 600 })
+export const dangerHint = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, lineHeight: 1.45 })
 
 // 表单行
 export const formRow = style({

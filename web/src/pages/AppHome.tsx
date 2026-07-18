@@ -73,10 +73,11 @@ export function AppHomePage() {
             {sources.isPending ? (
               <SourceListLoading />
             ) : sources.isError ? (
-              <div className={css.inlineState} role="alert">
-                <strong>无法加载存储源</strong>
-                <span>请检查连接后刷新页面。</span>
-              </div>
+              <RetryState
+                title="无法加载存储源"
+                message="请检查网络连接后重试。"
+                onRetry={() => sources.refetch()}
+              />
             ) : sourceList.length === 0 ? (
               <NoSourceView isAdmin={isAdmin} />
             ) : (
@@ -86,11 +87,11 @@ export function AppHomePage() {
                   <span>权限与服务</span>
                   <span>操作</span>
                 </div>
-                {sourceList.map((source, index) => (
+                {sourceList.map((source) => (
                   <button
                     type="button"
                     key={source.source_id}
-                    className={index === 1 ? css.sourceRowHighlighted : css.sourceRow}
+                    className={css.sourceRow}
                     onClick={() => openSource(source.source_id)}
                     aria-label={`打开存储源 ${source.name}`}
                   >
@@ -114,6 +115,8 @@ export function AppHomePage() {
           <RecentActivity
             items={activity.data ?? []}
             loading={activity.isPending}
+            error={activity.isError}
+            onRetry={() => activity.refetch()}
             showAll={isAdmin}
           />
         </div>
@@ -145,7 +148,12 @@ export function AppHomePage() {
               </Link>
             </div>
           </section>
-          <SystemStatusPanel data={system.data} loading={system.isPending} />
+          <SystemStatusPanel
+            data={system.data}
+            loading={system.isPending}
+            error={system.isError}
+            onRetry={() => system.refetch()}
+          />
         </aside>
       </div>
     </AppShell>
@@ -162,8 +170,37 @@ function capabilities(source: UserSource): string {
 
 function SourceListLoading() {
   return (
-    <div className={css.sourceList} aria-busy="true" aria-label="正在加载存储源">
-      {[0, 1, 2].map((item) => <div className={css.sourceSkeleton} key={item} />)}
+    <div className={css.sourceList} role="status" aria-busy="true" aria-label="正在加载存储源">
+      {[0, 1, 2].map((item) => (
+        <div className={css.sourceSkeleton} key={item} aria-hidden="true">
+          <span className={css.skeletonIcon} />
+          <span className={css.skeletonText}>
+            <i />
+            <i />
+          </span>
+          <span className={css.skeletonMeta} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RetryState({
+  title,
+  message,
+  onRetry,
+}: {
+  title: string
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <div className={css.inlineState} role="alert">
+      <div>
+        <strong>{title}</strong>
+        <span>{message}</span>
+      </div>
+      <Button variant="secondary" onClick={onRetry}>重新加载</Button>
     </div>
   )
 }
@@ -178,14 +215,24 @@ function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
       </div>
       {isAdmin && (
         <Link to="/app/admin" search={{ section: 'sources' }} className={css.textAction}>
-          前往设置 <IconChevronRight size={15} />
+          配置存储源 <IconChevronRight size={15} />
         </Link>
       )}
     </div>
   )
 }
 
-function SystemStatusPanel({ data, loading }: { data: SystemStatus | undefined; loading: boolean }) {
+function SystemStatusPanel({
+  data,
+  loading,
+  error,
+  onRetry,
+}: {
+  data: SystemStatus | undefined
+  loading: boolean
+  error: boolean
+  onRetry: () => void
+}) {
   const flags: Array<{ label: string; value: SystemStatusFlag | undefined }> = [
     { label: 'WebDAV', value: data?.webdav },
     { label: '图床服务', value: data?.file_preview },
@@ -198,9 +245,14 @@ function SystemStatusPanel({ data, loading }: { data: SystemStatus | undefined; 
         {!loading && data && <span className={css.running}><i />运行中</span>}
       </div>
       {loading ? (
-        <div className={css.statusLoading}>正在检查…</div>
-      ) : !data ? (
-        <div className={css.statusLoading}>暂时无法读取状态</div>
+        <div className={css.statusSkeleton} role="status" aria-label="正在检查服务状态">
+          {[0, 1, 2].map((item) => <i key={item} aria-hidden="true" />)}
+        </div>
+      ) : error || !data ? (
+        <div className={css.compactError} role="alert">
+          <span>暂时无法读取状态</span>
+          <button type="button" onClick={onRetry}>重新检查</button>
+        </div>
       ) : (
         <div className={css.statusList}>
           {flags.map(({ label, value }) => (
@@ -215,7 +267,19 @@ function SystemStatusPanel({ data, loading }: { data: SystemStatus | undefined; 
   )
 }
 
-function RecentActivity({ items, loading, showAll }: { items: ActivityItem[]; loading: boolean; showAll: boolean }) {
+function RecentActivity({
+  items,
+  loading,
+  error,
+  onRetry,
+  showAll,
+}: {
+  items: ActivityItem[]
+  loading: boolean
+  error: boolean
+  onRetry: () => void
+  showAll: boolean
+}) {
   return (
     <section className={css.activitySection} aria-labelledby="activity-title">
       <div className={css.sectionHeader}>
@@ -225,16 +289,30 @@ function RecentActivity({ items, loading, showAll }: { items: ActivityItem[]; lo
         )}
       </div>
       {loading ? (
-        <div className={css.activityEmpty}>正在加载…</div>
+        <div className={css.activityList} role="status" aria-label="正在加载最近活动">
+          {[0, 1, 2].map((item) => (
+            <div className={css.activitySkeleton} key={item} aria-hidden="true">
+              <i />
+              <span><i /><i /></span>
+              <i />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <RetryState
+          title="无法加载最近活动"
+          message="操作记录暂时不可用。"
+          onRetry={onRetry}
+        />
       ) : items.length === 0 ? (
-        <div className={css.activityEmpty}>还没有操作记录</div>
+        <div className={css.activityEmpty}>完成上传、整理或共享后，最近操作会显示在这里。</div>
       ) : (
         <div className={css.activityList}>
           {items.map((item) => (
             <div className={css.activityRow} key={item.id}>
               <span className={css.activityIcon}><IconActivity size={16} /></span>
               <span className={css.activityBody}>
-                <strong>{item.title}</strong>
+                <strong>{activityTitle(item)}</strong>
                 <small>{item.source_name ? `在 ${item.source_name}` : '系统操作'}</small>
               </span>
               <time>{formatRelative(item.created_at)}</time>
@@ -244,6 +322,39 @@ function RecentActivity({ items, loading, showAll }: { items: ActivityItem[]; lo
       )}
     </section>
   )
+}
+
+const activityLabels: Record<string, string> = {
+  create_source: '新建存储源',
+  update_source: '更新存储源',
+  delete_source: '删除存储源',
+  enable_source: '启用存储源',
+  disable_source: '禁用存储源',
+  update_exclude_patterns: '更新排除规则',
+  create_user: '创建用户',
+  delete_user: '删除用户',
+  enable_user: '启用用户',
+  disable_user: '禁用用户',
+  grant_permission: '分配存储源权限',
+  revoke_permission: '移除存储源权限',
+  image_upload: '上传图片',
+  image_delete: '删除图片',
+  delete_anonymous_image: '删除匿名图片',
+  upload: '上传文件',
+  delete: '删除文件',
+  create_folder: '创建文件夹',
+  rename: '重命名文件',
+  move: '移动文件',
+  change_password: '修改密码',
+  login_success: '登录成功',
+  login_failed: '登录失败',
+  reset_token_webdav: '重置 WebDAV Token',
+  reset_token_image_bed: '重置图床 Token',
+}
+
+function activityTitle(item: ActivityItem): string {
+  if (item.title && item.title !== item.action) return item.title
+  return activityLabels[item.action] ?? (item.title || '完成了一项操作')
 }
 
 function formatRelative(iso: string): string {

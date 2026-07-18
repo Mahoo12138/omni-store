@@ -41,7 +41,7 @@ export const nav = style({
   '@media': { 'screen and (max-width: 820px)': { flexDirection: 'row', flex: 1 } },
 })
 export const navLink = style({
-  display: 'flex', alignItems: 'center', gap: '11px', padding: '11px 13px', borderRadius: vars.radius.md,
+  minHeight: 44, display: 'flex', alignItems: 'center', gap: '11px', padding: '10px 13px', borderRadius: vars.radius.md,
   color: vars.color.textSecondary, fontSize: vars.fontSize.md, fontWeight: 500, whiteSpace: 'nowrap',
   transition: `background-color ${vars.motion.base} ${vars.motion.ease}, color ${vars.motion.base} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
@@ -61,7 +61,7 @@ export const sidebarMeta = style({
 })
 export const mobileUser = style({
   display: 'none', border: 0, background: 'transparent', color: vars.color.textSecondary, cursor: 'pointer',
-  '@media': { 'screen and (max-width: 820px)': { display: 'inline-flex', alignItems: 'center', padding: 8 } },
+  '@media': { 'screen and (max-width: 820px)': { width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, borderRadius: vars.radius.md } },
 })
 
 export const content = style({ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' })
@@ -71,7 +71,7 @@ export const topbar = style({
   position: 'sticky', top: 0, zIndex: vars.zIndex.sticky,
   '@media': { 'screen and (max-width: 820px)': { display: 'none' } },
 })
-export const topbarTitle = style({ fontSize: vars.fontSize.lg, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', letterSpacing: '-0.02em' })
+export const topbarTitle = style({ fontSize: vars.fontSize.lg, fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '-0.02em' })
 export const topbarSpacer = style({ flex: 1 })
 export const helpLink = style({
   display: 'inline-flex', alignItems: 'center', gap: 7, color: vars.color.textSecondary, fontSize: vars.fontSize.sm,
@@ -80,7 +80,7 @@ export const helpLink = style({
 })
 export const userMenu = style({ display: 'flex', alignItems: 'center', gap: vars.space.sm, flexShrink: 0 })
 export const userMenuBtn = style({
-  display: 'inline-flex', alignItems: 'center', gap: vars.space.sm, padding: '4px 9px 4px 4px',
+  minHeight: 40, display: 'inline-flex', alignItems: 'center', gap: vars.space.sm, padding: '4px 9px 4px 4px',
   background: 'none', border: 'none', borderRadius: vars.radius.md, cursor: 'pointer', color: vars.color.text,
   transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: { '&:hover': { backgroundColor: vars.color.surfaceHover }, '&:active': { transform: 'translateY(1px)' } },
@@ -95,7 +95,7 @@ export const userDropdown = style({
   border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.lg, boxShadow: vars.shadow.md, padding: 6, zIndex: vars.zIndex.dropdown,
 })
 export const userDropdownItem = style({
-  display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', background: 'none', border: 'none',
+  minHeight: 40, display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', background: 'none', border: 'none',
   borderRadius: vars.radius.md, color: vars.color.text, fontSize: vars.fontSize.md, cursor: 'pointer', textAlign: 'left',
   transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: { '&:hover': { backgroundColor: vars.color.surfaceHover } },
@@ -112,8 +112,8 @@ export const mainWide = style([main, {
 }])
 
 const pulse = keyframes({ '0%, 100%': { opacity: .5 }, '50%': { opacity: .85 } })
-export const loadingShell = style({ minHeight: '100dvh', display: 'grid', gridTemplateColumns: '224px 1fr', background: vars.color.background })
-export const loadingSidebar = style({ background: vars.color.surface, borderRight: `1px solid ${vars.color.border}` })
-export const loadingContent = style({ padding: 32 })
+export const loadingShell = style({ minHeight: '100dvh', display: 'grid', gridTemplateColumns: '224px 1fr', background: vars.color.background, '@media': { 'screen and (max-width: 820px)': { gridTemplateColumns: '1fr', gridTemplateRows: '64px 1fr' } } })
+export const loadingSidebar = style({ background: vars.color.surface, borderRight: `1px solid ${vars.color.border}`, '@media': { 'screen and (max-width: 820px)': { borderRight: 0, borderBottom: `1px solid ${vars.color.border}` } } })
+export const loadingContent = style({ padding: 32, '@media': { 'screen and (max-width: 820px)': { padding: vars.space.lg } } })
 export const loadingBar = style({ height: 18, width: 120, borderRadius: 5, background: vars.color.border, animation: `${pulse} 1.2s ease-in-out infinite` })
 export const loadingBlock = style({ height: 260, marginTop: 64, borderRadius: vars.radius.lg, background: vars.color.surfaceHover, animation: `${pulse} 1.2s ease-in-out infinite` })
