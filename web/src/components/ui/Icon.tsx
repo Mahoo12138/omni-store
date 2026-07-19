@@ -170,6 +170,12 @@ export const IconCopy = (p: IconProps) => (
   </Svg>
 )
 
+export const IconCheck = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 12.5l4.2 4.2L19 7" />
+  </Svg>
+)
+
 export const IconLogout = (p: IconProps) => (
   <Svg {...p}>
     <path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h10" />

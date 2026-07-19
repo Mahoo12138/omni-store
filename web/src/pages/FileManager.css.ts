@@ -409,29 +409,6 @@ export const pagerBtnActive = style([
   },
 ])
 
-export const pagerSelect = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-  color: vars.color.textSecondary,
-})
-
-export const pagerSelectNative = style({
-  height: '32px',
-  padding: '0 8px',
-  fontSize: vars.fontSize.sm,
-  fontFamily: vars.font.body,
-  color: vars.color.text,
-  background: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  outline: 'none',
-  cursor: 'pointer',
-  selectors: {
-    '&:focus': { borderColor: vars.color.primary },
-  },
-})
-
 // --- 右栏：存储源信息卡 ---
 
 export const sidePanel = style({

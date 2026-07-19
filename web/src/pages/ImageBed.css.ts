@@ -144,50 +144,6 @@ export const statusBadge = style({
   fontWeight: 600,
 })
 
-export const targetSelectWrap = style({
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  minHeight: 52,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  background: vars.color.surface,
-})
-
-export const targetIcon = style({
-  width: 34,
-  height: 34,
-  display: 'grid',
-  placeItems: 'center',
-  flexShrink: 0,
-  marginLeft: 8,
-  color: vars.color.primary,
-  background: vars.color.primarySubtle,
-  borderRadius: vars.radius.md,
-})
-
-export const targetSelect = style({
-  width: '100%',
-  height: 50,
-  padding: '0 38px 0 10px',
-  color: vars.color.text,
-  background: 'transparent',
-  border: 0,
-  outline: 0,
-  appearance: 'none',
-  fontSize: vars.fontSize.sm,
-  fontWeight: 600,
-  cursor: 'pointer',
-})
-
-export const selectChevron = style({
-  position: 'absolute',
-  right: 12,
-  display: 'inline-flex',
-  color: vars.color.textSecondary,
-  pointerEvents: 'none',
-})
-
 export const targetMetaRow = style({
   minHeight: 30,
   display: 'flex',
@@ -292,17 +248,6 @@ export const iconButton = style({
 })
 
 export const historyTools = style({ display: 'flex', alignItems: 'center', gap: 8 })
-
-export const filterSelect = style({
-  height: 32,
-  padding: '0 28px 0 10px',
-  color: vars.color.text,
-  background: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  fontSize: '11px',
-  outline: 0,
-})
 
 export const viewSwitch = style({
   display: 'flex',
@@ -477,6 +422,17 @@ export const targetSummary = style({
   gap: 8,
   padding: '8px 7px',
   border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+})
+
+export const targetSummaryIcon = style({
+  width: 34,
+  height: 34,
+  display: 'grid',
+  placeItems: 'center',
+  flexShrink: 0,
+  color: vars.color.primary,
+  background: vars.color.primarySubtle,
   borderRadius: vars.radius.md,
 })
 

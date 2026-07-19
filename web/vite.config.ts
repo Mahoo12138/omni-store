@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     // 开发时代理后端 API，生产由 go:embed 同源提供
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': 'http://localhost:18080',
     },
   },
 })

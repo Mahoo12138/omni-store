@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
+import { Select } from '../components/ui/Select'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -45,7 +46,7 @@ import { vars } from '../styles/theme.css'
 import * as css from './FileManager.css'
 
 type ViewMode = 'list' | 'grid'
-const PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 20
 
 // /app/sources/$sourceId（docs/file.png / file-1.png）：
 //   - 有存储源：标题 / 状态行 / 按钮 + 面包屑 / 工具条 / 表格 / 分页 + 右侧存储源信息卡
@@ -100,6 +101,7 @@ function FileManagerView({ source }: { source: UserSource }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState('')
   const [view, setView] = useState<ViewMode>('list')
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   // 各种操作弹窗
   const [mkdirOpen, setMkdirOpen] = useState(false)
@@ -111,12 +113,12 @@ function FileManagerView({ source }: { source: UserSource }) {
   const canWrite = source.permission === 'read_write'
 
   const filesQuery = useQuery({
-    queryKey: ['files', sourceId, currentPath, page],
-    queryFn: () => listFiles(sourceId, { path: currentPath, page, pageSize: PAGE_SIZE }),
+    queryKey: ['files', sourceId, currentPath, page, pageSize],
+    queryFn: () => listFiles(sourceId, { path: currentPath, page, pageSize }),
   })
 
   const total = filesQuery.data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['files', sourceId] })
@@ -426,25 +428,25 @@ function FileManagerView({ source }: { source: UserSource }) {
                 >
                   <IconChevronRight size={14} />
                 </button>
-                <span className={css.pagerSelect}>
-                  <select
-                    className={css.pagerSelectNative}
-                    value={PAGE_SIZE}
-                    onChange={() => {
-                      // 切换每页条数回到第 1 页（PAGE_SIZE 当前固定）
-                      navigate({
-                        to: '/app/sources/$sourceId',
-                        params: { sourceId },
-                        search: { path: currentPath, page: 1 },
-                      })
-                    }}
-                    aria-label="每页条数"
-                  >
-                    <option value="20">20 条/页</option>
-                    <option value="50">50 条/页</option>
-                    <option value="100">100 条/页</option>
-                  </select>
-                </span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(nextPageSize) => {
+                    setPageSize(Number(nextPageSize))
+                    navigate({
+                      to: '/app/sources/$sourceId',
+                      params: { sourceId },
+                      search: { path: currentPath, page: 1 },
+                    })
+                  }}
+                  options={[
+                    { value: '20', label: '20 条/页' },
+                    { value: '50', label: '50 条/页' },
+                    { value: '100', label: '100 条/页' },
+                  ]}
+                  ariaLabel="每页条数"
+                  size="compact"
+                  width="content"
+                />
               </div>
             </div>
           )}

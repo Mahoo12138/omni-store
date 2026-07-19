@@ -15,8 +15,8 @@ import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
+import { Select } from '../components/ui/Select'
 import {
-  IconChevronDown,
   IconChevronRight,
   IconCloud,
   IconCopy,
@@ -214,22 +214,17 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
                 <span className={css.statusBadge}>正常</span>
               </div>
 
-              <div className={css.targetSelectWrap}>
-                <span className={css.targetIcon}><IconImage size={19} /></span>
-                <select
-                  className={css.targetSelect}
-                  value={currentTarget}
-                  onChange={(event) => setSelectedTarget(event.target.value)}
-                  aria-label="选择图床目标"
-                >
-                  {targetData.targets.map((target) => (
-                    <option key={target.source_id} value={target.source_id}>
-                      {target.name}{target.source_id === targetData.default_source_id ? '（默认）' : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className={css.selectChevron}><IconChevronDown size={14} /></span>
-              </div>
+              <Select
+                value={currentTarget}
+                onValueChange={setSelectedTarget}
+                options={targetData.targets.map((target) => ({
+                  value: target.source_id,
+                  label: `${target.name}${target.source_id === targetData.default_source_id ? '（默认）' : ''}`,
+                }))}
+                ariaLabel="选择图床目标"
+                leadingIcon={<IconImage size={19} />}
+                size="large"
+              />
               <div className={css.targetMetaRow}>
                 <span>{currentTargetData?.description || `存储源 ID：${currentTarget}`}</span>
                 {currentTarget !== targetData.default_source_id ? (
@@ -292,16 +287,18 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
                 <span className={css.historyCount}>{history.data?.total ?? 0} 张</span>
               </div>
               <div className={css.historyTools}>
-                <select
-                  className={css.filterSelect}
+                <Select
                   value={timeFilter}
-                  onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                  aria-label="按时间筛选"
-                >
-                  <option value="all">全部时间</option>
-                  <option value="today">今天</option>
-                  <option value="month">本月</option>
-                </select>
+                  onValueChange={(nextValue) => setTimeFilter(nextValue as TimeFilter)}
+                  options={[
+                    { value: 'all', label: '全部时间' },
+                    { value: 'today', label: '今天' },
+                    { value: 'month', label: '本月' },
+                  ]}
+                  ariaLabel="按时间筛选"
+                  size="compact"
+                  width="content"
+                />
                 <div className={css.viewSwitch} aria-label="显示方式">
                   <button
                     type="button"
@@ -371,7 +368,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
             </div>
             <p className={css.sideLabel}>当前图床目标</p>
             <div className={css.targetSummary}>
-              <span className={css.targetIcon}><IconImage size={18} /></span>
+              <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
               <div className={css.targetSummaryText}>
                 <strong>{currentTargetData?.name ?? currentTarget}</strong>
                 <span>{currentTarget}</span>

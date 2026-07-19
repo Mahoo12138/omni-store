@@ -35,6 +35,7 @@ import { DialogWrap } from '../../components/ui/Dialog'
 import { Field } from '../../components/ui/Field'
 import * as fieldCss from '../../components/ui/Field.css'
 import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
   IconArrowUp,
@@ -1091,26 +1092,26 @@ function EditSourceDialog({
             </div>
           ))}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <select
-              className={fieldCss.select}
+            <Select
               value={permUserId}
-              onChange={(e) => setPermUserId(e.target.value)}
-            >
-              <option value="">选择用户…</option>
-              {users.data
+              onValueChange={setPermUserId}
+              options={users.data
                 ?.filter((u) => !perms.data?.some((p) => p.user_id === u.id))
-                .map((u) => (
-                  <option key={u.id} value={u.id}>{u.username}</option>
-                ))}
-            </select>
-            <select
-              className={fieldCss.select}
+                .map((u) => ({ value: String(u.id), label: u.username })) ?? []}
+              placeholder="选择用户…"
+              ariaLabel="选择要授权的用户"
+              width="wide"
+            />
+            <Select
               value={permLevel}
-              onChange={(e) => setPermLevel(e.target.value as 'read_only' | 'read_write')}
-            >
-              <option value="read_only">只读</option>
-              <option value="read_write">读写</option>
-            </select>
+              onValueChange={(nextValue) => setPermLevel(nextValue as 'read_only' | 'read_write')}
+              options={[
+                { value: 'read_only', label: '只读' },
+                { value: 'read_write', label: '读写' },
+              ]}
+              ariaLabel="权限级别"
+              width="content"
+            />
             <Button
               variant="secondary"
               disabled={!permUserId}
@@ -1346,14 +1347,16 @@ function CreateUserDialog({
         />
       </Field>
       <Field label="角色" required>
-        <select
-          className={fieldCss.select}
+        <Select
           value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          <option value="user">普通用户</option>
-          <option value="super_admin">超级管理员</option>
-        </select>
+          onValueChange={setRole}
+          options={[
+            { value: 'user', label: '普通用户' },
+            { value: 'super_admin', label: '超级管理员' },
+          ]}
+          ariaLabel="用户角色"
+          required
+        />
       </Field>
     </DialogWrap>
   )
@@ -1589,18 +1592,17 @@ function AnonymousImageBedDialog({
         hint={turnOn ? '需为"启用图床"且未禁用的存储源' : '保存时将一同记录'}
         error={err}
       >
-        <select
-          className={fieldCss.select}
+        <Select
           value={pickSource}
-          onChange={(e) => setPickSource(e.target.value)}
-        >
-          <option value="">选择存储源…</option>
-          {imageBedSources.map((s) => (
-            <option key={s.source_id} value={s.source_id}>
-              {s.name}（{s.source_id}）
-            </option>
-          ))}
-        </select>
+          onValueChange={setPickSource}
+          options={imageBedSources.map((source) => ({
+            value: source.source_id,
+            label: `${source.name}（${source.source_id}）`,
+          }))}
+          placeholder="选择存储源…"
+          ariaLabel="匿名图床目标存储源"
+          required={turnOn}
+        />
       </Field>
     </DialogWrap>
   )

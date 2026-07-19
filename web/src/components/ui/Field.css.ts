@@ -28,26 +28,6 @@ export const hintError = style([
   },
 ])
 
-// select 风格统一：与 Input 保持一致
-export const select = style({
-  width: '100%',
-  height: '36px',
-  padding: `0 ${vars.space.md}`,
-  fontSize: vars.fontSize.md,
-  fontFamily: vars.font.body,
-  color: vars.color.text,
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  outline: 'none',
-  cursor: 'pointer',
-  transition: `border-color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { borderColor: vars.color.borderStrong },
-    '&:focus': { borderColor: vars.color.primary },
-  },
-})
-
 export const textarea = style({
   width: '100%',
   minHeight: '100px',

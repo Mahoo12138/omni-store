@@ -2,10 +2,12 @@ import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
 export const pageHeader = style({
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.lg,
+  display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: vars.space.lg,
   marginBottom: vars.space.xl,
   '@media': { 'screen and (max-width: 640px)': { alignItems: 'flex-start', flexDirection: 'column', marginBottom: '32px' } },
 })
+export const headerCopy = style({ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' })
+export const welcomeDate = style({ marginBottom: vars.space.sm, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, fontWeight: 500 })
 export const pageTitle = style({ margin: 0, fontSize: vars.fontSize.display, lineHeight: 1.2, fontWeight: 700, letterSpacing: '-0.03em', color: vars.color.text })
 export const pageLead = style({ margin: `${vars.space.sm} 0 0`, maxWidth: '70ch', color: vars.color.textSecondary, fontSize: vars.fontSize.lg, lineHeight: 1.55, textWrap: 'pretty' })
 
@@ -39,7 +41,9 @@ export const sourceIdentity = style({ display: 'flex', alignItems: 'center', gap
 export const sourceIcon = style({
   width: 36, height: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   borderRadius: vars.radius.tile, background: vars.color.tileAmberBg, color: vars.color.tileAmberFg,
+  transition: `transform ${vars.motion.base} ${vars.motion.ease}, background-color ${vars.motion.base} ${vars.motion.ease}`,
 })
+globalStyle(`${sourceIcon} svg`, { transition: `transform ${vars.motion.base} ${vars.motion.ease}` })
 export const sourceText = style({
   display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0,
 })
@@ -53,6 +57,10 @@ export const openAction = style({
   display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3, color: vars.color.primary, fontSize: vars.fontSize.sm, fontWeight: 600,
   '@media': { 'screen and (max-width: 720px)': { gridColumn: 2, gridRow: '1 / span 2' } },
 })
+globalStyle(`${openAction} svg`, { transition: `transform ${vars.motion.base} ${vars.motion.ease}` })
+globalStyle(`${sourceRow}:hover ${sourceIcon}`, { transform: 'translateY(-1px)' })
+globalStyle(`${sourceRow}:hover ${sourceIcon} svg`, { transform: 'translateY(-1px) scale(1.04)' })
+globalStyle(`${sourceRow}:hover ${openAction} svg`, { transform: 'translateX(3px)' })
 
 const pulse = keyframes({ '0%, 100%': { opacity: .45 }, '50%': { opacity: .8 } })
 const skeletonBase = { background: vars.color.border, animation: `${pulse} 1.25s ease-in-out infinite` }
@@ -113,12 +121,29 @@ globalStyle(`${quickAction} small`, { display: 'block', marginTop: 3, color: var
 export const quickIcon = style({
   width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   borderRadius: vars.radius.md, background: vars.color.primarySubtle, color: vars.color.primary,
+  transition: `transform ${vars.motion.base} ${vars.motion.ease}, background-color ${vars.motion.base} ${vars.motion.ease}`,
 })
+export const quickArrow = style({
+  display: 'inline-flex', color: vars.color.textSecondary,
+  transition: `transform ${vars.motion.base} ${vars.motion.ease}, color ${vars.motion.base} ${vars.motion.ease}`,
+})
+globalStyle(`${quickAction}:hover:not(:disabled) ${quickIcon}`, { transform: 'translateY(-1px)', background: vars.color.primarySubtle })
+globalStyle(`${quickAction}:hover:not(:disabled) ${quickArrow}`, { transform: 'translateX(3px)', color: vars.color.primary })
 
 export const statusSection = style({ paddingTop: vars.space.lg, borderTop: `1px solid ${vars.color.border}` })
 export const statusHeader = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.sm })
 export const running = style({ display: 'inline-flex', alignItems: 'center', gap: 6, color: vars.color.success, fontSize: vars.fontSize.xs })
 globalStyle(`${running} i`, { width: 7, height: 7, borderRadius: '50%', background: vars.color.success })
+const confirmReady = keyframes({
+  '0%': { opacity: 0, transform: 'scale(0.7)' },
+  '55%': { opacity: 1, transform: 'scale(1.08)' },
+  '100%': { opacity: 1, transform: 'scale(1)' },
+})
+export const runningReady = style([
+  running,
+  { fontWeight: 600 },
+])
+globalStyle(`${runningReady} svg`, { animation: `${confirmReady} 420ms ${vars.motion.ease} both` })
 export const statusList = style({ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 })
 export const statusRow = style({ display: 'flex', justifyContent: 'space-between', gap: vars.space.md, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
 globalStyle(`${statusRow} > span:last-child`, { display: 'inline-flex', alignItems: 'center', gap: 7 })

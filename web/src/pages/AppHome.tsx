@@ -8,6 +8,7 @@ import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import {
   IconActivity,
+  IconCheck,
   IconChevronRight,
   IconFolderFilled,
   IconImage,
@@ -33,6 +34,8 @@ export function AppHomePage() {
 
   const sourceList = sources.data ?? []
   const isAdmin = me.data?.role === 'super_admin'
+  const now = new Date()
+  const displayName = me.data?.display_name
 
   function openSource(sourceId: string) {
     navigate({
@@ -45,9 +48,14 @@ export function AppHomePage() {
   return (
     <AppShell title="文件">
       <header className={css.pageHeader}>
-        <div>
-          <h1 className={css.pageTitle}>我的文件</h1>
-          <p className={css.pageLead}>选择一个存储源，开始管理文件。</p>
+        <div className={css.headerCopy}>
+          <time className={css.welcomeDate} dateTime={now.toISOString()}>{formatWelcomeDate(now)}</time>
+          <h1 className={css.pageTitle}>{displayName ? `${timeGreeting(now)}，${displayName}` : '我的文件'}</h1>
+          <p className={css.pageLead}>
+            {sourceList.length > 0
+              ? `${sourceList.length} 个存储源已连接，选择一个继续管理文件。`
+              : '选择一个存储源，开始管理文件。'}
+          </p>
         </div>
         {isAdmin && (
           <Button
@@ -136,7 +144,7 @@ export function AppHomePage() {
                   <strong>上传文件</strong>
                   <small>{sourceList[0] ? `进入 ${sourceList[0].name}` : '需要先创建存储源'}</small>
                 </span>
-                <IconChevronRight size={16} />
+                <span className={css.quickArrow}><IconChevronRight size={16} /></span>
               </button>
               <Link to="/app/image-bed" className={css.quickAction}>
                 <span className={css.quickIcon}><IconImage size={20} /></span>
@@ -144,7 +152,7 @@ export function AppHomePage() {
                   <strong>打开图床</strong>
                   <small>上传图片并复制外链</small>
                 </span>
-                <IconChevronRight size={16} />
+                <span className={css.quickArrow}><IconChevronRight size={16} /></span>
               </Link>
             </div>
           </section>
@@ -238,11 +246,17 @@ function SystemStatusPanel({
     { label: '图床服务', value: data?.file_preview },
     { label: '匿名访问', value: data?.anonymous },
   ]
+  const allEnabled = flags.every(({ value }) => value?.enabled)
   return (
     <section className={css.statusSection} aria-labelledby="status-title">
       <div className={css.statusHeader}>
         <h2 id="status-title" className={css.utilityTitle}>服务状态</h2>
-        {!loading && data && <span className={css.running}><i />运行中</span>}
+        {!loading && data && (
+          <span className={allEnabled ? css.runningReady : css.running}>
+            {allEnabled ? <IconCheck size={13} /> : <i />}
+            {allEnabled ? '全部就绪' : '运行中'}
+          </span>
+        )}
       </div>
       {loading ? (
         <div className={css.statusSkeleton} role="status" aria-label="正在检查服务状态">
@@ -305,7 +319,7 @@ function RecentActivity({
           onRetry={onRetry}
         />
       ) : items.length === 0 ? (
-        <div className={css.activityEmpty}>完成上传、整理或共享后，最近操作会显示在这里。</div>
+        <div className={css.activityEmpty}>这里还很安静。完成上传、整理或共享后，操作记录会显示在这里。</div>
       ) : (
         <div className={css.activityList}>
           {items.map((item) => (
@@ -350,6 +364,24 @@ const activityLabels: Record<string, string> = {
   login_failed: '登录失败',
   reset_token_webdav: '重置 WebDAV Token',
   reset_token_image_bed: '重置图床 Token',
+  update_anonymous_image_bed: '更新匿名图床设置',
+}
+
+function timeGreeting(date: Date): string {
+  const hour = date.getHours()
+  if (hour < 6) return '夜深了'
+  if (hour < 11) return '早上好'
+  if (hour < 14) return '中午好'
+  if (hour < 18) return '下午好'
+  return '晚上好'
+}
+
+function formatWelcomeDate(date: Date): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(date)
 }
 
 function activityTitle(item: ActivityItem): string {
