@@ -13,7 +13,7 @@ export const pageLead = style({ margin: `${vars.space.sm} 0 0`, maxWidth: '70ch'
 
 export const workspace = style({
   display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 288px', gap: vars.space.xl, alignItems: 'start',
-  '@media': { 'screen and (max-width: 1080px)': { gridTemplateColumns: 'minmax(0, 1fr)', gap: vars.space.xl } },
+  '@media': { 'screen and (max-width: 1180px)': { gridTemplateColumns: 'minmax(0, 1fr)', gap: vars.space.xl } },
 })
 export const mainCol = style({ display: 'flex', flexDirection: 'column', gap: vars.space.xl, minWidth: 0 })
 export const sectionHeader = style({ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: vars.space.md, marginBottom: vars.space.sm })
@@ -99,8 +99,8 @@ export const emptyIcon = style({
 
 export const utilityRail = style({
   display: 'flex', flexDirection: 'column', gap: vars.space.lg, paddingLeft: vars.space.lg, borderLeft: `1px solid ${vars.color.border}`,
-  position: 'sticky', top: '112px',
-  '@media': { 'screen and (max-width: 1080px)': { position: 'static', paddingLeft: 0, borderLeft: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, 'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' } },
+  position: 'sticky', top: '48px',
+  '@media': { 'screen and (max-width: 1180px)': { position: 'static', paddingLeft: 0, borderLeft: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, 'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' } },
 })
 export const utilitySection = style({})
 export const utilityTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 650, letterSpacing: '-0.015em', color: vars.color.text })
@@ -163,8 +163,12 @@ export const activityList = style({ borderTop: `1px solid ${vars.color.border}` 
 export const activityRow = style({
   display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', alignItems: 'center', gap: 12,
   minHeight: 64, padding: '12px 8px', borderBottom: `1px solid ${vars.color.border}`,
+  '@media': { 'screen and (max-width: 480px)': { gridTemplateColumns: '28px minmax(0, 1fr)', rowGap: 3 } },
 })
-globalStyle(`${activityRow} time`, { color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontVariantNumeric: 'tabular-nums' })
+globalStyle(`${activityRow} time`, {
+  color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontVariantNumeric: 'tabular-nums',
+  '@media': { 'screen and (max-width: 480px)': { gridColumn: 2 } },
+})
 export const activityIcon = style({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary })
 export const activityBody = style({ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 })
 globalStyle(`${activityBody} strong`, { fontSize: vars.fontSize.sm, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })

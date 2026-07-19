@@ -14,8 +14,8 @@ import {
 } from '../ui/Icon'
 import * as css from './AppShell.css'
 
-// 登录侧布局（docs/home.png）：左侧白色侧栏 + 内容区顶栏。
-// 未登录自动跳转 /login；<820px 时侧栏折叠为顶部横向导航。
+// 登录侧布局：桌面使用左侧导航，窄屏切为底部导航。
+// 未登录自动跳转 /login；账号入口始终位于导航末端。
 export function AppShell({
   title,
   children,
@@ -88,26 +88,11 @@ export function AppShell({
           )}
         </nav>
         <div className={css.sidebarSpacer} />
-        <button className={css.mobileUser} type="button" onClick={onLogout} aria-label="退出登录">
-          <IconLogout size={18} />
-        </button>
-        <div className={css.sidebarMeta}>
-          <span>自托管存储</span>
-          <span>数据留在你的设备</span>
-        </div>
+        <UserMenu displayName={user.display_name} onLogout={onLogout} />
       </aside>
 
       <div className={css.content}>
-        <header className={css.topbar}>
-          <div className={css.topbarTitle}>{title}</div>
-          <div className={css.topbarSpacer} />
-          <Link to="/about" className={css.helpLink}>
-            <IconQuestion size={16} />
-            使用帮助
-          </Link>
-          <UserMenu displayName={user.display_name} onLogout={onLogout} />
-        </header>
-        <main className={wide ? css.mainWide : css.main}>{children}</main>
+        <main className={wide ? css.mainWide : css.main} aria-label={title}>{children}</main>
       </div>
     </div>
   )
@@ -125,7 +110,7 @@ function AppShellLoading() {
   )
 }
 
-// 顶栏右上角用户菜单：头像 + 名 + 下拉，点击展开操作。
+// 侧栏底部用户菜单：桌面显示完整账号，窄屏收为底部导航入口。
 function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -149,17 +134,21 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
   const initial = displayName.slice(0, 1).toUpperCase()
 
   return (
-    <div className={css.userMenu} ref={ref} style={{ position: 'relative' }}>
+    <div className={css.userMenu} ref={ref}>
       <button
         type="button"
         className={css.userMenuBtn}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`账号菜单：${displayName}`}
       >
         <span className={css.avatar}>{initial}</span>
-        <span className={css.userName}>{displayName}</span>
-        <IconChevronDown size={14} />
+        <span className={css.userIdentity}>
+          <span className={css.userName}>{displayName}</span>
+          <span className={css.userCaption}>账号与设置</span>
+        </span>
+        <IconChevronDown size={14} className={css.userChevron} />
       </button>
       {open && (
         <div role="menu" className={css.userDropdown}>
@@ -181,6 +170,15 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
           >
             <IconImage size={16} />
             图床
+          </Link>
+          <Link
+            to="/about"
+            role="menuitem"
+            className={css.userDropdownItem}
+            onClick={() => setOpen(false)}
+          >
+            <IconQuestion size={16} />
+            使用帮助
           </Link>
           <div className={css.userDropdownDivider} />
           <button
