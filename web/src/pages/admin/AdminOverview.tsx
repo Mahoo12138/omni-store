@@ -72,6 +72,42 @@ const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'preferences', label: '偏好设置', icon: <IconSettings size={15} /> },
 ]
 
+const auditPageSize = 50
+const auditActorOptions = [
+  { value: 'all', label: '全部主体' },
+  { value: 'user', label: '登录用户' },
+  { value: 'anonymous', label: '匿名用户' },
+  { value: 'system', label: '系统' },
+] as const
+const auditEntryOptions = [
+  { value: 'all', label: '全部入口' },
+  { value: 'web', label: '网页' },
+  { value: 'webdav', label: 'WebDAV' },
+  { value: 'image_bed', label: '用户图床' },
+  { value: 'anonymous_image_bed', label: '匿名图床' },
+  { value: 'admin', label: '管理后台' },
+  { value: 'cli', label: '命令行' },
+] as const
+const auditStatusOptions = [
+  { value: 'all', label: '全部结果' },
+  { value: 'success', label: '成功' },
+  { value: 'failed', label: '失败' },
+] as const
+
+interface AuditFilters {
+  actorType: string
+  entryType: string
+  status: string
+  searchText: string
+}
+
+const emptyAuditFilters: AuditFilters = {
+  actorType: 'all',
+  entryType: 'all',
+  status: 'all',
+  searchText: '',
+}
+
 const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'stats', label: '仪表盘', icon: <IconInfo size={15} /> },
   { key: 'sources', label: '存储源', icon: <IconServer size={15} /> },
@@ -1365,14 +1401,92 @@ function CreateUserDialog({
 // --- 审计日志（原 AdminAudit）---
 
 function AuditSection() {
-  const logs = useQuery({ queryKey: ['admin-audit'], queryFn: adminFetchAuditLogs })
+  const [draftFilters, setDraftFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
+  const [filters, setFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
+  const [page, setPage] = useState(1)
+
+  const logs = useQuery({
+    queryKey: [
+      'admin-audit',
+      page,
+      filters.actorType,
+      filters.entryType,
+      filters.status,
+      filters.searchText,
+    ],
+    queryFn: () => adminFetchAuditLogs({
+      page,
+      page_size: auditPageSize,
+      actor_type: filters.actorType === 'all' ? undefined : filters.actorType as 'user' | 'anonymous' | 'system',
+      entry_type: filters.entryType === 'all' ? undefined : filters.entryType as 'web' | 'webdav' | 'image_bed' | 'anonymous_image_bed' | 'admin' | 'cli',
+      status: filters.status === 'all' ? undefined : filters.status as 'success' | 'failed',
+      q: filters.searchText || undefined,
+    }),
+  })
+
+  const total = logs.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / auditPageSize))
+
+  function applyFilters(event: FormEvent) {
+    event.preventDefault()
+    setPage(1)
+    setFilters({ ...draftFilters, searchText: draftFilters.searchText.trim() })
+  }
+
+  function resetFilters() {
+    setDraftFilters({ ...emptyAuditFilters })
+    setFilters({ ...emptyAuditFilters })
+    setPage(1)
+  }
+
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
-        <h2 className={css.sectionTitle}>审计日志（最近 200 条）</h2>
-        <p className={css.sectionHint}>记录所有用户/匿名在实例上的关键操作。</p>
+        <h2 className={css.sectionTitle}>审计日志</h2>
+        <p className={css.sectionHint}>按主体、入口、结果或关键字筛选实例上的关键操作。</p>
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      <form className={css.auditFilters} onSubmit={applyFilters}>
+        <Field label="主体">
+          <Select
+            value={draftFilters.actorType}
+            onValueChange={(value) => setDraftFilters((current) => ({ ...current, actorType: value }))}
+            options={auditActorOptions}
+            ariaLabel="筛选审计主体"
+            size="compact"
+          />
+        </Field>
+        <Field label="入口">
+          <Select
+            value={draftFilters.entryType}
+            onValueChange={(value) => setDraftFilters((current) => ({ ...current, entryType: value }))}
+            options={auditEntryOptions}
+            ariaLabel="筛选审计入口"
+            size="compact"
+          />
+        </Field>
+        <Field label="结果">
+          <Select
+            value={draftFilters.status}
+            onValueChange={(value) => setDraftFilters((current) => ({ ...current, status: value }))}
+            options={auditStatusOptions}
+            ariaLabel="筛选审计结果"
+            size="compact"
+          />
+        </Field>
+        <Field label="关键字">
+          <Input
+            value={draftFilters.searchText}
+            onChange={(event) => setDraftFilters((current) => ({ ...current, searchText: event.target.value }))}
+            placeholder="动作、路径、存储源、IP 或错误码"
+            maxLength={128}
+          />
+        </Field>
+        <div className={css.auditFilterActions}>
+          <Button type="submit">查询</Button>
+          <Button type="button" variant="secondary" onClick={resetFilters}>重置</Button>
+        </div>
+      </form>
+      <div className={css.auditTableWrap} aria-busy={logs.isFetching}>
         <table className={css.compactTable}>
           <thead>
             <tr>
@@ -1387,7 +1501,7 @@ function AuditSection() {
             </tr>
           </thead>
           <tbody>
-            {logs.data?.map((log) => (
+            {logs.data?.items.map((log) => (
               <tr key={log.id} className={css.compactTr}>
                 <td className={css.compactTd} style={{ whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
                 <td className={css.compactTd}>{log.actor_type}{log.actor_user_id ? `#${log.actor_user_id}` : ''}</td>
@@ -1414,9 +1528,12 @@ function AuditSection() {
             ))}
           </tbody>
         </table>
-        {logs.isSuccess && logs.data.length === 0 && (
+        {logs.isPending && (
+          <div className={css.auditMessage}>正在加载审计日志…</div>
+        )}
+        {logs.isSuccess && logs.data.items.length === 0 && (
           <div style={{ padding: 16, textAlign: 'center', color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
-            暂无日志
+            没有符合条件的日志
           </div>
         )}
         {logs.isError && (
@@ -1424,6 +1541,29 @@ function AuditSection() {
             加载失败
           </div>
         )}
+      </div>
+      <div className={css.auditPagination}>
+        <span aria-live="polite">
+          共 {total} 条，第 {Math.min(page, totalPages)} / {totalPages} 页
+        </span>
+        <div className={css.auditPaginationActions}>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={page <= 1 || logs.isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            上一页
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={page >= totalPages || logs.isFetching}
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+          >
+            下一页
+          </Button>
+        </div>
       </div>
     </section>
   )

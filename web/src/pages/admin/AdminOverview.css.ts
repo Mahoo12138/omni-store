@@ -390,6 +390,63 @@ export const sectionBody = style({
   gap: vars.space.md,
 })
 
+export const auditFilters = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(130px, 0.7fr)) minmax(240px, 1.5fr) auto',
+  gap: vars.space.md,
+  alignItems: 'end',
+  padding: vars.space.lg,
+  borderBottom: `1px solid ${vars.color.border}`,
+  backgroundColor: vars.color.surface,
+  '@media': {
+    'screen and (max-width: 1080px)': {
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    },
+    'screen and (max-width: 560px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
+  },
+})
+
+export const auditFilterActions = style({
+  display: 'flex',
+  gap: vars.space.sm,
+  alignItems: 'center',
+})
+
+export const auditTableWrap = style({
+  overflowX: 'auto',
+})
+
+export const auditMessage = style({
+  padding: vars.space.md,
+  textAlign: 'center',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const auditPagination = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+  padding: `${vars.space.md} ${vars.space.lg}`,
+  borderTop: `1px solid ${vars.color.border}`,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  '@media': {
+    'screen and (max-width: 560px)': {
+      alignItems: 'stretch',
+      flexDirection: 'column',
+    },
+  },
+})
+
+export const auditPaginationActions = style({
+  display: 'flex',
+  gap: vars.space.sm,
+})
+
 // 单行 key-value 列表
 export const kvRow = style({
   display: 'grid',

@@ -73,4 +73,25 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+## 审计日志查询
+
+管理员接口：
+
+```http
+GET /api/v1/admin/audit-logs
+```
+
+支持的查询参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `page` | `1` | 页码，必须为正整数 |
+| `page_size` | `50` | 每页条数，范围为 1–200 |
+| `actor_type` | 空 | `user`、`anonymous` 或 `system` |
+| `entry_type` | 空 | `web`、`webdav`、`image_bed`、`anonymous_image_bed`、`admin` 或 `cli` |
+| `status` | 空 | `success` 或 `failed` |
+| `q` | 空 | 在动作、存储源、源/目标路径、IP 和错误码中进行文字匹配，最多 128 个字符 |
+
+筛选条件之间采用 AND 关系，结果按 `id` 倒序返回。响应沿用统一列表结构，`total` 表示筛选后的记录总数。非法参数返回 `VALIDATION_ERROR`。
+
 ---

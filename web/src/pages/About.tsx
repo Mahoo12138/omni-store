@@ -59,8 +59,8 @@ export function AboutPage() {
             marginTop: vars.space.md,
           }}
         >
-          详细设计与开发文档请参考仓库内的 <code>README.md</code>、<code>PRODUCT.md</code> 与
-          <code> DESIGN.md</code>。
+          详细设计与开发文档请参考仓库内的 <code>README.md</code>、
+          <code>docs/PRODUCT.md</code> 与 <code>docs/DESIGN_SYSTEM.md</code>。
         </p>
       </div>
     </PublicShell>

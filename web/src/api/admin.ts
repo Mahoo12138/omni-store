@@ -41,6 +41,20 @@ export interface AuditLog {
   created_at: string
 }
 
+export interface AuditLogQuery {
+  page: number
+  page_size: number
+  actor_type?: 'user' | 'anonymous' | 'system'
+  entry_type?: 'web' | 'webdav' | 'image_bed' | 'anonymous_image_bed' | 'admin' | 'cli'
+  status?: 'success' | 'failed'
+  q?: string
+}
+
+export interface AuditLogPage {
+  items: AuditLog[]
+  total: number
+}
+
 // 用户管理
 export async function adminListUsers(): Promise<User[]> {
   const data = await apiFetch<{ items: User[]; total: number }>('/api/v1/admin/users')
@@ -165,9 +179,18 @@ export async function adminSetAnonymousSettings(input: {
 }
 
 // 审计日志
-export async function adminFetchAuditLogs(): Promise<AuditLog[]> {
-  const data = await apiFetch<{ items: AuditLog[]; total: number }>('/api/v1/admin/audit-logs')
-  return data.items ?? []
+export async function adminFetchAuditLogs(query: AuditLogQuery): Promise<AuditLogPage> {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    page_size: String(query.page_size),
+  })
+  if (query.actor_type) params.set('actor_type', query.actor_type)
+  if (query.entry_type) params.set('entry_type', query.entry_type)
+  if (query.status) params.set('status', query.status)
+  if (query.q) params.set('q', query.q)
+
+  const data = await apiFetch<AuditLogPage>(`/api/v1/admin/audit-logs?${params}`)
+  return { items: data.items ?? [], total: data.total ?? 0 }
 }
 
 // 概览 dashboard

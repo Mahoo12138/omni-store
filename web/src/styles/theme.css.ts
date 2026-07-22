@@ -1,6 +1,6 @@
 import { createGlobalTheme } from '@vanilla-extract/css'
 
-// 设计 token 来源：docs/index.png + docs/home.png（见 DESIGN.md）。
+// 设计 token 来源：docs/index.png + docs/home.png（见 docs/DESIGN_SYSTEM.md）。
 // 颜色、间距、圆角、阴影、字号全部从这里取，组件中不写魔法值。
 export const vars = createGlobalTheme(':root', {
   color: {
