@@ -566,3 +566,96 @@ export const formRowLabel = style({
   color: vars.color.textSecondary,
   marginBottom: '4px',
 })
+
+export const sourcePreview = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+  padding: vars.space.md,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.background,
+})
+
+export const sourcePreviewHeader = style({
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+})
+
+export const sourcePreviewEyebrow = style({
+  display: 'block',
+  marginBottom: vars.space.xs,
+  color: vars.color.success,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+})
+
+export const sourcePreviewPath = style({
+  color: vars.color.text,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  overflowWrap: 'anywhere',
+})
+
+export const sourcePreviewStats = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  gap: vars.space.sm,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+  '@media': {
+    'screen and (max-width: 520px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+  },
+})
+
+export const sourcePreviewStatValue = style({
+  display: 'block',
+  marginBottom: '2px',
+  color: vars.color.text,
+  fontSize: vars.fontSize.lg,
+})
+
+export const sourcePreviewEntries = style({
+  maxHeight: '190px',
+  overflowY: 'auto',
+  borderTop: `1px solid ${vars.color.border}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+})
+
+export const sourcePreviewEntry = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  minHeight: '36px',
+  padding: `6px ${vars.space.xs}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  color: vars.color.text,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  selectors: {
+    '&:last-child': { borderBottom: 'none' },
+  },
+})
+
+export const sourcePreviewEntryName = style({
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+export const sourcePreviewEmpty = style({
+  margin: 0,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const sourcePreviewWarnings = style({
+  margin: 0,
+  paddingLeft: '18px',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+  lineHeight: 1.55,
+})

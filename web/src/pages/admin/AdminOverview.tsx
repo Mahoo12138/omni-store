@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ import {
   adminListPermissions,
   adminListSources,
   adminListUsers,
+  adminPreflightSource,
   adminRemovePermission,
   adminSetAnonymousSettings,
   adminSetExcludePatterns,
@@ -26,6 +27,7 @@ import {
   updateProfile,
   type AdminSource,
   type OverviewSystem,
+  type SourcePreflight,
 } from '../../api/admin'
 import { fetchMe, type User } from '../../api/auth'
 import {
@@ -1014,8 +1016,17 @@ function CreateSourceDialog({
   const [name, setName] = useState('')
   const [rootPath, setRootPath] = useState('')
   const [err, setErr] = useState('')
+  const [preview, setPreview] = useState<SourcePreflight | null>(null)
+  const requestedRootPath = useRef('')
 
-  const mutation = useMutation({
+  const preflightMutation = useMutation({
+    mutationFn: adminPreflightSource,
+    onSuccess: (result, variables) => {
+      if (requestedRootPath.current === variables.root_path) setPreview(result)
+    },
+  })
+
+  const createMutation = useMutation({
     mutationFn: adminCreateSource,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-sources'] })
@@ -1024,22 +1035,60 @@ function CreateSourceDialog({
   })
 
   useEffect(() => {
-    if (!open) { setSourceId(''); setName(''); setRootPath(''); setErr('') }
+    if (!open) {
+      setSourceId('')
+      setName('')
+      setRootPath('')
+      setErr('')
+      setPreview(null)
+      requestedRootPath.current = ''
+    }
   }, [open])
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault()
+  function validateInput() {
+    if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(sourceId) || sourceId.includes('--')) {
+      return 'source_id 长度须为 3–63，只能包含小写字母、数字和短横线，首尾须为字母或数字且不能连续使用短横线'
+    }
+    if (!rootPath.trim()) return '请输入服务端可访问的目录绝对路径'
+    return ''
+  }
+
+  function runPreflight() {
     setErr('')
-    if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(sourceId)) {
-      setErr('source_id 必须以小写字母或数字开头，仅包含小写字母、数字、短横线（最长 41）')
+    const validationError = validateInput()
+    if (validationError) {
+      setErr(validationError)
       return
     }
-    if (!rootPath.startsWith('/')) {
-      setErr('路径必须是绝对路径（以 / 开头）')
+
+    setPreview(null)
+    requestedRootPath.current = rootPath.trim()
+    preflightMutation.mutate(
+      { root_path: requestedRootPath.current },
+      { onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '目录预检失败') },
+    )
+  }
+
+  function createSource() {
+    setErr('')
+    const validationError = validateInput()
+    if (validationError) {
+      setErr(validationError)
       return
     }
-    mutation.mutate(
-      { source_id: sourceId, name: name || sourceId, description: '', root_path: rootPath },
+    if (!preview || requestedRootPath.current !== rootPath.trim()) {
+      setErr('目录路径已变更，请重新预检')
+      return
+    }
+
+    createMutation.mutate(
+      {
+        source_id: sourceId,
+        name: name || sourceId,
+        description: '',
+        root_path: preview.root_path,
+        exclude_patterns: preview.exclude_patterns,
+      },
       { onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '创建失败') },
     )
   }
@@ -1049,17 +1098,28 @@ function CreateSourceDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="新建存储源"
-      description="路径创建后不可修改；不允许系统目录、数据目录或重叠挂载。"
+      description={preview ? '目录预检已通过，请核对内容后确认创建。' : '先预检已有目录；通过后再确认创建存储源。'}
       wide
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button
-            onClick={onSubmit}
-            disabled={mutation.isPending || !sourceId || !rootPath}
-          >
-            {mutation.isPending ? '创建中…' : '创建'}
-          </Button>
+          {preview ? (
+            <>
+              <Button variant="ghost" onClick={runPreflight} disabled={preflightMutation.isPending || createMutation.isPending}>
+                重新预检
+              </Button>
+              <Button onClick={createSource} disabled={createMutation.isPending}>
+                {createMutation.isPending ? '创建中…' : '确认创建'}
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={runPreflight}
+              disabled={preflightMutation.isPending || !sourceId || !rootPath.trim()}
+            >
+              {preflightMutation.isPending ? '预检中…' : '预检目录'}
+            </Button>
+          )}
         </>
       }
     >
@@ -1086,11 +1146,64 @@ function CreateSourceDialog({
       >
         <Input
           value={rootPath}
-          onChange={(e) => setRootPath(e.target.value)}
-          placeholder="/var/data/xxx"
+          onChange={(e) => {
+            setRootPath(e.target.value)
+            setPreview(null)
+            setErr('')
+            requestedRootPath.current = ''
+          }}
+          placeholder="例如 /mnt/photos 或 D:\\Photos"
         />
       </Field>
+      {preview ? <SourcePreflightPreview preview={preview} /> : null}
     </DialogWrap>
+  )
+}
+
+const sourceEntryKindLabels: Record<SourcePreflight['entries'][number]['kind'], string> = {
+  file: '文件',
+  directory: '目录',
+  symlink: '符号链接',
+  unsupported: '不支持',
+}
+
+function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
+  const summary = preview.summary
+  return (
+    <section className={css.sourcePreview} aria-label="目录预检结果">
+      <div className={css.sourcePreviewHeader}>
+        <div>
+          <span className={css.sourcePreviewEyebrow}>安全与读写预检通过</span>
+          <code className={css.sourcePreviewPath}>{preview.root_path}</code>
+        </div>
+        <Badge color="green">可导入</Badge>
+      </div>
+      <div className={css.sourcePreviewStats}>
+        <span><strong className={css.sourcePreviewStatValue}>{summary.total_entries}</strong>首层条目</span>
+        <span><strong className={css.sourcePreviewStatValue}>{summary.files}</strong>文件</span>
+        <span><strong className={css.sourcePreviewStatValue}>{summary.directories}</strong>目录</span>
+        <span><strong className={css.sourcePreviewStatValue}>{summary.excluded_entries}</strong>已排除</span>
+      </div>
+      {preview.entries.length > 0 ? (
+        <div className={css.sourcePreviewEntries}>
+          {preview.entries.map((entry) => (
+            <div className={css.sourcePreviewEntry} key={entry.name}>
+              <span className={css.sourcePreviewEntryName} title={entry.name}>{entry.name}</span>
+              <Badge color={entry.kind === 'symlink' || entry.kind === 'unsupported' ? 'red' : 'gray'}>
+                {sourceEntryKindLabels[entry.kind]}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className={css.sourcePreviewEmpty}>目录为空，创建后可以直接上传文件。</p>
+      )}
+      {preview.warnings.length > 0 ? (
+        <ul className={css.sourcePreviewWarnings}>
+          {preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </section>
   )
 }
 

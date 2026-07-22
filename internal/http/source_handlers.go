@@ -30,6 +30,28 @@ func (s *Server) handleAdminListSources(w http.ResponseWriter, r *http.Request) 
 	WriteData(w, r, ListData{Items: list, Total: int64(len(list))})
 }
 
+func (s *Server) handleAdminPreflightSource(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RootPath        string    `json:"root_path"`
+		ExcludePatterns *[]string `json:"exclude_patterns"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	in := sources.PreflightInput{RootPath: req.RootPath}
+	if req.ExcludePatterns != nil {
+		in.ExcludePatterns = *req.ExcludePatterns
+		in.HasPatterns = true
+	}
+	preview, err := s.sources.Preflight(in)
+	if err != nil {
+		s.writeSourceError(w, r, err)
+		return
+	}
+	WriteData(w, r, preview)
+}
+
 func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SourceID        string    `json:"source_id"`

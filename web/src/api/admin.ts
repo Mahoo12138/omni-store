@@ -26,6 +26,27 @@ export interface SourcePermission {
   updated_at: string
 }
 
+export interface SourcePreflight {
+  root_path: string
+  is_empty: boolean
+  summary: {
+    total_entries: number
+    visible_entries: number
+    files: number
+    directories: number
+    symlinks: number
+    unsupported_entries: number
+    excluded_entries: number
+  }
+  entries: Array<{
+    name: string
+    kind: 'file' | 'directory' | 'symlink' | 'unsupported'
+  }>
+  sample_truncated: boolean
+  exclude_patterns: string[]
+  warnings: string[]
+}
+
 export interface AuditLog {
   id: number
   actor_type: string
@@ -89,8 +110,19 @@ export async function adminCreateSource(input: {
   name: string
   description: string
   root_path: string
+  exclude_patterns?: string[]
 }): Promise<AdminSource> {
   return apiFetch('/api/v1/admin/sources', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function adminPreflightSource(input: {
+  root_path: string
+  exclude_patterns?: string[]
+}): Promise<SourcePreflight> {
+  return apiFetch('/api/v1/admin/sources/preflight', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export async function adminGetSource(sourceId: string): Promise<{

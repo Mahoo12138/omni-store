@@ -120,6 +120,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 
 	// 管理员：存储源管理
 	mux.HandleFunc("GET /api/v1/admin/sources", s.requireAdmin(s.handleAdminListSources))
+	mux.HandleFunc("POST /api/v1/admin/sources/preflight", s.requireAdmin(s.handleAdminPreflightSource))
 	mux.HandleFunc("POST /api/v1/admin/sources", s.requireAdmin(s.handleAdminCreateSource))
 	mux.HandleFunc("GET /api/v1/admin/sources/{source_id}", s.requireAdmin(s.handleAdminGetSource))
 	mux.HandleFunc("PATCH /api/v1/admin/sources/{source_id}", s.requireAdmin(s.handleAdminUpdateSource))

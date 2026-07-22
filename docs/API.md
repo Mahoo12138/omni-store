@@ -74,6 +74,50 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+## 存储源已有目录预检
+
+管理员在创建存储源前可预检服务端已有目录：
+
+```http
+POST /api/v1/admin/sources/preflight
+```
+
+请求默认采用新建存储源的建议排除规则；显式传入 `exclude_patterns`（包括空数组）时改用指定规则：
+
+```json
+{
+  "root_path": "/mnt/photos",
+  "exclude_patterns": ["**/.git/**", "**/.env"]
+}
+```
+
+接口执行与正式创建相同的真实路径解析、敏感目录、系统数据目录、存储源重叠及读写能力校验。成功响应包含规范化后的 `root_path`、首层条目分类统计、最多 20 个按名称排序的可见条目、实际采用的排除规则和风险提示：
+
+```json
+{
+  "data": {
+    "root_path": "/mnt/photos",
+    "is_empty": false,
+    "summary": {
+      "total_entries": 12,
+      "visible_entries": 10,
+      "files": 8,
+      "directories": 2,
+      "symlinks": 0,
+      "unsupported_entries": 0,
+      "excluded_entries": 2
+    },
+    "entries": [{ "name": "2026", "kind": "directory" }],
+    "sample_truncated": false,
+    "exclude_patterns": ["**/.git/**", "**/.env"],
+    "warnings": ["该目录已有内容；创建后会直接作为存储源显示，文件不会被移动、复制或写入索引。"]
+  },
+  "request_id": "req_xxx"
+}
+```
+
+预检只读取目录首层，不建立文件索引、不移动或修改已有内容。读写能力校验会创建并立即删除一个严格命名的临时测试文件。`POST /api/v1/admin/sources` 在真正写入配置前仍会重新执行全部路径校验，不能把预检结果当作长期授权凭据。
+
 ## 图床 Token 管理
 
 登录用户可以管理自己的命名图床 Token：
