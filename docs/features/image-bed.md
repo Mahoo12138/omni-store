@@ -47,6 +47,8 @@ image_bed:
 
 PicGo / API Token 上传使用用户默认图床目标，不允许 API 指定 `source_id` 或目录。
 
+用户可以为不同客户端创建多个命名图床 Token。每个 Token 独立保存哈希、记录最近使用时间并可单独撤销；单个用户最多同时保留 10 个。
+
 ### 登录用户图床落盘路径
 
 使用稳定的 `user_public_id`，不使用 username。

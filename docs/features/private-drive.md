@@ -272,6 +272,8 @@ MVP 有三个独立大小限制：
 ```yaml
 upload:
   max_file_size_mb: 1024
+  cleanup_stale_files: true
+  temp_file_max_age_hours: 24
 
 image_bed:
   user_max_file_size_mb: 20
@@ -365,6 +367,14 @@ MVP 只做普通流式上传。
 3. WebDAV `PROPFIND`。
 4. 图床访问。
 
-V1.1 可加清理超过 24 小时的上传残留文件。
+系统在启动时及之后每小时扫描一次存储源，默认清理超过 24 小时的上传残留文件。
+
+安全边界：
+
+1. 只删除严格匹配 `.omnistore-upload-{16位小写十六进制}.tmp` 的普通文件。
+2. 不跟随或删除符号链接。
+3. 不删除目录、近 24 小时内的文件或仅仅具有相似前缀的用户文件。
+4. 单个存储源扫描失败不会阻止其他存储源继续清理，失败信息只写应用日志。
+5. 可以通过 `upload.cleanup_stale_files: false` 完全关闭后台清理。
 
 ---

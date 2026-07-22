@@ -88,6 +88,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/me/tokens", s.requireAuth(s.handleTokenStatus))
 	mux.HandleFunc("POST /api/v1/me/tokens/webdav/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeWebDAV)))
 	mux.HandleFunc("POST /api/v1/me/tokens/image-bed/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeImageBed)))
+	mux.HandleFunc("GET /api/v1/me/tokens/image-bed", s.requireAuth(s.handleListImageBedTokens))
+	mux.HandleFunc("POST /api/v1/me/tokens/image-bed", s.requireAuth(s.handleCreateImageBedToken))
+	mux.HandleFunc("DELETE /api/v1/me/tokens/image-bed/{token_id}", s.requireAuth(s.handleDeleteImageBedToken))
 
 	// 管理员：用户管理
 	mux.HandleFunc("GET /api/v1/admin/users", s.requireAdmin(s.handleAdminListUsers))
@@ -206,6 +209,39 @@ func StartSessionCleanup(sessions *auth.Sessions, logger *slog.Logger, stop <-ch
 // Sessions 暴露 Session 服务供 main 启动后台清理任务。
 func (s *Server) Sessions() *auth.Sessions {
 	return s.sessions
+}
+
+// Files 暴露文件服务供 main 启动上传残留清理任务。
+func (s *Server) Files() *files.Service {
+	return s.files
+}
+
+// StartUploadCleanup 在启动时及之后每小时清理一次过期上传临时文件。
+func StartUploadCleanup(fileService *files.Service, maxAge time.Duration, logger *slog.Logger, stop <-chan struct{}) {
+	go func() {
+		cleanup := func() {
+			result, err := fileService.CleanupStaleUploads(maxAge)
+			if err != nil {
+				logger.Warn("清理上传临时文件未完全成功", "err", err, "removed", result.RemovedFiles)
+				return
+			}
+			if result.RemovedFiles > 0 {
+				logger.Info("清理上传临时文件", "count", result.RemovedFiles, "sources", result.ScannedSources)
+			}
+		}
+
+		cleanup()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cleanup()
+			case <-stop:
+				return
+			}
+		}
+	}()
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

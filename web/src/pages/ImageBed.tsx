@@ -245,7 +245,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               </div>
               <InfoRow
                 label="PicGo API Token"
-                value={tokenStatus.data?.image_bed.exists ? '已配置 · 明文仅在重置时显示' : '尚未配置'}
+                value={tokenStatus.data?.image_bed.exists ? `已配置 ${tokenStatus.data.image_bed.count} 个 · 明文仅在创建时显示` : '尚未配置'}
                 action={
                   <Link to="/app/admin" search={{ section: 'profile' }} className={css.inlineLink}>
                     管理
@@ -391,7 +391,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               <h2 className={css.sectionTitle}>如何在 PicGo 中使用</h2>
             </div>
             <ol className={css.steps}>
-              <li>在个人设置中重置并复制图床 API Token。</li>
+              <li>在个人设置中为当前客户端新建并复制图床 API Token。</li>
               <li>在 PicGo 中选择“自定义 Web 图床”。</li>
               <li>将接口地址填为上方 API 地址，并添加 Bearer Token。</li>
               <li>保存配置后即可直接上传到当前默认目标。</li>

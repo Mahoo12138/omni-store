@@ -364,6 +364,8 @@ const activityLabels: Record<string, string> = {
   login_failed: '登录失败',
   reset_token_webdav: '重置 WebDAV Token',
   reset_token_image_bed: '重置图床 Token',
+  create_image_bed_token: '创建图床 Token',
+  delete_image_bed_token: '撤销图床 Token',
   update_anonymous_image_bed: '更新匿名图床设置',
 }
 

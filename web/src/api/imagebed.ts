@@ -64,6 +64,7 @@ export async function uploadAnonymousImage(file: File): Promise<{ url: string }>
 
 export interface TokenStatus {
   exists: boolean
+  count: number
   created_at: string | null
   last_used_at: string | null
 }
@@ -74,4 +75,32 @@ export async function fetchTokenStatus(): Promise<Record<'webdav' | 'image_bed',
 
 export async function resetToken(type: 'webdav' | 'image-bed'): Promise<{ token: string }> {
   return apiFetch(`/api/v1/me/tokens/${type}/reset`, { method: 'POST' })
+}
+
+export interface ImageBedToken {
+  token_id: string
+  label: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export async function fetchImageBedTokens(): Promise<ImageBedToken[]> {
+  const data = await apiFetch<{ items: ImageBedToken[]; total: number }>('/api/v1/me/tokens/image-bed')
+  return data.items ?? []
+}
+
+export async function createImageBedToken(label: string): Promise<{
+  item: ImageBedToken
+  token: string
+}> {
+  return apiFetch('/api/v1/me/tokens/image-bed', {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  })
+}
+
+export async function deleteImageBedToken(tokenId: string): Promise<void> {
+  await apiFetch(`/api/v1/me/tokens/image-bed/${encodeURIComponent(tokenId)}`, {
+    method: 'DELETE',
+  })
 }

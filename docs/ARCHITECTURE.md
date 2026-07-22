@@ -226,7 +226,7 @@ SQLite / 管理后台负责产品运行状态：
 14. 图床图片记录。
 15. 审计日志。
 
-### MVP 配置示例
+### 配置示例
 
 ```yaml
 server:
@@ -250,6 +250,8 @@ security:
 
 upload:
   max_file_size_mb: 1024
+  cleanup_stale_files: true
+  temp_file_max_age_hours: 24
 
 image_bed:
   root_path: "/images"
@@ -281,6 +283,8 @@ OMNISTORE_PUBLIC_URL=https://store.example.com
 OMNISTORE_COOKIE_SECURE=true
 OMNISTORE_SESSION_TTL_HOURS=168
 OMNISTORE_UPLOAD_MAX_FILE_SIZE_MB=1024
+OMNISTORE_UPLOAD_CLEANUP_STALE_FILES=true
+OMNISTORE_UPLOAD_TEMP_FILE_MAX_AGE_HOURS=24
 OMNISTORE_IMAGE_BED_ROOT_PATH=/images
 OMNISTORE_IMAGE_BED_USER_MAX_FILE_SIZE_MB=20
 OMNISTORE_IMAGE_BED_ANONYMOUS_MAX_FILE_SIZE_MB=10
@@ -504,21 +508,18 @@ audit:
 
 ## 后台任务
 
-MVP 只做一个必要后台任务：
+当前后台任务均由进程内轻量定时器执行，不引入通用任务系统：
 
-```text
-清理过期 Session
-```
+1. 每小时清理过期 Session。
+2. 启动时及每小时清理超过配置时限的上传临时文件。
 
-建议每 1 小时执行一次。
-
-删除：
+Session 删除条件：
 
 ```text
 expires_at < now()
 ```
 
-MVP 不做通用任务系统。
+上传临时文件清理只匹配 OmniStore 自身生成的严格文件名，不跟随符号链接；默认时限为 24 小时，可通过配置关闭。
 
 不做：
 

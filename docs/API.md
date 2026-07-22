@@ -47,6 +47,7 @@ PATH_INVALID
 PATH_EXCLUDED
 FILE_NOT_FOUND
 FILE_ALREADY_EXISTS
+TOKEN_NOT_FOUND
 CONFLICT
 LOCKED
 VALIDATION_ERROR
@@ -72,6 +73,28 @@ HTTP 状态码：
 501 NOT_IMPLEMENTED
 500 INTERNAL_ERROR
 ```
+
+## 图床 Token 管理
+
+登录用户可以管理自己的命名图床 Token：
+
+```http
+GET    /api/v1/me/tokens/image-bed
+POST   /api/v1/me/tokens/image-bed
+DELETE /api/v1/me/tokens/image-bed/{token_id}
+```
+
+创建请求：
+
+```json
+{
+  "label": "MacBook PicGo"
+}
+```
+
+创建响应中的 `token` 是明文，仅返回一次；`item` 只包含 `token_id`、名称、创建时间和最近使用时间。每个用户最多保留 10 个图床 Token，达到上限时返回 `CONFLICT`。删除接口只能撤销当前用户自己的 Token，不存在时返回 `TOKEN_NOT_FOUND`。
+
+兼容接口 `POST /api/v1/me/tokens/image-bed/reset` 仍可用，其语义为撤销当前用户的全部图床 Token，并创建一个新的“默认 Token”。
 
 ## 审计日志查询
 

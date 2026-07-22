@@ -28,13 +28,27 @@ CREATE TABLE sessions (
 CREATE TABLE user_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  token_type TEXT NOT NULL, -- webdav / image_bed
+  token_type TEXT NOT NULL, -- webdav
   token_hash TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   last_used_at DATETIME,
   FOREIGN KEY(user_id) REFERENCES users(id),
   UNIQUE(user_id, token_type)
 );
+
+-- 图床 API Token 可按客户端创建多个命名凭据；明文只在创建时返回。
+CREATE TABLE image_bed_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_id TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL,
+  last_used_at DATETIME,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_image_bed_tokens_user ON image_bed_tokens(user_id, created_at);
 
 CREATE TABLE storage_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

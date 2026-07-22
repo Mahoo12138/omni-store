@@ -52,7 +52,7 @@ CREATE TABLE sessions (
 
 ### user_tokens
 
-可统一保存 WebDAV Token 和图床 Token 哈希。
+开发期初始 schema 中，该表只承载 WebDAV Token；图床 Token 使用独立的 `image_bed_tokens` 表。
 
 ```sql
 CREATE TABLE user_tokens (
@@ -71,8 +71,29 @@ CREATE TABLE user_tokens (
 
 ```text
 webdav
-image_bed
 ```
+
+### image_bed_tokens
+
+```sql
+CREATE TABLE image_bed_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_id TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL,
+  last_used_at DATETIME,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+```
+
+约束：
+
+1. `token_id` 全局唯一，用于管理接口定位，不能用于鉴权。
+2. `token_hash` 全局唯一，数据库不保存明文 Token。
+3. 每个用户最多 10 条记录，限制由服务层在事务内执行。
+4. 删除用户时必须同步删除其图床 Token。
 
 ### storage_sources
 

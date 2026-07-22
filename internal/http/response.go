@@ -16,6 +16,7 @@ const (
 	CodePathExcluded        = "PATH_EXCLUDED"
 	CodeFileNotFound        = "FILE_NOT_FOUND"
 	CodeFileAlreadyExists   = "FILE_ALREADY_EXISTS"
+	CodeTokenNotFound       = "TOKEN_NOT_FOUND"
 	CodeConflict            = "CONFLICT"
 	CodeLocked              = "LOCKED"
 	CodeValidationError     = "VALIDATION_ERROR"
@@ -33,7 +34,7 @@ func statusOf(code string) int {
 		return http.StatusUnauthorized
 	case CodeForbidden:
 		return http.StatusForbidden
-	case CodeSourceNotFound, CodeFileNotFound:
+	case CodeSourceNotFound, CodeFileNotFound, CodeTokenNotFound:
 		return http.StatusNotFound
 	case CodeSourceDisabled:
 		return http.StatusForbidden

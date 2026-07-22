@@ -338,6 +338,10 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "重置 WebDAV Token"
 	case "reset_token_image_bed":
 		return "重置图床 Token"
+	case "create_image_bed_token":
+		return "创建图床 Token"
+	case "delete_image_bed_token":
+		return "撤销图床 Token"
 	default:
 		return e.Action
 	}

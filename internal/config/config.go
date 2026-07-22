@@ -49,14 +49,16 @@ type SecurityConfig struct {
 }
 
 type UploadConfig struct {
-	MaxFileSizeMB int64 `yaml:"max_file_size_mb"`
+	MaxFileSizeMB       int64 `yaml:"max_file_size_mb"`
+	CleanupStaleFiles   bool  `yaml:"cleanup_stale_files"`
+	TempFileMaxAgeHours int   `yaml:"temp_file_max_age_hours"`
 }
 
 type ImageBedConfig struct {
-	RootPath               string              `yaml:"root_path"`
-	UserMaxFileSizeMB      int64               `yaml:"user_max_file_size_mb"`
-	AnonymousMaxFileSizeMB int64               `yaml:"anonymous_max_file_size_mb"`
-	AnonymousRateLimit     AnonymousRateLimit  `yaml:"anonymous_rate_limit"`
+	RootPath               string             `yaml:"root_path"`
+	UserMaxFileSizeMB      int64              `yaml:"user_max_file_size_mb"`
+	AnonymousMaxFileSizeMB int64              `yaml:"anonymous_max_file_size_mb"`
+	AnonymousRateLimit     AnonymousRateLimit `yaml:"anonymous_rate_limit"`
 }
 
 type AnonymousRateLimit struct {
@@ -92,7 +94,9 @@ func Default() *Config {
 			SessionTTLHours: 168,
 		},
 		Upload: UploadConfig{
-			MaxFileSizeMB: 1024,
+			MaxFileSizeMB:       1024,
+			CleanupStaleFiles:   true,
+			TempFileMaxAgeHours: 24,
 		},
 		ImageBed: ImageBedConfig{
 			RootPath:               "/images",
@@ -181,6 +185,8 @@ func applyEnvOverrides(cfg *Config) {
 	setBool("OMNISTORE_COOKIE_SECURE", &cfg.Security.CookieSecure)
 	setInt("OMNISTORE_SESSION_TTL_HOURS", &cfg.Security.SessionTTLHours)
 	setInt64("OMNISTORE_UPLOAD_MAX_FILE_SIZE_MB", &cfg.Upload.MaxFileSizeMB)
+	setBool("OMNISTORE_UPLOAD_CLEANUP_STALE_FILES", &cfg.Upload.CleanupStaleFiles)
+	setInt("OMNISTORE_UPLOAD_TEMP_FILE_MAX_AGE_HOURS", &cfg.Upload.TempFileMaxAgeHours)
 	setStr("OMNISTORE_IMAGE_BED_ROOT_PATH", &cfg.ImageBed.RootPath)
 	setInt64("OMNISTORE_IMAGE_BED_USER_MAX_FILE_SIZE_MB", &cfg.ImageBed.UserMaxFileSizeMB)
 	setInt64("OMNISTORE_IMAGE_BED_ANONYMOUS_MAX_FILE_SIZE_MB", &cfg.ImageBed.AnonymousMaxFileSizeMB)
@@ -216,6 +222,9 @@ func (c *Config) normalize() error {
 	}
 	if c.Upload.MaxFileSizeMB <= 0 {
 		c.Upload.MaxFileSizeMB = 1024
+	}
+	if c.Upload.TempFileMaxAgeHours <= 0 {
+		c.Upload.TempFileMaxAgeHours = 24
 	}
 	c.Server.PublicURL = strings.TrimRight(c.Server.PublicURL, "/")
 	return nil

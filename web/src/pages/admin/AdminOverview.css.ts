@@ -347,6 +347,59 @@ export const tokenDate = style({ color: vars.color.text, fontFamily: vars.font.m
 export const lastUsed = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
 export const tokenAction = style({ '@media': { 'screen and (max-width: 520px)': { gridColumn: '2 / -1' } } })
 
+export const imageTokenGroup = style({
+  padding: '22px 0',
+})
+export const imageTokenHeader = style({
+  display: 'grid',
+  gridTemplateColumns: '40px minmax(180px, 1fr) minmax(150px, 0.7fr) auto',
+  gap: vars.space.md,
+  alignItems: 'center',
+  '@media': {
+    'screen and (max-width: 760px)': { gridTemplateColumns: '40px minmax(0, 1fr) auto' },
+    'screen and (max-width: 520px)': { gridTemplateColumns: '40px minmax(0, 1fr)', alignItems: 'start' },
+  },
+})
+export const imageTokenItems = style({
+  marginTop: vars.space.md,
+  marginLeft: '56px',
+  borderTop: `1px solid ${vars.color.border}`,
+  '@media': {
+    'screen and (max-width: 520px)': { marginLeft: 0 },
+  },
+})
+export const imageTokenItem = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(160px, 1fr) minmax(180px, 0.8fr) auto',
+  gap: vars.space.md,
+  alignItems: 'center',
+  minHeight: '66px',
+  padding: `${vars.space.sm} 0`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  selectors: { '&:last-child': { borderBottom: 'none' } },
+  '@media': {
+    'screen and (max-width: 680px)': {
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+    },
+  },
+})
+export const imageTokenItemCopy = style({ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 })
+export const imageTokenLabel = style({ color: vars.color.text, fontSize: vars.fontSize.sm, fontWeight: 600 })
+export const imageTokenId = style({ color: vars.color.textSecondary, fontFamily: vars.font.mono, fontSize: vars.fontSize.xs })
+export const imageTokenDates = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+  '@media': {
+    'screen and (max-width: 680px)': { gridColumn: '1 / -1', gridRow: 2 },
+  },
+})
+export const imageTokenEmpty = style({ padding: `${vars.space.md} 0`, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.5 })
+export const imageTokenError = style([imageTokenEmpty, { color: vars.color.danger }])
+export const tokenRevealRow = style({ display: 'flex', gap: vars.space.sm })
+
 export const settingsFooter = style({
   marginTop: vars.space.xl,
   paddingTop: vars.space.md,

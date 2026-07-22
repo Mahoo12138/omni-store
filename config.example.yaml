@@ -24,6 +24,8 @@ security:
 
 upload:
   max_file_size_mb: 1024
+  cleanup_stale_files: true
+  temp_file_max_age_hours: 24
 
 image_bed:
   root_path: "/images"
