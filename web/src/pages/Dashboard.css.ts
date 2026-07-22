@@ -3,22 +3,35 @@ import { vars } from '../styles/theme.css'
 
 export const pageHeader = style({
   display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: vars.space.lg,
-  marginBottom: vars.space.xl,
+  marginBottom: vars.space.lg,
   '@media': { 'screen and (max-width: 640px)': { alignItems: 'flex-start', flexDirection: 'column', marginBottom: '32px' } },
 })
 export const headerCopy = style({ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' })
 export const welcomeDate = style({ marginBottom: vars.space.sm, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, fontWeight: 500 })
-export const pageTitle = style({ margin: 0, fontSize: vars.fontSize.display, lineHeight: 1.2, fontWeight: 700, letterSpacing: '-0.03em', color: vars.color.text })
+export const pageTitle = style({
+  margin: 0, fontSize: '40px', lineHeight: 1.1, fontWeight: 700, letterSpacing: '-0.04em', color: vars.color.text,
+  '@media': { 'screen and (max-width: 640px)': { fontSize: vars.fontSize.display } },
+})
 export const pageLead = style({ margin: `${vars.space.sm} 0 0`, maxWidth: '70ch', color: vars.color.textSecondary, fontSize: vars.fontSize.lg, lineHeight: 1.55, textWrap: 'pretty' })
 
 export const workspace = style({
-  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 288px', gap: vars.space.xl, alignItems: 'start',
-  '@media': { 'screen and (max-width: 1180px)': { gridTemplateColumns: 'minmax(0, 1fr)', gap: vars.space.xl } },
+  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 288px', gap: vars.space.lg, alignItems: 'start',
+  '@media': { 'screen and (max-width: 1180px)': { gridTemplateColumns: 'minmax(0, 1fr)', gap: vars.space.lg } },
 })
-export const mainCol = style({ display: 'flex', flexDirection: 'column', gap: vars.space.xl, minWidth: 0 })
+export const mainCol = style({ display: 'flex', flexDirection: 'column', gap: vars.space.lg, minWidth: 0 })
 export const sectionHeader = style({ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: vars.space.md, marginBottom: vars.space.sm })
-export const sectionTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 600, color: vars.color.text })
+export const sectionTitle = style({ margin: 0, fontSize: vars.fontSize.lg, fontWeight: 600, color: vars.color.text })
 export const sectionMeta = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontVariantNumeric: 'tabular-nums' })
+
+export const cardSection = style({
+  minWidth: 0,
+  padding: '20px 24px 24px',
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+  '@media': { 'screen and (max-width: 640px)': { padding: `${vars.space.md} ${vars.space.md} 20px` } },
+})
 
 export const sourceList = style({ borderTop: `1px solid ${vars.color.border}` })
 export const sourceListHead = style({
@@ -98,12 +111,19 @@ export const emptyIcon = style({
 })
 
 export const utilityRail = style({
-  display: 'flex', flexDirection: 'column', gap: vars.space.lg, paddingLeft: vars.space.lg, borderLeft: `1px solid ${vars.color.border}`,
+  display: 'flex', flexDirection: 'column', gap: vars.space.lg,
   position: 'sticky', top: '48px',
-  '@media': { 'screen and (max-width: 1180px)': { position: 'static', paddingLeft: 0, borderLeft: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, 'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' } },
+  '@media': { 'screen and (max-width: 1180px)': { position: 'static', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, 'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' } },
 })
-export const utilitySection = style({})
-export const utilityTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 650, letterSpacing: '-0.015em', color: vars.color.text })
+export const utilitySection = style({
+  padding: '20px 24px 24px',
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+  '@media': { 'screen and (max-width: 640px)': { padding: `${vars.space.md} ${vars.space.md} 20px` } },
+})
+export const utilityTitle = style({ margin: 0, fontSize: vars.fontSize.lg, fontWeight: 650, letterSpacing: '-0.015em', color: vars.color.text })
 export const quickActions = style({ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 })
 export const quickAction = style({
   display: 'grid', gridTemplateColumns: '32px minmax(0, 1fr) auto', alignItems: 'center', gap: vars.space.md,
@@ -130,7 +150,14 @@ export const quickArrow = style({
 globalStyle(`${quickAction}:hover:not(:disabled) ${quickIcon}`, { transform: 'translateY(-1px)', background: vars.color.primarySubtle })
 globalStyle(`${quickAction}:hover:not(:disabled) ${quickArrow}`, { transform: 'translateX(3px)', color: vars.color.primary })
 
-export const statusSection = style({ paddingTop: vars.space.lg, borderTop: `1px solid ${vars.color.border}` })
+export const statusSection = style({
+  padding: '20px 24px 24px',
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+  '@media': { 'screen and (max-width: 640px)': { padding: `${vars.space.md} ${vars.space.md} 20px` } },
+})
 export const statusHeader = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.sm })
 export const running = style({ display: 'inline-flex', alignItems: 'center', gap: 6, color: vars.color.success, fontSize: vars.fontSize.xs })
 globalStyle(`${running} i`, { width: 7, height: 7, borderRadius: '50%', background: vars.color.success })
@@ -144,7 +171,7 @@ export const runningReady = style([
   { fontWeight: 600 },
 ])
 globalStyle(`${runningReady} svg`, { animation: `${confirmReady} 420ms ${vars.motion.ease} both` })
-export const statusList = style({ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 })
+export const statusList = style({ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 })
 export const statusRow = style({ display: 'flex', justifyContent: 'space-between', gap: vars.space.md, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
 globalStyle(`${statusRow} > span:last-child`, { display: 'inline-flex', alignItems: 'center', gap: 7 })
 export const dotOn = style({ width: 7, height: 7, borderRadius: '50%', background: vars.color.success })
@@ -158,7 +185,15 @@ globalStyle(`${compactError} button`, {
 })
 globalStyle(`${compactError} button:hover`, { background: vars.color.primarySubtle })
 
-export const activitySection = style({})
+export const activitySection = style({
+  minWidth: 0,
+  padding: '20px 24px 24px',
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+  '@media': { 'screen and (max-width: 640px)': { padding: `${vars.space.md} ${vars.space.md} 20px` } },
+})
 export const activityList = style({ borderTop: `1px solid ${vars.color.border}` })
 export const activityRow = style({
   display: 'grid', gridTemplateColumns: '28px minmax(0, 1fr) auto', alignItems: 'center', gap: 12,

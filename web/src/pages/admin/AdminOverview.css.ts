@@ -181,7 +181,7 @@ export const settingsLayout = style({
   gridTemplateColumns: 'minmax(160px, 200px) minmax(0, 1fr)',
   gap: vars.space.lg,
   alignItems: 'start',
-  marginTop: vars.space.lg,
+  marginTop: 0,
   '@media': {
     'screen and (max-width: 820px)': {
       gridTemplateColumns: 'minmax(0, 1fr)',
@@ -191,17 +191,39 @@ export const settingsLayout = style({
 
 export const settingsSide = style({
   position: 'sticky',
-  top: '88px',
+  top: '32px',
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.md,
+  padding: 10,
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
   fontSize: vars.fontSize.sm,
+  '@media': {
+    'screen and (max-width: 820px)': {
+      position: 'static',
+      flexDirection: 'row',
+      gap: vars.space.md,
+      overflowX: 'auto',
+      scrollbarWidth: 'thin',
+    },
+  },
 })
 
 export const settingsGroup = style({
   display: 'flex',
   flexDirection: 'column',
   gap: '2px',
+  '@media': {
+    'screen and (max-width: 820px)': {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexShrink: 0,
+      gap: 4,
+    },
+  },
 })
 
 export const settingsGroupTitle = style({
@@ -212,12 +234,14 @@ export const settingsGroupTitle = style({
   textTransform: 'uppercase',
   letterSpacing: '0.04em',
   userSelect: 'none',
+  '@media': { 'screen and (max-width: 820px)': { display: 'none' } },
 })
 
 export const settingsNavLink = style({
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
+  minHeight: 40,
   padding: `6px ${vars.space.md}`,
   borderRadius: vars.radius.md,
   color: vars.color.textSecondary,
@@ -229,7 +253,12 @@ export const settingsNavLink = style({
       backgroundColor: vars.color.surfaceHover,
       color: vars.color.text,
     },
+    '&:focus-visible': {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: 2,
+    },
   },
+  '@media': { 'screen and (max-width: 820px)': { whiteSpace: 'nowrap' } },
 })
 
 export const settingsNavLinkActive = style([

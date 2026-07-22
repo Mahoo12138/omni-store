@@ -70,7 +70,7 @@ export function AppHomePage() {
 
       <div className={css.workspace}>
         <div className={css.mainCol}>
-          <section aria-labelledby="sources-title">
+          <section className={css.cardSection} aria-labelledby="sources-title">
             <div className={css.sectionHeader}>
               <h2 id="sources-title" className={css.sectionTitle}>存储源</h2>
               {sources.isSuccess && sourceList.length > 0 && (

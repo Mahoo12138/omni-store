@@ -8,8 +8,8 @@ export const pageHeader = style({
   alignItems: 'center',
   flexWrap: 'wrap',
   gap: vars.space.md,
-  marginTop: vars.space.lg,
-  marginBottom: vars.space.md,
+  marginTop: 0,
+  marginBottom: vars.space.lg,
 })
 
 export const pageTitle = style({
