@@ -37,23 +37,33 @@ const (
 
 // Service 提供图床能力。
 type Service struct {
-	db        *sql.DB
-	rootRel   string // image_bed.root_path 规范化后的源内相对路径，例如 "images"
-	publicURL string
-	sources   *sources.Service
-	files     *files.Service
-	locks     *locks.Manager
+	db             *sql.DB
+	rootRel        string // image_bed.root_path 规范化后的源内相对路径，例如 "images"
+	publicURL      string
+	thumbnailCache string
+	sources        *sources.Service
+	files          *files.Service
+	locks          *locks.Manager
+	thumbnailLocks *locks.Manager
+	thumbnailSlot  chan struct{}
 }
 
 // NewService 创建图床服务。
-func NewService(db *sql.DB, rootPath, publicURL string, srcSvc *sources.Service, fileSvc *files.Service) (*Service, error) {
+func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *sources.Service, fileSvc *files.Service) (*Service, error) {
 	rootRel, err := security.NormalizeRelPath(rootPath)
 	if err != nil || rootRel == "" {
 		return nil, fmt.Errorf("image_bed.root_path 非法: %s", rootPath)
 	}
+	if thumbnailCache == "" {
+		return nil, errors.New("缩略图缓存目录不能为空")
+	}
+	if err := os.MkdirAll(thumbnailCache, 0o755); err != nil {
+		return nil, fmt.Errorf("创建缩略图缓存目录失败: %w", err)
+	}
 	return &Service{
-		db: db, rootRel: rootRel, publicURL: strings.TrimRight(publicURL, "/"),
-		sources: srcSvc, files: fileSvc, locks: fileSvc.Locks(),
+		db: db, rootRel: rootRel, publicURL: strings.TrimRight(publicURL, "/"), thumbnailCache: thumbnailCache,
+		sources: srcSvc, files: fileSvc, locks: fileSvc.Locks(), thumbnailLocks: locks.NewManager(),
+		thumbnailSlot: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -334,12 +344,22 @@ func scanImage(row interface{ Scan(...any) error }) (*models.Image, error) {
 }
 
 func (s *Service) getByRowID(id int64) (*models.Image, error) {
-	return scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE id = ?`, id))
+	img, err := scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE id = ?`, id))
+	return s.decorateImage(img, err)
 }
 
 // Get 按 image_id 查询图片记录。
 func (s *Service) Get(imageID string) (*models.Image, error) {
-	return scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE image_id = ?`, imageID))
+	img, err := scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE image_id = ?`, imageID))
+	return s.decorateImage(img, err)
+}
+
+func (s *Service) decorateImage(img *models.Image, err error) (*models.Image, error) {
+	if err != nil {
+		return nil, err
+	}
+	img.ThumbnailURL = fmt.Sprintf("%s/t/%s.jpg", s.publicURL, img.ImageID)
+	return img, nil
 }
 
 // OpenImage 打开图片文件用于公开访问（README §17.8）。
@@ -399,6 +419,10 @@ func (s *Service) ListForOwner(ownerUserID *int64, page, pageSize int) ([]*model
 		if err != nil {
 			return nil, 0, err
 		}
+		img, err = s.decorateImage(img, nil)
+		if err != nil {
+			return nil, 0, err
+		}
 		out = append(out, img)
 	}
 	return out, total, rows.Err()
@@ -440,5 +464,8 @@ func (s *Service) deletePhysicalAndRecord(img *models.Image) error {
 		}
 	}
 	_, err = s.db.Exec(`DELETE FROM images WHERE id = ?`, img.ID)
+	if err == nil {
+		s.removeThumbnailFiles(img.ImageID)
+	}
 	return err
 }

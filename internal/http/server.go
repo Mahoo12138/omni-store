@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -59,7 +60,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
 	s.public = publicdisk.NewService(dbConn, s.sources, s.files)
 	s.tokens = auth.NewTokens(dbConn)
-	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL, s.sources, s.files)
+	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
+		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.files)
 	if err != nil {
 		// 配置错误应在启动时直接失败。
 		panic(err)
@@ -147,6 +149,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 
 	// 图床：公开图片访问（README §17.8）
 	mux.HandleFunc("GET /i/{image_file}", s.handleServeImage)
+	mux.HandleFunc("GET /t/{thumbnail_file}", s.handleServeThumbnail)
 
 	// 图床：登录用户（README §17.3/§17.11/§17.12）
 	mux.HandleFunc("GET /api/v1/image-bed/targets", s.requireAuth(s.handleImageBedTargets))
@@ -223,6 +226,11 @@ func (s *Server) Files() *files.Service {
 	return s.files
 }
 
+// ImageBed 暴露图床服务供 main 启动缩略图缓存清理任务。
+func (s *Server) ImageBed() *imagebed.Service {
+	return s.imagebed
+}
+
 // StartUploadCleanup 在启动时及之后每小时清理一次过期上传临时文件。
 func StartUploadCleanup(fileService *files.Service, maxAge time.Duration, logger *slog.Logger, stop <-chan struct{}) {
 	go func() {
@@ -264,6 +272,31 @@ func StartWebDAVLockCleanup(fileService *files.Service, logger *slog.Logger, sto
 		}
 		cleanup()
 		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cleanup()
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
+// StartThumbnailCacheCleanup 在启动时及之后每天清理超过 30 天未使用的缩略图缓存。
+func StartThumbnailCacheCleanup(service *imagebed.Service, logger *slog.Logger, stop <-chan struct{}) {
+	go func() {
+		cleanup := func() {
+			n, err := service.CleanupThumbnailCache(30 * 24 * time.Hour)
+			if err != nil {
+				logger.Warn("清理缩略图缓存失败", "err", err)
+			} else if n > 0 {
+				logger.Info("清理缩略图缓存", "count", n)
+			}
+		}
+		cleanup()
+		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
 			select {

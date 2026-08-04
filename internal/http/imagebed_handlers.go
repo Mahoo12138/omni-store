@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
@@ -72,6 +73,33 @@ func (s *Server) handleServeImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "inline")
 	// 图床 URL 内容不可变，长缓存（README §13.11）。
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+// handleServeThumbnail 按需生成并返回固定规格缩略图。
+func (s *Server) handleServeThumbnail(w http.ResponseWriter, r *http.Request) {
+	file := r.PathValue("thumbnail_file")
+	if !strings.HasSuffix(file, ".jpg") {
+		http.NotFound(w, r)
+		return
+	}
+	imageID := strings.TrimSuffix(file, ".jpg")
+	if imageID == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	f, info, etag, err := s.imagebed.OpenThumbnail(r.Context(), imageID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("ETag", etag)
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 

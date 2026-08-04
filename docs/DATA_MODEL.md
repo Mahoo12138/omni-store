@@ -235,6 +235,8 @@ CREATE INDEX idx_images_owner ON images(owner_type, owner_user_id, created_at);
 CREATE INDEX idx_images_source_path ON images(source_id, relative_path);
 ```
 
+API 返回的 `thumbnail_url` 是根据 `image_id` 和 `server.public_url` 计算的派生字段，不写入 `images` 表。缩略图缓存同样不进入 SQLite，其有效性由原图 size + modTime 校验。
+
 ### audit_logs
 
 ```sql

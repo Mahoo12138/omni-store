@@ -148,6 +148,25 @@ DELETE /api/v1/me/tokens/image-bed/{token_id}
 
 兼容接口 `POST /api/v1/me/tokens/image-bed/reset` 仍可用，其语义为撤销当前用户的全部图床 Token，并创建一个新的“默认 Token”。
 
+## 图床缩略图
+
+图床图片记录新增派生字段：
+
+```json
+{
+  "public_url": "https://store.example.com/i/img_xxx.png",
+  "thumbnail_url": "https://store.example.com/t/img_xxx.jpg"
+}
+```
+
+`public_url` 仍用于查看和复制原图；历史墙使用 `thumbnail_url` 预览。公开缩略图接口：
+
+```http
+GET /t/{image_id}.jpg
+```
+
+成功响应为 `image/jpeg`，最长边不超过 480px，包含 `ETag` 和 `Cache-Control: public, max-age=3600`。`If-None-Match` 命中时返回 `304 Not Modified`。图片记录不存在、物理文件不可访问或存储源已禁用时返回 404。
+
 ## 审计日志查询
 
 管理员接口：

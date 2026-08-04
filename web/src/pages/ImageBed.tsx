@@ -444,7 +444,7 @@ function ImageCard({
   return (
     <article className={list ? css.imageCardList : css.imageCard}>
       <a href={image.public_url} target="_blank" rel="noreferrer" className={list ? css.thumbLinkList : css.thumbLink}>
-        <img className={list ? css.imageThumbList : css.imageThumb} src={image.public_url} alt={name} loading="lazy" />
+        <img className={list ? css.imageThumbList : css.imageThumb} src={image.thumbnail_url || image.public_url} alt={name} loading="lazy" />
       </a>
       <div className={css.imageBody}>
         <strong className={css.imageName} title={name}>{name}</strong>

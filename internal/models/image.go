@@ -18,6 +18,7 @@ type Image struct {
 	RelativePath     string    `json:"relative_path"`
 	OriginalFilename string    `json:"original_filename"`
 	PublicURL        string    `json:"public_url"`
+	ThumbnailURL     string    `json:"thumbnail_url"`
 	Size             int64     `json:"size"`
 	MimeType         string    `json:"mime_type"`
 	Width            int       `json:"width"`

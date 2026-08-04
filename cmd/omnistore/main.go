@@ -102,6 +102,7 @@ func runServer(args []string) error {
 			time.Duration(cfg.Upload.TempFileMaxAgeHours)*time.Hour, logger, stopCleanup)
 	}
 	httpserver.StartWebDAVLockCleanup(app.Files(), logger, stopCleanup)
+	httpserver.StartThumbnailCacheCleanup(app.ImageBed(), logger, stopCleanup)
 	defer close(stopCleanup)
 
 	errCh := make(chan error, 1)

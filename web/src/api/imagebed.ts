@@ -9,6 +9,7 @@ export interface ImageRecord {
   relative_path: string
   original_filename: string
   public_url: string
+  thumbnail_url: string
   size: number
   mime_type: string
   width: number

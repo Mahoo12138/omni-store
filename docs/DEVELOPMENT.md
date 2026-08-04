@@ -135,6 +135,6 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o omnistore ./cmd/omnistore
 ## 备份边界（生产）
 
 必须备份：`config.yaml`、`$OMNISTORE_DATA_DIR/omnistore.db`、`$OMNISTORE_DATA_DIR/keys/`。
-可不备份：`cache/`、`tmp/`。用户存储源文件由管理员自行备份。
+可不备份：`cache/`、`tmp/`。其中 `cache/thumbnails/` 是可按需重建的图床缩略图缓存，服务启动时及每天清理超过 30 天未访问的文件。用户存储源文件由管理员自行备份。
 
 V1.1 可在管理后台“配置导出”下载上述系统配置包。该文件包含敏感系统数据且不包含真实存储源文件，不能替代完整备份策略。
