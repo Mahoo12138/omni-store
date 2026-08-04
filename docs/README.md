@@ -29,7 +29,7 @@
 | [私有网盘与文件操作](features/private-drive.md) | 浏览、上传、下载、删除、移动与缓存 |
 | [WebDAV](features/webdav.md) | 鉴权、方法支持和操作语义 |
 | [图床](features/image-bed.md) | 登录 / 匿名图床、图片校验、历史与 PicGo |
-| [S3 兼容接口](features/s3.md) | V1.1 基础对象接口与 V1.2 Multipart 边界 |
+| [S3 兼容接口](features/s3.md) | V1.1 基础对象接口与 V1.2 Multipart Upload |
 
 ## 设计与文档维护
 

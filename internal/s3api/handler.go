@@ -38,15 +38,17 @@ type Handler struct {
 	proxy       *security.ProxyResolver
 	logger      *slog.Logger
 	maxUpload   int64
+	multipart   *MultipartStore
 }
 
 func NewHandler(credentials *Credentials, sources *sources.Service, files *files.Service,
-	auditLogger *audit.Logger, proxy *security.ProxyResolver, logger *slog.Logger, maxFileSizeMB int64) *Handler {
+	auditLogger *audit.Logger, proxy *security.ProxyResolver, logger *slog.Logger, maxFileSizeMB int64,
+	multipart *MultipartStore) *Handler {
 	return &Handler{
 		credentials: credentials,
 		verifier:    newSignatureVerifier(credentials),
 		sources:     sources, files: files, audit: auditLogger, proxy: proxy, logger: logger,
-		maxUpload: maxFileSizeMB * 1024 * 1024,
+		maxUpload: maxFileSizeMB * 1024 * 1024, multipart: multipart,
 	}
 }
 
@@ -77,7 +79,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	write := r.Method == http.MethodPut || r.Method == http.MethodDelete || (r.Method == http.MethodPost && r.URL.Query().Has("delete"))
+	write := r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPost
 	allowed, err := h.allowed(authenticated.User, bucket, write)
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "权限检查失败", bucket)
@@ -132,12 +134,25 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request, authentica
 		h.writeError(w, r, http.StatusBadRequest, "InvalidObjectName", "对象 Key 非法", key)
 		return
 	}
-	switch r.Method {
-	case http.MethodGet, http.MethodHead:
+	query := r.URL.Query()
+	switch {
+	case r.Method == http.MethodPost && query.Has("uploads"):
+		h.createMultipartUpload(w, r, authenticated.User, src, key)
+	case r.Method == http.MethodPut && query.Has("uploadId") && query.Has("partNumber"):
+		h.uploadPart(w, r, authenticated, src, key)
+	case r.Method == http.MethodGet && query.Has("uploadId"):
+		h.listParts(w, r, authenticated.User, src, key)
+	case r.Method == http.MethodPost && query.Has("uploadId"):
+		h.completeMultipartUpload(w, r, authenticated, src, key)
+	case r.Method == http.MethodDelete && query.Has("uploadId"):
+		h.abortMultipartUpload(w, r, authenticated.User, src, key)
+	case query.Has("uploadId") || query.Has("partNumber"):
+		h.writeError(w, r, http.StatusBadRequest, "InvalidRequest", "Multipart 请求参数不完整", key)
+	case r.Method == http.MethodGet || r.Method == http.MethodHead:
 		h.getObject(w, r, src, key)
-	case http.MethodPut:
+	case r.Method == http.MethodPut:
 		h.putObject(w, r, authenticated, src, key)
-	case http.MethodDelete:
+	case r.Method == http.MethodDelete:
 		h.deleteObject(w, r, authenticated.User, src, key, true)
 	default:
 		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", key)
@@ -291,7 +306,7 @@ func (h *Handler) listObjectsV2(w http.ResponseWriter, r *http.Request, src *mod
 			commonSeen[displayPrefix] = true
 			result.CommonPrefixes = append(result.CommonPrefixes, commonPrefix{Prefix: encodeS3Value(displayPrefix, encodingType)})
 		} else {
-			etag, err := h.objectETag(src, entry.Key)
+			etag, err := h.objectETag(src, entry.Key, entry.Size, entry.MTime)
 			if err != nil {
 				continue
 			}
@@ -334,7 +349,14 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request, src *models.
 	}
 	defer unlock()
 	defer f.Close()
-	etag, err := etagReader(f)
+	etag, known, err := h.multipart.ObjectETag(src.SourceID, key, info.Size(), info.ModTime())
+	if err != nil {
+		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "读取对象 ETag 失败", key)
+		return
+	}
+	if !known {
+		etag, err = etagReader(f)
+	}
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "计算对象 ETag 失败", key)
 		return
@@ -416,6 +438,10 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request, authenticate
 			h.writeError(w, r, http.StatusRequestEntityTooLarge, "EntityTooLarge", "对象超过上传大小限制", key)
 			return
 		}
+		if isPayloadReadError(err) {
+			h.writePayloadError(w, r, err, key)
+			return
+		}
 		h.writeFileError(w, r, err, key)
 		return
 	}
@@ -425,6 +451,9 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request, authenticate
 		w.Header().Set(chunked.checksumName, chunked.trailerValue)
 	}
 	w.WriteHeader(http.StatusOK)
+	if err := h.multipart.ForgetObjectETag(src.SourceID, key); err != nil {
+		h.logger.Warn("清理旧 S3 Multipart ETag 失败", "err", err, "source_id", src.SourceID, "key", key)
+	}
 	h.logMutation(r, authenticated.User, "put_object", src.SourceID, key, audit.StatusSuccess, "")
 }
 
@@ -459,6 +488,9 @@ func (h *Handler) deleteObject(w http.ResponseWriter, r *http.Request, user *mod
 	}
 	if writeResponse {
 		w.WriteHeader(http.StatusNoContent)
+	}
+	if err := h.multipart.ForgetObjectETag(src.SourceID, key); err != nil {
+		h.logger.Warn("清理 S3 Multipart ETag 失败", "err", err, "source_id", src.SourceID, "key", key)
 	}
 	h.logMutation(r, user, "delete_object", src.SourceID, key, audit.StatusSuccess, "")
 	return true
@@ -517,7 +549,12 @@ func (h *Handler) deleteObjects(w http.ResponseWriter, r *http.Request, user *mo
 	h.writeXML(w, http.StatusOK, result)
 }
 
-func (h *Handler) objectETag(src *models.StorageSource, key string) (string, error) {
+func (h *Handler) objectETag(src *models.StorageSource, key string, size int64, mtime time.Time) (string, error) {
+	if etag, known, err := h.multipart.ObjectETag(src.SourceID, key, size, mtime); err != nil {
+		return "", err
+	} else if known {
+		return etag, nil
+	}
 	f, _, unlock, err := h.files.OpenForRead(src, key)
 	if err != nil {
 		return "", err

@@ -330,7 +330,7 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
 1. `omnistore.db`：SQLite 数据库。
 2. `keys/`：后续保存 master key 或密钥材料。
 3. `cache/`：可重建缓存；V1.1 使用 `cache/thumbnails/` 保存图床缩略图。
-4. `tmp/`：内部临时任务目录。
+4. `tmp/`：内部临时任务目录；S3 Multipart 分片位于 `tmp/multipart/{upload_id}/`。
 5. `logs/`：可选。MVP 可以只输出 stdout。
 
 ### 系统数据目录安全规则
@@ -517,6 +517,7 @@ audit:
 2. 启动时及每小时清理超过配置时限的上传临时文件。
 3. 启动时及每小时清理过期 WebDAV 持久锁。
 4. 启动时及每天清理超过 30 天未访问的缩略图缓存。
+5. 启动时及每小时清理超过 24 小时未活动的 S3 Multipart 状态与孤儿分片目录。
 
 Session 删除条件：
 
@@ -528,10 +529,9 @@ expires_at < now()
 
 暂不做：
 
-1. S3 Multipart GC。
-2. 图床失效图片扫描。
-3. 文件索引任务。
-4. 定时备份。
+1. 图床失效图片扫描。
+2. 文件索引任务。
+3. 定时备份。
 
 审计日志超量清理可以在写入日志后顺手执行，也可以复用 Session 清理任务。
 
@@ -575,6 +575,9 @@ internal/webdav/
 
 internal/imagebed/
   登录用户图床、匿名图床、图片校验、图片公开访问
+
+internal/s3api/
+  Signature V4、基础对象操作、Multipart 状态与协议响应
 
 internal/publicdisk/
   公开网盘虚拟挂载解析、公开目录浏览、raw 文件访问

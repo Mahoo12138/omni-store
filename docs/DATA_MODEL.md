@@ -116,6 +116,47 @@ CREATE TABLE s3_credentials (
 `access_key_id` 可明文保存；Secret Access Key 使用实例 master key 做 AES-256-GCM
 可恢复加密，明文只在创建时返回。每个用户最多保留 10 个 S3 凭据。
 
+### s3_multipart_uploads / s3_multipart_parts / s3_object_etags
+
+```sql
+CREATE TABLE s3_multipart_uploads (
+  upload_id TEXT PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL,
+  source_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
+
+CREATE TABLE s3_multipart_parts (
+  upload_id TEXT NOT NULL,
+  part_number INTEGER NOT NULL CHECK(part_number BETWEEN 1 AND 10000),
+  etag TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY(upload_id, part_number),
+  FOREIGN KEY(upload_id) REFERENCES s3_multipart_uploads(upload_id) ON DELETE CASCADE
+);
+
+CREATE TABLE s3_object_etags (
+  source_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  etag TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mtime_unix_nano INTEGER NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY(source_id, object_key),
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
+```
+
+Upload 记录绑定创建者、存储源与对象 Key；Part 表只保存编号、ETag、大小和时间，真实分片位于
+`{data.dir}/tmp/multipart/{upload_id}/`。`updated_at` 用于识别超过 24 小时未活动的上传。
+`s3_object_etags` 保存完成后的 Multipart ETag，并用文件 size + mtime 检测 S3 之外的修改；
+普通 PUT、DELETE 或检测到物理文件变化时会删除对应记录。
+
 ### storage_sources
 
 ```sql

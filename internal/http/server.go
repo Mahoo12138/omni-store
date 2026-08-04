@@ -45,6 +45,7 @@ type Server struct {
 	audit       *audit.Logger
 	proxy       *security.ProxyResolver
 	s3Keys      *s3api.Credentials
+	s3Multipart *s3api.MultipartStore
 	s3Handler   http.Handler
 }
 
@@ -64,7 +65,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.public = publicdisk.NewService(dbConn, s.sources, s.files)
 	s.tokens = auth.NewTokens(dbConn)
 	s.s3Keys = s3api.NewCredentials(dbConn, cfg.Data.Dir, cfg.Security.MasterKey)
-	s.s3Handler = s3api.NewHandler(s.s3Keys, s.sources, s.files, s.audit, s.proxy, logger, cfg.Upload.MaxFileSizeMB)
+	s.s3Multipart = s3api.NewMultipartStore(dbConn, cfg.Data.Dir, s.files, cfg.Upload.MaxFileSizeMB)
+	s.s3Handler = s3api.NewHandler(s.s3Keys, s.sources, s.files, s.audit, s.proxy, logger,
+		cfg.Upload.MaxFileSizeMB, s.s3Multipart)
 	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
 		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.files)
 	if err != nil {
@@ -247,6 +250,40 @@ func (s *Server) S3Server() *http.Server {
 		Addr: s.cfg.Server.S3Addr, Handler: s.s3Handler,
 		ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
 	}
+}
+
+// S3Multipart 暴露 Multipart 状态服务供 main 启动过期任务清理。
+func (s *Server) S3Multipart() *s3api.MultipartStore {
+	return s.s3Multipart
+}
+
+// StartS3MultipartCleanup 在启动时及之后每小时清理超过 24 小时未活动的上传与孤儿分片。
+func StartS3MultipartCleanup(store *s3api.MultipartStore, logger *slog.Logger, stop <-chan struct{}) {
+	go func() {
+		cleanup := func() {
+			result, err := store.CleanupExpired(s3api.MultipartMaxAge)
+			if err != nil {
+				logger.Warn("清理 S3 Multipart 临时数据未完全成功", "err", err,
+					"uploads_removed", result.UploadsRemoved, "orphans_removed", result.OrphansRemoved)
+				return
+			}
+			if result.UploadsRemoved > 0 || result.OrphansRemoved > 0 {
+				logger.Info("清理 S3 Multipart 临时数据",
+					"uploads_removed", result.UploadsRemoved, "orphans_removed", result.OrphansRemoved)
+			}
+		}
+		cleanup()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cleanup()
+			case <-stop:
+				return
+			}
+		}
+	}()
 }
 
 // StartUploadCleanup 在启动时及之后每小时清理一次过期上传临时文件。

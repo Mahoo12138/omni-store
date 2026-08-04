@@ -1,6 +1,6 @@
 -- OmniStore v1.0.0 初始 schema。
 -- v1.0.0 尚未发布；首个稳定版本发布前的所有结构变更均合并在此文件中。
--- SQLite 只保存系统数据：用户、权限、配置、Session、Token、图床流水、WebDAV 锁、审计日志。
+-- SQLite 只保存系统数据：用户、权限、配置、Session、Token、S3 Multipart 状态、图床流水、WebDAV 锁、审计日志。
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +66,43 @@ CREATE TABLE IF NOT EXISTS s3_credentials (
 );
 
 CREATE INDEX IF NOT EXISTS idx_s3_credentials_owner ON s3_credentials(owner_user_id, created_at);
+
+-- S3 Multipart 上传状态与 Part 元数据；真实分片保存在系统 tmp/multipart 下。
+CREATE TABLE IF NOT EXISTS s3_multipart_uploads (
+  upload_id TEXT PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL,
+  source_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_s3_multipart_uploads_owner ON s3_multipart_uploads(owner_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_s3_multipart_uploads_updated ON s3_multipart_uploads(updated_at);
+
+CREATE TABLE IF NOT EXISTS s3_multipart_parts (
+  upload_id TEXT NOT NULL,
+  part_number INTEGER NOT NULL CHECK(part_number BETWEEN 1 AND 10000),
+  etag TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY(upload_id, part_number),
+  FOREIGN KEY(upload_id) REFERENCES s3_multipart_uploads(upload_id) ON DELETE CASCADE
+);
+
+-- Multipart ETag 不是最终文件 MD5；保留 size + mtime 用于检测 S3 之外的文件变更。
+CREATE TABLE IF NOT EXISTS s3_object_etags (
+  source_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  etag TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mtime_unix_nano INTEGER NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY(source_id, object_key),
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS storage_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

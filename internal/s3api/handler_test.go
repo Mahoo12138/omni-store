@@ -28,11 +28,12 @@ import (
 )
 
 type s3Fixture struct {
-	handler *Handler
-	access  string
-	secret  string
-	now     time.Time
-	root    string
+	handler   *Handler
+	multipart *MultipartStore
+	access    string
+	secret    string
+	now       time.Time
+	root      string
 }
 
 func newS3Fixture(t *testing.T) *s3Fixture {
@@ -64,11 +65,12 @@ func newS3Fixture(t *testing.T) *s3Fixture {
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	multipart := NewMultipartStore(conn, dataDir, fileService, 10)
 	handler := NewHandler(credentials, sourceService, fileService,
-		audit.New(conn, true, 1000, logger), security.NewProxyResolver([]string{"127.0.0.1"}), logger, 10)
+		audit.New(conn, true, 1000, logger), security.NewProxyResolver([]string{"127.0.0.1"}), logger, 10, multipart)
 	now := time.Date(2026, 8, 4, 8, 30, 0, 0, time.UTC)
 	handler.verifier.now = func() time.Time { return now }
-	return &s3Fixture{handler: handler, access: item.AccessKeyID, secret: secret, now: now, root: root}
+	return &s3Fixture{handler: handler, multipart: multipart, access: item.AccessKeyID, secret: secret, now: now, root: root}
 }
 
 func (f *s3Fixture) signedRequest(t *testing.T, method, target string, body []byte) *http.Request {

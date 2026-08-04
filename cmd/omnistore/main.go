@@ -97,6 +97,9 @@ func runServer(args []string) error {
 
 	stopCleanup := make(chan struct{})
 	httpserver.StartSessionCleanup(app.Sessions(), logger, stopCleanup)
+	if cfg.Server.S3Enabled {
+		httpserver.StartS3MultipartCleanup(app.S3Multipart(), logger, stopCleanup)
+	}
 	if cfg.Upload.CleanupStaleFiles {
 		httpserver.StartUploadCleanup(app.Files(),
 			time.Duration(cfg.Upload.TempFileMaxAgeHours)*time.Hour, logger, stopCleanup)

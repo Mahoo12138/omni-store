@@ -26,12 +26,12 @@ V1.1 可实现：
 
 V1.2 可实现：
 
-1. S3 Multipart Upload。
-2. Multipart 临时分片目录。
-3. Multipart SQLite 状态表。
-4. Multipart Abort。
-5. Multipart ListParts。
-6. 24 小时孤儿分片 GC。
+1. S3 Multipart Upload。（已实现：创建、分片上传与流式完成合并）
+2. Multipart 临时分片目录。（已实现：`data.dir/tmp/multipart/{upload_id}/`，不污染存储源）
+3. Multipart SQLite 状态表。（已实现：Upload 与 Part 元数据，直接合并到未发布的 `v1.0.0.sql`）
+4. Multipart Abort。（已实现：删除状态与临时分片）
+5. Multipart ListParts。（已实现：PartNumber marker 与最多 1000 条分页）
+6. 24 小时孤儿分片 GC。（已实现：启动时及每小时清理超时状态和严格命名孤儿目录）
 
 ---
 

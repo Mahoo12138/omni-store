@@ -100,7 +100,16 @@
 6. GET 支持 Range；PUT 支持普通 payload、`UNSIGNED-PAYLOAD` 和 unsigned aws-chunked trailer 校验。
 7. S3 复用用户存储源读写权限；禁用存储源、排除路径、symlink 和只读写入均不可绕过。
 8. S3 写操作不能绕过 WebDAV 持久锁，并写入 `entry_type=s3` 审计日志。
-9. 不支持的 ACL、Policy、Multipart 等操作返回 S3 XML `NotImplemented`，不伪装成功。
+9. 不支持的 ACL、Policy 等操作返回 S3 XML `NotImplemented`，不伪装成功。
+
+### V1.2 S3 Multipart
+
+1. CreateMultipartUpload、UploadPart、ListParts、CompleteMultipartUpload 与 AbortMultipartUpload 可用。
+2. UploadId 绑定用户、存储源和对象 Key，其他用户或对象不能复用。
+3. PartNumber 限制为 1–10000，同号 Part 可覆盖；完成时校验严格递增顺序、ETag 和非末片 5 MiB 下限。
+4. ListParts 支持 marker 与最多 1000 条分页；完成时只逐片流式读取，不把整个对象载入内存。
+5. 完成写入复用统一文件服务，不能绕过排除规则、symlink 拒绝和 WebDAV 持久锁。
+6. 完成或 Abort 后清理 SQLite 状态与临时目录；失败可重试，超过 24 小时未活动的状态和孤儿目录自动清理。
 
 ### 安全
 

@@ -108,6 +108,18 @@ AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
   s3api list-objects-v2 --bucket team-files
 ```
 
+验证 Multipart 时可生成一个超过 AWS CLI 默认 Multipart 阈值的文件；测试配置允许最大 64 MiB：
+
+```bash
+dd if=/dev/zero of=.testdata/multipart-demo.bin bs=1m count=10
+AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
+  aws --endpoint-url "$endpoint" --region "$region" --no-verify-ssl \
+  s3 cp .testdata/multipart-demo.bin s3://team-files/multipart-demo.bin
+```
+
+完成后对象位于 `.testdata/sources/team-files/multipart-demo.bin`；未完成的分片位于
+`.testdata/data/tmp/multipart/`，可用于观察 Abort、重试和 24 小时 GC 行为。
+
 生产环境通过 `server.s3_enabled: true` 或 `OMNISTORE_S3_ENABLED=true` 显式启用；可用
 `OMNISTORE_S3_ADDR` 修改专用监听地址。`OMNISTORE_MASTER_KEY` 必须解码为 32 字节，建议使用
 `openssl rand -base64 32` 生成。如果未提供，系统首次创建 S3 凭据时会生成
