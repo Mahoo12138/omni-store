@@ -11,7 +11,7 @@
 3. 数据库：SQLite。
 4. 数据库访问：`database/sql` + 原生 SQL + Repository 层。
 5. SQLite 驱动：优先 `modernc.org/sqlite`，因为 pure Go、无 CGO，便于单二进制跨平台构建。
-6. 迁移：内置 SQL migration 文件，通过 `go:embed` 打包。
+6. 迁移：按稳定版本命名为 `migrations/vMAJOR.MINOR.PATCH.sql`，按 SemVer 顺序执行并通过 `go:embed` 打包。
 7. 前端静态产物：通过 Go `go:embed` 嵌入二进制。
 
 禁止 MVP 使用：

@@ -23,8 +23,8 @@ import (
 	"github.com/omni-store/omnistore/web"
 )
 
-// Version 由构建时注入，MVP 先用固定值。
-var Version = "0.1.0-dev"
+// Version 是当前开发版本；发布构建可通过 -ldflags 覆盖。
+var Version = "1.0.0-dev"
 
 // Server 聚合 HTTP 层依赖。
 type Server struct {

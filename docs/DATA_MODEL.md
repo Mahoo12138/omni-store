@@ -2,6 +2,8 @@
 
 本文档解释 SQLite 业务表的建议结构与字段语义；数据库迁移文件是最终事实来源。
 
+迁移版本采用 `vMAJOR.MINOR.PATCH`。当前 `v1.0.0` 尚未发布，初始结构统一维护在 `migrations/v1.0.0.sql`；发布后该文件必须冻结。
+
 ### schema_migrations
 
 ```sql

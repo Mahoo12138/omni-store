@@ -1,4 +1,5 @@
--- OmniStore MVP 初始 schema（README §22）
+-- OmniStore v1.0.0 初始 schema。
+-- v1.0.0 尚未发布；首个稳定版本发布前的所有结构变更均合并在此文件中。
 -- SQLite 只保存系统数据：用户、权限、配置、Session、Token、图床流水、审计日志。
 
 CREATE TABLE users (
@@ -140,3 +141,14 @@ CREATE TABLE audit_logs (
 
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_type, actor_user_id);
+
+-- 公开挂载路径修改后保留旧路径，并重定向到存储源的当前挂载路径。
+CREATE TABLE public_mount_redirects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id TEXT NOT NULL,
+  mount_path TEXT NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_public_mount_redirects_source ON public_mount_redirects(source_id, created_at);
