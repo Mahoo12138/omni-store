@@ -69,7 +69,9 @@ func Migrate(conn *sql.DB) error {
 	for _, file := range files {
 		name := file.name
 		version := strings.TrimSuffix(name, ".sql")
-		if applied[version] {
+		// v1.0.0 尚未发布，基线会持续合并新的幂等建表/索引语句。
+		// 已记录该版本的开发数据库仍需安全重放，以获得新加入的结构。
+		if applied[version] && version != initialMigrationVersion {
 			continue
 		}
 		sqlBytes, err := migrations.FS.ReadFile(name)
@@ -85,10 +87,12 @@ func Migrate(conn *sql.DB) error {
 			tx.Rollback()
 			return fmt.Errorf("执行迁移 %s 失败: %w", name, err)
 		}
-		if _, err := tx.Exec(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
-			version, time.Now().UTC()); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("记录迁移版本 %s 失败: %w", version, err)
+		if !applied[version] {
+			if _, err := tx.Exec(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
+				version, time.Now().UTC()); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("记录迁移版本 %s 失败: %w", version, err)
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("提交迁移 %s 失败: %w", name, err)

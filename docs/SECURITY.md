@@ -259,6 +259,10 @@ username + WebDAV Token
 5. 用户禁用后 WebDAV Token 失效。
 6. 生产环境必须放在 HTTPS 反向代理后使用。
 
+### WebDAV Lock Token
+
+Lock Token 是已通过 Basic Auth 的客户端提交的资源状态标识，不替代身份认证或存储源权限检查。服务端只允许锁创建者刷新或解除对应锁；写操作仍必须先完成用户、存储源和路径安全校验。锁 owner XML 可能包含客户端提供的联系信息，管理与日志接口不得额外暴露或记录该内容。
+
 ### 图床 API Token
 
 每个用户最多可以创建 10 个命名图床 API Token，建议按设备或客户端分别创建，以便独立撤销。

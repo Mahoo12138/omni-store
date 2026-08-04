@@ -74,6 +74,14 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+## WebDAV 持久锁
+
+`/dav/{source_id}/{path}` 支持 RFC 4918 `LOCK / UNLOCK`。新建独占写锁时请求体使用 `DAV:lockinfo`，响应返回 `Lock-Token` 与 `DAV:lockdiscovery`；刷新锁使用无请求体的 `LOCK` 和包含单个 Token 的 `If` 头；解锁使用 `Lock-Token` 头。
+
+未提交覆盖目标路径的锁 Token 时，`PUT / MKCOL / DELETE / MOVE` 返回 `423 Locked`。REST 等其他文件写入口同样返回统一的 `LOCKED` 错误。
+
+成功 `DELETE` 会清理被删除资源及后代资源自身的锁；成功 `MOVE` 不把源路径上的锁迁移到目标路径。锁在源路径之外的祖先资源上时仍保留，并按目标路径重新判断是否覆盖。
+
 ## 存储源已有目录预检
 
 管理员在创建存储源前可预检服务端已有目录：

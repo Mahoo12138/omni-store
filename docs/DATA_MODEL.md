@@ -263,6 +263,28 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_type, actor_user_id);
 ```
 
+### webdav_locks
+
+WebDAV 独占写锁持久化到 SQLite；Token 用于协议状态匹配，不替代用户鉴权。
+
+```sql
+CREATE TABLE webdav_locks (
+  token TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  relative_path TEXT NOT NULL,
+  depth TEXT NOT NULL CHECK(depth IN ('0', 'infinity')),
+  owner_xml TEXT NOT NULL DEFAULT '',
+  owner_user_id INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  refreshed_at DATETIME NOT NULL,
+  expires_at DATETIME NOT NULL,
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+`expires_at` 用于访问时惰性清理和每小时后台清理；存储源或锁创建者删除后，关联锁级联删除。
+
 ### V2 file_records 规划
 
 V2 配额系统再增加：

@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"database/sql"
 	"io/fs"
 	"log/slog"
@@ -236,6 +237,31 @@ func StartUploadCleanup(fileService *files.Service, maxAge time.Duration, logger
 			}
 		}
 
+		cleanup()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cleanup()
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
+// StartWebDAVLockCleanup 在启动时及之后每小时清理过期的持久锁。
+func StartWebDAVLockCleanup(fileService *files.Service, logger *slog.Logger, stop <-chan struct{}) {
+	go func() {
+		cleanup := func() {
+			n, err := fileService.PersistentLocks().CleanupExpired(context.Background())
+			if err != nil {
+				logger.Warn("清理过期 WebDAV 锁失败", "err", err)
+			} else if n > 0 {
+				logger.Info("清理过期 WebDAV 锁", "count", n)
+			}
+		}
 		cleanup()
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()

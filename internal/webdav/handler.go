@@ -19,6 +19,7 @@ import (
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/files"
+	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
@@ -32,6 +33,7 @@ type Handler struct {
 	audit       *audit.Logger
 	proxy       *security.ProxyResolver
 	logger      *slog.Logger
+	persistent  *locks.PersistentStore
 	maxFileSize int64 // 字节，PUT 受 upload.max_file_size_mb 限制（README §14.1）
 }
 
@@ -41,6 +43,7 @@ func New(tokens *auth.Tokens, srcSvc *sources.Service, fileSvc *files.Service,
 	return &Handler{
 		tokens: tokens, sources: srcSvc, files: fileSvc,
 		audit: auditLogger, proxy: proxy, logger: logger,
+		persistent:  fileSvc.PersistentLocks(),
 		maxFileSize: maxFileSizeMB * 1024 * 1024,
 	}
 }
@@ -79,15 +82,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDelete(w, r, user, rest)
 	case "MOVE":
 		h.handleMove(w, r, user, rest)
+	case "LOCK":
+		h.handleLock(w, r, user, rest)
+	case "UNLOCK":
+		h.handleUnlock(w, r, user, rest)
 	default:
-		// COPY / LOCK / UNLOCK / PROPPATCH / REPORT / SEARCH / ACL 等（README §16.4）。
+		// COPY / PROPPATCH / REPORT / SEARCH / ACL 等（README §16.4）。
 		http.Error(w, "not implemented", http.StatusNotImplemented)
 	}
 }
 
 func (h *Handler) handleOptions(w http.ResponseWriter) {
-	w.Header().Set("DAV", "1")
-	w.Header().Set("Allow", "OPTIONS, PROPFIND, GET, HEAD, PUT, MKCOL, DELETE, MOVE")
+	w.Header().Set("DAV", "1, 2")
+	w.Header().Set("Allow", "OPTIONS, PROPFIND, GET, HEAD, PUT, MKCOL, DELETE, MOVE, LOCK, UNLOCK")
 	w.Header().Set("MS-Author-Via", "DAV")
 	w.WriteHeader(http.StatusOK)
 }
@@ -155,10 +162,12 @@ type davPropstats struct {
 }
 
 type davProp struct {
-	DisplayName   string       `xml:"D:displayname,omitempty"`
-	ResourceType  resourceType `xml:"D:resourcetype"`
-	ContentLength *int64       `xml:"D:getcontentlength,omitempty"`
-	LastModified  string       `xml:"D:getlastmodified,omitempty"`
+	DisplayName   string            `xml:"D:displayname,omitempty"`
+	ResourceType  resourceType      `xml:"D:resourcetype"`
+	ContentLength *int64            `xml:"D:getcontentlength,omitempty"`
+	LastModified  string            `xml:"D:getlastmodified,omitempty"`
+	SupportedLock *davSupportedLock `xml:"D:supportedlock,omitempty"`
+	LockDiscovery *davLockDiscovery `xml:"D:lockdiscovery,omitempty"`
 }
 
 type resourceType struct {
@@ -235,7 +244,12 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 				return
 			}
 			for _, v := range list {
-				responses = append(responses, dirResponse(davHref(v.SourceID), v.Name))
+				response := dirResponse(davHref(v.SourceID), v.Name)
+				if err := h.addLockProperties(r, &response, v.SourceID, ""); err != nil {
+					h.writeError(w, err)
+					return
+				}
+				responses = append(responses, response)
 			}
 		}
 	} else {
@@ -253,7 +267,12 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 		selfHref := davHref(sourceID, inner)
 		switch entry.Type {
 		case files.TypeDir:
-			responses = append(responses, dirResponse(selfHref, entry.Name))
+			response := dirResponse(selfHref, entry.Name)
+			if err := h.addLockProperties(r, &response, sourceID, inner); err != nil {
+				h.writeError(w, err)
+				return
+			}
+			responses = append(responses, response)
 			if depth == "1" {
 				// WebDAV 不分页，一次拉全（上限 500 * N 页在 MVP 简化为最大页）。
 				result, err := h.files.List(src, inner, files.ListOptions{Page: 1, PageSize: 500}, false)
@@ -263,16 +282,32 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 				}
 				for _, e := range result.Items {
 					childHref := davHref(sourceID, strings.TrimPrefix(inner+"/"+e.Name, "/"))
+					childRel := strings.TrimPrefix(inner+"/"+e.Name, "/")
 					if e.Type == files.TypeDir {
-						responses = append(responses, dirResponse(childHref, e.Name))
+						response := dirResponse(childHref, e.Name)
+						if err := h.addLockProperties(r, &response, sourceID, childRel); err != nil {
+							h.writeError(w, err)
+							return
+						}
+						responses = append(responses, response)
 					} else if e.Type == files.TypeFile {
-						responses = append(responses, fileResponse(childHref, e.Name, e.Size, e.MTime))
+						response := fileResponse(childHref, e.Name, e.Size, e.MTime)
+						if err := h.addLockProperties(r, &response, sourceID, childRel); err != nil {
+							h.writeError(w, err)
+							return
+						}
+						responses = append(responses, response)
 					}
 					// symlink 直接跳过（README §10.7）。
 				}
 			}
 		case files.TypeFile:
-			responses = append(responses, fileResponse(selfHref, entry.Name, entry.Size, entry.MTime))
+			response := fileResponse(selfHref, entry.Name, entry.Size, entry.MTime)
+			if err := h.addLockProperties(r, &response, sourceID, inner); err != nil {
+				h.writeError(w, err)
+				return
+			}
+			responses = append(responses, response)
 		default:
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -331,7 +366,7 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request, user *models
 	dir := path.Dir("/" + inner)
 	name := path.Base("/" + inner)
 	// WebDAV PUT 按协议习惯覆盖文件（README §13.4）。
-	relPath, _, err := h.files.Upload(src, dir, name, r.Body, true)
+	relPath, _, err := h.files.UploadWithLockTokens(src, dir, name, r.Body, true, extractLockTokens(r.Header.Get("If")), &user.ID)
 
 	h.logAudit(r, user, "upload", sourceID, strings.TrimPrefix(inner, "/"), "", err)
 	if err != nil {
@@ -364,7 +399,7 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request, user *mode
 
 	dir := path.Dir("/" + inner)
 	name := path.Base("/" + inner)
-	_, err := h.files.Mkdir(src, dir, name)
+	_, err := h.files.MkdirWithLockTokens(src, dir, name, extractLockTokens(r.Header.Get("If")), &user.ID)
 	h.logAudit(r, user, "create_folder", sourceID, inner, "", err)
 	if err != nil {
 		if errors.Is(err, files.ErrAlreadyExists) {
@@ -391,7 +426,7 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request, user *mod
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
-	err := h.files.Delete(src, inner)
+	err := h.files.DeleteWithLockTokens(src, inner, extractLockTokens(r.Header.Get("If")), &user.ID)
 	h.logAudit(r, user, "delete", sourceID, inner, "", err)
 	if err != nil {
 		h.writeError(w, err)
@@ -437,7 +472,7 @@ func (h *Handler) handleMove(w http.ResponseWriter, r *http.Request, user *model
 		return
 	}
 
-	newRel, err := h.files.Move(src, inner, destInner)
+	newRel, err := h.files.MoveWithLockTokens(src, inner, destInner, extractLockTokens(r.Header.Get("If")), &user.ID)
 	h.logAudit(r, user, "move", sourceID, inner, newRel, err)
 	if err != nil {
 		if errors.Is(err, files.ErrAlreadyExists) {
@@ -463,6 +498,8 @@ func (h *Handler) writeError(w http.ResponseWriter, err error) {
 		http.Error(w, "not found", http.StatusNotFound)
 	case errors.Is(err, files.ErrInvalid):
 		http.Error(w, "bad request", http.StatusBadRequest)
+	case errors.Is(err, files.ErrLocked):
+		http.Error(w, "locked", http.StatusLocked)
 	default:
 		h.logger.Error("webdav 内部错误", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

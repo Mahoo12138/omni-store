@@ -65,6 +65,15 @@ func TestOpenAppliesSquashedInitialMigration(t *testing.T) {
 	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'public_mount_redirects'`).Scan(&tableName); err != nil {
 		t.Fatalf("initial migration missing redirects table: %v", err)
 	}
+	if _, err := conn.Exec(`DROP TABLE webdav_locks`); err != nil {
+		t.Fatalf("drop development table: %v", err)
+	}
+	if err := Migrate(conn); err != nil {
+		t.Fatalf("replay unreleased baseline: %v", err)
+	}
+	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'webdav_locks'`).Scan(&tableName); err != nil {
+		t.Fatalf("replayed baseline missing WebDAV locks table: %v", err)
+	}
 }
 
 func TestMigrateReconcilesLegacyPreReleaseVersions(t *testing.T) {

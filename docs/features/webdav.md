@@ -51,7 +51,7 @@ MVP 支持：
 2. `DELETE /dav/{source_id}` 删除存储源。
 3. 在 `/dav` 下创建存储源。
 
-### MVP 支持方法
+### 支持方法
 
 支持：
 
@@ -64,6 +64,8 @@ PUT
 MKCOL
 DELETE
 MOVE
+LOCK
+UNLOCK
 ```
 
 `PROPFIND` 支持：
@@ -75,14 +77,26 @@ Depth: 1
 
 `Depth: infinity` 返回明确错误，避免大目录扫爆。
 
-### MVP 不支持方法
+V1.1 的 `LOCK / UNLOCK` 支持 RFC 4918 独占写锁：
+
+1. `Depth: 0` 只锁定请求资源；省略 `Depth` 等价于 `Depth: infinity`。
+2. 新建锁返回 `Lock-Token` 和 `DAV:lockdiscovery`；无请求体的 `LOCK` 搭配 `If` 头用于刷新。
+3. `UNLOCK` 使用 `Lock-Token`，成功返回 `204 No Content`。
+4. 锁定不存在的 URL 时创建零字节普通文件。
+5. 锁最长保留 7 天，默认 1 小时；访问时和后台任务都会清理过期锁。
+6. 持久锁写入 SQLite，进程重启后继续生效。
+7. REST、WebDAV、图床等所有文件写入口都必须遵守持久锁；WebDAV 通过 `If` 头提交匹配 Token。
+8. 当前只支持规范要求的独占写锁，不支持共享锁。
+9. 成功删除资源时会删除以该资源或其后代为根的锁；成功 `MOVE` 不把源资源的锁迁移到目标路径，外部祖先锁保持不变。
+
+`PROPFIND` 返回 `DAV:supportedlock` 和 `DAV:lockdiscovery`。`OPTIONS` 声明 `DAV: 1, 2`。
+
+### 不支持方法
 
 不支持：
 
 ```text
 COPY
-LOCK
-UNLOCK
 PROPPATCH
 REPORT
 SEARCH
@@ -127,7 +141,8 @@ MVP 不支持跨存储源移动。
 9. 检查路径穿越。
 10. 检查排除规则。
 11. 检查 symlink。
-12. 获取路径锁。
-13. 访问真实文件系统。
+12. 校验 WebDAV 持久写锁。
+13. 获取请求级路径锁。
+14. 访问真实文件系统。
 
 ---

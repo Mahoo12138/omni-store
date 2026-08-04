@@ -4,6 +4,7 @@
 package files
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -33,6 +34,8 @@ var (
 	ErrInvalid = errors.New("非法路径或文件名")
 	// ErrUnsupported 符号链接等不支持的条目。
 	ErrUnsupported = errors.New("不支持的文件类型")
+	// ErrLocked 路径受 WebDAV 持久写锁保护，且未提交匹配 Token。
+	ErrLocked = locks.ErrPersistentLocked
 )
 
 // 条目类型。
@@ -52,19 +55,25 @@ type Entry struct {
 
 // Service 提供核心文件操作，REST、WebDAV、图床、公开网盘共用。
 type Service struct {
-	db      *sql.DB
-	sources *sources.Service
-	locks   *locks.Manager
+	db              *sql.DB
+	sources         *sources.Service
+	locks           *locks.Manager
+	persistentLocks *locks.PersistentStore
 }
 
 // NewService 创建文件服务。
 func NewService(db *sql.DB, srcSvc *sources.Service, lockMgr *locks.Manager) *Service {
-	return &Service{db: db, sources: srcSvc, locks: lockMgr}
+	return &Service{db: db, sources: srcSvc, locks: lockMgr, persistentLocks: locks.NewPersistentStore(db)}
 }
 
 // Locks 暴露锁管理器（WebDAV 等入口共用）。
 func (s *Service) Locks() *locks.Manager {
 	return s.locks
+}
+
+// PersistentLocks 暴露 WebDAV 持久锁存储，供协议层和后台清理复用。
+func (s *Service) PersistentLocks() *locks.PersistentStore {
+	return s.persistentLocks
 }
 
 // prepare 执行统一前置检查：规范化路径 -> 排除规则 -> symlink 检查。
@@ -325,6 +334,11 @@ func (s *Service) OpenForRead(src *models.StorageSource, relInput string) (*os.F
 
 // Mkdir 在 parentRel 下创建名为 name 的目录。
 func (s *Service) Mkdir(src *models.StorageSource, parentRel, name string) (string, error) {
+	return s.MkdirWithLockTokens(src, parentRel, name, nil, nil)
+}
+
+// MkdirWithLockTokens 创建目录，并允许 WebDAV 提交匹配的持久锁 Token。
+func (s *Service) MkdirWithLockTokens(src *models.StorageSource, parentRel, name string, lockTokens []string, lockOwnerUserID *int64) (string, error) {
 	if err := security.ValidateFileName(name); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
@@ -341,6 +355,12 @@ func (s *Service) Mkdir(src *models.StorageSource, parentRel, name string) (stri
 	if err != nil {
 		return "", err
 	}
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+		[]locks.MutationScope{{Path: relPath}}, lockTokens, lockOwnerUserID)
+	if err != nil {
+		return "", err
+	}
+	defer releasePersistent()
 
 	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
 	defer unlock()
@@ -363,6 +383,11 @@ func (s *Service) Mkdir(src *models.StorageSource, parentRel, name string) (stri
 // 数据先写同目录临时文件 .omnistore-upload-*.tmp，成功后原子重命名。
 // overwrite 为 false 且目标存在时返回 ErrAlreadyExists。
 func (s *Service) Upload(src *models.StorageSource, dirRel, filename string, body io.Reader, overwrite bool) (string, int64, error) {
+	return s.UploadWithLockTokens(src, dirRel, filename, body, overwrite, nil, nil)
+}
+
+// UploadWithLockTokens 上传文件，并允许 WebDAV 提交匹配的持久锁 Token。
+func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filename string, body io.Reader, overwrite bool, lockTokens []string, lockOwnerUserID *int64) (string, int64, error) {
 	if err := security.ValidateFileName(filename); err != nil {
 		return "", 0, fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
@@ -379,6 +404,12 @@ func (s *Service) Upload(src *models.StorageSource, dirRel, filename string, bod
 	if err != nil {
 		return "", 0, err
 	}
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+		[]locks.MutationScope{{Path: relPath}}, lockTokens, lockOwnerUserID)
+	if err != nil {
+		return "", 0, err
+	}
+	defer releasePersistent()
 
 	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
 	defer unlock()
@@ -453,6 +484,11 @@ func writeViaTemp(dirAbs, targetAbs string, body io.Reader) (int64, error) {
 
 // Delete 永久删除文件或目录（含目录内全部内容），并同步清理图床记录。
 func (s *Service) Delete(src *models.StorageSource, relInput string) error {
+	return s.DeleteWithLockTokens(src, relInput, nil, nil)
+}
+
+// DeleteWithLockTokens 删除路径，并允许 WebDAV 提交覆盖整个删除范围的锁 Token。
+func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput string, lockTokens []string, lockOwnerUserID *int64) error {
 	relPath, absPath, err := s.prepare(src, relInput)
 	if err != nil {
 		return err
@@ -460,6 +496,12 @@ func (s *Service) Delete(src *models.StorageSource, relInput string) error {
 	if relPath == "" {
 		return fmt.Errorf("%w: 不能删除存储源根目录", ErrInvalid)
 	}
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+		[]locks.MutationScope{{Path: relPath, IncludeDescendants: true}}, lockTokens, lockOwnerUserID)
+	if err != nil {
+		return err
+	}
+	defer releasePersistent()
 
 	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
 	defer unlock()
@@ -482,6 +524,9 @@ func (s *Service) Delete(src *models.StorageSource, relInput string) error {
 
 	// 同步清理 Images 表，避免图床历史残留失效图片（README §13.5/§17.12）。
 	s.cleanupImageRecords(src.SourceID, relPath, isDir)
+	if err := releasePersistent(relPath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -514,11 +559,16 @@ func (s *Service) Rename(src *models.StorageSource, relInput, newName string) (s
 	if parent != "" {
 		newRel = parent + "/" + newName
 	}
-	return s.move(src, relPath, newRel)
+	return s.move(src, relPath, newRel, nil, nil)
 }
 
 // Move 将文件或目录移动到同存储源内的新路径 toRel（完整目标路径，含文件名）。
 func (s *Service) Move(src *models.StorageSource, fromInput, toInput string) (string, error) {
+	return s.MoveWithLockTokens(src, fromInput, toInput, nil, nil)
+}
+
+// MoveWithLockTokens 移动路径，并允许 WebDAV 提交源与目标范围所需的锁 Token。
+func (s *Service) MoveWithLockTokens(src *models.StorageSource, fromInput, toInput string, lockTokens []string, lockOwnerUserID *int64) (string, error) {
 	fromRel, err := security.NormalizeRelPath(fromInput)
 	if err != nil || fromRel == "" {
 		return "", fmt.Errorf("%w: 非法源路径", ErrInvalid)
@@ -527,10 +577,10 @@ func (s *Service) Move(src *models.StorageSource, fromInput, toInput string) (st
 	if err != nil || toRel == "" {
 		return "", fmt.Errorf("%w: 非法目标路径", ErrInvalid)
 	}
-	return s.move(src, fromRel, toRel)
+	return s.move(src, fromRel, toRel, lockTokens, lockOwnerUserID)
 }
 
-func (s *Service) move(src *models.StorageSource, fromRel, toRel string) (string, error) {
+func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTokens []string, lockOwnerUserID *int64) (string, error) {
 	if fromRel == toRel {
 		return "", ErrAlreadyExists
 	}
@@ -547,6 +597,15 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string) (string
 	if err != nil {
 		return "", err
 	}
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+		[]locks.MutationScope{
+			{Path: fromRel, IncludeDescendants: true},
+			{Path: toRel},
+		}, lockTokens, lockOwnerUserID)
+	if err != nil {
+		return "", err
+	}
+	defer releasePersistent()
 
 	unlock := s.locks.LockPair(locks.Key(src.SourceID, fromRel), locks.Key(src.SourceID, toRel))
 	defer unlock()
@@ -574,6 +633,10 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string) (string
 
 	// 同步更新图床记录路径，保持公开 URL 有效。
 	s.syncImageRecordsMove(src.SourceID, fromRel, toRel, info.IsDir())
+	// RFC 4918：MOVE 不携带源资源上的锁。外部祖先锁保留，并按新路径重新判断覆盖关系。
+	if err := releasePersistent(fromRel); err != nil {
+		return "", err
+	}
 	return toRel, nil
 }
 

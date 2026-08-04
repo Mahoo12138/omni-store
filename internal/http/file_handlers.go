@@ -64,6 +64,8 @@ func writeFileError(w http.ResponseWriter, r *http.Request, err error) {
 		WriteError(w, r, CodePathInvalid, "不支持的文件类型", nil)
 	case errors.Is(err, files.ErrInvalid):
 		WriteError(w, r, CodePathInvalid, err.Error(), nil)
+	case errors.Is(err, files.ErrLocked):
+		WriteError(w, r, CodeLocked, "资源已被 WebDAV 锁定", nil)
 	case errors.As(err, &maxBytesErr):
 		WriteError(w, r, CodePayloadTooLarge, "文件超过大小限制", nil)
 	default:
