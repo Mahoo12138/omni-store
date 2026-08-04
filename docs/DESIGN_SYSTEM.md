@@ -276,7 +276,7 @@ OmniStore 的界面像一只整理良好的文件柜：空间冷静、分类明�
 ```text
 /login
 /app
-/app/sources/{source_id}?path=/xxx
+/app/sources/{storage_key}?path=/xxx
 /app/image-bed
 /app/settings
 ```

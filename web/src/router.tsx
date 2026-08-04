@@ -70,7 +70,7 @@ interface FileManagerSearch {
 
 const fileManagerRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/app/sources/$sourceId',
+  path: '/app/sources/$sourceKey',
   component: FileManagerPage,
   validateSearch: (search: Record<string, unknown>): FileManagerSearch => ({
     path: typeof search.path === 'string' && search.path ? search.path : '/',

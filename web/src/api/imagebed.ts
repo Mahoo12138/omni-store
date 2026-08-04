@@ -5,7 +5,7 @@ export interface ImageRecord {
   id: number
   image_id: string
   owner_type: 'user' | 'anonymous'
-  source_id: string
+  storage_source_id: number
   relative_path: string
   original_filename: string
   public_url: string
@@ -20,22 +20,22 @@ export interface ImageRecord {
 
 export async function fetchImageBedTargets(): Promise<{
   targets: UserSource[]
-  default_source_id: string
+  default_key: string
 }> {
   return apiFetch('/api/v1/image-bed/targets')
 }
 
-export async function setDefaultImageBedTarget(sourceId: string): Promise<void> {
+export async function setDefaultImageBedTarget(sourceKey: string): Promise<void> {
   await apiFetch('/api/v1/image-bed/default-target', {
     method: 'PUT',
-    body: JSON.stringify({ source_id: sourceId }),
+    body: JSON.stringify({ key: sourceKey }),
   })
 }
 
-export async function uploadImage(file: File, sourceId?: string): Promise<ImageRecord> {
+export async function uploadImage(file: File, sourceKey?: string): Promise<ImageRecord> {
   const form = new FormData()
   form.append('file', file)
-  const q = sourceId ? `?source_id=${encodeURIComponent(sourceId)}` : ''
+  const q = sourceKey ? `?key=${encodeURIComponent(sourceKey)}` : ''
   return apiFetch(`/api/v1/image-bed/uploads${q}`, { method: 'POST', body: form })
 }
 

@@ -45,7 +45,7 @@ image_bed:
 
 网页端上传可以提供下拉框临时切换目标。
 
-PicGo / API Token 上传使用用户默认图床目标，不允许 API 指定 `source_id` 或目录。
+PicGo / API Token 上传使用用户默认图床目标，不允许客户端指定存储源或目录。网页端临时选择目标时仅展示名称，内部请求使用系统生成 key。
 
 用户可以为不同客户端创建多个命名图床 Token。每个 Token 独立保存哈希、记录最近使用时间并可单独撤销；单个用户最多同时保留 10 个。
 
@@ -75,7 +75,7 @@ SQLite 系统设置字段：
 
 ```text
 anonymous_image_bed_enabled
-anonymous_image_bed_source_id
+anonymous_image_bed_storage_source_id
 ```
 
 匿名公共图床目标存储源必须满足：
@@ -182,7 +182,7 @@ https://store.example.com/i/img_8k3f9a2d.jpg
 
 公开 URL 不暴露：
 
-1. source_id。
+1. 存储源内部 key。
 2. public_mount_path。
 3. 真实相对路径。
 4. 用户 ID。
@@ -223,7 +223,7 @@ id
 image_id
 owner_type          user / anonymous
 owner_user_id       可为空
-source_id
+storage_source_id
 relative_path
 original_filename
 public_url
@@ -313,7 +313,7 @@ file: 图片文件
 
 不允许传：
 
-1. source_id。
+1. 存储源选择参数。
 2. 目录。
 3. 文件名模板。
 

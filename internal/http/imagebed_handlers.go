@@ -12,6 +12,7 @@ import (
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/imagebed"
+	"github.com/omni-store/omnistore/internal/models"
 )
 
 // readMultipartFile 从 multipart 请求中取出 file 字段（流式，不整体读入内存）。
@@ -117,38 +118,51 @@ func (s *Server) handleImageBedTargets(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "查询默认目标失败", nil)
 		return
 	}
-	WriteData(w, r, map[string]any{"targets": targets, "default_source_id": def})
+	WriteData(w, r, map[string]any{"targets": targets, "default_key": def})
 }
 
 func (s *Server) handleSetImageBedDefaultTarget(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceID string `json:"source_id"`
+		Key string `json:"key"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.imagebed.SetDefaultTarget(CurrentUser(r.Context()), req.SourceID); err != nil {
+	if err := s.imagebed.SetDefaultTarget(CurrentUser(r.Context()), req.Key); err != nil {
 		writeImageBedError(w, r, err)
 		return
 	}
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
-func (s *Server) imageBedAudit(r *http.Request, entryType, action string, userID *int64, sourceID string, opErr error) {
+func (s *Server) imageBedAudit(r *http.Request, entryType, action string, userID *int64, storageSourceID *int64, sourceKey string, opErr error) {
 	actorType := audit.ActorUser
 	if userID == nil {
 		actorType = audit.ActorAnonymous
 	}
 	e := audit.Entry{
 		ActorType: actorType, ActorUserID: userID,
-		EntryType: entryType, Action: action, SourceID: sourceID,
+		EntryType: entryType, Action: action,
 		IPAddress: s.proxy.ClientIP(r), UserAgent: r.UserAgent(),
 		Status: audit.StatusSuccess,
+	}
+	if storageSourceID != nil {
+		e.StorageSourceID = storageSourceID
+	} else if src, err := s.sources.Get(sourceKey); err == nil {
+		e.StorageSourceID = &src.ID
 	}
 	if opErr != nil {
 		e.Status = audit.StatusFailed
 	}
 	s.audit.Log(e)
+}
+
+func imageStorageSourceID(img *models.Image) *int64 {
+	if img == nil {
+		return nil
+	}
+	id := img.StorageSourceID
+	return &id
 }
 
 // handleImageBedUpload 网页端登录用户上传（Cookie + CSRF）。
@@ -160,9 +174,9 @@ func (s *Server) handleImageBedUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourceID := r.URL.Query().Get("source_id") // 可临时切换目标（README §17.3）
-	img, err := s.imagebed.UploadForUser(user, sourceID, path.Base(part.FileName()), part)
-	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, sourceID, err)
+	sourceKey := r.URL.Query().Get("key") // 可临时切换目标（README §17.3）
+	img, err := s.imagebed.UploadForUser(user, sourceKey, path.Base(part.FileName()), part)
+	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, imageStorageSourceID(img), sourceKey, err)
 	if err != nil {
 		writeImageBedError(w, r, err)
 		return
@@ -186,7 +200,7 @@ func (s *Server) handleImageBedHistory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImageBedDelete(w http.ResponseWriter, r *http.Request) {
 	user := CurrentUser(r.Context())
 	err := s.imagebed.DeleteByUser(user, r.PathValue("image_id"))
-	s.imageBedAudit(r, audit.EntryImageBed, "image_delete", &user.ID, "", err)
+	s.imageBedAudit(r, audit.EntryImageBed, "image_delete", &user.ID, nil, "", err)
 	if err != nil {
 		writeImageBedError(w, r, err)
 		return
@@ -224,9 +238,9 @@ func (s *Server) handlePicGoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// PicGo 上传使用默认图床目标，不允许指定 source_id（README §17.3）。
+	// PicGo 上传使用默认图床目标，不允许指定存储源 key（README §17.3）。
 	img, err := s.imagebed.UploadForUser(user, "", path.Base(part.FileName()), part)
-	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, "", err)
+	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, imageStorageSourceID(img), "", err)
 	if err != nil {
 		msg := "上传失败"
 		var maxBytesErr *http.MaxBytesError
@@ -252,7 +266,7 @@ func (s *Server) handleAnonymousImageBedStatus(w http.ResponseWriter, r *http.Re
 		WriteError(w, r, CodeInternalError, "查询失败", nil)
 		return
 	}
-	// 对外只暴露开关，不暴露目标 source_id。
+	// 对外只暴露开关，不暴露目标 key。
 	WriteData(w, r, map[string]any{
 		"enabled":          settings.Enabled,
 		"max_file_size_mb": s.cfg.ImageBed.AnonymousMaxFileSizeMB,
@@ -273,7 +287,7 @@ func (s *Server) handleAnonymousImageBedUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	img, err := s.imagebed.UploadAnonymous(path.Base(part.FileName()), part)
-	s.imageBedAudit(r, audit.EntryAnonymousImageBed, "image_upload", nil, "", err)
+	s.imageBedAudit(r, audit.EntryAnonymousImageBed, "image_upload", nil, imageStorageSourceID(img), "", err)
 	if err != nil {
 		writeImageBedError(w, r, err)
 		return
@@ -295,13 +309,13 @@ func (s *Server) handleAdminGetAnonymousSettings(w http.ResponseWriter, r *http.
 
 func (s *Server) handleAdminSetAnonymousSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Enabled  bool   `json:"enabled"`
-		SourceID string `json:"source_id"`
+		Enabled bool   `json:"enabled"`
+		Key     string `json:"key"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.imagebed.SetAnonymousSettings(req.Enabled, req.SourceID); err != nil {
+	if err := s.imagebed.SetAnonymousSettings(req.Enabled, req.Key); err != nil {
 		writeImageBedError(w, r, err)
 		return
 	}

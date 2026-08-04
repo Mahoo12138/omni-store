@@ -46,13 +46,13 @@
 1. `/` 是公开网盘首页。
 2. `/p/*` 可浏览公开目录。
 3. `/raw/*` 可访问公开文件。
-4. public_mount_path 隐藏 source_id。
+4. public_mount_path 与公开 URL 不暴露存储源内部 key。
 5. 修改 public_mount_path 后，旧目录页和 raw 链接重定向到新路径；禁用公开访问或存储源后旧链接不可访问。
 
 ### WebDAV
 
 1. `/dav` 可显示可访问存储源。
-2. `/dav/{source_id}` 可直接挂载。
+2. 系统提供的 `/dav/{storage_key}` 地址可直接挂载，界面用存储源名称描述它。
 3. Basic Auth 使用 WebDAV Token。
 4. 登录密码不能作为 WebDAV Token 使用。
 5. 基础方法可用。

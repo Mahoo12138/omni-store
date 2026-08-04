@@ -4,7 +4,7 @@ package locks
 
 import "sync"
 
-// Manager 管理按 key 的读写锁。key = source_id + "\x00" + normalized_relative_path。
+// Manager 管理按 key 的读写锁。key = opaque_source_key + "\x00" + normalized_relative_path。
 // 所有入口（REST、WebDAV、图床、公开 raw）必须共用同一个 Manager。
 type Manager struct {
 	mu      sync.Mutex
@@ -22,8 +22,8 @@ func NewManager() *Manager {
 }
 
 // Key 构造锁 key。
-func Key(sourceID, relPath string) string {
-	return sourceID + "\x00" + relPath
+func Key(sourceKey, relPath string) string {
+	return sourceKey + "\x00" + relPath
 }
 
 func (m *Manager) acquire(key string) *entry {

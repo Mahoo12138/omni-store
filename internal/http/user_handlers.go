@@ -133,7 +133,6 @@ type ActivityItem struct {
 	ID           int64  `json:"id"`
 	Action       string `json:"action"`
 	Title        string `json:"title"`
-	SourceID     string `json:"source_id,omitempty"`
 	SourceName   string `json:"source_name,omitempty"`
 	RelativePath string `json:"relative_path,omitempty"`
 	CreatedAt    string `json:"created_at"`
@@ -151,10 +150,10 @@ func (s *Server) handleMyActivity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := s.db.Query(`SELECT a.id, a.action, a.source_id, a.relative_path, a.created_at,
+	rows, err := s.db.Query(`SELECT a.id, a.action, a.relative_path, a.created_at,
        COALESCE(s.name, '') AS source_name
   FROM audit_logs a
-  LEFT JOIN storage_sources s ON s.source_id = a.source_id
+	  LEFT JOIN storage_sources s ON s.id = a.storage_source_id
   WHERE a.actor_type = 'user' AND a.actor_user_id = ?
     AND a.action NOT IN ('login_success', 'login_failed', 'change_password')
   ORDER BY a.id DESC LIMIT ?`, u.ID, limit)
@@ -168,16 +167,12 @@ func (s *Server) handleMyActivity(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var (
 			it           ActivityItem
-			sourceID     *string
 			relativePath *string
 			createdAt    string
 		)
-		if err := rows.Scan(&it.ID, &it.Action, &sourceID, &relativePath, &createdAt, &it.SourceName); err != nil {
+		if err := rows.Scan(&it.ID, &it.Action, &relativePath, &createdAt, &it.SourceName); err != nil {
 			WriteError(w, r, CodeInternalError, "查询活动失败", nil)
 			return
-		}
-		if sourceID != nil {
-			it.SourceID = *sourceID
 		}
 		if relativePath != nil {
 			it.RelativePath = *relativePath

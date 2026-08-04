@@ -36,7 +36,7 @@ func (s *Service) CleanupStaleUploads(maxAge time.Duration) (CleanupResult, erro
 		removed, err := cleanupStaleUploadsInRoot(source.RootPath, cutoff)
 		result.RemovedFiles += removed
 		if err != nil {
-			cleanupErrors = append(cleanupErrors, fmt.Errorf("存储源 %s: %w", source.SourceID, err))
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("存储源 %s: %w", source.Name, err))
 		}
 	}
 	return result, errors.Join(cleanupErrors...)

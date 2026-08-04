@@ -36,7 +36,7 @@
 
 ## Primary interactions and console
 
-- 在“存在目标但默认目标为空”的状态下点击上传，网络请求为 `POST /api/v1/image-bed/uploads?source_id=repro`，返回 200。
+- 在“存在目标但默认目标为空”的状态下点击上传，网络请求使用系统生成的不透明 key，例如 `POST /api/v1/image-bed/uploads?key=src-1111111111111111`，返回 200。
 - 上传完成后历史数量与右侧统计同步刷新。
 - 目标选择、设为默认、时间筛选、网格/列表切换、复制与删除控件均可操作。
 - 最终干净浏览器会话控制台：0 errors，0 warnings。

@@ -37,10 +37,10 @@ export function AppHomePage() {
   const now = new Date()
   const displayName = me.data?.display_name
 
-  function openSource(sourceId: string) {
+  function openSource(sourceKey: string) {
     navigate({
-      to: '/app/sources/$sourceId',
-      params: { sourceId },
+      to: '/app/sources/$sourceKey',
+      params: { sourceKey },
       search: { path: '/', page: 1 },
     })
   }
@@ -98,9 +98,9 @@ export function AppHomePage() {
                 {sourceList.map((source) => (
                   <button
                     type="button"
-                    key={source.source_id}
+                    key={source.key}
                     className={css.sourceRow}
-                    onClick={() => openSource(source.source_id)}
+                    onClick={() => openSource(source.key)}
                     aria-label={`打开存储源 ${source.name}`}
                   >
                     <span className={css.sourceIdentity}>
@@ -137,7 +137,7 @@ export function AppHomePage() {
                 type="button"
                 className={css.quickAction}
                 disabled={sourceList.length === 0}
-                onClick={() => sourceList[0] && openSource(sourceList[0].source_id)}
+                onClick={() => sourceList[0] && openSource(sourceList[0].key)}
               >
                 <span className={css.quickIcon}><IconUpload size={20} /></span>
                 <span>

@@ -125,30 +125,30 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/sources", s.requireAuth(s.handleListMySources))
 
 	// 私有网盘文件操作（README §13.2）
-	mux.HandleFunc("GET /api/v1/sources/{source_id}/files", s.requireAuth(s.handleListFiles))
-	mux.HandleFunc("GET /api/v1/sources/{source_id}/files/stat", s.requireAuth(s.handleStatFile))
-	mux.HandleFunc("GET /api/v1/sources/{source_id}/download", s.requireAuth(s.handleDownloadFile))
-	mux.HandleFunc("POST /api/v1/sources/{source_id}/folders", s.requireAuth(s.handleCreateFolder))
-	mux.HandleFunc("POST /api/v1/sources/{source_id}/upload", s.requireAuth(s.handleUploadFile))
-	mux.HandleFunc("DELETE /api/v1/sources/{source_id}/files", s.requireAuth(s.handleDeleteFile))
-	mux.HandleFunc("POST /api/v1/sources/{source_id}/files/rename", s.requireAuth(s.handleRenameFile))
-	mux.HandleFunc("POST /api/v1/sources/{source_id}/files/move", s.requireAuth(s.handleMoveFile))
+	mux.HandleFunc("GET /api/v1/sources/{key}/files", s.requireAuth(s.handleListFiles))
+	mux.HandleFunc("GET /api/v1/sources/{key}/files/stat", s.requireAuth(s.handleStatFile))
+	mux.HandleFunc("GET /api/v1/sources/{key}/download", s.requireAuth(s.handleDownloadFile))
+	mux.HandleFunc("POST /api/v1/sources/{key}/folders", s.requireAuth(s.handleCreateFolder))
+	mux.HandleFunc("POST /api/v1/sources/{key}/upload", s.requireAuth(s.handleUploadFile))
+	mux.HandleFunc("DELETE /api/v1/sources/{key}/files", s.requireAuth(s.handleDeleteFile))
+	mux.HandleFunc("POST /api/v1/sources/{key}/files/rename", s.requireAuth(s.handleRenameFile))
+	mux.HandleFunc("POST /api/v1/sources/{key}/files/move", s.requireAuth(s.handleMoveFile))
 
 	// 管理员：存储源管理
 	mux.HandleFunc("GET /api/v1/admin/sources", s.requireAdmin(s.handleAdminListSources))
 	mux.HandleFunc("POST /api/v1/admin/sources/preflight", s.requireAdmin(s.handleAdminPreflightSource))
 	mux.HandleFunc("POST /api/v1/admin/sources", s.requireAdmin(s.handleAdminCreateSource))
-	mux.HandleFunc("GET /api/v1/admin/sources/{source_id}", s.requireAdmin(s.handleAdminGetSource))
-	mux.HandleFunc("PATCH /api/v1/admin/sources/{source_id}", s.requireAdmin(s.handleAdminUpdateSource))
-	mux.HandleFunc("POST /api/v1/admin/sources/{source_id}/disable", s.requireAdmin(s.handleAdminSetSourceDisabled(true)))
-	mux.HandleFunc("POST /api/v1/admin/sources/{source_id}/enable", s.requireAdmin(s.handleAdminSetSourceDisabled(false)))
-	mux.HandleFunc("DELETE /api/v1/admin/sources/{source_id}", s.requireAdmin(s.handleAdminDeleteSource))
-	mux.HandleFunc("PUT /api/v1/admin/sources/{source_id}/exclude-patterns", s.requireAdmin(s.handleAdminSetExcludePatterns))
+	mux.HandleFunc("GET /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminGetSource))
+	mux.HandleFunc("PATCH /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminUpdateSource))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/disable", s.requireAdmin(s.handleAdminSetSourceDisabled(true)))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/enable", s.requireAdmin(s.handleAdminSetSourceDisabled(false)))
+	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminDeleteSource))
+	mux.HandleFunc("PUT /api/v1/admin/sources/{key}/exclude-patterns", s.requireAdmin(s.handleAdminSetExcludePatterns))
 
 	// 管理员：权限分配
-	mux.HandleFunc("GET /api/v1/admin/sources/{source_id}/permissions", s.requireAdmin(s.handleAdminListPermissions))
-	mux.HandleFunc("PUT /api/v1/admin/sources/{source_id}/permissions/{id}", s.requireAdmin(s.handleAdminSetPermission))
-	mux.HandleFunc("DELETE /api/v1/admin/sources/{source_id}/permissions/{id}", s.requireAdmin(s.handleAdminRemovePermission))
+	mux.HandleFunc("GET /api/v1/admin/sources/{key}/permissions", s.requireAdmin(s.handleAdminListPermissions))
+	mux.HandleFunc("PUT /api/v1/admin/sources/{key}/permissions/{id}", s.requireAdmin(s.handleAdminSetPermission))
+	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}/permissions/{id}", s.requireAdmin(s.handleAdminRemovePermission))
 
 	// 公开网盘（匿名可访问，README §12.5）
 	mux.HandleFunc("GET /api/v1/public/mounts", s.handlePublicMounts)

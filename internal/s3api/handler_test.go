@@ -28,12 +28,14 @@ import (
 )
 
 type s3Fixture struct {
-	handler   *Handler
-	multipart *MultipartStore
-	access    string
-	secret    string
-	now       time.Time
-	root      string
+	handler         *Handler
+	multipart       *MultipartStore
+	access          string
+	secret          string
+	now             time.Time
+	root            string
+	bucket          string
+	storageSourceID int64
 }
 
 func newS3Fixture(t *testing.T) *s3Fixture {
@@ -55,7 +57,8 @@ func newS3Fixture(t *testing.T) *s3Fixture {
 		t.Fatal(err)
 	}
 	sourceService := sources.NewService(conn, dataDir)
-	if _, err := sourceService.Create(sources.CreateInput{SourceID: "bucket-one", Name: "Bucket", RootPath: root}); err != nil {
+	source, err := sourceService.Create(sources.CreateInput{Name: "Bucket", RootPath: root})
+	if err != nil {
 		t.Fatal(err)
 	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
@@ -70,7 +73,7 @@ func newS3Fixture(t *testing.T) *s3Fixture {
 		audit.New(conn, true, 1000, logger), security.NewProxyResolver([]string{"127.0.0.1"}), logger, 10, multipart)
 	now := time.Date(2026, 8, 4, 8, 30, 0, 0, time.UTC)
 	handler.verifier.now = func() time.Time { return now }
-	return &s3Fixture{handler: handler, multipart: multipart, access: item.AccessKeyID, secret: secret, now: now, root: root}
+	return &s3Fixture{handler: handler, multipart: multipart, access: item.AccessKeyID, secret: secret, now: now, root: root, bucket: source.Key, storageSourceID: source.ID}
 }
 
 func (f *s3Fixture) signedRequest(t *testing.T, method, target string, body []byte) *http.Request {
@@ -110,7 +113,7 @@ func perform(handler http.Handler, req *http.Request) *httptest.ResponseRecorder
 
 func TestS3ObjectLifecycleAndList(t *testing.T) {
 	f := newS3Fixture(t)
-	keyPath := "/bucket-one/folder/hello%20world.txt"
+	keyPath := "/" + f.bucket + "/folder/hello%20world.txt"
 
 	put := perform(f.handler, f.signedRequest(t, http.MethodPut, "http://s3.test"+keyPath, []byte("hello s3")))
 	if put.Code != http.StatusOK {
@@ -136,7 +139,7 @@ func TestS3ObjectLifecycleAndList(t *testing.T) {
 	}
 
 	list := perform(f.handler, f.signedRequest(t, http.MethodGet,
-		"http://s3.test/bucket-one?list-type=2&delimiter=%2F", nil))
+		"http://s3.test/"+f.bucket+"?list-type=2&delimiter=%2F", nil))
 	if list.Code != http.StatusOK {
 		t.Fatalf("LIST status=%d body=%s", list.Code, list.Body.String())
 	}
@@ -149,7 +152,7 @@ func TestS3ObjectLifecycleAndList(t *testing.T) {
 	}
 
 	deleteXML := []byte(`<Delete><Object><Key>folder/hello world.txt</Key></Object></Delete>`)
-	deleteReq := f.signedRequest(t, http.MethodPost, "http://s3.test/bucket-one?delete=", deleteXML)
+	deleteReq := f.signedRequest(t, http.MethodPost, "http://s3.test/"+f.bucket+"?delete=", deleteXML)
 	delete := perform(f.handler, deleteReq)
 	if delete.Code != http.StatusOK || !strings.Contains(delete.Body.String(), "<Deleted>") {
 		t.Fatalf("DELETE multiple status=%d body=%s", delete.Code, delete.Body.String())
@@ -165,7 +168,7 @@ func TestS3PresignedGetAndTamperedSignature(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(f.root, "demo.txt"), []byte("demo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	target := "http://s3.test/bucket-one/demo.txt"
+	target := "http://s3.test/" + f.bucket + "/demo.txt"
 	req := httptest.NewRequest(http.MethodGet, target, nil)
 	date := f.now.Format("20060102")
 	scope := date + "/us-east-1/s3/aws4_request"
@@ -206,7 +209,7 @@ func TestS3UnsignedAWSChunkedUploadWithTrailer(t *testing.T) {
 	checksumBytes := []byte{byte(checksum >> 24), byte(checksum >> 16), byte(checksum >> 8), byte(checksum)}
 	trailerValue := base64.StdEncoding.EncodeToString(checksumBytes)
 	encodedBody := []byte("11\r\nhello aws chunked\r\n0\r\nx-amz-checksum-crc32:" + trailerValue + "\r\n\r\n")
-	req := httptest.NewRequest(http.MethodPut, "http://s3.test/bucket-one/chunked.txt", bytes.NewReader(encodedBody))
+	req := httptest.NewRequest(http.MethodPut, "http://s3.test/"+f.bucket+"/chunked.txt", bytes.NewReader(encodedBody))
 	req.Header.Set("Content-Encoding", "aws-chunked")
 	req.Header.Set("X-Amz-Content-Sha256", streamingUnsignedTrailer)
 	req.Header.Set("X-Amz-Date", f.now.Format("20060102T150405Z"))

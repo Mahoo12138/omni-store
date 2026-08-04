@@ -46,6 +46,7 @@ import {
   setS3CredentialDisabled,
   type S3Credential,
 } from '../../api/s3'
+import { fetchMySources } from '../../api/sources'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
@@ -691,6 +692,7 @@ function ImageBedTokenManager() {
 function S3CredentialManager() {
   const queryClient = useQueryClient()
   const credentials = useQuery({ queryKey: ['s3-credentials'], queryFn: fetchS3Credentials })
+  const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
@@ -796,6 +798,26 @@ function S3CredentialManager() {
             </div>
           </div>
         ))}
+        {sources.isSuccess && sources.data.length > 0 ? (
+          <>
+            <div className={css.imageTokenEmpty}>
+              S3 客户端中的 Bucket 由系统生成；请按存储源名称复制对应值。
+            </div>
+            {sources.data.map((source) => (
+              <div key={source.key} className={css.imageTokenItem}>
+                <div className={css.imageTokenItemCopy}>
+                  <strong className={css.imageTokenLabel}>{source.name}</strong>
+                  <span className={css.imageTokenId}>{source.key}</span>
+                </div>
+                <div className={css.s3CredentialActions}>
+                  <Button variant="ghost" onClick={() => navigator.clipboard.writeText(source.key)}>
+                    复制 Bucket
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : null}
       </div>
 
       <DialogWrap
@@ -1037,7 +1059,6 @@ function StatsSection() {
             <thead>
               <tr>
                 <th className={css.compactTh}>名称</th>
-                <th className={css.compactTh}>Source ID</th>
                 <th className={css.compactTh}>真实路径</th>
                 <th className={css.compactTh}>公开</th>
                 <th className={css.compactTh}>状态</th>
@@ -1046,17 +1067,14 @@ function StatsSection() {
             <tbody>
               {o?.sources.length === 0 && (
                 <tr>
-                  <td colSpan={5} className={css.compactTd} style={{ color: vars.color.textSecondary }}>
+                  <td colSpan={4} className={css.compactTd} style={{ color: vars.color.textSecondary }}>
                     还没有存储源。
                   </td>
                 </tr>
               )}
               {o?.sources.map((s) => (
-                <tr key={s.source_id} className={css.compactTr}>
+                <tr key={s.key} className={css.compactTr}>
                   <td className={css.compactTd} style={{ fontWeight: 500 }}>{s.name}</td>
-                  <td className={css.compactTd} style={{ color: vars.color.textSecondary, fontFamily: vars.font.mono }}>
-                    {s.source_id}
-                  </td>
                   <td className={css.compactTd} style={{ color: vars.color.textSecondary, fontFamily: vars.font.mono }}>
                     {s.root_path}
                   </td>
@@ -1162,7 +1180,6 @@ function SourcesSection() {
           <table className={css.compactTable}>
             <thead>
               <tr>
-                <th className={css.compactTh}>source_id</th>
                 <th className={css.compactTh}>名称</th>
                 <th className={css.compactTh}>路径</th>
                 <th className={css.compactTh}>状态</th>
@@ -1172,8 +1189,7 @@ function SourcesSection() {
             </thead>
             <tbody>
               {sources.data?.map((s) => (
-                <tr key={s.source_id} className={css.compactTr}>
-                  <td className={css.compactTd} style={{ fontFamily: vars.font.mono }}>{s.source_id}</td>
+                <tr key={s.key} className={css.compactTr}>
                   <td className={css.compactTd} style={{ fontWeight: 500 }}>{s.name}</td>
                   <td className={css.compactTd} style={{ color: vars.color.textSecondary, fontFamily: vars.font.mono }}>
                     {s.root_path}
@@ -1188,12 +1204,12 @@ function SourcesSection() {
                   </td>
                   <td className={css.compactTd}>
                     <div className={css.formRow}>
-                      <Button variant="ghost" onClick={() => setEditId(s.source_id)}>
+                      <Button variant="ghost" onClick={() => setEditId(s.key)}>
                         配置
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => disableMut.mutate({ id: s.source_id, disabled: !s.is_disabled })}
+                        onClick={() => disableMut.mutate({ id: s.key, disabled: !s.is_disabled })}
                       >
                         {s.is_disabled ? '启用' : '禁用'}
                       </Button>
@@ -1220,7 +1236,7 @@ function SourcesSection() {
       {/* 编辑存储源 弹窗 */}
       {editId && (
         <EditSourceDialog
-          sourceId={editId}
+          sourceKey={editId}
           onClose={() => setEditId(null)}
         />
       )}
@@ -1238,7 +1254,7 @@ function SourcesSection() {
             </Button>
             <Button
               variant="danger"
-              onClick={() => deleting && deleteMut.mutate(deleting.source_id)}
+              onClick={() => deleting && deleteMut.mutate(deleting.key)}
               disabled={deleteMut.isPending}
             >
               {deleteMut.isPending ? '删除中…' : '确认删除'}
@@ -1264,7 +1280,6 @@ function CreateSourceDialog({
   onOpenChange: (v: boolean) => void
 }) {
   const queryClient = useQueryClient()
-  const [sourceId, setSourceId] = useState('')
   const [name, setName] = useState('')
   const [rootPath, setRootPath] = useState('')
   const [err, setErr] = useState('')
@@ -1288,7 +1303,6 @@ function CreateSourceDialog({
 
   useEffect(() => {
     if (!open) {
-      setSourceId('')
       setName('')
       setRootPath('')
       setErr('')
@@ -1298,9 +1312,7 @@ function CreateSourceDialog({
   }, [open])
 
   function validateInput() {
-    if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(sourceId) || sourceId.includes('--')) {
-      return 'source_id 长度须为 3–63，只能包含小写字母、数字和短横线，首尾须为字母或数字且不能连续使用短横线'
-    }
+    if (!name.trim()) return '请输入存储源名称'
     if (!rootPath.trim()) return '请输入服务端可访问的目录绝对路径'
     return ''
   }
@@ -1335,8 +1347,7 @@ function CreateSourceDialog({
 
     createMutation.mutate(
       {
-        source_id: sourceId,
-        name: name || sourceId,
+        name: name.trim(),
         description: '',
         root_path: preview.root_path,
         exclude_patterns: preview.exclude_patterns,
@@ -1367,7 +1378,7 @@ function CreateSourceDialog({
           ) : (
             <Button
               onClick={runPreflight}
-              disabled={preflightMutation.isPending || !sourceId || !rootPath.trim()}
+              disabled={preflightMutation.isPending || !name.trim() || !rootPath.trim()}
             >
               {preflightMutation.isPending ? '预检中…' : '预检目录'}
             </Button>
@@ -1375,19 +1386,12 @@ function CreateSourceDialog({
         </>
       }
     >
-      <Field label="source_id" required hint="小写字母数字短横线，创建后不可改">
+      <Field label="名称" required hint="显示在列表和客户端连接信息中">
         <Input
           autoFocus
-          value={sourceId}
-          onChange={(e) => setSourceId(e.target.value)}
-          placeholder="例如：photos"
-        />
-      </Field>
-      <Field label="名称" hint="留空则使用 source_id">
-        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="显示在列表里的名字"
+          placeholder="例如：团队文件"
         />
       </Field>
       <Field
@@ -1462,15 +1466,15 @@ function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
 // --- 编辑存储源 弹窗（WebDAV/图床/公开访问 + 排除规则 + 用户权限）---
 
 function EditSourceDialog({
-  sourceId,
+  sourceKey,
   onClose,
 }: {
-  sourceId: string
+  sourceKey: string
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
-  const detail = useQuery({ queryKey: ['admin-source', sourceId], queryFn: () => adminGetSource(sourceId) })
-  const perms = useQuery({ queryKey: ['admin-perms', sourceId], queryFn: () => adminListPermissions(sourceId) })
+  const detail = useQuery({ queryKey: ['admin-source', sourceKey], queryFn: () => adminGetSource(sourceKey) })
+  const perms = useQuery({ queryKey: ['admin-perms', sourceKey], queryFn: () => adminListPermissions(sourceKey) })
   const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
 
   const [mountPath, setMountPath] = useState<string | null>(null)
@@ -1494,30 +1498,30 @@ function EditSourceDialog({
   }, [detail.isSuccess, detail.data])
 
   const updateMut = useMutation({
-    mutationFn: (input: Parameters<typeof adminUpdateSource>[1]) => adminUpdateSource(sourceId, input),
+    mutationFn: (input: Parameters<typeof adminUpdateSource>[1]) => adminUpdateSource(sourceKey, input),
     onSuccess: () => { setMsg('已保存'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
   const patternsMut = useMutation({
-    mutationFn: (list: string[]) => adminSetExcludePatterns(sourceId, list),
+    mutationFn: (list: string[]) => adminSetExcludePatterns(sourceKey, list),
     onSuccess: () => { setMsg('排除规则已保存'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
   const setPermMut = useMutation({
     mutationFn: ({ userId, level }: { userId: number; level: 'read_only' | 'read_write' }) =>
-      adminSetPermission(sourceId, userId, level),
+      adminSetPermission(sourceKey, userId, level),
     onSuccess: () => { setMsg('权限已更新'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '操作失败'),
   })
   const removePermMut = useMutation({
-    mutationFn: (userId: number) => adminRemovePermission(sourceId, userId),
+    mutationFn: (userId: number) => adminRemovePermission(sourceKey, userId),
     onSuccess: () => { setMsg('已取消权限'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '操作失败'),
   })
 
   function refresh() {
-    queryClient.invalidateQueries({ queryKey: ['admin-source', sourceId] })
-    queryClient.invalidateQueries({ queryKey: ['admin-perms', sourceId] })
+    queryClient.invalidateQueries({ queryKey: ['admin-source', sourceKey] })
+    queryClient.invalidateQueries({ queryKey: ['admin-perms', sourceKey] })
     queryClient.invalidateQueries({ queryKey: ['admin-sources'] })
   }
 
@@ -1531,7 +1535,7 @@ function EditSourceDialog({
       open
       onOpenChange={(o) => { if (!o) onClose() }}
       title={`配置：${src.name}`}
-      description={`source_id: ${src.source_id} · 路径: ${src.root_path}`}
+      description={`真实路径：${src.root_path}`}
       wide
       footer={
         <Button variant="secondary" onClick={onClose}>关闭</Button>
@@ -2050,7 +2054,7 @@ function AuditSection() {
                 <td className={css.compactTd}>{log.entry_type}</td>
                 <td className={css.compactTd}>{log.action}</td>
                 <td className={css.compactTd} style={{ fontFamily: vars.font.mono, color: vars.color.textSecondary }}>
-                  {log.source_id ?? '—'}
+                  {log.storage_source_name ?? '—'}
                 </td>
                 <td className={css.compactTd}>
                   {log.relative_path ?? '—'}
@@ -2155,7 +2159,7 @@ function ImageBedSection() {
                 <>
                   <Badge color="green">已开启</Badge>
                   <span style={{ marginLeft: 8, color: vars.color.textSecondary }}>
-                    目标存储源：{settings.data.source_id}
+                    目标存储源：{imageBedSources.find((source) => source.key === settings.data.key)?.name ?? '未配置'}
                   </span>
                 </>
               ) : (
@@ -2192,7 +2196,7 @@ function ImageBedSection() {
         open={editOpen}
         onOpenChange={(o) => { setEditOpen(o); if (!o) setMsg('') }}
         enabled={settings.data.enabled}
-        sourceId={settings.data.source_id}
+        sourceKey={settings.data.key}
         imageBedSources={imageBedSources}
       />
     </>
@@ -2203,17 +2207,17 @@ function AnonymousImageBedDialog({
   open,
   onOpenChange,
   enabled,
-  sourceId,
+  sourceKey,
   imageBedSources,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   enabled: boolean
-  sourceId: string
-  imageBedSources: { source_id: string; name: string }[]
+  sourceKey: string
+  imageBedSources: { key: string; name: string }[]
 }) {
   const queryClient = useQueryClient()
-  const [pickSource, setPickSource] = useState(sourceId)
+  const [pickSource, setPickSource] = useState(sourceKey)
   const [turnOn, setTurnOn] = useState(enabled)
   const [err, setErr] = useState('')
 
@@ -2228,18 +2232,18 @@ function AnonymousImageBedDialog({
 
   useEffect(() => {
     if (open) {
-      setPickSource(sourceId)
+      setPickSource(sourceKey)
       setTurnOn(enabled)
       setErr('')
     }
-  }, [open, sourceId, enabled])
+  }, [open, sourceKey, enabled])
 
   function onSubmit() {
     if (turnOn && !pickSource) {
       setErr('请选择目标存储源')
       return
     }
-    mutation.mutate({ enabled: turnOn, source_id: pickSource })
+    mutation.mutate({ enabled: turnOn, key: pickSource })
   }
 
   return (
@@ -2275,11 +2279,13 @@ function AnonymousImageBedDialog({
         error={err}
       >
         <Select
-          value={pickSource}
-          onValueChange={setPickSource}
-          options={imageBedSources.map((source) => ({
-            value: source.source_id,
-            label: `${source.name}（${source.source_id}）`,
+          value={imageBedSources.some((source) => source.key === pickSource)
+            ? String(imageBedSources.findIndex((source) => source.key === pickSource))
+            : ''}
+          onValueChange={(index) => setPickSource(imageBedSources[Number(index)]?.key ?? '')}
+          options={imageBedSources.map((source, index) => ({
+            value: String(index),
+            label: source.name,
           }))}
           placeholder="选择存储源…"
           ariaLabel="匿名图床目标存储源"

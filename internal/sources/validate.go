@@ -3,7 +3,6 @@ package sources
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,22 +11,6 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 )
-
-var sourceIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
-
-// ValidateSourceID 校验 source_id 命名（README §10.2，兼容 S3 Bucket 命名）。
-func ValidateSourceID(id string) error {
-	if !sourceIDRe.MatchString(id) {
-		return fmt.Errorf("source_id 只允许小写字母、数字、短横线，长度 3-63，首尾必须是字母或数字")
-	}
-	if strings.Contains(id, "--") {
-		return fmt.Errorf("source_id 不允许连续两个短横线")
-	}
-	if net.ParseIP(id) != nil {
-		return fmt.Errorf("source_id 不允许是 IP 地址格式")
-	}
-	return nil
-}
 
 // Linux 敏感目录黑名单（README §10.5）。
 var sensitiveDirs = []string{

@@ -25,15 +25,15 @@ const (
 
 // PersistentLock 是数据库中持久化的 WebDAV 独占写锁。
 type PersistentLock struct {
-	Token        string
-	SourceID     string
-	RelativePath string
-	Depth        string
-	OwnerXML     string
-	OwnerUserID  int64
-	CreatedAt    time.Time
-	RefreshedAt  time.Time
-	ExpiresAt    time.Time
+	Token           string
+	StorageSourceID int64
+	RelativePath    string
+	Depth           string
+	OwnerXML        string
+	OwnerUserID     int64
+	CreatedAt       time.Time
+	RefreshedAt     time.Time
+	ExpiresAt       time.Time
 }
 
 // MutationScope 描述一次文件写操作影响的路径范围。
@@ -56,13 +56,13 @@ func NewPersistentStore(db *sql.DB) *PersistentStore {
 // GuardMutation 校验受影响路径上的锁；成功时调用方必须执行返回的结束函数。
 // 文件系统操作成功删除或移动资源时，把已消失的锁根路径传给结束函数，
 // 使锁记录清理和 LOCK 创建仍处于同一临界区。
-func (s *PersistentStore) GuardMutation(ctx context.Context, sourceID string, scopes []MutationScope, submittedTokens []string, submittedOwnerUserID *int64) (func(...string) error, error) {
+func (s *PersistentStore) GuardMutation(ctx context.Context, storageSourceID int64, scopes []MutationScope, submittedTokens []string, submittedOwnerUserID *int64) (func(...string) error, error) {
 	s.mu.Lock()
 	if err := s.cleanupExpired(ctx); err != nil {
 		s.mu.Unlock()
 		return nil, err
 	}
-	active, err := s.listSource(ctx, sourceID)
+	active, err := s.listSource(ctx, storageSourceID)
 	if err != nil {
 		s.mu.Unlock()
 		return nil, err
@@ -92,7 +92,7 @@ func (s *PersistentStore) GuardMutation(ctx context.Context, sourceID string, sc
 		finished = true
 		defer s.mu.Unlock()
 		for _, root := range removedRoots {
-			if err := s.deleteLocksRootedAt(ctx, sourceID, root); err != nil {
+			if err := s.deleteLocksRootedAt(ctx, storageSourceID, root); err != nil {
 				return err
 			}
 		}
@@ -101,13 +101,13 @@ func (s *PersistentStore) GuardMutation(ctx context.Context, sourceID string, sc
 }
 
 // Create 创建独占写锁。OmniStore V1.1 只实现 RFC 4918 要求的独占锁。
-func (s *PersistentStore) Create(ctx context.Context, sourceID, relPath, depth, ownerXML string, ownerUserID int64, timeout time.Duration) (*PersistentLock, error) {
+func (s *PersistentStore) Create(ctx context.Context, storageSourceID int64, relPath, depth, ownerXML string, ownerUserID int64, timeout time.Duration) (*PersistentLock, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.cleanupExpired(ctx); err != nil {
 		return nil, err
 	}
-	active, err := s.listSource(ctx, sourceID)
+	active, err := s.listSource(ctx, storageSourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,19 +118,19 @@ func (s *PersistentStore) Create(ctx context.Context, sourceID, relPath, depth, 
 	}
 	now := time.Now().UTC()
 	lock := &PersistentLock{
-		Token:        newLockToken(),
-		SourceID:     sourceID,
-		RelativePath: relPath,
-		Depth:        depth,
-		OwnerXML:     ownerXML,
-		OwnerUserID:  ownerUserID,
-		CreatedAt:    now,
-		RefreshedAt:  now,
-		ExpiresAt:    now.Add(timeout),
+		Token:           newLockToken(),
+		StorageSourceID: storageSourceID,
+		RelativePath:    relPath,
+		Depth:           depth,
+		OwnerXML:        ownerXML,
+		OwnerUserID:     ownerUserID,
+		CreatedAt:       now,
+		RefreshedAt:     now,
+		ExpiresAt:       now.Add(timeout),
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO webdav_locks
-  (token, source_id, relative_path, depth, owner_xml, owner_user_id, created_at, refreshed_at, expires_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, lock.Token, lock.SourceID, lock.RelativePath, lock.Depth,
+  (token, storage_source_id, relative_path, depth, owner_xml, owner_user_id, created_at, refreshed_at, expires_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, lock.Token, lock.StorageSourceID, lock.RelativePath, lock.Depth,
 		lock.OwnerXML, lock.OwnerUserID, lock.CreatedAt, lock.RefreshedAt, lock.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("创建 WebDAV 锁失败: %w", err)
@@ -138,7 +138,7 @@ func (s *PersistentStore) Create(ctx context.Context, sourceID, relPath, depth, 
 	return lock, nil
 }
 
-func (s *PersistentStore) Refresh(ctx context.Context, token string, ownerUserID int64, sourceID, relPath string, timeout time.Duration) (*PersistentLock, error) {
+func (s *PersistentStore) Refresh(ctx context.Context, token string, ownerUserID int64, storageSourceID int64, relPath string, timeout time.Duration) (*PersistentLock, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.cleanupExpired(ctx); err != nil {
@@ -151,7 +151,7 @@ func (s *PersistentStore) Refresh(ctx context.Context, token string, ownerUserID
 	if lock.OwnerUserID != ownerUserID {
 		return nil, ErrLockForbidden
 	}
-	if lock.SourceID != sourceID || !lockCovers(lock.RelativePath, lock.Depth, relPath) {
+	if lock.StorageSourceID != storageSourceID || !lockCovers(lock.RelativePath, lock.Depth, relPath) {
 		return nil, ErrLockNotFound
 	}
 	lock.RefreshedAt = time.Now().UTC()
@@ -163,7 +163,7 @@ func (s *PersistentStore) Refresh(ctx context.Context, token string, ownerUserID
 	return lock, nil
 }
 
-func (s *PersistentStore) Unlock(ctx context.Context, token string, ownerUserID int64, sourceID, relPath string) error {
+func (s *PersistentStore) Unlock(ctx context.Context, token string, ownerUserID int64, storageSourceID int64, relPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.cleanupExpired(ctx); err != nil {
@@ -176,7 +176,7 @@ func (s *PersistentStore) Unlock(ctx context.Context, token string, ownerUserID 
 	if lock.OwnerUserID != ownerUserID {
 		return ErrLockForbidden
 	}
-	if lock.SourceID != sourceID || !lockCovers(lock.RelativePath, lock.Depth, relPath) {
+	if lock.StorageSourceID != storageSourceID || !lockCovers(lock.RelativePath, lock.Depth, relPath) {
 		return ErrLockNotFound
 	}
 	_, err = s.db.ExecContext(ctx, `DELETE FROM webdav_locks WHERE token = ?`, token)
@@ -184,13 +184,13 @@ func (s *PersistentStore) Unlock(ctx context.Context, token string, ownerUserID 
 }
 
 // Discover 返回直接或通过 Depth: infinity 覆盖目标资源的活动锁。
-func (s *PersistentStore) Discover(ctx context.Context, sourceID, relPath string) ([]PersistentLock, error) {
+func (s *PersistentStore) Discover(ctx context.Context, storageSourceID int64, relPath string) ([]PersistentLock, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.cleanupExpired(ctx); err != nil {
 		return nil, err
 	}
-	active, err := s.listSource(ctx, sourceID)
+	active, err := s.listSource(ctx, storageSourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -231,14 +231,14 @@ func (s *PersistentStore) cleanupExpiredCount(ctx context.Context) (int64, error
 
 // deleteLocksRootedAt 删除以 root 本身或其后代为根的锁。
 // 该方法只在 PersistentStore.mu 已持有时调用；外部祖先的 Depth: infinity 锁不会被删除。
-func (s *PersistentStore) deleteLocksRootedAt(ctx context.Context, sourceID, root string) error {
+func (s *PersistentStore) deleteLocksRootedAt(ctx context.Context, storageSourceID int64, root string) error {
 	var err error
 	if root == "" {
-		_, err = s.db.ExecContext(ctx, `DELETE FROM webdav_locks WHERE source_id = ?`, sourceID)
+		_, err = s.db.ExecContext(ctx, `DELETE FROM webdav_locks WHERE storage_source_id = ?`, storageSourceID)
 	} else {
 		_, err = s.db.ExecContext(ctx, `DELETE FROM webdav_locks
-  WHERE source_id = ? AND (relative_path = ? OR substr(relative_path, 1, length(?) + 1) = ? || '/')`,
-			sourceID, root, root, root)
+  WHERE storage_source_id = ? AND (relative_path = ? OR substr(relative_path, 1, length(?) + 1) = ? || '/')`,
+			storageSourceID, root, root, root)
 	}
 	if err != nil {
 		return fmt.Errorf("清理已移除资源的 WebDAV 锁失败: %w", err)
@@ -248,9 +248,9 @@ func (s *PersistentStore) deleteLocksRootedAt(ctx context.Context, sourceID, roo
 
 func (s *PersistentStore) get(ctx context.Context, token string) (*PersistentLock, error) {
 	var lock PersistentLock
-	err := s.db.QueryRowContext(ctx, `SELECT token, source_id, relative_path, depth, owner_xml,
+	err := s.db.QueryRowContext(ctx, `SELECT token, storage_source_id, relative_path, depth, owner_xml,
   owner_user_id, created_at, refreshed_at, expires_at FROM webdav_locks WHERE token = ?`, token).
-		Scan(&lock.Token, &lock.SourceID, &lock.RelativePath, &lock.Depth, &lock.OwnerXML,
+		Scan(&lock.Token, &lock.StorageSourceID, &lock.RelativePath, &lock.Depth, &lock.OwnerXML,
 			&lock.OwnerUserID, &lock.CreatedAt, &lock.RefreshedAt, &lock.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrLockNotFound
@@ -258,10 +258,10 @@ func (s *PersistentStore) get(ctx context.Context, token string) (*PersistentLoc
 	return &lock, err
 }
 
-func (s *PersistentStore) listSource(ctx context.Context, sourceID string) ([]PersistentLock, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT token, source_id, relative_path, depth, owner_xml,
+func (s *PersistentStore) listSource(ctx context.Context, storageSourceID int64) ([]PersistentLock, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT token, storage_source_id, relative_path, depth, owner_xml,
   owner_user_id, created_at, refreshed_at, expires_at FROM webdav_locks
-  WHERE source_id = ? AND expires_at > ? ORDER BY created_at`, sourceID, time.Now().UTC())
+  WHERE storage_source_id = ? AND expires_at > ? ORDER BY created_at`, storageSourceID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func (s *PersistentStore) listSource(ctx context.Context, sourceID string) ([]Pe
 	var out []PersistentLock
 	for rows.Next() {
 		var lock PersistentLock
-		if err := rows.Scan(&lock.Token, &lock.SourceID, &lock.RelativePath, &lock.Depth, &lock.OwnerXML,
+		if err := rows.Scan(&lock.Token, &lock.StorageSourceID, &lock.RelativePath, &lock.Depth, &lock.OwnerXML,
 			&lock.OwnerUserID, &lock.CreatedAt, &lock.RefreshedAt, &lock.ExpiresAt); err != nil {
 			return nil, err
 		}

@@ -40,12 +40,12 @@ var (
 var uploadIDPattern = regexp.MustCompile(`^mpu_[0-9a-f]{48}$`)
 
 type MultipartUpload struct {
-	UploadID    string
-	OwnerUserID int64
-	SourceID    string
-	ObjectKey   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	UploadID        string
+	OwnerUserID     int64
+	StorageSourceID int64
+	ObjectKey       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type MultipartPart struct {
@@ -82,7 +82,7 @@ func NewMultipartStore(db *sql.DB, dataDir string, fileService *files.Service, m
 	}
 }
 
-func (s *MultipartStore) Create(userID int64, sourceID, objectKey string) (*MultipartUpload, error) {
+func (s *MultipartStore) Create(userID, storageSourceID int64, objectKey string) (*MultipartUpload, error) {
 	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return nil, fmt.Errorf("创建 Multipart 临时目录失败: %w", err)
 	}
@@ -97,10 +97,10 @@ func (s *MultipartStore) Create(userID int64, sourceID, objectKey string) (*Mult
 			return nil, err
 		}
 		_, err := s.db.Exec(`INSERT INTO s3_multipart_uploads
-  (upload_id, owner_user_id, source_id, object_key, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?)`, uploadID, userID, sourceID, objectKey, now, now)
+  (upload_id, owner_user_id, storage_source_id, object_key, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?)`, uploadID, userID, storageSourceID, objectKey, now, now)
 		if err == nil {
-			return &MultipartUpload{UploadID: uploadID, OwnerUserID: userID, SourceID: sourceID, ObjectKey: objectKey, CreatedAt: now, UpdatedAt: now}, nil
+			return &MultipartUpload{UploadID: uploadID, OwnerUserID: userID, StorageSourceID: storageSourceID, ObjectKey: objectKey, CreatedAt: now, UpdatedAt: now}, nil
 		}
 		_ = os.RemoveAll(dir)
 		if !strings.Contains(err.Error(), "s3_multipart_uploads.upload_id") {
@@ -110,28 +110,28 @@ func (s *MultipartStore) Create(userID int64, sourceID, objectKey string) (*Mult
 	return nil, fmt.Errorf("生成 upload_id 失败")
 }
 
-func (s *MultipartStore) Get(userID int64, sourceID, objectKey, uploadID string) (*MultipartUpload, error) {
+func (s *MultipartStore) Get(userID, storageSourceID int64, objectKey, uploadID string) (*MultipartUpload, error) {
 	if !uploadIDPattern.MatchString(uploadID) {
 		return nil, ErrNoSuchUpload
 	}
 	var upload MultipartUpload
-	err := s.db.QueryRow(`SELECT upload_id, owner_user_id, source_id, object_key, created_at, updated_at
-  FROM s3_multipart_uploads WHERE upload_id = ? AND owner_user_id = ? AND source_id = ? AND object_key = ?`,
-		uploadID, userID, sourceID, objectKey).Scan(&upload.UploadID, &upload.OwnerUserID,
-		&upload.SourceID, &upload.ObjectKey, &upload.CreatedAt, &upload.UpdatedAt)
+	err := s.db.QueryRow(`SELECT upload_id, owner_user_id, storage_source_id, object_key, created_at, updated_at
+  FROM s3_multipart_uploads WHERE upload_id = ? AND owner_user_id = ? AND storage_source_id = ? AND object_key = ?`,
+		uploadID, userID, storageSourceID, objectKey).Scan(&upload.UploadID, &upload.OwnerUserID,
+		&upload.StorageSourceID, &upload.ObjectKey, &upload.CreatedAt, &upload.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNoSuchUpload
 	}
 	return &upload, err
 }
 
-func (s *MultipartStore) UploadPart(userID int64, sourceID, objectKey, uploadID string, partNumber int, body io.Reader) (*MultipartPart, error) {
+func (s *MultipartStore) UploadPart(userID, storageSourceID int64, objectKey, uploadID string, partNumber int, body io.Reader) (*MultipartPart, error) {
 	if partNumber < 1 || partNumber > MaxMultipartParts {
 		return nil, fmt.Errorf("partNumber 必须为 1-10000")
 	}
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
-	if _, err := s.Get(userID, sourceID, objectKey, uploadID); err != nil {
+	if _, err := s.Get(userID, storageSourceID, objectKey, uploadID); err != nil {
 		return nil, err
 	}
 	dir := s.uploadDir(uploadID)
@@ -233,8 +233,8 @@ func (s *MultipartStore) UploadPart(userID int64, sourceID, objectKey, uploadID 
 	return &MultipartPart{PartNumber: partNumber, ETag: etag, Size: written, CreatedAt: now}, nil
 }
 
-func (s *MultipartStore) ListParts(userID int64, sourceID, objectKey, uploadID string) ([]MultipartPart, error) {
-	if _, err := s.Get(userID, sourceID, objectKey, uploadID); err != nil {
+func (s *MultipartStore) ListParts(userID, storageSourceID int64, objectKey, uploadID string) ([]MultipartPart, error) {
+	if _, err := s.Get(userID, storageSourceID, objectKey, uploadID); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.Query(`SELECT part_number, etag, size, created_at FROM s3_multipart_parts
@@ -257,7 +257,7 @@ func (s *MultipartStore) ListParts(userID int64, sourceID, objectKey, uploadID s
 func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objectKey, uploadID string, requested []CompletedPart) (string, int64, error) {
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
-	if _, err := s.Get(userID, src.SourceID, objectKey, uploadID); err != nil {
+	if _, err := s.Get(userID, src.ID, objectKey, uploadID); err != nil {
 		return "", 0, err
 	}
 	if len(requested) == 0 || len(requested) > MaxMultipartParts {
@@ -317,7 +317,7 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 	if err != nil {
 		return "", 0, err
 	}
-	if err := s.RememberObjectETag(src.SourceID, objectKey, etag, entry.Size, entry.MTime); err != nil {
+	if err := s.RememberObjectETag(src.ID, objectKey, etag, entry.Size, entry.MTime); err != nil {
 		return "", 0, err
 	}
 	if _, err := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ?`, uploadID); err != nil {
@@ -328,21 +328,21 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 }
 
 // RememberObjectETag 保存 Multipart 完成后的非普通 MD5 ETag。
-func (s *MultipartStore) RememberObjectETag(sourceID, objectKey, etag string, size int64, mtime time.Time) error {
+func (s *MultipartStore) RememberObjectETag(storageSourceID int64, objectKey, etag string, size int64, mtime time.Time) error {
 	_, err := s.db.Exec(`INSERT INTO s3_object_etags
-  (source_id, object_key, etag, size, mtime_unix_nano, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-  ON CONFLICT(source_id, object_key) DO UPDATE SET etag = excluded.etag, size = excluded.size,
+	  (storage_source_id, object_key, etag, size, mtime_unix_nano, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+  ON CONFLICT(storage_source_id, object_key) DO UPDATE SET etag = excluded.etag, size = excluded.size,
     mtime_unix_nano = excluded.mtime_unix_nano, updated_at = excluded.updated_at`,
-		sourceID, objectKey, etag, size, mtime.UnixNano(), s.now().UTC())
+		storageSourceID, objectKey, etag, size, mtime.UnixNano(), s.now().UTC())
 	return err
 }
 
 // ObjectETag 返回仍与物理文件 size + mtime 匹配的 Multipart ETag。
-func (s *MultipartStore) ObjectETag(sourceID, objectKey string, size int64, mtime time.Time) (string, bool, error) {
+func (s *MultipartStore) ObjectETag(storageSourceID int64, objectKey string, size int64, mtime time.Time) (string, bool, error) {
 	var etag string
 	var storedSize, storedMTime int64
 	err := s.db.QueryRow(`SELECT etag, size, mtime_unix_nano FROM s3_object_etags
-  WHERE source_id = ? AND object_key = ?`, sourceID, objectKey).Scan(&etag, &storedSize, &storedMTime)
+  WHERE storage_source_id = ? AND object_key = ?`, storageSourceID, objectKey).Scan(&etag, &storedSize, &storedMTime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -350,7 +350,7 @@ func (s *MultipartStore) ObjectETag(sourceID, objectKey string, size int64, mtim
 		return "", false, err
 	}
 	if storedSize != size || storedMTime != mtime.UnixNano() {
-		if err := s.ForgetObjectETag(sourceID, objectKey); err != nil {
+		if err := s.ForgetObjectETag(storageSourceID, objectKey); err != nil {
 			return "", false, err
 		}
 		return "", false, nil
@@ -359,15 +359,15 @@ func (s *MultipartStore) ObjectETag(sourceID, objectKey string, size int64, mtim
 }
 
 // ForgetObjectETag 移除被普通 PUT、DELETE 或外部修改取代的 Multipart ETag。
-func (s *MultipartStore) ForgetObjectETag(sourceID, objectKey string) error {
-	_, err := s.db.Exec(`DELETE FROM s3_object_etags WHERE source_id = ? AND object_key = ?`, sourceID, objectKey)
+func (s *MultipartStore) ForgetObjectETag(storageSourceID int64, objectKey string) error {
+	_, err := s.db.Exec(`DELETE FROM s3_object_etags WHERE storage_source_id = ? AND object_key = ?`, storageSourceID, objectKey)
 	return err
 }
 
-func (s *MultipartStore) Abort(userID int64, sourceID, objectKey, uploadID string) error {
+func (s *MultipartStore) Abort(userID, storageSourceID int64, objectKey, uploadID string) error {
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
-	if _, err := s.Get(userID, sourceID, objectKey, uploadID); err != nil {
+	if _, err := s.Get(userID, storageSourceID, objectKey, uploadID); err != nil {
 		return err
 	}
 	if _, err := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ?`, uploadID); err != nil {

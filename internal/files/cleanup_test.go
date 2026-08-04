@@ -102,7 +102,7 @@ func TestCleanupStaleUploadsScansRegisteredSources(t *testing.T) {
 			t.Fatalf("create source root: %v", err)
 		}
 		if _, err := sourceService.Create(sources.CreateInput{
-			SourceID: id, Name: id, RootPath: root, HasPatterns: true,
+			Name: id, RootPath: root, HasPatterns: true,
 		}); err != nil {
 			t.Fatalf("register source %s: %v", id, err)
 		}

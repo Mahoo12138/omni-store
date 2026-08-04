@@ -41,11 +41,11 @@ func newThumbnailTestEnv(t *testing.T) *thumbnailTestEnv {
 		t.Fatalf("create source root: %v", err)
 	}
 	sourceService := sources.NewService(conn, dataDir)
-	source, err := sourceService.Create(sources.CreateInput{SourceID: "images", Name: "Images", RootPath: sourceRoot})
+	source, err := sourceService.Create(sources.CreateInput{Name: "Images", RootPath: sourceRoot})
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	if _, err := conn.Exec(`UPDATE storage_sources SET image_bed_enabled = 1 WHERE source_id = ?`, source.SourceID); err != nil {
+	if _, err := conn.Exec(`UPDATE storage_sources SET image_bed_enabled = 1 WHERE id = ?`, source.ID); err != nil {
 		t.Fatalf("enable image bed: %v", err)
 	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
@@ -66,10 +66,10 @@ func newThumbnailTestEnv(t *testing.T) *thumbnailTestEnv {
 	}
 	imageID := "img_thumbnail_test"
 	if _, err := conn.Exec(`INSERT INTO images
-  (image_id, owner_type, owner_user_id, source_id, relative_path, original_filename,
+	  (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
    public_url, size, mime_type, width, height, ext, created_at)
   VALUES (?, 'anonymous', NULL, ?, ?, 'original.png', ?, ?, 'image/png', 960, 480, 'png', ?)`,
-		imageID, source.SourceID, originalRel, "https://store.example.test/i/"+imageID+".png", info.Size(), time.Now().UTC()); err != nil {
+		imageID, source.ID, originalRel, "https://store.example.test/i/"+imageID+".png", info.Size(), time.Now().UTC()); err != nil {
 		t.Fatalf("insert image: %v", err)
 	}
 	return &thumbnailTestEnv{service: service, conn: conn, sourceRoot: sourceRoot, originalPath: originalPath, imageID: imageID}

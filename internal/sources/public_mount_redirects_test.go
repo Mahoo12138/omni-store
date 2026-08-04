@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/omni-store/omnistore/internal/db"
+	"github.com/omni-store/omnistore/internal/models"
 )
 
 func boolPtr(v bool) *bool       { return &v }
@@ -23,40 +24,42 @@ func newSourceService(t *testing.T) (*Service, string) {
 	return NewService(conn, dataDir), base
 }
 
-func createTestSource(t *testing.T, service *Service, base, sourceID string) {
+func createTestSource(t *testing.T, service *Service, base, name string) *models.StorageSource {
 	t.Helper()
-	root := filepath.Join(base, sourceID)
+	root := filepath.Join(base, name)
 	if err := os.Mkdir(root, 0o755); err != nil {
 		t.Fatalf("create source root: %v", err)
 	}
-	if _, err := service.Create(CreateInput{SourceID: sourceID, RootPath: root}); err != nil {
+	source, err := service.Create(CreateInput{Name: name, RootPath: root})
+	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
+	return source
 }
 
 func TestUpdatePublicMountPathKeepsRedirectAndReservesOldPath(t *testing.T) {
 	service, base := newSourceService(t)
-	createTestSource(t, service, base, "source-one")
-	createTestSource(t, service, base, "source-two")
+	sourceOne := createTestSource(t, service, base, "source-one")
+	sourceTwo := createTestSource(t, service, base, "source-two")
 
-	if _, err := service.Update("source-one", UpdateInput{
+	if _, err := service.Update(sourceOne.Key, UpdateInput{
 		PublicReadEnabled: boolPtr(true), PublicMountPath: stringPtr("/photos"),
 	}); err != nil {
 		t.Fatalf("set initial mount: %v", err)
 	}
-	if _, err := service.Update("source-one", UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
+	if _, err := service.Update(sourceOne.Key, UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
 		t.Fatalf("rename mount: %v", err)
 	}
 
-	var redirectSource string
-	if err := service.db.QueryRow(`SELECT source_id FROM public_mount_redirects WHERE mount_path = '/photos'`).Scan(&redirectSource); err != nil {
+	var redirectSource int64
+	if err := service.db.QueryRow(`SELECT storage_source_id FROM public_mount_redirects WHERE mount_path = '/photos'`).Scan(&redirectSource); err != nil {
 		t.Fatalf("query redirect: %v", err)
 	}
-	if redirectSource != "source-one" {
-		t.Fatalf("unexpected redirect owner: %s", redirectSource)
+	if redirectSource != sourceOne.ID {
+		t.Fatalf("unexpected redirect owner: %d", redirectSource)
 	}
 
-	if _, err := service.Update("source-two", UpdateInput{
+	if _, err := service.Update(sourceTwo.Key, UpdateInput{
 		PublicReadEnabled: boolPtr(true), PublicMountPath: stringPtr("/photos/team"),
 	}); err == nil {
 		t.Fatal("expected old mount path to remain reserved")
@@ -65,30 +68,30 @@ func TestUpdatePublicMountPathKeepsRedirectAndReservesOldPath(t *testing.T) {
 
 func TestUpdatePublicMountPathCanRestoreOwnRedirect(t *testing.T) {
 	service, base := newSourceService(t)
-	createTestSource(t, service, base, "source-one")
+	sourceOne := createTestSource(t, service, base, "source-one")
 
-	if _, err := service.Update("source-one", UpdateInput{
+	if _, err := service.Update(sourceOne.Key, UpdateInput{
 		PublicReadEnabled: boolPtr(true), PublicMountPath: stringPtr("/photos"),
 	}); err != nil {
 		t.Fatalf("set initial mount: %v", err)
 	}
-	if _, err := service.Update("source-one", UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
+	if _, err := service.Update(sourceOne.Key, UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
 		t.Fatalf("rename mount: %v", err)
 	}
-	if _, err := service.Update("source-one", UpdateInput{PublicMountPath: stringPtr("/photos")}); err != nil {
+	if _, err := service.Update(sourceOne.Key, UpdateInput{PublicMountPath: stringPtr("/photos")}); err != nil {
 		t.Fatalf("restore old mount: %v", err)
 	}
 
 	var count int
 	if err := service.db.QueryRow(`SELECT COUNT(*) FROM public_mount_redirects
-  WHERE source_id = 'source-one' AND mount_path = '/photos'`).Scan(&count); err != nil {
+	  WHERE storage_source_id = ? AND mount_path = '/photos'`, sourceOne.ID).Scan(&count); err != nil {
 		t.Fatalf("count restored redirect: %v", err)
 	}
 	if count != 0 {
 		t.Fatalf("restored current path must not remain a redirect: %d", count)
 	}
 	if err := service.db.QueryRow(`SELECT COUNT(*) FROM public_mount_redirects
-  WHERE source_id = 'source-one' AND mount_path = '/archive'`).Scan(&count); err != nil {
+	  WHERE storage_source_id = ? AND mount_path = '/archive'`, sourceOne.ID).Scan(&count); err != nil {
 		t.Fatalf("count previous redirect: %v", err)
 	}
 	if count != 1 {
@@ -98,21 +101,21 @@ func TestUpdatePublicMountPathCanRestoreOwnRedirect(t *testing.T) {
 
 func TestDeleteSourceRemovesPublicMountRedirects(t *testing.T) {
 	service, base := newSourceService(t)
-	createTestSource(t, service, base, "source-one")
-	if _, err := service.Update("source-one", UpdateInput{
+	sourceOne := createTestSource(t, service, base, "source-one")
+	if _, err := service.Update(sourceOne.Key, UpdateInput{
 		PublicReadEnabled: boolPtr(true), PublicMountPath: stringPtr("/photos"),
 	}); err != nil {
 		t.Fatalf("set initial mount: %v", err)
 	}
-	if _, err := service.Update("source-one", UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
+	if _, err := service.Update(sourceOne.Key, UpdateInput{PublicMountPath: stringPtr("/archive")}); err != nil {
 		t.Fatalf("rename mount: %v", err)
 	}
-	if err := service.Delete("source-one"); err != nil {
+	if err := service.Delete(sourceOne.Key); err != nil {
 		t.Fatalf("delete source: %v", err)
 	}
 
 	var count int
-	if err := service.db.QueryRow(`SELECT COUNT(*) FROM public_mount_redirects WHERE source_id = 'source-one'`).Scan(&count); err != nil {
+	if err := service.db.QueryRow(`SELECT COUNT(*) FROM public_mount_redirects WHERE storage_source_id = ?`, sourceOne.ID).Scan(&count); err != nil {
 		t.Fatalf("count redirects: %v", err)
 	}
 	if count != 0 {

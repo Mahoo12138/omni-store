@@ -24,9 +24,9 @@ func newTestLogger(t *testing.T, maxEntries int) *audit.Logger {
 func TestQueryFiltersSearchesAndPaginates(t *testing.T) {
 	logger := newTestLogger(t, 0)
 	entries := []audit.Entry{
-		{ActorType: audit.ActorUser, EntryType: audit.EntryWeb, Action: "upload", SourceID: "photos", RelativePath: "trip/a.jpg", IPAddress: "192.0.2.1", Status: audit.StatusSuccess},
-		{ActorType: audit.ActorAnonymous, EntryType: audit.EntryAnonymousImageBed, Action: "image_upload", SourceID: "images", RelativePath: "anonymous/b.png", IPAddress: "192.0.2.2", Status: audit.StatusFailed, ErrorCode: "RATE_LIMITED"},
-		{ActorType: audit.ActorUser, EntryType: audit.EntryWebDAV, Action: "move", SourceID: "photos", RelativePath: "trip/a.jpg", TargetRelativePath: "trip/b.jpg", IPAddress: "192.0.2.3", Status: audit.StatusSuccess},
+		{ActorType: audit.ActorUser, EntryType: audit.EntryWeb, Action: "upload", RelativePath: "trip/a.jpg", IPAddress: "192.0.2.1", Status: audit.StatusSuccess},
+		{ActorType: audit.ActorAnonymous, EntryType: audit.EntryAnonymousImageBed, Action: "image_upload", RelativePath: "anonymous/b.png", IPAddress: "192.0.2.2", Status: audit.StatusFailed, ErrorCode: "RATE_LIMITED"},
+		{ActorType: audit.ActorUser, EntryType: audit.EntryWebDAV, Action: "move", RelativePath: "trip/a.jpg", TargetRelativePath: "trip/b.jpg", IPAddress: "192.0.2.3", Status: audit.StatusSuccess},
 		{ActorType: audit.ActorSystem, EntryType: audit.EntryCLI, Action: "export_100%", Status: audit.StatusSuccess},
 	}
 	for _, entry := range entries {

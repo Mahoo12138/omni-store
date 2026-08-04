@@ -84,12 +84,12 @@ type davLockProp struct {
 }
 
 func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" {
 		http.Error(w, "cannot lock virtual root", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceID, true)
+	src, status := h.resolveSource(user, sourceKey, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -107,7 +107,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *model
 	}
 	timeout := parseLockTimeout(r.Header.Get("Timeout"))
 	if len(bytes.TrimSpace(body)) == 0 {
-		h.handleLockRefresh(w, r, user, sourceID, relPath, timeout)
+		h.handleLockRefresh(w, r, user, src, relPath, timeout)
 		return
 	}
 
@@ -141,9 +141,9 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *model
 	if request.Owner != nil {
 		ownerXML = request.Owner.InnerXML
 	}
-	lock, err := h.persistent.Create(r.Context(), sourceID, relPath, depth, ownerXML, user.ID, timeout)
+	lock, err := h.persistent.Create(r.Context(), src.ID, relPath, depth, ownerXML, user.ID, timeout)
 	if err != nil {
-		h.logAudit(r, user, "lock", sourceID, relPath, "", err)
+		h.logAudit(r, user, "lock", sourceKey, relPath, "", err)
 		if errors.Is(err, locks.ErrPersistentLocked) {
 			http.Error(w, "locked", http.StatusLocked)
 			return
@@ -155,7 +155,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *model
 	if _, err := h.files.Stat(src, relPath); err != nil {
 		if !errors.Is(err, files.ErrNotFound) {
 			_ = h.persistent.Delete(context.Background(), lock.Token)
-			h.logAudit(r, user, "lock", sourceID, relPath, "", err)
+			h.logAudit(r, user, "lock", sourceKey, relPath, "", err)
 			h.writeError(w, err)
 			return
 		}
@@ -167,25 +167,25 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *model
 		name := path.Base("/" + relPath)
 		if _, _, err := h.files.UploadWithLockTokens(src, dir, name, bytes.NewReader(nil), false, []string{lock.Token}, &user.ID); err != nil {
 			_ = h.persistent.Delete(context.Background(), lock.Token)
-			h.logAudit(r, user, "lock", sourceID, relPath, "", err)
+			h.logAudit(r, user, "lock", sourceKey, relPath, "", err)
 			h.writeError(w, err)
 			return
 		}
 		created = true
 	}
-	h.logAudit(r, user, "lock", sourceID, relPath, "", nil)
+	h.logAudit(r, user, "lock", sourceKey, relPath, "", nil)
 	w.Header().Set("Lock-Token", "<"+lock.Token+">")
-	h.writeLockResponse(w, lock, map[bool]int{true: http.StatusCreated, false: http.StatusOK}[created])
+	h.writeLockResponse(w, lock, src.Key, map[bool]int{true: http.StatusCreated, false: http.StatusOK}[created])
 }
 
-func (h *Handler) handleLockRefresh(w http.ResponseWriter, r *http.Request, user *models.User, sourceID, relPath string, timeout time.Duration) {
+func (h *Handler) handleLockRefresh(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource, relPath string, timeout time.Duration) {
 	tokens := extractLockTokens(r.Header.Get("If"))
 	if len(tokens) != 1 {
 		http.Error(w, "LOCK refresh requires exactly one lock token", http.StatusBadRequest)
 		return
 	}
-	lock, err := h.persistent.Refresh(r.Context(), tokens[0], user.ID, sourceID, relPath, timeout)
-	h.logAudit(r, user, "refresh_lock", sourceID, relPath, "", err)
+	lock, err := h.persistent.Refresh(r.Context(), tokens[0], user.ID, src.ID, relPath, timeout)
+	h.logAudit(r, user, "refresh_lock", src.Key, relPath, "", err)
 	if err != nil {
 		switch {
 		case errors.Is(err, locks.ErrLockForbidden):
@@ -197,16 +197,17 @@ func (h *Handler) handleLockRefresh(w http.ResponseWriter, r *http.Request, user
 		}
 		return
 	}
-	h.writeLockResponse(w, lock, http.StatusOK)
+	h.writeLockResponse(w, lock, src.Key, http.StatusOK)
 }
 
 func (h *Handler) handleUnlock(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" {
 		http.Error(w, "cannot unlock virtual root", http.StatusForbidden)
 		return
 	}
-	if _, status := h.resolveSource(user, sourceID, true); status != 0 {
+	src, status := h.resolveSource(user, sourceKey, true)
+	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
@@ -220,8 +221,8 @@ func (h *Handler) handleUnlock(w http.ResponseWriter, r *http.Request, user *mod
 		http.Error(w, "missing Lock-Token header", http.StatusBadRequest)
 		return
 	}
-	err = h.persistent.Unlock(r.Context(), tokens[0], user.ID, sourceID, relPath)
-	h.logAudit(r, user, "unlock", sourceID, relPath, "", err)
+	err = h.persistent.Unlock(r.Context(), tokens[0], user.ID, src.ID, relPath)
+	h.logAudit(r, user, "unlock", sourceKey, relPath, "", err)
 	if err != nil {
 		switch {
 		case errors.Is(err, locks.ErrLockForbidden):
@@ -237,17 +238,17 @@ func (h *Handler) handleUnlock(w http.ResponseWriter, r *http.Request, user *mod
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) writeLockResponse(w http.ResponseWriter, lock *locks.PersistentLock, status int) {
+func (h *Handler) writeLockResponse(w http.ResponseWriter, lock *locks.PersistentLock, sourceKey string, status int) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(xml.Header))
 	_ = xml.NewEncoder(w).Encode(davLockProp{XmlnsD: "DAV:", LockDiscovery: davLockDiscovery{
-		ActiveLocks: []davActiveLock{activeLockXML(*lock)},
+		ActiveLocks: []davActiveLock{activeLockXML(*lock, sourceKey)},
 	}})
 }
 
-func activeLockXML(lock locks.PersistentLock) davActiveLock {
+func activeLockXML(lock locks.PersistentLock, sourceKey string) davActiveLock {
 	remaining := int64(time.Until(lock.ExpiresAt).Seconds())
 	if remaining < 0 {
 		remaining = 0
@@ -263,18 +264,22 @@ func activeLockXML(lock locks.PersistentLock) davActiveLock {
 		Owner:     owner,
 		Timeout:   fmt.Sprintf("Second-%d", remaining),
 		LockToken: davHrefValue{Href: lock.Token},
-		LockRoot:  davHrefValue{Href: davHref(lock.SourceID, lock.RelativePath)},
+		LockRoot:  davHrefValue{Href: davHref(sourceKey, lock.RelativePath)},
 	}
 }
 
-func (h *Handler) addLockProperties(r *http.Request, response *propfindResponse, sourceID, relPath string) error {
-	active, err := h.persistent.Discover(r.Context(), sourceID, relPath)
+func (h *Handler) addLockProperties(r *http.Request, response *propfindResponse, sourceKey, relPath string) error {
+	src, err := h.sources.Get(sourceKey)
+	if err != nil {
+		return err
+	}
+	active, err := h.persistent.Discover(r.Context(), src.ID, relPath)
 	if err != nil {
 		return err
 	}
 	discovery := &davLockDiscovery{ActiveLocks: make([]davActiveLock, 0, len(active))}
 	for _, lock := range active {
-		discovery.ActiveLocks = append(discovery.ActiveLocks, activeLockXML(lock))
+		discovery.ActiveLocks = append(discovery.ActiveLocks, activeLockXML(lock, sourceKey))
 	}
 	for i := range response.Propstats {
 		response.Propstats[i].Prop.SupportedLock = &davSupportedLock{Entries: []davLockEntry{{

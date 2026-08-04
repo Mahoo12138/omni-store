@@ -48,7 +48,7 @@
 ```text
 识别访问主体
 -> 鉴权
--> 解析 source_id 或 public_mount_path
+-> 将不透明路由 key 或 public_mount_path 解析为内部 storage_source_id
 -> 找到存储源
 -> 检查存储源状态
 -> 检查权限

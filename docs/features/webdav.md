@@ -28,19 +28,19 @@ MVP 支持：
 
 ```text
 /dav
-/dav/{source_id}
-/dav/{source_id}/...
+/dav/{storage_key}
+/dav/{storage_key}/...
 ```
 
 `/dav` 是虚拟根目录。
 
-用户登录后，在 `/dav` 可以看到自己有权限访问且启用 WebDAV 的存储源列表。
+用户登录后，在 `/dav` 可以看到自己有权限访问且启用 WebDAV 的存储源列表。列表使用存储源名称作为 `displayname`，实际 href 使用系统生成的不透明 key；挂载地址由连接信息直接提供，用户无需自行填写或记忆 key。
 
 示例：
 
 ```text
-/dav/photos
-/dav/downloads
+/dav/src-cd6ee2f48ba8709d
+/dav/src-cdfcd8b58630e339
 ```
 
 `/dav` 不能写入。
@@ -48,7 +48,7 @@ MVP 支持：
 禁止：
 
 1. `MKCOL /dav/new-source`。
-2. `DELETE /dav/{source_id}` 删除存储源。
+2. `DELETE /dav/{storage_key}` 删除存储源。
 3. 在 `/dav` 下创建存储源。
 
 ### 支持方法
@@ -133,7 +133,7 @@ MVP 不支持跨存储源移动。
 1. Basic Auth 鉴权。
 2. 检查用户未禁用。
 3. 解析路径。
-4. 识别 source_id。
+4. 将不透明路径段解析为存储源。
 5. 检查存储源存在。
 6. 检查存储源未禁用。
 7. 检查 `webdav_enabled = true`。

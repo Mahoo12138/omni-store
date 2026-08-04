@@ -28,16 +28,17 @@ func newPublicRedirectServer(t *testing.T) *Server {
 		t.Fatalf("create source root: %v", err)
 	}
 	sourceService := sources.NewService(conn, dataDir)
-	if _, err := sourceService.Create(sources.CreateInput{SourceID: "photo-source", RootPath: root}); err != nil {
+	source, err := sourceService.Create(sources.CreateInput{Name: "photo-source", RootPath: root})
+	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
 	enabled, oldPath, newPath := true, "/photos", "/archive"
-	if _, err := sourceService.Update("photo-source", sources.UpdateInput{
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{
 		PublicReadEnabled: &enabled, PublicMountPath: &oldPath,
 	}); err != nil {
 		t.Fatalf("set initial mount: %v", err)
 	}
-	if _, err := sourceService.Update("photo-source", sources.UpdateInput{PublicMountPath: &newPath}); err != nil {
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{PublicMountPath: &newPath}); err != nil {
 		t.Fatalf("rename mount: %v", err)
 	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())

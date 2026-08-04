@@ -105,10 +105,11 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
 
   const currentTarget = resolveImageBedTarget(
     selectedTarget,
-    targetData.default_source_id,
+    targetData.default_key,
     targetData.targets,
   )
-  const currentTargetData = targetData.targets.find((target) => target.source_id === currentTarget)
+  const currentTargetData = targetData.targets.find((target) => target.key === currentTarget)
+  const currentTargetIndex = targetData.targets.findIndex((target) => target.key === currentTarget)
   const apiEndpoint = `${window.location.origin}/api/v1/image-bed/upload`
 
   const visibleImages = useMemo(
@@ -215,19 +216,22 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               </div>
 
               <Select
-                value={currentTarget}
-                onValueChange={setSelectedTarget}
-                options={targetData.targets.map((target) => ({
-                  value: target.source_id,
-                  label: `${target.name}${target.source_id === targetData.default_source_id ? '（默认）' : ''}`,
+                value={currentTargetIndex >= 0 ? String(currentTargetIndex) : ''}
+                onValueChange={(index) => {
+                  const nextTarget = targetData.targets[Number(index)]
+                  if (nextTarget) setSelectedTarget(nextTarget.key)
+                }}
+                options={targetData.targets.map((target, index) => ({
+                  value: String(index),
+                  label: `${target.name}${target.key === targetData.default_key ? '（默认）' : ''}`,
                 }))}
                 ariaLabel="选择图床目标"
                 leadingIcon={<IconImage size={19} />}
                 size="large"
               />
               <div className={css.targetMetaRow}>
-                <span>{currentTargetData?.description || `存储源 ID：${currentTarget}`}</span>
-                {currentTarget !== targetData.default_source_id ? (
+                <span>{currentTargetData?.description || '图片会保存到当前选中的存储源'}</span>
+                {currentTarget !== targetData.default_key ? (
                   <button
                     type="button"
                     className={css.textButton}
@@ -371,7 +375,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
               <div className={css.targetSummaryText}>
                 <strong>{currentTargetData?.name ?? currentTarget}</strong>
-                <span>{currentTarget}</span>
+                <span>{currentTargetData?.description || '当前默认存储位置'}</span>
               </div>
               <span className={css.statusBadge}>正常</span>
             </div>

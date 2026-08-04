@@ -90,7 +90,7 @@ func (s *Service) prepare(src *models.StorageSource, relInput string) (relPath, 
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
-	matcher, err := s.sources.Matcher(src.SourceID)
+	matcher, err := s.sources.Matcher(src.ID)
 	if err != nil {
 		return "", "", err
 	}
@@ -144,7 +144,7 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 		opts.PageSize = 500
 	}
 
-	unlock := s.locks.RLock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.RLock(locks.Key(src.Key, relPath))
 	defer unlock()
 
 	dirents, err := os.ReadDir(absPath)
@@ -155,7 +155,7 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 		return nil, fmt.Errorf("读取目录失败: %w", err)
 	}
 
-	matcher, err := s.sources.Matcher(src.SourceID)
+	matcher, err := s.sources.Matcher(src.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (s *Service) ListObjects(src *models.StorageSource) ([]ObjectEntry, error) 
 	if err != nil {
 		return nil, err
 	}
-	matcher, err := s.sources.Matcher(src.SourceID)
+	matcher, err := s.sources.Matcher(src.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +356,7 @@ func (s *Service) Stat(src *models.StorageSource, relInput string) (*Entry, erro
 	if err != nil {
 		return nil, err
 	}
-	unlock := s.locks.RLock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.RLock(locks.Key(src.Key, relPath))
 	defer unlock()
 
 	info, err := os.Lstat(absPath)
@@ -390,7 +390,7 @@ func (s *Service) OpenForRead(src *models.StorageSource, relInput string) (*os.F
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	unlock := s.locks.RLock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.RLock(locks.Key(src.Key, relPath))
 
 	info, err := os.Lstat(absPath)
 	if err != nil {
@@ -442,14 +442,14 @@ func (s *Service) MkdirWithLockTokens(src *models.StorageSource, parentRel, name
 	if err != nil {
 		return "", err
 	}
-	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.ID,
 		[]locks.MutationScope{{Path: relPath}}, lockTokens, lockOwnerUserID)
 	if err != nil {
 		return "", err
 	}
 	defer releasePersistent()
 
-	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 	defer unlock()
 
 	if _, err := os.Lstat(absPath); err == nil {
@@ -491,14 +491,14 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	if err != nil {
 		return "", 0, err
 	}
-	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.ID,
 		[]locks.MutationScope{{Path: relPath}}, lockTokens, lockOwnerUserID)
 	if err != nil {
 		return "", 0, err
 	}
 	defer releasePersistent()
 
-	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 	defer unlock()
 
 	// 冲突检查（README §13.4）。
@@ -583,14 +583,14 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 	if relPath == "" {
 		return fmt.Errorf("%w: 不能删除存储源根目录", ErrInvalid)
 	}
-	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.ID,
 		[]locks.MutationScope{{Path: relPath, IncludeDescendants: true}}, lockTokens, lockOwnerUserID)
 	if err != nil {
 		return err
 	}
 	defer releasePersistent()
 
-	unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
+	unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 	defer unlock()
 
 	info, err := os.Lstat(absPath)
@@ -610,20 +610,20 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 	}
 
 	// 同步清理 Images 表，避免图床历史残留失效图片（README §13.5/§17.12）。
-	s.cleanupImageRecords(src.SourceID, relPath, isDir)
+	s.cleanupImageRecords(src.ID, relPath, isDir)
 	if err := releasePersistent(relPath); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) cleanupImageRecords(sourceID, relPath string, isDir bool) {
+func (s *Service) cleanupImageRecords(storageSourceID int64, relPath string, isDir bool) {
 	if isDir {
-		_, _ = s.db.Exec(`DELETE FROM images WHERE source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			sourceID, relPath, relPath+"/%")
+		_, _ = s.db.Exec(`DELETE FROM images WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
+			storageSourceID, relPath, relPath+"/%")
 		return
 	}
-	_, _ = s.db.Exec(`DELETE FROM images WHERE source_id = ? AND relative_path = ?`, sourceID, relPath)
+	_, _ = s.db.Exec(`DELETE FROM images WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
 }
 
 // --- 重命名 / 移动（README §13.6 只支持同存储源） ---
@@ -684,7 +684,7 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	if err != nil {
 		return "", err
 	}
-	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.SourceID,
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.ID,
 		[]locks.MutationScope{
 			{Path: fromRel, IncludeDescendants: true},
 			{Path: toRel},
@@ -694,7 +694,7 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	}
 	defer releasePersistent()
 
-	unlock := s.locks.LockPair(locks.Key(src.SourceID, fromRel), locks.Key(src.SourceID, toRel))
+	unlock := s.locks.LockPair(locks.Key(src.Key, fromRel), locks.Key(src.Key, toRel))
 	defer unlock()
 
 	info, err := os.Lstat(fromAbs)
@@ -719,7 +719,7 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	}
 
 	// 同步更新图床记录路径，保持公开 URL 有效。
-	s.syncImageRecordsMove(src.SourceID, fromRel, toRel, info.IsDir())
+	s.syncImageRecordsMove(src.ID, fromRel, toRel, info.IsDir())
 	// RFC 4918：MOVE 不携带源资源上的锁。外部祖先锁保留，并按新路径重新判断覆盖关系。
 	if err := releasePersistent(fromRel); err != nil {
 		return "", err
@@ -727,11 +727,11 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	return toRel, nil
 }
 
-func (s *Service) syncImageRecordsMove(sourceID, fromRel, toRel string, isDir bool) {
+func (s *Service) syncImageRecordsMove(storageSourceID int64, fromRel, toRel string, isDir bool) {
 	if isDir {
 		rows, err := s.db.Query(`SELECT id, relative_path FROM images
-  WHERE source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			sourceID, fromRel, fromRel+"/%")
+  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
+			storageSourceID, fromRel, fromRel+"/%")
 		if err != nil {
 			return
 		}
@@ -755,6 +755,6 @@ func (s *Service) syncImageRecordsMove(sourceID, fromRel, toRel string, isDir bo
 		}
 		return
 	}
-	_, _ = s.db.Exec(`UPDATE images SET relative_path = ? WHERE source_id = ? AND relative_path = ?`,
-		toRel, sourceID, fromRel)
+	_, _ = s.db.Exec(`UPDATE images SET relative_path = ? WHERE storage_source_id = ? AND relative_path = ?`,
+		toRel, storageSourceID, fromRel)
 }

@@ -38,7 +38,7 @@ type Entry struct {
 	ActorUserID        *int64
 	EntryType          string
 	Action             string
-	SourceID           string
+	StorageSourceID    *int64
 	RelativePath       string
 	TargetRelativePath string
 	IPAddress          string
@@ -72,11 +72,11 @@ func (l *Logger) Log(e Entry) {
 		return s
 	}
 	_, err := l.db.Exec(`INSERT INTO audit_logs
-  (actor_type, actor_user_id, entry_type, action, source_id, relative_path, target_relative_path,
+  (actor_type, actor_user_id, entry_type, action, storage_source_id, relative_path, target_relative_path,
    ip_address, user_agent, status, error_code, created_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ActorType, e.ActorUserID, e.EntryType, e.Action,
-		nullable(e.SourceID), nullable(e.RelativePath), nullable(e.TargetRelativePath),
+		e.StorageSourceID, nullable(e.RelativePath), nullable(e.TargetRelativePath),
 		nullable(e.IPAddress), nullable(e.UserAgent), e.Status, nullable(e.ErrorCode),
 		time.Now().UTC())
 	if err != nil {
@@ -105,7 +105,8 @@ type LogEntry struct {
 	ActorUserID        *int64    `json:"actor_user_id"`
 	EntryType          string    `json:"entry_type"`
 	Action             string    `json:"action"`
-	SourceID           *string   `json:"source_id"`
+	StorageSourceID    *int64    `json:"storage_source_id"`
+	StorageSourceName  *string   `json:"storage_source_name"`
 	RelativePath       *string   `json:"relative_path"`
 	TargetRelativePath *string   `json:"target_relative_path"`
 	IPAddress          *string   `json:"ip_address"`
@@ -146,15 +147,15 @@ func (l *Logger) Query(opts QueryOptions) ([]*LogEntry, int64, error) {
 		where = append(where, column+" = ?")
 		args = append(args, value)
 	}
-	addExact("actor_type", opts.ActorType)
-	addExact("entry_type", opts.EntryType)
-	addExact("status", opts.Status)
+	addExact("a.actor_type", opts.ActorType)
+	addExact("a.entry_type", opts.EntryType)
+	addExact("a.status", opts.Status)
 
 	if query := strings.TrimSpace(opts.SearchText); query != "" {
 		query = "%" + escapeLike(query) + "%"
-		where = append(where, `(action LIKE ? ESCAPE '\' OR source_id LIKE ? ESCAPE '\'
-      OR relative_path LIKE ? ESCAPE '\' OR target_relative_path LIKE ? ESCAPE '\'
-      OR ip_address LIKE ? ESCAPE '\' OR error_code LIKE ? ESCAPE '\')`)
+		where = append(where, `(a.action LIKE ? ESCAPE '\' OR s.name LIKE ? ESCAPE '\'
+      OR a.relative_path LIKE ? ESCAPE '\' OR a.target_relative_path LIKE ? ESCAPE '\'
+      OR a.ip_address LIKE ? ESCAPE '\' OR a.error_code LIKE ? ESCAPE '\')`)
 		for range 6 {
 			args = append(args, query)
 		}
@@ -162,16 +163,18 @@ func (l *Logger) Query(opts QueryOptions) ([]*LogEntry, int64, error) {
 
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
-	if err := l.db.QueryRow(`SELECT COUNT(*) FROM audit_logs WHERE `+whereSQL, args...).Scan(&total); err != nil {
+	if err := l.db.QueryRow(`SELECT COUNT(*) FROM audit_logs a
+  LEFT JOIN storage_sources s ON s.id = a.storage_source_id WHERE `+whereSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	queryArgs := append([]any{}, args...)
 	queryArgs = append(queryArgs, opts.PageSize, (opts.Page-1)*opts.PageSize)
 	rows, err := l.db.Query(`SELECT
-    id, actor_type, actor_user_id, entry_type, action, source_id, relative_path,
-    target_relative_path, ip_address, user_agent, status, error_code, created_at
-  FROM audit_logs WHERE `+whereSQL+` ORDER BY id DESC LIMIT ? OFFSET ?`, queryArgs...)
+    a.id, a.actor_type, a.actor_user_id, a.entry_type, a.action, a.storage_source_id, s.name,
+    a.relative_path, a.target_relative_path, a.ip_address, a.user_agent, a.status, a.error_code, a.created_at
+  FROM audit_logs a LEFT JOIN storage_sources s ON s.id = a.storage_source_id
+  WHERE `+whereSQL+` ORDER BY a.id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -181,7 +184,7 @@ func (l *Logger) Query(opts QueryOptions) ([]*LogEntry, int64, error) {
 	for rows.Next() {
 		var e LogEntry
 		if err := rows.Scan(&e.ID, &e.ActorType, &e.ActorUserID, &e.EntryType, &e.Action,
-			&e.SourceID, &e.RelativePath, &e.TargetRelativePath, &e.IPAddress, &e.UserAgent,
+			&e.StorageSourceID, &e.StorageSourceName, &e.RelativePath, &e.TargetRelativePath, &e.IPAddress, &e.UserAgent,
 			&e.Status, &e.ErrorCode, &e.CreatedAt); err != nil {
 			return nil, 0, err
 		}

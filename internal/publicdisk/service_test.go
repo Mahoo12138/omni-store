@@ -25,18 +25,19 @@ func TestRedirectPathPreservesInnerPathAndChecksSourceStatus(t *testing.T) {
 		t.Fatalf("create source root: %v", err)
 	}
 	sourceService := sources.NewService(conn, dataDir)
-	if _, err := sourceService.Create(sources.CreateInput{SourceID: "photo-source", RootPath: root}); err != nil {
+	source, err := sourceService.Create(sources.CreateInput{Name: "photo-source", RootPath: root})
+	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
 	publicEnabled := true
 	oldPath := "/photos"
 	newPath := "/archive"
-	if _, err := sourceService.Update("photo-source", sources.UpdateInput{
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{
 		PublicReadEnabled: &publicEnabled, PublicMountPath: &oldPath,
 	}); err != nil {
 		t.Fatalf("set initial mount: %v", err)
 	}
-	if _, err := sourceService.Update("photo-source", sources.UpdateInput{PublicMountPath: &newPath}); err != nil {
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{PublicMountPath: &newPath}); err != nil {
 		t.Fatalf("rename mount: %v", err)
 	}
 
@@ -53,18 +54,18 @@ func TestRedirectPathPreservesInnerPathAndChecksSourceStatus(t *testing.T) {
 		t.Fatalf("current mount unexpectedly redirected: ok=%v err=%v", ok, err)
 	}
 
-	if err := sourceService.SetDisabled("photo-source", true); err != nil {
+	if err := sourceService.SetDisabled(source.Key, true); err != nil {
 		t.Fatalf("disable source: %v", err)
 	}
 	if _, ok, err := service.RedirectPath("/photos/2026/a.jpg"); err != nil || ok {
 		t.Fatalf("disabled source redirect remained active: ok=%v err=%v", ok, err)
 	}
 
-	if err := sourceService.SetDisabled("photo-source", false); err != nil {
+	if err := sourceService.SetDisabled(source.Key, false); err != nil {
 		t.Fatalf("enable source: %v", err)
 	}
 	publicEnabled = false
-	if _, err := sourceService.Update("photo-source", sources.UpdateInput{PublicReadEnabled: &publicEnabled}); err != nil {
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{PublicReadEnabled: &publicEnabled}); err != nil {
 		t.Fatalf("disable public access: %v", err)
 	}
 	if _, ok, err := service.RedirectPath("/photos/2026/a.jpg"); err != nil || ok {

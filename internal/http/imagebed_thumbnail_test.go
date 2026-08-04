@@ -40,7 +40,7 @@ func TestThumbnailHTTPResponseAndConditionalCache(t *testing.T) {
 	if err := os.Mkdir(sourceRoot, 0o755); err != nil {
 		t.Fatalf("create source root: %v", err)
 	}
-	source, err := app.sources.Create(sources.CreateInput{SourceID: "thumbs", RootPath: sourceRoot})
+	source, err := app.sources.Create(sources.CreateInput{Name: "thumbs", RootPath: sourceRoot})
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
@@ -56,10 +56,10 @@ func TestThumbnailHTTPResponseAndConditionalCache(t *testing.T) {
 	}
 	imageID := "img_http_thumbnail"
 	if _, err := conn.Exec(`INSERT INTO images
-  (image_id, owner_type, owner_user_id, source_id, relative_path, original_filename,
+	  (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
    public_url, size, mime_type, width, height, ext, created_at)
   VALUES (?, 'anonymous', NULL, ?, ?, 'http.png', ?, ?, 'image/png', 800, 400, 'png', ?)`,
-		imageID, source.SourceID, originalRel, "https://store.example.test/i/"+imageID+".png", info.Size(), time.Now().UTC()); err != nil {
+		imageID, source.ID, originalRel, "https://store.example.test/i/"+imageID+".png", info.Size(), time.Now().UTC()); err != nil {
 		t.Fatalf("insert image: %v", err)
 	}
 

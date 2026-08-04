@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 )
@@ -14,8 +16,8 @@ import (
 var (
 	// ErrNotFound 存储源不存在。
 	ErrNotFound = errors.New("存储源不存在")
-	// ErrSourceIDTaken source_id 已存在。
-	ErrSourceIDTaken = errors.New("source_id 已存在")
+	// ErrNameRequired 存储源名称不能为空。
+	ErrNameRequired = errors.New("存储源名称不能为空")
 )
 
 // DefaultExcludePatterns 是新建存储源默认建议排除规则（README §11.3）。
@@ -43,13 +45,13 @@ func NewService(db *sql.DB, dataDir string) *Service {
 	return &Service{db: db, dataDir: dataDir}
 }
 
-const sourceColumns = `id, source_id, name, description, root_path, is_disabled,
+const sourceColumns = `id, key, name, description, root_path, is_disabled,
   public_read_enabled, public_mount_path, webdav_enabled, image_bed_enabled, created_at, updated_at`
 
 func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, error) {
 	var s models.StorageSource
 	var desc sql.NullString
-	err := row.Scan(&s.ID, &s.SourceID, &s.Name, &desc, &s.RootPath, &s.IsDisabled,
+	err := row.Scan(&s.ID, &s.Key, &s.Name, &desc, &s.RootPath, &s.IsDisabled,
 		&s.PublicReadEnabled, &s.PublicMountPath, &s.WebdavEnabled, &s.ImageBedEnabled,
 		&s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -64,7 +66,6 @@ func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, err
 
 // CreateInput 是创建存储源的输入。
 type CreateInput struct {
-	SourceID    string
 	Name        string
 	Description string
 	RootPath    string
@@ -75,11 +76,8 @@ type CreateInput struct {
 
 // Create 创建存储源，执行全部路径安全校验（README §10.5）。
 func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
-	if err := ValidateSourceID(in.SourceID); err != nil {
-		return nil, err
-	}
 	if in.Name = strings.TrimSpace(in.Name); in.Name == "" {
-		in.Name = in.SourceID
+		return nil, ErrNameRequired
 	}
 
 	existing, err := s.allRootPaths()
@@ -103,31 +101,42 @@ func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`INSERT INTO storage_sources
-  (source_id, name, description, root_path, is_disabled, public_read_enabled,
+	var (
+		key    string
+		result sql.Result
+	)
+	for attempt := 0; attempt < 5; attempt++ {
+		key = auth.NewRandomToken("src-", 8)
+		result, err = tx.Exec(`INSERT INTO storage_sources
+  (key, name, description, root_path, is_disabled, public_read_enabled,
    public_mount_path, webdav_enabled, image_bed_enabled, created_at, updated_at)
   VALUES (?, ?, ?, ?, 0, 0, NULL, 1, 0, ?, ?)`,
-		in.SourceID, in.Name, in.Description, realPath, now, now)
-	if err != nil {
-		if strings.Contains(err.Error(), "storage_sources.source_id") {
-			return nil, ErrSourceIDTaken
+			key, in.Name, in.Description, realPath, now, now)
+		if err == nil || !strings.Contains(err.Error(), "storage_sources.key") {
+			break
 		}
+	}
+	if err != nil {
 		return nil, fmt.Errorf("创建存储源失败: %w", err)
+	}
+	storageSourceID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
 	}
 
 	for _, p := range patterns {
 		if p = strings.TrimSpace(p); p == "" {
 			continue
 		}
-		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (source_id, pattern, created_at)
-  VALUES (?, ?, ?)`, in.SourceID, p, now); err != nil {
+		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (storage_source_id, pattern, created_at)
+  VALUES (?, ?, ?)`, storageSourceID, p, now); err != nil {
 			return nil, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return s.Get(in.SourceID)
+	return s.Get(key)
 }
 
 func (s *Service) allRootPaths() ([]string, error) {
@@ -147,9 +156,14 @@ func (s *Service) allRootPaths() ([]string, error) {
 	return out, rows.Err()
 }
 
-// Get 按 source_id 查询存储源。
-func (s *Service) Get(sourceID string) (*models.StorageSource, error) {
-	return scanSource(s.db.QueryRow(`SELECT `+sourceColumns+` FROM storage_sources WHERE source_id = ?`, sourceID))
+// Get 按系统生成的不透明 key 查询存储源。
+func (s *Service) Get(key string) (*models.StorageSource, error) {
+	return scanSource(s.db.QueryRow(`SELECT `+sourceColumns+` FROM storage_sources WHERE key = ?`, key))
+}
+
+// GetByID 仅供持久化关联解析使用；数字主键不暴露到用户路由。
+func (s *Service) GetByID(id int64) (*models.StorageSource, error) {
+	return scanSource(s.db.QueryRow(`SELECT `+sourceColumns+` FROM storage_sources WHERE id = ?`, id))
 }
 
 // List 返回全部存储源（管理员）。
@@ -170,7 +184,7 @@ func (s *Service) List() ([]*models.StorageSource, error) {
 	return out, rows.Err()
 }
 
-// UpdateInput 是可修改的存储源配置。root_path 和 source_id 创建后不可修改（README §10.3）。
+// UpdateInput 是可修改的存储源配置。root_path 创建后不可修改（README §10.3）。
 type UpdateInput struct {
 	Name              *string
 	Description       *string
@@ -181,8 +195,8 @@ type UpdateInput struct {
 }
 
 // Update 修改存储源配置。开启公开访问时校验挂载路径格式和冲突（README §12.3/§12.4）。
-func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource, error) {
-	src, err := s.Get(sourceID)
+func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, error) {
+	src, err := s.Get(key)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +250,7 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 	defer tx.Rollback()
 
 	if src.PublicMountPath != nil {
-		reserved, err := reservedMountPaths(tx, sourceID, normalizedMountPath)
+		reserved, err := reservedMountPaths(tx, src.ID, normalizedMountPath)
 		if err != nil {
 			return nil, err
 		}
@@ -244,21 +258,21 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 			return nil, err
 		}
 		// 允许存储源把当前路径改回自己的某个旧路径。
-		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE source_id = ? AND mount_path = ?`,
-			sourceID, normalizedMountPath); err != nil {
+		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE storage_source_id = ? AND mount_path = ?`,
+			src.ID, normalizedMountPath); err != nil {
 			return nil, err
 		}
 	}
 
 	if previousMountPath != "" && previousMountPath != normalizedMountPath && src.PublicMountPath != nil {
-		if _, err := tx.Exec(`INSERT INTO public_mount_redirects (source_id, mount_path, created_at)
-  VALUES (?, ?, ?) ON CONFLICT(mount_path) DO NOTHING`, sourceID, previousMountPath, time.Now().UTC()); err != nil {
+		if _, err := tx.Exec(`INSERT INTO public_mount_redirects (storage_source_id, mount_path, created_at)
+  VALUES (?, ?, ?) ON CONFLICT(mount_path) DO NOTHING`, src.ID, previousMountPath, time.Now().UTC()); err != nil {
 			return nil, err
 		}
 	}
 	if src.PublicMountPath == nil {
 		// 没有新的目标路径时，旧路径无法安全重定向，不再继续占用。
-		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE source_id = ?`, sourceID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE storage_source_id = ?`, src.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -266,16 +280,16 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 	_, err = tx.Exec(`UPDATE storage_sources SET
   name = ?, description = ?, public_read_enabled = ?, public_mount_path = ?,
   webdav_enabled = ?, image_bed_enabled = ?, updated_at = ?
-  WHERE source_id = ?`,
+  WHERE id = ?`,
 		src.Name, src.Description, src.PublicReadEnabled, src.PublicMountPath,
-		src.WebdavEnabled, src.ImageBedEnabled, time.Now().UTC(), sourceID)
+		src.WebdavEnabled, src.ImageBedEnabled, time.Now().UTC(), src.ID)
 	if err != nil {
 		return nil, fmt.Errorf("更新存储源失败: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return s.Get(sourceID)
+	return s.Get(key)
 }
 
 type queryer interface {
@@ -283,12 +297,12 @@ type queryer interface {
 }
 
 // reservedMountPaths 返回其他当前挂载和全部旧路径。当前存储源准备恢复的同名旧路径除外。
-func reservedMountPaths(q queryer, excludeSourceID, allowedRedirectPath string) ([]string, error) {
+func reservedMountPaths(q queryer, excludeStorageSourceID int64, allowedRedirectPath string) ([]string, error) {
 	rows, err := q.Query(`SELECT public_mount_path FROM storage_sources
-  WHERE public_mount_path IS NOT NULL AND source_id != ?
+  WHERE public_mount_path IS NOT NULL AND id != ?
 UNION ALL
 SELECT mount_path FROM public_mount_redirects
-  WHERE NOT (source_id = ? AND mount_path = ?)`, excludeSourceID, excludeSourceID, allowedRedirectPath)
+  WHERE NOT (storage_source_id = ? AND mount_path = ?)`, excludeStorageSourceID, excludeStorageSourceID, allowedRedirectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -305,9 +319,9 @@ SELECT mount_path FROM public_mount_redirects
 }
 
 // SetDisabled 启用/禁用存储源。禁用后所有入口不可访问（README §10.1）。
-func (s *Service) SetDisabled(sourceID string, disabled bool) error {
-	res, err := s.db.Exec(`UPDATE storage_sources SET is_disabled = ?, updated_at = ? WHERE source_id = ?`,
-		disabled, time.Now().UTC(), sourceID)
+func (s *Service) SetDisabled(key string, disabled bool) error {
+	res, err := s.db.Exec(`UPDATE storage_sources SET is_disabled = ?, updated_at = ? WHERE key = ?`,
+		disabled, time.Now().UTC(), key)
 	if err != nil {
 		return err
 	}
@@ -318,7 +332,12 @@ func (s *Service) SetDisabled(sourceID string, disabled bool) error {
 }
 
 // Delete 删除存储源的 OmniStore 内部记录，不删除真实磁盘文件（README §10.4）。
-func (s *Service) Delete(sourceID string) error {
+func (s *Service) Delete(key string) error {
+	src, err := s.Get(key)
+	if err != nil {
+		return err
+	}
+	id := src.ID
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -326,24 +345,24 @@ func (s *Service) Delete(sourceID string) error {
 	defer tx.Rollback()
 
 	for _, q := range []string{
-		`DELETE FROM user_source_permissions WHERE source_id = ?`,
-		`DELETE FROM storage_source_exclude_patterns WHERE source_id = ?`,
-		`DELETE FROM public_mount_redirects WHERE source_id = ?`,
-		`UPDATE user_preferences SET default_image_bed_source_id = NULL, updated_at = CURRENT_TIMESTAMP
-       WHERE default_image_bed_source_id = ?`,
-		`DELETE FROM images WHERE source_id = ?`,
+		`DELETE FROM user_source_permissions WHERE storage_source_id = ?`,
+		`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`,
+		`DELETE FROM public_mount_redirects WHERE storage_source_id = ?`,
+		`UPDATE user_preferences SET default_image_bed_storage_source_id = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE default_image_bed_storage_source_id = ?`,
+		`DELETE FROM images WHERE storage_source_id = ?`,
 	} {
-		if _, err := tx.Exec(q, sourceID); err != nil {
+		if _, err := tx.Exec(q, id); err != nil {
 			return err
 		}
 	}
 	// 匿名图床目标指向该存储源时一并清理。
 	if _, err := tx.Exec(`DELETE FROM system_settings
-  WHERE key = 'anonymous_image_bed_source_id' AND value = ?`, sourceID); err != nil {
+  WHERE key = 'anonymous_image_bed_storage_source_id' AND value = ?`, strconv.FormatInt(id, 10)); err != nil {
 		return err
 	}
 
-	res, err := tx.Exec(`DELETE FROM storage_sources WHERE source_id = ?`, sourceID)
+	res, err := tx.Exec(`DELETE FROM storage_sources WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -356,9 +375,9 @@ func (s *Service) Delete(sourceID string) error {
 // --- 排除规则（README §11） ---
 
 // ExcludePatterns 返回存储源的自定义排除规则（不含系统强制规则）。
-func (s *Service) ExcludePatterns(sourceID string) ([]string, error) {
+func (s *Service) ExcludePatterns(id int64) ([]string, error) {
 	rows, err := s.db.Query(`SELECT pattern FROM storage_source_exclude_patterns
-  WHERE source_id = ? ORDER BY id`, sourceID)
+  WHERE storage_source_id = ? ORDER BY id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +394,8 @@ func (s *Service) ExcludePatterns(sourceID string) ([]string, error) {
 }
 
 // SetExcludePatterns 整体替换存储源排除规则。
-func (s *Service) SetExcludePatterns(sourceID string, patterns []string) error {
-	if _, err := s.Get(sourceID); err != nil {
+func (s *Service) SetExcludePatterns(id int64, patterns []string) error {
+	if _, err := s.GetByID(id); err != nil {
 		return err
 	}
 	tx, err := s.db.Begin()
@@ -385,7 +404,7 @@ func (s *Service) SetExcludePatterns(sourceID string, patterns []string) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`DELETE FROM storage_source_exclude_patterns WHERE source_id = ?`, sourceID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`, id); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
@@ -393,8 +412,8 @@ func (s *Service) SetExcludePatterns(sourceID string, patterns []string) error {
 		if p = strings.TrimSpace(p); p == "" {
 			continue
 		}
-		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (source_id, pattern, created_at)
-  VALUES (?, ?, ?)`, sourceID, p, now); err != nil {
+		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (storage_source_id, pattern, created_at)
+  VALUES (?, ?, ?)`, id, p, now); err != nil {
 			return err
 		}
 	}
@@ -402,8 +421,8 @@ func (s *Service) SetExcludePatterns(sourceID string, patterns []string) error {
 }
 
 // Matcher 返回该存储源的排除规则匹配器（含系统强制规则）。
-func (s *Service) Matcher(sourceID string) (*security.ExcludeMatcher, error) {
-	patterns, err := s.ExcludePatterns(sourceID)
+func (s *Service) Matcher(id int64) (*security.ExcludeMatcher, error) {
+	patterns, err := s.ExcludePatterns(id)
 	if err != nil {
 		return nil, err
 	}
@@ -412,8 +431,8 @@ func (s *Service) Matcher(sourceID string) (*security.ExcludeMatcher, error) {
 
 // IsPathExcluded 统一排除规则检查函数（README §11.4）。
 // relativePath 必须是 NormalizeRelPath 的输出。
-func (s *Service) IsPathExcluded(sourceID, relativePath string) bool {
-	m, err := s.Matcher(sourceID)
+func (s *Service) IsPathExcluded(id int64, relativePath string) bool {
+	m, err := s.Matcher(id)
 	if err != nil {
 		// 查询失败时按排除处理，宁可拒绝不可泄露。
 		return true

@@ -93,16 +93,18 @@ func seed(configFile, fixtureRoot string) error {
 	_ = sessions.DeleteByUser(demo.ID)
 
 	sourceService := sources.NewService(conn, cfg.Data.Dir)
-	if err := ensureSource(sourceService, "demo-public", "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, true, "/demo", true); err != nil {
+	publicSource, err := ensureSource(sourceService, "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, true, "/demo", true)
+	if err != nil {
 		return err
 	}
-	if err := ensureSource(sourceService, "team-files", "团队文件", "用于测试读写权限和文件操作", teamRoot, false, "", true); err != nil {
+	teamSource, err := ensureSource(sourceService, "团队文件", "用于测试读写权限和文件操作", teamRoot, false, "", true)
+	if err != nil {
 		return err
 	}
-	if err := sourceService.SetPermission(demo.ID, "demo-public", models.PermissionReadOnly); err != nil {
+	if err := sourceService.SetPermission(demo.ID, publicSource.Key, models.PermissionReadOnly); err != nil {
 		return err
 	}
-	if err := sourceService.SetPermission(demo.ID, "team-files", models.PermissionReadWrite); err != nil {
+	if err := sourceService.SetPermission(demo.ID, teamSource.Key, models.PermissionReadWrite); err != nil {
 		return err
 	}
 
@@ -112,13 +114,13 @@ func seed(configFile, fixtureRoot string) error {
 	if err != nil {
 		return err
 	}
-	if err := imageService.SetDefaultTarget(admin, "demo-public"); err != nil {
+	if err := imageService.SetDefaultTarget(admin, publicSource.Key); err != nil {
 		return err
 	}
-	if err := imageService.SetDefaultTarget(demo, "team-files"); err != nil {
+	if err := imageService.SetDefaultTarget(demo, teamSource.Key); err != nil {
 		return err
 	}
-	if err := imageService.SetAnonymousSettings(true, "demo-public"); err != nil {
+	if err := imageService.SetAnonymousSettings(true, publicSource.Key); err != nil {
 		return err
 	}
 
@@ -138,8 +140,8 @@ func seed(configFile, fixtureRoot string) error {
 		return err
 	}
 	credentialFile := filepath.Join(filepath.Dir(cfg.Data.Dir), "s3-credentials.txt")
-	credentialText := fmt.Sprintf("endpoint=http://%s\naccess_key_id=%s\nsecret_access_key=%s\nregion=us-east-1\n",
-		cfg.Server.S3Addr, s3Credential.AccessKeyID, s3Secret)
+	credentialText := fmt.Sprintf("endpoint=http://%s\naccess_key_id=%s\nsecret_access_key=%s\nregion=us-east-1\nteam_bucket=%s\npublic_bucket=%s\n",
+		cfg.Server.S3Addr, s3Credential.AccessKeyID, s3Secret, teamSource.Key, publicSource.Key)
 	if err := os.WriteFile(credentialFile, []byte(credentialText), 0o600); err != nil {
 		return err
 	}
@@ -180,18 +182,26 @@ func ensureUser(service *users.Service, username, displayName, password, role st
 	return service.GetByID(user.ID)
 }
 
-func ensureSource(service *sources.Service, sourceID, name, description, root string, public bool, mountPath string, imageBed bool) error {
-	source, err := service.Get(sourceID)
-	if errors.Is(err, sources.ErrNotFound) {
-		source, err = service.Create(sources.CreateInput{
-			SourceID: sourceID, Name: name, Description: description, RootPath: root,
-		})
+func ensureSource(service *sources.Service, name, description, root string, public bool, mountPath string, imageBed bool) (*models.StorageSource, error) {
+	var source *models.StorageSource
+	list, err := service.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range list {
+		if filepath.Clean(candidate.RootPath) == filepath.Clean(root) {
+			source = candidate
+			break
+		}
+	}
+	if source == nil {
+		source, err = service.Create(sources.CreateInput{Name: name, Description: description, RootPath: root})
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if filepath.Clean(source.RootPath) != filepath.Clean(root) {
-		return fmt.Errorf("测试存储源 %s 已指向 %s；请清理 .testdata 后重试", sourceID, source.RootPath)
+		return nil, fmt.Errorf("测试存储源 %s 已指向 %s；请清理 .testdata 后重试", name, source.RootPath)
 	}
 	webdav := true
 	input := sources.UpdateInput{
@@ -204,8 +214,7 @@ func ensureSource(service *sources.Service, sourceID, name, description, root st
 	if public || mountPath != "" {
 		input.PublicMountPath = &mountPath
 	}
-	_, err = service.Update(sourceID, input)
-	return err
+	return service.Update(source.Key, input)
 }
 
 func seedFixtureFiles(publicRoot, teamRoot string) error {

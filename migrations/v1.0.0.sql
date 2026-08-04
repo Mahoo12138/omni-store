@@ -71,12 +71,12 @@ CREATE INDEX IF NOT EXISTS idx_s3_credentials_owner ON s3_credentials(owner_user
 CREATE TABLE IF NOT EXISTS s3_multipart_uploads (
   upload_id TEXT PRIMARY KEY,
   owner_user_id INTEGER NOT NULL,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   object_key TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_s3_multipart_uploads_owner ON s3_multipart_uploads(owner_user_id, created_at);
@@ -94,19 +94,19 @@ CREATE TABLE IF NOT EXISTS s3_multipart_parts (
 
 -- Multipart ETag 不是最终文件 MD5；保留 size + mtime 用于检测 S3 之外的文件变更。
 CREATE TABLE IF NOT EXISTS s3_object_etags (
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   object_key TEXT NOT NULL,
   etag TEXT NOT NULL,
   size INTEGER NOT NULL,
   mtime_unix_nano INTEGER NOT NULL,
   updated_at DATETIME NOT NULL,
-  PRIMARY KEY(source_id, object_key),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  PRIMARY KEY(storage_source_id, object_key),
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS storage_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL UNIQUE,
+  key TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
   root_path TEXT NOT NULL,
@@ -121,30 +121,30 @@ CREATE TABLE IF NOT EXISTS storage_sources (
 
 CREATE TABLE IF NOT EXISTS storage_source_exclude_patterns (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   pattern TEXT NOT NULL,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS user_source_permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   permission TEXT NOT NULL, -- read_only / read_write
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id),
-  UNIQUE(user_id, source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
+  UNIQUE(user_id, storage_source_id)
 );
 
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id INTEGER PRIMARY KEY,
-  default_image_bed_source_id TEXT,
+  default_image_bed_storage_source_id INTEGER,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(default_image_bed_source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(default_image_bed_storage_source_id) REFERENCES storage_sources(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS system_settings (
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS images (
   image_id TEXT NOT NULL UNIQUE,
   owner_type TEXT NOT NULL, -- user / anonymous
   owner_user_id INTEGER,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   relative_path TEXT NOT NULL,
   original_filename TEXT,
   public_url TEXT NOT NULL,
@@ -169,11 +169,11 @@ CREATE TABLE IF NOT EXISTS images (
   ext TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY(owner_user_id) REFERENCES users(id),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_owner ON images(owner_type, owner_user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_images_source_path ON images(source_id, relative_path);
+CREATE INDEX IF NOT EXISTS idx_images_source_path ON images(storage_source_id, relative_path);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   actor_user_id INTEGER,
   entry_type TEXT NOT NULL, -- web / webdav / s3 / image_bed / anonymous_image_bed / admin / cli
   action TEXT NOT NULL,
-  source_id TEXT,
+  storage_source_id INTEGER,
   relative_path TEXT,
   target_relative_path TEXT,
   ip_address TEXT,
@@ -198,18 +198,18 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_type, actor_
 -- 公开挂载路径修改后保留旧路径，并重定向到存储源的当前挂载路径。
 CREATE TABLE IF NOT EXISTS public_mount_redirects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   mount_path TEXT NOT NULL UNIQUE,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_public_mount_redirects_source ON public_mount_redirects(source_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_public_mount_redirects_source ON public_mount_redirects(storage_source_id, created_at);
 
 -- WebDAV 独占写锁跨请求、跨进程重启持久化；过期锁由访问时及后台任务清理。
 CREATE TABLE IF NOT EXISTS webdav_locks (
   token TEXT PRIMARY KEY,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   relative_path TEXT NOT NULL,
   depth TEXT NOT NULL CHECK(depth IN ('0', 'infinity')),
   owner_xml TEXT NOT NULL DEFAULT '',
@@ -217,9 +217,9 @@ CREATE TABLE IF NOT EXISTS webdav_locks (
   created_at DATETIME NOT NULL,
   refreshed_at DATETIME NOT NULL,
   expires_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
   FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_webdav_locks_source_path ON webdav_locks(source_id, relative_path);
+CREATE INDEX IF NOT EXISTS idx_webdav_locks_source_path ON webdav_locks(storage_source_id, relative_path);
 CREATE INDEX IF NOT EXISTS idx_webdav_locks_expires_at ON webdav_locks(expires_at);

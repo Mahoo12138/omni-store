@@ -122,12 +122,12 @@ CREATE TABLE s3_credentials (
 CREATE TABLE s3_multipart_uploads (
   upload_id TEXT PRIMARY KEY,
   owner_user_id INTEGER NOT NULL,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   object_key TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
 CREATE TABLE s3_multipart_parts (
@@ -141,14 +141,14 @@ CREATE TABLE s3_multipart_parts (
 );
 
 CREATE TABLE s3_object_etags (
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   object_key TEXT NOT NULL,
   etag TEXT NOT NULL,
   size INTEGER NOT NULL,
   mtime_unix_nano INTEGER NOT NULL,
   updated_at DATETIME NOT NULL,
-  PRIMARY KEY(source_id, object_key),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  PRIMARY KEY(storage_source_id, object_key),
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 ```
 
@@ -162,7 +162,7 @@ Upload 记录绑定创建者、存储源与对象 Key；Part 表只保存编号�
 ```sql
 CREATE TABLE storage_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL UNIQUE,
+  key TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
   root_path TEXT NOT NULL,
@@ -176,15 +176,17 @@ CREATE TABLE storage_sources (
 );
 ```
 
+`id` 只用于 SQLite 内部外键；`key` 在创建时由服务端生成，格式为 `src-` 加 16 位小写十六进制随机字符串。Web、WebDAV 和 S3 把 key 当不透明协议值，常规界面使用 `name` 识别存储源。
+
 ### storage_source_exclude_patterns
 
 ```sql
 CREATE TABLE storage_source_exclude_patterns (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   pattern TEXT NOT NULL,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 ```
 
@@ -195,10 +197,10 @@ CREATE TABLE storage_source_exclude_patterns (
 ```sql
 CREATE TABLE public_mount_redirects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   mount_path TEXT NOT NULL UNIQUE,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 ```
 
@@ -215,13 +217,13 @@ CREATE TABLE public_mount_redirects (
 CREATE TABLE user_source_permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   permission TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id),
-  UNIQUE(user_id, source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
+  UNIQUE(user_id, storage_source_id)
 );
 ```
 
@@ -239,10 +241,10 @@ read_write
 ```sql
 CREATE TABLE user_preferences (
   user_id INTEGER PRIMARY KEY,
-  default_image_bed_source_id TEXT,
+  default_image_bed_storage_source_id INTEGER,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(default_image_bed_source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(default_image_bed_storage_source_id) REFERENCES storage_sources(id) ON DELETE SET NULL
 );
 ```
 
@@ -262,7 +264,7 @@ CREATE TABLE system_settings (
 
 ```text
 anonymous_image_bed_enabled
-anonymous_image_bed_source_id
+anonymous_image_bed_storage_source_id
 ```
 
 ### images
@@ -273,7 +275,7 @@ CREATE TABLE images (
   image_id TEXT NOT NULL UNIQUE,
   owner_type TEXT NOT NULL,
   owner_user_id INTEGER,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   relative_path TEXT NOT NULL,
   original_filename TEXT,
   public_url TEXT NOT NULL,
@@ -284,7 +286,7 @@ CREATE TABLE images (
   ext TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY(owner_user_id) REFERENCES users(id),
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id)
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 ```
 
@@ -292,7 +294,7 @@ CREATE TABLE images (
 
 ```sql
 CREATE INDEX idx_images_owner ON images(owner_type, owner_user_id, created_at);
-CREATE INDEX idx_images_source_path ON images(source_id, relative_path);
+CREATE INDEX idx_images_source_path ON images(storage_source_id, relative_path);
 ```
 
 API 返回的 `thumbnail_url` 是根据 `image_id` 和 `server.public_url` 计算的派生字段，不写入 `images` 表。缩略图缓存同样不进入 SQLite，其有效性由原图 size + modTime 校验。
@@ -306,7 +308,7 @@ CREATE TABLE audit_logs (
   actor_user_id INTEGER,
   entry_type TEXT NOT NULL,
   action TEXT NOT NULL,
-  source_id TEXT,
+  storage_source_id INTEGER,
   relative_path TEXT,
   target_relative_path TEXT,
   ip_address TEXT,
@@ -332,7 +334,7 @@ WebDAV 独占写锁持久化到 SQLite；Token 用于协议状态匹配，不替
 ```sql
 CREATE TABLE webdav_locks (
   token TEXT PRIMARY KEY,
-  source_id TEXT NOT NULL,
+  storage_source_id INTEGER NOT NULL,
   relative_path TEXT NOT NULL,
   depth TEXT NOT NULL CHECK(depth IN ('0', 'infinity')),
   owner_xml TEXT NOT NULL DEFAULT '',
@@ -340,7 +342,7 @@ CREATE TABLE webdav_locks (
   created_at DATETIME NOT NULL,
   refreshed_at DATETIME NOT NULL,
   expires_at DATETIME NOT NULL,
-  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
   FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 ```
@@ -359,7 +361,7 @@ file_records
 
 ```text
 id
-source_id
+storage_source_id
 relative_path
 size
 owner_user_id

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,8 +32,8 @@ var (
 
 // 系统设置 key（README §22.9）。
 const (
-	SettingAnonymousEnabled  = "anonymous_image_bed_enabled"
-	SettingAnonymousSourceID = "anonymous_image_bed_source_id"
+	SettingAnonymousEnabled         = "anonymous_image_bed_enabled"
+	SettingAnonymousStorageSourceID = "anonymous_image_bed_storage_source_id"
 )
 
 // Service 提供图床能力。
@@ -84,10 +85,11 @@ func (s *Service) Targets(user *models.User) ([]*models.UserSourceView, error) {
 	return out, nil
 }
 
-// DefaultTarget 返回用户默认图床目标 source_id，可能为空。
+// DefaultTarget 返回用户默认图床目标的不透明 key，可能为空。
 func (s *Service) DefaultTarget(userID int64) (string, error) {
 	var target sql.NullString
-	err := s.db.QueryRow(`SELECT default_image_bed_source_id FROM user_preferences WHERE user_id = ?`,
+	err := s.db.QueryRow(`SELECT s.key FROM user_preferences p
+  JOIN storage_sources s ON s.id = p.default_image_bed_storage_source_id WHERE p.user_id = ?`,
 		userID).Scan(&target)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
@@ -99,52 +101,50 @@ func (s *Service) DefaultTarget(userID int64) (string, error) {
 }
 
 // SetDefaultTarget 设置用户默认图床目标。
-func (s *Service) SetDefaultTarget(user *models.User, sourceID string) error {
-	if err := s.checkTarget(user, sourceID); err != nil {
+func (s *Service) SetDefaultTarget(user *models.User, sourceKey string) error {
+	src, err := s.checkTarget(user, sourceKey)
+	if err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`INSERT INTO user_preferences (user_id, default_image_bed_source_id, updated_at)
+	_, err = s.db.Exec(`INSERT INTO user_preferences (user_id, default_image_bed_storage_source_id, updated_at)
   VALUES (?, ?, ?)
-  ON CONFLICT(user_id) DO UPDATE SET default_image_bed_source_id = excluded.default_image_bed_source_id,
+  ON CONFLICT(user_id) DO UPDATE SET default_image_bed_storage_source_id = excluded.default_image_bed_storage_source_id,
     updated_at = excluded.updated_at`,
-		user.ID, sourceID, time.Now().UTC())
+		user.ID, src.ID, time.Now().UTC())
 	return err
 }
 
 // checkTarget 校验存储源可作为该用户的图床目标。
-func (s *Service) checkTarget(user *models.User, sourceID string) error {
-	src, err := s.sources.Get(sourceID)
+func (s *Service) checkTarget(user *models.User, sourceKey string) (*models.StorageSource, error) {
+	src, err := s.sources.Get(sourceKey)
 	if err != nil {
-		return ErrTargetInvalid
+		return nil, ErrTargetInvalid
 	}
 	if src.IsDisabled || !src.ImageBedEnabled {
-		return ErrTargetInvalid
+		return nil, ErrTargetInvalid
 	}
-	ok, err := s.sources.CanWriteSource(user, sourceID)
+	ok, err := s.sources.CanWriteSource(user, sourceKey)
 	if err != nil || !ok {
-		return ErrTargetInvalid
+		return nil, ErrTargetInvalid
 	}
-	return nil
+	return src, nil
 }
 
 // --- 上传 ---
 
-// UploadForUser 登录用户上传图片。sourceID 为空时使用默认图床目标（README §17.3）。
-func (s *Service) UploadForUser(user *models.User, sourceID, originalFilename string, body io.Reader) (*models.Image, error) {
-	if sourceID == "" {
+// UploadForUser 登录用户上传图片。source key 为空时使用默认图床目标（README §17.3）。
+func (s *Service) UploadForUser(user *models.User, sourceKey, originalFilename string, body io.Reader) (*models.Image, error) {
+	if sourceKey == "" {
 		var err error
-		sourceID, err = s.DefaultTarget(user.ID)
+		sourceKey, err = s.DefaultTarget(user.ID)
 		if err != nil {
 			return nil, err
 		}
-		if sourceID == "" {
+		if sourceKey == "" {
 			return nil, ErrNoTarget
 		}
 	}
-	if err := s.checkTarget(user, sourceID); err != nil {
-		return nil, err
-	}
-	src, err := s.sources.Get(sourceID)
+	src, err := s.checkTarget(user, sourceKey)
 	if err != nil {
 		return nil, ErrTargetInvalid
 	}
@@ -156,15 +156,15 @@ func (s *Service) UploadForUser(user *models.User, sourceID, originalFilename st
 
 // AnonymousSettings 是匿名图床配置。
 type AnonymousSettings struct {
-	Enabled  bool   `json:"enabled"`
-	SourceID string `json:"source_id"`
+	Enabled bool   `json:"enabled"`
+	Key     string `json:"key"`
 }
 
 // GetAnonymousSettings 读取匿名图床配置（README §17.5，默认关闭）。
 func (s *Service) GetAnonymousSettings() (*AnonymousSettings, error) {
 	out := &AnonymousSettings{}
 	rows, err := s.db.Query(`SELECT key, value FROM system_settings WHERE key IN (?, ?)`,
-		SettingAnonymousEnabled, SettingAnonymousSourceID)
+		SettingAnonymousEnabled, SettingAnonymousStorageSourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,17 +177,23 @@ func (s *Service) GetAnonymousSettings() (*AnonymousSettings, error) {
 		switch k {
 		case SettingAnonymousEnabled:
 			out.Enabled = v == "true"
-		case SettingAnonymousSourceID:
-			out.SourceID = v
+		case SettingAnonymousStorageSourceID:
+			id, parseErr := strconv.ParseInt(v, 10, 64)
+			if parseErr == nil {
+				if src, getErr := s.sources.GetByID(id); getErr == nil {
+					out.Key = src.Key
+				}
+			}
 		}
 	}
 	return out, rows.Err()
 }
 
 // SetAnonymousSettings 更新匿名图床配置（仅超级管理员入口调用）。
-func (s *Service) SetAnonymousSettings(enabled bool, sourceID string) error {
+func (s *Service) SetAnonymousSettings(enabled bool, sourceKey string) error {
+	var storageSourceID int64
 	if enabled {
-		src, err := s.sources.Get(sourceID)
+		src, err := s.sources.Get(sourceKey)
 		if err != nil {
 			return ErrTargetInvalid
 		}
@@ -195,6 +201,7 @@ func (s *Service) SetAnonymousSettings(enabled bool, sourceID string) error {
 		if src.IsDisabled || !src.ImageBedEnabled {
 			return ErrTargetInvalid
 		}
+		storageSourceID = src.ID
 	}
 	now := time.Now().UTC()
 	set := func(k, v string) error {
@@ -209,7 +216,7 @@ func (s *Service) SetAnonymousSettings(enabled bool, sourceID string) error {
 	if err := set(SettingAnonymousEnabled, enabledStr); err != nil {
 		return err
 	}
-	return set(SettingAnonymousSourceID, sourceID)
+	return set(SettingAnonymousStorageSourceID, strconv.FormatInt(storageSourceID, 10))
 }
 
 // UploadAnonymous 匿名上传图片（README §17.5）。调用方负责限流。
@@ -218,10 +225,10 @@ func (s *Service) UploadAnonymous(originalFilename string, body io.Reader) (*mod
 	if err != nil {
 		return nil, err
 	}
-	if !settings.Enabled || settings.SourceID == "" {
+	if !settings.Enabled || settings.Key == "" {
 		return nil, ErrAnonymousDisabled
 	}
-	src, err := s.sources.Get(settings.SourceID)
+	src, err := s.sources.Get(settings.Key)
 	if err != nil {
 		return nil, ErrAnonymousDisabled
 	}
@@ -243,7 +250,7 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	}
 
 	// 排除规则检查（README §11.4 图床上传）。
-	matcher, err := s.sources.Matcher(src.SourceID)
+	matcher, err := s.sources.Matcher(src.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -291,10 +298,10 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		publicURL := fmt.Sprintf("%s/i/%s.%s", s.publicURL, imageID, info.Ext)
 
 		res, err := s.db.Exec(`INSERT INTO images
-  (image_id, owner_type, owner_user_id, source_id, relative_path, original_filename,
+  (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
    public_url, size, mime_type, width, height, ext, created_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			imageID, ownerType, ownerUserID, src.SourceID, relPath, originalFilename,
+			imageID, ownerType, ownerUserID, src.ID, relPath, originalFilename,
 			publicURL, size, info.MimeType, info.Width, info.Height, info.Ext, time.Now().UTC())
 		if err != nil {
 			if strings.Contains(err.Error(), "images.image_id") {
@@ -305,7 +312,7 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		}
 		rowID, _ := res.LastInsertId()
 
-		unlock := s.locks.Lock(locks.Key(src.SourceID, relPath))
+		unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 		absPath := filepath.Join(absDir, filename)
 		if _, statErr := os.Lstat(absPath); statErr == nil {
 			unlock()
@@ -327,12 +334,12 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 
 // --- 查询 / 访问 ---
 
-const imageColumns = `id, image_id, owner_type, owner_user_id, source_id, relative_path,
+const imageColumns = `id, image_id, owner_type, owner_user_id, storage_source_id, relative_path,
   COALESCE(original_filename, ''), public_url, size, mime_type, width, height, ext, created_at`
 
 func scanImage(row interface{ Scan(...any) error }) (*models.Image, error) {
 	var m models.Image
-	err := row.Scan(&m.ID, &m.ImageID, &m.OwnerType, &m.OwnerUserID, &m.SourceID, &m.RelativePath,
+	err := row.Scan(&m.ID, &m.ImageID, &m.OwnerType, &m.OwnerUserID, &m.StorageSourceID, &m.RelativePath,
 		&m.OriginalFilename, &m.PublicURL, &m.Size, &m.MimeType, &m.Width, &m.Height, &m.Ext, &m.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -372,7 +379,7 @@ func (s *Service) OpenImage(imageID, ext string) (*models.Image, *os.File, os.Fi
 	if img.Ext != ext {
 		return nil, nil, nil, nil, ErrNotFound
 	}
-	src, err := s.sources.Get(img.SourceID)
+	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err != nil || src.IsDisabled {
 		return nil, nil, nil, nil, ErrNotFound
 	}
@@ -438,7 +445,11 @@ func (s *Service) DeleteByUser(user *models.User, imageID string) error {
 		return ErrNotFound // 不暴露他人图片存在性
 	}
 	// 检查用户当前是否仍对该存储源有读写权限。
-	ok, err := s.sources.CanWriteSource(user, img.SourceID)
+	src, err := s.sources.GetByID(img.StorageSourceID)
+	if err != nil {
+		return ErrTargetInvalid
+	}
+	ok, err := s.sources.CanWriteSource(user, src.Key)
 	if err != nil || !ok {
 		return ErrTargetInvalid
 	}
@@ -455,7 +466,7 @@ func (s *Service) DeleteByAdmin(imageID string) error {
 }
 
 func (s *Service) deletePhysicalAndRecord(img *models.Image) error {
-	src, err := s.sources.Get(img.SourceID)
+	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err == nil && !src.IsDisabled {
 		// files.Delete 同时清理 images 记录；物理文件不存在时按已删除处理（README §17.12）。
 		if delErr := s.files.Delete(src, img.RelativePath); delErr != nil &&

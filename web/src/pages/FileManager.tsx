@@ -48,13 +48,13 @@ import * as css from './FileManager.css'
 type ViewMode = 'list' | 'grid'
 const DEFAULT_PAGE_SIZE = 20
 
-// /app/sources/$sourceId（docs/file.png / file-1.png）：
+// /app/sources/$sourceKey（docs/file.png / file-1.png）：
 //   - 有存储源：标题 / 状态行 / 按钮 + 面包屑 / 工具条 / 表格 / 分页 + 右侧存储源信息卡
 //   - 没有可用存储源：空状态 + 右侧"暂无可用存储源"卡
 export function FileManagerPage() {
-  const { sourceId } = useParams({ from: '/app/sources/$sourceId' })
+  const { sourceKey } = useParams({ from: '/app/sources/$sourceKey' })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
-  const source = sources.data?.find((s) => s.source_id === sourceId)
+  const source = sources.data?.find((s) => s.key === sourceKey)
 
   // 1) 加载中
   if (sources.isPending) {
@@ -74,7 +74,7 @@ export function FileManagerPage() {
     )
   }
 
-  // 3) URL 里指定的 sourceId 不可用
+  // 3) URL 里指定的 sourceKey 不可用
   if (sources.isSuccess && !source) {
     return (
       <AppShell title="文件管理">
@@ -91,10 +91,10 @@ export function FileManagerPage() {
 // --- 主视图 ---
 
 function FileManagerView({ source }: { source: UserSource }) {
-  const sourceId = source.source_id
+  const sourceKey = source.key
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const search = useSearch({ from: '/app/sources/$sourceId' })
+  const search = useSearch({ from: '/app/sources/$sourceKey' })
   const currentPath = search.path || '/'
   const page = search.page ?? 1
 
@@ -113,32 +113,32 @@ function FileManagerView({ source }: { source: UserSource }) {
   const canWrite = source.permission === 'read_write'
 
   const filesQuery = useQuery({
-    queryKey: ['files', sourceId, currentPath, page, pageSize],
-    queryFn: () => listFiles(sourceId, { path: currentPath, page, pageSize }),
+    queryKey: ['files', sourceKey, currentPath, page, pageSize],
+    queryFn: () => listFiles(sourceKey, { path: currentPath, page, pageSize }),
   })
 
   const total = filesQuery.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   function refresh() {
-    queryClient.invalidateQueries({ queryKey: ['files', sourceId] })
+    queryClient.invalidateQueries({ queryKey: ['files', sourceKey] })
   }
 
   function goTo(seg: string) {
     setFilter('')
     const abs = currentPath === '/' ? `/${seg}` : `${currentPath}/${seg}`
-    navigate({ to: '/app/sources/$sourceId', params: { sourceId }, search: { path: abs, page: 1 } })
+    navigate({ to: '/app/sources/$sourceKey', params: { sourceKey }, search: { path: abs, page: 1 } })
   }
 
   function upOne() {
     const parent = currentPath.replace(/\/[^/]+$/, '') || '/'
-    navigate({ to: '/app/sources/$sourceId', params: { sourceId }, search: { path: parent, page: 1 } })
+    navigate({ to: '/app/sources/$sourceKey', params: { sourceKey }, search: { path: parent, page: 1 } })
   }
 
   function goPage(p: number) {
     navigate({
-      to: '/app/sources/$sourceId',
-      params: { sourceId },
+      to: '/app/sources/$sourceKey',
+      params: { sourceKey },
       search: { path: currentPath, page: p },
     })
   }
@@ -162,13 +162,13 @@ function FileManagerView({ source }: { source: UserSource }) {
     let failed = false
     for (const file of Array.from(files)) {
       try {
-        await uploadFile(sourceId, currentPath, file)
+        await uploadFile(sourceKey, currentPath, file)
         completed += 1
       } catch (err) {
         if (err instanceof ApiRequestError && err.code === 'FILE_ALREADY_EXISTS') {
           if (confirm(`文件 ${file.name} 已存在，是否覆盖？`)) {
             try {
-              await uploadFile(sourceId, currentPath, file, true)
+              await uploadFile(sourceKey, currentPath, file, true)
               completed += 1
             } catch (e) {
               failed = true
@@ -238,7 +238,7 @@ function FileManagerView({ source }: { source: UserSource }) {
       <div className={css.layout}>
         <div className={css.main}>
           {/* 面包屑：存储源列表 / 源名 / 子路径 */}
-          <Breadcrumb sourceId={sourceId} currentPath={currentPath} upOne={upOne} />
+          <Breadcrumb sourceKey={sourceKey} sourceName={source.name} currentPath={currentPath} upOne={upOne} />
 
           {/* 工具条：当前位置 / 搜索 / 视图切换 / 刷新 */}
           <div className={css.toolbar}>
@@ -302,7 +302,7 @@ function FileManagerView({ source }: { source: UserSource }) {
               }
               onOpenDir={goTo}
               fileHref={(entry) =>
-                downloadFileUrl(sourceId, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)
+                downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)
               }
               renderActions={(entry) => {
                 if (entry.type === 'unsupported') return null
@@ -312,7 +312,7 @@ function FileManagerView({ source }: { source: UserSource }) {
                       <a
                         className={css.actionBtn}
                         href={downloadFileUrl(
-                          sourceId,
+                          sourceKey,
                           currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`,
                         )}
                         target="_blank"
@@ -433,8 +433,8 @@ function FileManagerView({ source }: { source: UserSource }) {
                   onValueChange={(nextPageSize) => {
                     setPageSize(Number(nextPageSize))
                     navigate({
-                      to: '/app/sources/$sourceId',
-                      params: { sourceId },
+                      to: '/app/sources/$sourceKey',
+                      params: { sourceKey },
                       search: { path: currentPath, page: 1 },
                     })
                   }}
@@ -461,14 +461,14 @@ function FileManagerView({ source }: { source: UserSource }) {
         open={mkdirOpen}
         onOpenChange={setMkdirOpen}
         onCreated={refresh}
-        sourceId={sourceId}
+        sourceKey={sourceKey}
         currentPath={currentPath}
       />
 
       {/* 重命名 */}
       {renameTarget && (
         <RenameDialog
-          sourceId={sourceId}
+          sourceKey={sourceKey}
           currentPath={currentPath}
           target={renameTarget}
           onClose={() => setRenameTarget(null)}
@@ -479,7 +479,7 @@ function FileManagerView({ source }: { source: UserSource }) {
       {/* 移动 */}
       {moveTarget && (
         <MoveDialog
-          sourceId={sourceId}
+          sourceKey={sourceKey}
           currentPath={currentPath}
           target={moveTarget}
           onClose={() => setMoveTarget(null)}
@@ -490,7 +490,7 @@ function FileManagerView({ source }: { source: UserSource }) {
       {/* 删除 */}
       {deleteTarget && (
         <DeleteDialog
-          sourceId={sourceId}
+          sourceKey={sourceKey}
           currentPath={currentPath}
           target={deleteTarget}
           onClose={() => setDeleteTarget(null)}
@@ -508,11 +508,13 @@ function FileManagerView({ source }: { source: UserSource }) {
 // --- 面包屑 ---
 
 function Breadcrumb({
-  sourceId,
+  sourceKey,
+  sourceName,
   currentPath,
   upOne,
 }: {
-  sourceId: string
+  sourceKey: string
+  sourceName: string
   currentPath: string
   upOne: () => void
 }) {
@@ -528,7 +530,7 @@ function Breadcrumb({
         className={segs.length === 0 ? css.crumbCurrent : css.crumbLink}
         onClick={() => segs.length > 0 && upOne()}
       >
-        {sourceId}
+        {sourceName}
       </span>
       {segs.map((s, i) => {
         const isLast = i === segs.length - 1
@@ -540,8 +542,8 @@ function Breadcrumb({
               <span className={css.crumbCurrent}>{s}</span>
             ) : (
               <span className={css.crumbLink} onClick={() => navigate({
-                to: '/app/sources/$sourceId',
-                params: { sourceId },
+                to: '/app/sources/$sourceKey',
+                params: { sourceKey },
                 search: { path: upTo, page: 1 },
               })}>
                 {s}
@@ -655,7 +657,6 @@ function SourceInfoCard({ source }: { source: UserSource }) {
         <header className={css.sidePanelHeader}>存储源信息</header>
         <div className={css.sidePanelBody}>
           <Row label="存储源名称" value={source.name} />
-          <Row label="Source ID" value={source.source_id} mono />
           <Row
             label="权限"
             value={source.permission === 'read_write' ? '读写' : '只读'}
@@ -810,13 +811,13 @@ function MkdirDialog({
   open,
   onOpenChange,
   onCreated,
-  sourceId,
+  sourceKey,
   currentPath,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: () => void
-  sourceId: string
+  sourceKey: string
   currentPath: string
 }) {
   const [name, setName] = useState('')
@@ -826,7 +827,7 @@ function MkdirDialog({
   }, [open])
 
   const mut = useMutation({
-    mutationFn: () => createFolder(sourceId, currentPath, name.trim()),
+    mutationFn: () => createFolder(sourceKey, currentPath, name.trim()),
     onSuccess: () => { onOpenChange(false); onCreated() },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '创建失败'),
   })
@@ -861,13 +862,13 @@ function MkdirDialog({
 }
 
 function RenameDialog({
-  sourceId,
+  sourceKey,
   currentPath,
   target,
   onClose,
   onChanged,
 }: {
-  sourceId: string
+  sourceKey: string
   currentPath: string
   target: { name: string }
   onClose: () => void
@@ -879,7 +880,7 @@ function RenameDialog({
 
   const fullPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
   const mut = useMutation({
-    mutationFn: () => renameFile(sourceId, fullPath, name.trim()),
+    mutationFn: () => renameFile(sourceKey, fullPath, name.trim()),
     onSuccess: () => { onClose(); onChanged() },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '重命名失败'),
   })
@@ -915,13 +916,13 @@ function RenameDialog({
 }
 
 function MoveDialog({
-  sourceId,
+  sourceKey,
   currentPath,
   target,
   onClose,
   onChanged,
 }: {
-  sourceId: string
+  sourceKey: string
   currentPath: string
   target: { name: string }
   onClose: () => void
@@ -933,7 +934,7 @@ function MoveDialog({
   useEffect(() => { setToPath(fromPath); setErr('') }, [fromPath])
 
   const mut = useMutation({
-    mutationFn: () => moveFile(sourceId, fromPath, toPath.trim()),
+    mutationFn: () => moveFile(sourceKey, fromPath, toPath.trim()),
     onSuccess: () => { onClose(); onChanged() },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '移动失败'),
   })
@@ -972,14 +973,14 @@ function MoveDialog({
 }
 
 function DeleteDialog({
-  sourceId,
+  sourceKey,
   currentPath,
   target,
   onClose,
   onChanged,
   onError,
 }: {
-  sourceId: string
+  sourceKey: string
   currentPath: string
   target: { name: string; type: string }
   onClose: () => void
@@ -989,7 +990,7 @@ function DeleteDialog({
   const fullPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
   const isDir = target.type === 'dir'
   const mut = useMutation({
-    mutationFn: () => deleteFile(sourceId, fullPath),
+    mutationFn: () => deleteFile(sourceKey, fullPath),
     onSuccess: () => { onClose(); onChanged() },
     onError,
   })

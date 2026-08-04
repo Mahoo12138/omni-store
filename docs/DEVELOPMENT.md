@@ -40,6 +40,7 @@ SQL 迁移文件与稳定版本一一对应，命名为 `migrations/vMAJOR.MINOR
 
 迁移器会把旧开发数据库中的 `0001_init` 与 `0002_public_mount_redirects` 记录合并为 `v1.0.0`，仅用于兼容首个稳定版本发布前的本地数据；此后不再使用无版本归属的迁移文件名。
 由于 `v1.0.0` 尚未发布，其初始建表和索引语句必须保持幂等；迁移器会为已记录 `v1.0.0` 的开发数据库安全重放该文件，使新合并的表和索引无需删除本地数据库即可生效。
+开发期旧库若仍使用用户自定义的存储源标识，迁移器会在重放基线前保留数据并重建关联表：存储源改用内部数字主键，同时生成 `src-` 加 16 位小写十六进制随机 key。key 仅用于 Web/REST 路由及 WebDAV、S3 协议适配，常规界面以存储源名称为准。
 
 ## 本地开发
 
@@ -105,7 +106,7 @@ source .testdata/s3-credentials.txt
 set +a
 AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
   aws --endpoint-url "$endpoint" --region "$region" --no-verify-ssl \
-  s3api list-objects-v2 --bucket team-files
+  s3api list-objects-v2 --bucket "$team_bucket"
 ```
 
 验证 Multipart 时可生成一个超过 AWS CLI 默认 Multipart 阈值的文件；测试配置允许最大 64 MiB：
@@ -114,7 +115,7 @@ AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
 dd if=/dev/zero of=.testdata/multipart-demo.bin bs=1m count=10
 AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
   aws --endpoint-url "$endpoint" --region "$region" --no-verify-ssl \
-  s3 cp .testdata/multipart-demo.bin s3://team-files/multipart-demo.bin
+  s3 cp .testdata/multipart-demo.bin "s3://$team_bucket/multipart-demo.bin"
 ```
 
 完成后对象位于 `.testdata/sources/team-files/multipart-demo.bin`；未完成的分片位于

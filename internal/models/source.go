@@ -12,7 +12,7 @@ const (
 // root_path 只对管理员可见，返回普通用户时必须裁剪。
 type StorageSource struct {
 	ID                int64     `json:"id"`
-	SourceID          string    `json:"source_id"`
+	Key               string    `json:"key"`
 	Name              string    `json:"name"`
 	Description       string    `json:"description"`
 	RootPath          string    `json:"root_path"`
@@ -27,7 +27,7 @@ type StorageSource struct {
 
 // UserSourceView 是普通用户可见的存储源信息（不含 root_path）。
 type UserSourceView struct {
-	SourceID          string `json:"source_id"`
+	Key               string `json:"key"`
 	Name              string `json:"name"`
 	Description       string `json:"description"`
 	Permission        string `json:"permission"`
@@ -41,7 +41,6 @@ type UserSourceView struct {
 type SourcePermission struct {
 	UserID     int64     `json:"user_id"`
 	Username   string    `json:"username"`
-	SourceID   string    `json:"source_id"`
 	Permission string    `json:"permission"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }

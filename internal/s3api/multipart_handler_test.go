@@ -26,7 +26,7 @@ func TestS3MultipartLifecycle(t *testing.T) {
 	_ = uploadMultipartPart(t, f, key, uploadID, 2, []byte("old"))
 	secondETag := uploadMultipartPart(t, f, key, uploadID, 2, []byte("end"))
 
-	listTarget := fmt.Sprintf("http://s3.test/bucket-one/%s?uploadId=%s&max-parts=1", key, uploadID)
+	listTarget := fmt.Sprintf("http://s3.test/%s/%s?uploadId=%s&max-parts=1", f.bucket, key, uploadID)
 	listedResponse := perform(f.handler, f.signedRequest(t, http.MethodGet, listTarget, nil))
 	if listedResponse.Code != http.StatusOK {
 		t.Fatalf("ListParts status=%d body=%s", listedResponse.Code, listedResponse.Body.String())
@@ -40,7 +40,7 @@ func TestS3MultipartLifecycle(t *testing.T) {
 	}
 
 	completeBody := []byte(fmt.Sprintf(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>%s</ETag></Part><Part><PartNumber>2</PartNumber><ETag>%s</ETag></Part></CompleteMultipartUpload>`, firstETag, secondETag))
-	completeTarget := fmt.Sprintf("http://s3.test/bucket-one/%s?uploadId=%s", key, uploadID)
+	completeTarget := fmt.Sprintf("http://s3.test/%s/%s?uploadId=%s", f.bucket, key, uploadID)
 	completedResponse := perform(f.handler, f.signedRequest(t, http.MethodPost, completeTarget, completeBody))
 	if completedResponse.Code != http.StatusOK {
 		t.Fatalf("CompleteMultipartUpload status=%d body=%s", completedResponse.Code, completedResponse.Body.String())
@@ -49,10 +49,10 @@ func TestS3MultipartLifecycle(t *testing.T) {
 	if err := xml.Unmarshal(completedResponse.Body.Bytes(), &completed); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(strings.Trim(completed.ETag, `"`), "-2") || completed.Bucket != "bucket-one" || completed.Key != key {
+	if !strings.HasSuffix(strings.Trim(completed.ETag, `"`), "-2") || completed.Bucket != f.bucket || completed.Key != key {
 		t.Fatalf("unexpected completion result: %+v", completed)
 	}
-	headTarget := "http://s3.test/bucket-one/" + key
+	headTarget := "http://s3.test/" + f.bucket + "/" + key
 	head := perform(f.handler, f.signedRequest(t, http.MethodHead, headTarget, nil))
 	if head.Code != http.StatusOK || head.Header().Get("ETag") != completed.ETag {
 		t.Fatalf("multipart HEAD ETag=%q want=%q status=%d", head.Header().Get("ETag"), completed.ETag, head.Code)
@@ -87,7 +87,7 @@ func TestS3MultipartValidationAndAbort(t *testing.T) {
 	uploadID := initiateMultipart(t, f, key)
 	firstETag := uploadMultipartPart(t, f, key, uploadID, 1, []byte("too small"))
 	secondETag := uploadMultipartPart(t, f, key, uploadID, 2, []byte("last"))
-	target := fmt.Sprintf("http://s3.test/bucket-one/%s?uploadId=%s", key, uploadID)
+	target := fmt.Sprintf("http://s3.test/%s/%s?uploadId=%s", f.bucket, key, uploadID)
 
 	badOrder := []byte(fmt.Sprintf(`<CompleteMultipartUpload><Part><PartNumber>2</PartNumber><ETag>%s</ETag></Part><Part><PartNumber>1</PartNumber><ETag>%s</ETag></Part></CompleteMultipartUpload>`, secondETag, firstETag))
 	response := perform(f.handler, f.signedRequest(t, http.MethodPost, target, badOrder))
@@ -146,17 +146,17 @@ func TestS3MultipartCompleteRespectsPersistentLock(t *testing.T) {
 	key := "locked.bin"
 	uploadID := initiateMultipart(t, f, key)
 	etag := uploadMultipartPart(t, f, key, uploadID, 1, []byte("content"))
-	if _, err := f.handler.files.PersistentLocks().Create(context.Background(), "bucket-one", key,
+	if _, err := f.handler.files.PersistentLocks().Create(context.Background(), f.storageSourceID, key,
 		locks.DepthZero, "", 1, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	body := []byte(fmt.Sprintf(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>%s</ETag></Part></CompleteMultipartUpload>`, etag))
-	target := fmt.Sprintf("http://s3.test/bucket-one/%s?uploadId=%s", key, uploadID)
+	target := fmt.Sprintf("http://s3.test/%s/%s?uploadId=%s", f.bucket, key, uploadID)
 	response := perform(f.handler, f.signedRequest(t, http.MethodPost, target, body))
 	if response.Code != http.StatusLocked || !strings.Contains(response.Body.String(), "OperationAborted") {
 		t.Fatalf("locked completion status=%d body=%s", response.Code, response.Body.String())
 	}
-	if _, err := f.multipart.Get(1, "bucket-one", key, uploadID); err != nil {
+	if _, err := f.multipart.Get(1, f.storageSourceID, key, uploadID); err != nil {
 		t.Fatalf("failed completion removed upload state: %v", err)
 	}
 }
@@ -165,7 +165,7 @@ func TestS3UploadPartRejectsPayloadHashMismatch(t *testing.T) {
 	f := newS3Fixture(t)
 	key := "digest.bin"
 	uploadID := initiateMultipart(t, f, key)
-	target := fmt.Sprintf("http://s3.test/bucket-one/%s?partNumber=1&uploadId=%s", key, uploadID)
+	target := fmt.Sprintf("http://s3.test/%s/%s?partNumber=1&uploadId=%s", f.bucket, key, uploadID)
 	request := f.signedRequest(t, http.MethodPut, target, []byte("signed content"))
 	request.Body = io.NopCloser(strings.NewReader("tampered content"))
 	request.ContentLength = int64(len("tampered content"))
@@ -173,7 +173,7 @@ func TestS3UploadPartRejectsPayloadHashMismatch(t *testing.T) {
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "XAmzContentSHA256Mismatch") {
 		t.Fatalf("payload mismatch status=%d body=%s", response.Code, response.Body.String())
 	}
-	parts, err := f.multipart.ListParts(1, "bucket-one", key, uploadID)
+	parts, err := f.multipart.ListParts(1, f.storageSourceID, key, uploadID)
 	if err != nil || len(parts) != 0 {
 		t.Fatalf("payload mismatch persisted part: parts=%+v err=%v", parts, err)
 	}
@@ -181,7 +181,7 @@ func TestS3UploadPartRejectsPayloadHashMismatch(t *testing.T) {
 
 func initiateMultipart(t *testing.T, f *s3Fixture, key string) string {
 	t.Helper()
-	target := "http://s3.test/bucket-one/" + key + "?uploads="
+	target := "http://s3.test/" + f.bucket + "/" + key + "?uploads="
 	response := perform(f.handler, f.signedRequest(t, http.MethodPost, target, nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("CreateMultipartUpload status=%d body=%s", response.Code, response.Body.String())
@@ -198,7 +198,7 @@ func initiateMultipart(t *testing.T, f *s3Fixture, key string) string {
 
 func uploadMultipartPart(t *testing.T, f *s3Fixture, key, uploadID string, partNumber int, body []byte) string {
 	t.Helper()
-	target := fmt.Sprintf("http://s3.test/bucket-one/%s?partNumber=%d&uploadId=%s", key, partNumber, uploadID)
+	target := fmt.Sprintf("http://s3.test/%s/%s?partNumber=%d&uploadId=%s", f.bucket, key, partNumber, uploadID)
 	response := perform(f.handler, f.signedRequest(t, http.MethodPut, target, body))
 	if response.Code != http.StatusOK {
 		t.Fatalf("UploadPart %d status=%d body=%s", partNumber, response.Code, response.Body.String())

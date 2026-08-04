@@ -17,24 +17,24 @@ MVP 私有网盘按存储源分区展示，不做统一虚拟目录树。
 进入某个存储源：
 
 ```text
-/app/sources/{source_id}?path=/
-/app/sources/{source_id}?path=/2026
-/app/sources/{source_id}?path=/2026/travel
+/app/sources/{storage_key}?path=/
+/app/sources/{storage_key}?path=/2026
+/app/sources/{storage_key}?path=/2026/travel
 ```
 
 `path` 永远表示存储源内部相对路径。
 
 ### 路径表达
 
-REST API 使用 `source_id + path 查询参数`。
+REST API 内部使用系统生成的不透明 `key + path 查询参数`；网页路由会包含 key，但所有可见导航、标题和详情均展示存储源名称，不要求用户理解或输入 key。
 
 示例：
 
 ```text
-GET /api/v1/sources/{source_id}/files?path=/2026
-POST /api/v1/sources/{source_id}/folders
-POST /api/v1/sources/{source_id}/upload?path=/2026
-DELETE /api/v1/sources/{source_id}/files?path=/2026/a.jpg
+GET /api/v1/sources/{storage_key}/files?path=/2026
+POST /api/v1/sources/{storage_key}/folders
+POST /api/v1/sources/{storage_key}/upload?path=/2026
+DELETE /api/v1/sources/{storage_key}/files?path=/2026/a.jpg
 ```
 
 禁止传真实磁盘路径。
@@ -143,7 +143,7 @@ REST 文件列表使用实时扫描当前目录 + 过滤 + 排序 + 分页。
 API 示例：
 
 ```text
-GET /api/v1/sources/{source_id}/files?path=/2026&page=1&page_size=100&sort=name&order=asc
+GET /api/v1/sources/{storage_key}/files?path=/2026&page=1&page_size=100&sort=name&order=asc
 ```
 
 参数：

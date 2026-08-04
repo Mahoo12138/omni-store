@@ -5,7 +5,7 @@ import type { User } from './auth'
 
 export interface AdminSource {
   id: number
-  source_id: string
+  key: string
   name: string
   description: string
   root_path: string
@@ -21,7 +21,6 @@ export interface AdminSource {
 export interface SourcePermission {
   user_id: number
   username: string
-  source_id: string
   permission: 'read_only' | 'read_write'
   updated_at: string
 }
@@ -53,7 +52,8 @@ export interface AuditLog {
   actor_user_id: number | null
   entry_type: string
   action: string
-  source_id: string | null
+  storage_source_id: number | null
+  storage_source_name: string | null
   relative_path: string | null
   target_relative_path: string | null
   ip_address: string | null
@@ -106,7 +106,6 @@ export async function adminListSources(): Promise<AdminSource[]> {
 }
 
 export async function adminCreateSource(input: {
-  source_id: string
   name: string
   description: string
   root_path: string
@@ -125,15 +124,15 @@ export async function adminPreflightSource(input: {
   })
 }
 
-export async function adminGetSource(sourceId: string): Promise<{
+export async function adminGetSource(sourceKey: string): Promise<{
   source: AdminSource
   exclude_patterns: string[]
 }> {
-  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}`)
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`)
 }
 
 export async function adminUpdateSource(
-  sourceId: string,
+  sourceKey: string,
   input: Partial<{
     name: string
     description: string
@@ -143,51 +142,51 @@ export async function adminUpdateSource(
     image_bed_enabled: boolean
   }>,
 ): Promise<AdminSource> {
-  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}`, {
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
   })
 }
 
-export async function adminSetSourceDisabled(sourceId: string, disabled: boolean): Promise<void> {
+export async function adminSetSourceDisabled(sourceKey: string, disabled: boolean): Promise<void> {
   await apiFetch(
-    `/api/v1/admin/sources/${encodeURIComponent(sourceId)}/${disabled ? 'disable' : 'enable'}`,
+    `/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/${disabled ? 'disable' : 'enable'}`,
     { method: 'POST' },
   )
 }
 
-export async function adminDeleteSource(sourceId: string): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE' })
+export async function adminDeleteSource(sourceKey: string): Promise<void> {
+  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`, { method: 'DELETE' })
 }
 
-export async function adminSetExcludePatterns(sourceId: string, patterns: string[]): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}/exclude-patterns`, {
+export async function adminSetExcludePatterns(sourceKey: string, patterns: string[]): Promise<void> {
+  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/exclude-patterns`, {
     method: 'PUT',
     body: JSON.stringify({ patterns }),
   })
 }
 
 // 权限分配
-export async function adminListPermissions(sourceId: string): Promise<SourcePermission[]> {
+export async function adminListPermissions(sourceKey: string): Promise<SourcePermission[]> {
   const data = await apiFetch<{ items: SourcePermission[]; total: number }>(
-    `/api/v1/admin/sources/${encodeURIComponent(sourceId)}/permissions`,
+    `/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions`,
   )
   return data.items ?? []
 }
 
 export async function adminSetPermission(
-  sourceId: string,
+  sourceKey: string,
   userId: number,
   permission: 'read_only' | 'read_write',
 ): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}/permissions/${userId}`, {
+  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions/${userId}`, {
     method: 'PUT',
     body: JSON.stringify({ permission }),
   })
 }
 
-export async function adminRemovePermission(sourceId: string, userId: number): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceId)}/permissions/${userId}`, {
+export async function adminRemovePermission(sourceKey: string, userId: number): Promise<void> {
+  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions/${userId}`, {
     method: 'DELETE',
   })
 }
@@ -195,14 +194,14 @@ export async function adminRemovePermission(sourceId: string, userId: number): P
 // 匿名图床配置
 export async function adminGetAnonymousSettings(): Promise<{
   enabled: boolean
-  source_id: string
+  key: string
 }> {
   return apiFetch('/api/v1/admin/image-bed/anonymous-settings')
 }
 
 export async function adminSetAnonymousSettings(input: {
   enabled: boolean
-  source_id: string
+  key: string
 }): Promise<void> {
   await apiFetch('/api/v1/admin/image-bed/anonymous-settings', {
     method: 'PUT',
@@ -273,7 +272,7 @@ export interface OverviewSystem {
   webdav_status: string
 }
 export interface OverviewSource {
-  source_id: string
+  key: string
   name: string
   root_path: string
   public_mount_path?: string
@@ -297,7 +296,7 @@ export interface OverviewAudit {
   status: string
   actor_name: string
   actor_type: string
-  source_id?: string
+  source_name?: string
   created_at: string
   title: string
 }

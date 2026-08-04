@@ -11,7 +11,7 @@ export const tilePalettes = [
 
 export type TilePalette = (typeof tilePalettes)[number]
 
-// 稳定散列：同一 source_id 永远拿到同一种砖色。
+// 稳定散列：同一存储源的内部 key 永远拿到同一种砖色。
 export function tileOf(key: string): TilePalette {
   let h = 0
   for (let i = 0; i < key.length; i++) {

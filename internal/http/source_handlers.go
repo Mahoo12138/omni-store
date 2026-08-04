@@ -12,8 +12,6 @@ func (s *Server) writeSourceError(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case errors.Is(err, sources.ErrNotFound):
 		WriteError(w, r, CodeSourceNotFound, err.Error(), nil)
-	case errors.Is(err, sources.ErrSourceIDTaken):
-		WriteError(w, r, CodeConflict, err.Error(), nil)
 	default:
 		WriteError(w, r, CodeValidationError, err.Error(), nil)
 	}
@@ -54,7 +52,6 @@ func (s *Server) handleAdminPreflightSource(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceID        string    `json:"source_id"`
 		Name            string    `json:"name"`
 		Description     string    `json:"description"`
 		RootPath        string    `json:"root_path"`
@@ -65,7 +62,6 @@ func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request)
 	}
 
 	in := sources.CreateInput{
-		SourceID:    req.SourceID,
 		Name:        req.Name,
 		Description: req.Description,
 		RootPath:    req.RootPath,
@@ -86,12 +82,12 @@ func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleAdminGetSource(w http.ResponseWriter, r *http.Request) {
-	src, err := s.sources.Get(r.PathValue("source_id"))
+	src, err := s.sources.Get(r.PathValue("key"))
 	if err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}
-	patterns, err := s.sources.ExcludePatterns(src.SourceID)
+	patterns, err := s.sources.ExcludePatterns(src.ID)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "查询排除规则失败", nil)
 		return
@@ -112,7 +108,7 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	src, err := s.sources.Update(r.PathValue("source_id"), sources.UpdateInput{
+	src, err := s.sources.Update(r.PathValue("key"), sources.UpdateInput{
 		Name:              req.Name,
 		Description:       req.Description,
 		PublicReadEnabled: req.PublicReadEnabled,
@@ -134,7 +130,7 @@ func (s *Server) handleAdminSetSourceDisabled(disabled bool) http.HandlerFunc {
 		action = "disable_source"
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.sources.SetDisabled(r.PathValue("source_id"), disabled); err != nil {
+		if err := s.sources.SetDisabled(r.PathValue("key"), disabled); err != nil {
 			s.writeSourceError(w, r, err)
 			return
 		}
@@ -144,7 +140,7 @@ func (s *Server) handleAdminSetSourceDisabled(disabled bool) http.HandlerFunc {
 }
 
 func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request) {
-	if err := s.sources.Delete(r.PathValue("source_id")); err != nil {
+	if err := s.sources.Delete(r.PathValue("key")); err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}
@@ -160,7 +156,12 @@ func (s *Server) handleAdminSetExcludePatterns(w http.ResponseWriter, r *http.Re
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.sources.SetExcludePatterns(r.PathValue("source_id"), req.Patterns); err != nil {
+	src, err := s.sources.Get(r.PathValue("key"))
+	if err != nil {
+		s.writeSourceError(w, r, err)
+		return
+	}
+	if err := s.sources.SetExcludePatterns(src.ID, req.Patterns); err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}
@@ -171,11 +172,11 @@ func (s *Server) handleAdminSetExcludePatterns(w http.ResponseWriter, r *http.Re
 // --- 管理员：权限分配 ---
 
 func (s *Server) handleAdminListPermissions(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.sources.Get(r.PathValue("source_id")); err != nil {
+	if _, err := s.sources.Get(r.PathValue("key")); err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}
-	list, err := s.sources.PermissionsOfSource(r.PathValue("source_id"))
+	list, err := s.sources.PermissionsOfSource(r.PathValue("key"))
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "查询权限失败", nil)
 		return
@@ -199,7 +200,7 @@ func (s *Server) handleAdminSetPermission(w http.ResponseWriter, r *http.Request
 		WriteError(w, r, CodeValidationError, "用户不存在", nil)
 		return
 	}
-	if err := s.sources.SetPermission(id, r.PathValue("source_id"), req.Permission); err != nil {
+	if err := s.sources.SetPermission(id, r.PathValue("key"), req.Permission); err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}
@@ -213,7 +214,7 @@ func (s *Server) handleAdminRemovePermission(w http.ResponseWriter, r *http.Requ
 		WriteError(w, r, CodeValidationError, "非法用户 ID", nil)
 		return
 	}
-	if err := s.sources.RemovePermission(id, r.PathValue("source_id")); err != nil {
+	if err := s.sources.RemovePermission(id, r.PathValue("key")); err != nil {
 		WriteError(w, r, CodeInternalError, "取消权限失败", nil)
 		return
 	}

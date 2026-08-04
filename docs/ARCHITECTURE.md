@@ -388,7 +388,7 @@ V1.1 配置包包含生效 YAML、SQLite 一致性快照、`keys/` 普通文件�
 锁 key：
 
 ```text
-source_id + normalized_relative_path
+storage_source_id + normalized_relative_path
 ```
 
 所有入口共用同一套锁管理器：
@@ -425,7 +425,7 @@ source_id + normalized_relative_path
 
 ### WebDAV 持久写锁
 
-V1.1 增加 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范围为 `source_id + normalized_relative_path + depth`，支持 `Depth: 0` 和 `Depth: infinity`，并保存创建者、owner XML、刷新时间和过期时间。
+V1.1 增加 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范围为 `storage_source_id + normalized_relative_path + depth`，支持 `Depth: 0` 和 `Depth: infinity`，并保存创建者、owner XML、刷新时间和过期时间。
 
 持久锁检查位于核心文件服务中，因此 REST、WebDAV、图床等入口无法绕过。文件写操作持有进程级持久锁检查守卫直到真实文件操作完成，避免“检查通过后才创建 LOCK”的竞态；之后仍获取原有请求级路径锁。
 
@@ -473,7 +473,7 @@ actor_type             user / anonymous / system
 actor_user_id          可为空
 entry_type             web / webdav / s3 / image_bed / anonymous_image_bed / admin / cli
 action                 upload / delete / move / login_success 等
-source_id              可为空
+storage_source_id 可为空
 relative_path          可为空
 target_relative_path   可为空
 ip_address

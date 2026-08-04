@@ -76,7 +76,7 @@ HTTP 状态码：
 
 ## WebDAV 持久锁
 
-`/dav/{source_id}/{path}` 支持 RFC 4918 `LOCK / UNLOCK`。新建独占写锁时请求体使用 `DAV:lockinfo`，响应返回 `Lock-Token` 与 `DAV:lockdiscovery`；刷新锁使用无请求体的 `LOCK` 和包含单个 Token 的 `If` 头；解锁使用 `Lock-Token` 头。
+`/dav/{storage_key}/{path}` 支持 RFC 4918 `LOCK / UNLOCK`。`storage_key` 由系统生成，客户端应直接使用连接信息中给出的地址。新建独占写锁时请求体使用 `DAV:lockinfo`，响应返回 `Lock-Token` 与 `DAV:lockdiscovery`；刷新锁使用无请求体的 `LOCK` 和包含单个 Token 的 `If` 头；解锁使用 `Lock-Token` 头。
 
 未提交覆盖目标路径的锁 Token 时，`PUT / MKCOL / DELETE / MOVE` 返回 `423 Locked`。REST 等其他文件写入口同样返回统一的 `LOCKED` 错误。
 
@@ -125,6 +125,8 @@ POST /api/v1/admin/sources/preflight
 ```
 
 预检只读取目录首层，不建立文件索引、不移动或修改已有内容。读写能力校验会创建并立即删除一个严格命名的临时测试文件。`POST /api/v1/admin/sources` 在真正写入配置前仍会重新执行全部路径校验，不能把预检结果当作长期授权凭据。
+
+正式创建请求必须提供 `name` 与 `root_path`，可选 `description`、`exclude_patterns`；不接受用户自定义存储源标识。服务端生成 `src-` 加 16 位小写十六进制随机 key 并随响应返回，前端仅将其作为不透明路由参数。
 
 ## 图床 Token 管理
 

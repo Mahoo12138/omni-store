@@ -14,11 +14,11 @@ import (
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
-// resolveSource 解析 source_id 并执行统一检查链路（README §28）：
+// resolveSource 解析系统生成的不透明 key 并执行统一检查链路（README §28）：
 // 存储源存在 -> 未禁用 -> 用户权限。needWrite 为 true 时要求读写权限。
 func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request, needWrite bool) *models.StorageSource {
-	sourceID := r.PathValue("source_id")
-	src, err := s.sources.Get(sourceID)
+	sourceKey := r.PathValue("key")
+	src, err := s.sources.Get(sourceKey)
 	if err != nil {
 		if errors.Is(err, sources.ErrNotFound) {
 			WriteError(w, r, CodeSourceNotFound, "存储源不存在", nil)
@@ -35,9 +35,9 @@ func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request, needWrite
 	user := CurrentUser(r.Context())
 	var allowed bool
 	if needWrite {
-		allowed, err = s.sources.CanWriteSource(user, sourceID)
+		allowed, err = s.sources.CanWriteSource(user, sourceKey)
 	} else {
-		allowed, err = s.sources.CanReadSource(user, sourceID)
+		allowed, err = s.sources.CanReadSource(user, sourceKey)
 	}
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "权限检查失败", nil)
@@ -74,12 +74,12 @@ func writeFileError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // fileAudit 记录文件写操作审计（README §20.1）。
-func (s *Server) fileAudit(r *http.Request, action, sourceID, relPath, targetRel string, opErr error) {
+func (s *Server) fileAudit(r *http.Request, action string, src *models.StorageSource, relPath, targetRel string, opErr error) {
 	u := CurrentUser(r.Context())
 	e := audit.Entry{
 		ActorType: audit.ActorUser, ActorUserID: &u.ID,
 		EntryType: audit.EntryWeb, Action: action,
-		SourceID: sourceID, RelativePath: relPath, TargetRelativePath: targetRel,
+		StorageSourceID: &src.ID, RelativePath: relPath, TargetRelativePath: targetRel,
 		IPAddress: s.proxy.ClientIP(r), UserAgent: r.UserAgent(),
 		Status: audit.StatusSuccess,
 	}
@@ -173,7 +173,7 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "create_folder", src.SourceID, relPath, "", nil)
+	s.fileAudit(r, "create_folder", src, relPath, "", nil)
 	WriteData(w, r, map[string]any{"path": "/" + relPath})
 }
 
@@ -207,11 +207,11 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		filename := path.Base(part.FileName())
 		relPath, size, err := s.files.Upload(src, dirRel, filename, part, overwrite)
 		if err != nil {
-			s.fileAudit(r, "upload", src.SourceID, dirRel+"/"+filename, "", err)
+			s.fileAudit(r, "upload", src, dirRel+"/"+filename, "", err)
 			writeFileError(w, r, err)
 			return
 		}
-		s.fileAudit(r, "upload", src.SourceID, relPath, "", nil)
+		s.fileAudit(r, "upload", src, relPath, "", nil)
 		WriteData(w, r, map[string]any{"path": "/" + relPath, "size": size})
 		return
 	}
@@ -227,7 +227,7 @@ func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "delete", src.SourceID, strings.TrimPrefix(relPath, "/"), "", nil)
+	s.fileAudit(r, "delete", src, strings.TrimPrefix(relPath, "/"), "", nil)
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
@@ -248,7 +248,7 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "rename", src.SourceID, strings.TrimPrefix(req.Path, "/"), newRel, nil)
+	s.fileAudit(r, "rename", src, strings.TrimPrefix(req.Path, "/"), newRel, nil)
 	WriteData(w, r, map[string]any{"path": "/" + newRel})
 }
 
@@ -269,6 +269,6 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "move", src.SourceID, strings.TrimPrefix(req.Path, "/"), newRel, nil)
+	s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), newRel, nil)
 	WriteData(w, r, map[string]any{"path": "/" + newRel})
 }

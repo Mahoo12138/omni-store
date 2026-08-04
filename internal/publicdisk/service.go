@@ -87,13 +87,13 @@ func (s *Service) Resolve(virtualPath string) (*models.StorageSource, string, er
 			continue
 		}
 
-		var sourceID string
-		err := s.db.QueryRow(`SELECT source_id FROM storage_sources WHERE public_mount_path = ?`,
-			m.MountPath).Scan(&sourceID)
+		var storageSourceID int64
+		err := s.db.QueryRow(`SELECT id FROM storage_sources WHERE public_mount_path = ?`,
+			m.MountPath).Scan(&storageSourceID)
 		if err != nil {
 			return nil, "", ErrNotFound
 		}
-		src, err := s.sources.Get(sourceID)
+		src, err := s.sources.GetByID(storageSourceID)
 		if err != nil {
 			return nil, "", ErrNotFound
 		}
@@ -115,7 +115,7 @@ func (s *Service) RedirectPath(virtualPath string) (string, bool, error) {
 
 	rows, err := s.db.Query(`SELECT r.mount_path, s.public_mount_path
   FROM public_mount_redirects r
-  JOIN storage_sources s ON s.source_id = r.source_id
+	  JOIN storage_sources s ON s.id = r.storage_source_id
   WHERE s.is_disabled = 0 AND s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL
   ORDER BY length(r.mount_path) DESC`)
 	if err != nil {

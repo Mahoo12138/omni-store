@@ -34,6 +34,10 @@ type webDAVTestEnv struct {
 	root        string
 }
 
+func (e *webDAVTestEnv) path(inner string) string {
+	return "/dav/" + e.source.Key + inner
+}
+
 func newWebDAVTestEnv(t *testing.T) *webDAVTestEnv {
 	t.Helper()
 	base := t.TempDir()
@@ -57,11 +61,11 @@ func newWebDAVTestEnv(t *testing.T) *webDAVTestEnv {
 		t.Fatalf("create source root: %v", err)
 	}
 	sourceService := sources.NewService(conn, dataDir)
-	source, err := sourceService.Create(sources.CreateInput{SourceID: "team-files", Name: "Team Files", RootPath: root})
+	source, err := sourceService.Create(sources.CreateInput{Name: "Team Files", RootPath: root})
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	if err := sourceService.SetPermission(user.ID, source.SourceID, models.PermissionReadWrite); err != nil {
+	if err := sourceService.SetPermission(user.ID, source.Key, models.PermissionReadWrite); err != nil {
 		t.Fatalf("set permission: %v", err)
 	}
 	fileService := files.NewService(conn, sourceService, lockpkg.NewManager())
@@ -97,12 +101,12 @@ func TestPersistentWebDAVLockLifecycleAndWriteEnforcement(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	options := env.request(t, "OPTIONS", "/dav/team-files/document.txt", "", nil)
+	options := env.request(t, "OPTIONS", env.path("/document.txt"), "", nil)
 	if options.Code != http.StatusOK || options.Header().Get("DAV") != "1, 2" || !strings.Contains(options.Header().Get("Allow"), "LOCK") {
 		t.Fatalf("unexpected OPTIONS response: status=%d DAV=%q Allow=%q", options.Code, options.Header().Get("DAV"), options.Header().Get("Allow"))
 	}
 
-	locked := env.request(t, "LOCK", "/dav/team-files/document.txt", exclusiveLockBody, map[string]string{
+	locked := env.request(t, "LOCK", env.path("/document.txt"), exclusiveLockBody, map[string]string{
 		"Depth": "0", "Timeout": "Second-120", "Content-Type": "application/xml",
 	})
 	if locked.Code != http.StatusOK {
@@ -128,33 +132,33 @@ func TestPersistentWebDAVLockLifecycleAndWriteEnforcement(t *testing.T) {
 		[]string{lockToken}, &otherUser.ID); !errors.Is(err, files.ErrLocked) {
 		t.Fatalf("another user reused the lock token: %v", err)
 	}
-	withoutToken := env.request(t, http.MethodPut, "/dav/team-files/document.txt", "blocked", nil)
+	withoutToken := env.request(t, http.MethodPut, env.path("/document.txt"), "blocked", nil)
 	if withoutToken.Code != http.StatusLocked {
 		t.Fatalf("PUT without token status=%d body=%s", withoutToken.Code, withoutToken.Body.String())
 	}
-	withToken := env.request(t, http.MethodPut, "/dav/team-files/document.txt", "updated", map[string]string{"If": "(<" + lockToken + ">)"})
+	withToken := env.request(t, http.MethodPut, env.path("/document.txt"), "updated", map[string]string{"If": "(<" + lockToken + ">)"})
 	if withToken.Code != http.StatusCreated {
 		t.Fatalf("PUT with token status=%d body=%s", withToken.Code, withToken.Body.String())
 	}
 
-	conflict := env.request(t, "LOCK", "/dav/team-files/document.txt", exclusiveLockBody, map[string]string{"Depth": "0"})
+	conflict := env.request(t, "LOCK", env.path("/document.txt"), exclusiveLockBody, map[string]string{"Depth": "0"})
 	if conflict.Code != http.StatusLocked {
 		t.Fatalf("conflicting LOCK status=%d", conflict.Code)
 	}
-	refresh := env.request(t, "LOCK", "/dav/team-files/document.txt", "", map[string]string{"If": "(<" + lockToken + ">)", "Timeout": "Second-240"})
+	refresh := env.request(t, "LOCK", env.path("/document.txt"), "", map[string]string{"If": "(<" + lockToken + ">)", "Timeout": "Second-240"})
 	if refresh.Code != http.StatusOK || refresh.Header().Get("Lock-Token") != "" {
 		t.Fatalf("refresh status=%d lock-token=%q body=%s", refresh.Code, refresh.Header().Get("Lock-Token"), refresh.Body.String())
 	}
-	propfind := env.request(t, "PROPFIND", "/dav/team-files/document.txt", "", map[string]string{"Depth": "0"})
+	propfind := env.request(t, "PROPFIND", env.path("/document.txt"), "", map[string]string{"Depth": "0"})
 	if propfind.Code != http.StatusMultiStatus || !strings.Contains(propfind.Body.String(), lockToken) || !strings.Contains(propfind.Body.String(), "supportedlock") {
 		t.Fatalf("PROPFIND missing lock properties: status=%d body=%s", propfind.Code, propfind.Body.String())
 	}
 
-	wrongPath := env.request(t, "UNLOCK", "/dav/team-files/other.txt", "", map[string]string{"Lock-Token": "<" + lockToken + ">"})
+	wrongPath := env.request(t, "UNLOCK", env.path("/other.txt"), "", map[string]string{"Lock-Token": "<" + lockToken + ">"})
 	if wrongPath.Code != http.StatusConflict {
 		t.Fatalf("UNLOCK wrong path status=%d", wrongPath.Code)
 	}
-	unlocked := env.request(t, "UNLOCK", "/dav/team-files/document.txt", "", map[string]string{"Lock-Token": "<" + lockToken + ">"})
+	unlocked := env.request(t, "UNLOCK", env.path("/document.txt"), "", map[string]string{"Lock-Token": "<" + lockToken + ">"})
 	if unlocked.Code != http.StatusNoContent {
 		t.Fatalf("UNLOCK status=%d body=%s", unlocked.Code, unlocked.Body.String())
 	}
@@ -168,7 +172,7 @@ func TestDepthInfinityAndLockNullResource(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(env.root, "folder"), 0o755); err != nil {
 		t.Fatalf("create folder: %v", err)
 	}
-	locked := env.request(t, "LOCK", "/dav/team-files/folder", exclusiveLockBody, nil)
+	locked := env.request(t, "LOCK", env.path("/folder"), exclusiveLockBody, nil)
 	if locked.Code != http.StatusOK {
 		t.Fatalf("LOCK collection: status=%d body=%s", locked.Code, locked.Body.String())
 	}
@@ -176,15 +180,15 @@ func TestDepthInfinityAndLockNullResource(t *testing.T) {
 	if _, _, err := env.fileService.Upload(env.source, "folder", "child.txt", strings.NewReader("x"), false); !errors.Is(err, files.ErrLocked) {
 		t.Fatalf("Depth infinity did not protect descendant: %v", err)
 	}
-	put := env.request(t, http.MethodPut, "/dav/team-files/folder/child.txt", "x", map[string]string{"If": "(<" + token + ">)"})
+	put := env.request(t, http.MethodPut, env.path("/folder/child.txt"), "x", map[string]string{"If": "(<" + token + ">)"})
 	if put.Code != http.StatusCreated {
 		t.Fatalf("PUT descendant with token: status=%d body=%s", put.Code, put.Body.String())
 	}
 
-	if unlock := env.request(t, "UNLOCK", "/dav/team-files/folder", "", map[string]string{"Lock-Token": "<" + token + ">"}); unlock.Code != http.StatusNoContent {
+	if unlock := env.request(t, "UNLOCK", env.path("/folder"), "", map[string]string{"Lock-Token": "<" + token + ">"}); unlock.Code != http.StatusNoContent {
 		t.Fatalf("UNLOCK collection status=%d", unlock.Code)
 	}
-	lockNull := env.request(t, "LOCK", "/dav/team-files/new-empty.txt", exclusiveLockBody, map[string]string{"Depth": "0"})
+	lockNull := env.request(t, "LOCK", env.path("/new-empty.txt"), exclusiveLockBody, map[string]string{"Depth": "0"})
 	if lockNull.Code != http.StatusCreated {
 		t.Fatalf("LOCK unmapped URL: status=%d body=%s", lockNull.Code, lockNull.Body.String())
 	}
@@ -199,23 +203,23 @@ func TestMoveDropsSourceLockInsteadOfMovingIt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(env.root, "before.txt"), []byte("before"), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	locked := env.request(t, "LOCK", "/dav/team-files/before.txt", exclusiveLockBody, map[string]string{"Depth": "0"})
+	locked := env.request(t, "LOCK", env.path("/before.txt"), exclusiveLockBody, map[string]string{"Depth": "0"})
 	if locked.Code != http.StatusOK {
 		t.Fatalf("LOCK status=%d body=%s", locked.Code, locked.Body.String())
 	}
 	token := strings.Trim(locked.Header().Get("Lock-Token"), "<>")
-	moved := env.request(t, "MOVE", "/dav/team-files/before.txt", "", map[string]string{
-		"Destination": "/dav/team-files/after.txt",
+	moved := env.request(t, "MOVE", env.path("/before.txt"), "", map[string]string{
+		"Destination": env.path("/after.txt"),
 		"If":          "(<" + token + ">)",
 	})
 	if moved.Code != http.StatusCreated {
 		t.Fatalf("MOVE status=%d body=%s", moved.Code, moved.Body.String())
 	}
 	var count int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM webdav_locks WHERE source_id = ?`, env.source.SourceID).Scan(&count); err != nil || count != 0 {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM webdav_locks WHERE storage_source_id = ?`, env.source.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("MOVE retained or moved source lock: count=%d err=%v", count, err)
 	}
-	put := env.request(t, http.MethodPut, "/dav/team-files/after.txt", "updated", nil)
+	put := env.request(t, http.MethodPut, env.path("/after.txt"), "updated", nil)
 	if put.Code != http.StatusCreated {
 		t.Fatalf("destination remained locked after MOVE: status=%d body=%s", put.Code, put.Body.String())
 	}
@@ -229,12 +233,12 @@ func TestDeleteCleansRemovedLockRootsButKeepsAncestorLock(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(env.root, "folder", "child.txt"), []byte("child"), 0o644); err != nil {
 		t.Fatalf("write child: %v", err)
 	}
-	locked := env.request(t, "LOCK", "/dav/team-files/folder", exclusiveLockBody, nil)
+	locked := env.request(t, "LOCK", env.path("/folder"), exclusiveLockBody, nil)
 	if locked.Code != http.StatusOK {
 		t.Fatalf("LOCK status=%d body=%s", locked.Code, locked.Body.String())
 	}
 	token := strings.Trim(locked.Header().Get("Lock-Token"), "<>")
-	deletedChild := env.request(t, http.MethodDelete, "/dav/team-files/folder/child.txt", "", map[string]string{
+	deletedChild := env.request(t, http.MethodDelete, env.path("/folder/child.txt"), "", map[string]string{
 		"If": "(<" + token + ">)",
 	})
 	if deletedChild.Code != http.StatusNoContent {
@@ -244,7 +248,7 @@ func TestDeleteCleansRemovedLockRootsButKeepsAncestorLock(t *testing.T) {
 	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM webdav_locks WHERE token = ?`, token).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("DELETE child removed ancestor lock: count=%d err=%v", count, err)
 	}
-	deletedRoot := env.request(t, http.MethodDelete, "/dav/team-files/folder", "", map[string]string{
+	deletedRoot := env.request(t, http.MethodDelete, env.path("/folder"), "", map[string]string{
 		"If": "(<" + token + ">)",
 	})
 	if deletedRoot.Code != http.StatusNoContent {
@@ -260,7 +264,7 @@ func TestExpiredPersistentLockIsCleanedLazily(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(env.root, "expires.txt"), []byte("before"), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	locked := env.request(t, "LOCK", "/dav/team-files/expires.txt", exclusiveLockBody, map[string]string{"Depth": "0"})
+	locked := env.request(t, "LOCK", env.path("/expires.txt"), exclusiveLockBody, map[string]string{"Depth": "0"})
 	if locked.Code != http.StatusOK {
 		t.Fatalf("LOCK status=%d body=%s", locked.Code, locked.Body.String())
 	}

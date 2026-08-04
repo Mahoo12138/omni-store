@@ -8,7 +8,7 @@ V1.1 可实现：
 
 1. S3 基础对象存储子集。（已实现：Bucket 列举/检查、ListObjectsV2、对象 HEAD/GET/PUT/DELETE 与批量删除）
 2. S3 专用端口 `8081`。（已实现：默认关闭，`s3_enabled` 显式启用后独立监听）
-3. S3 Path-style 路由。（已实现：`/{source_id}/{object_key}`，不支持 virtual-host-style）
+3. S3 Path-style 路由。（已实现：`/{storage_key}/{object_key}`；Bucket 使用系统生成的不透明 key，不支持 virtual-host-style）
 4. AWS Signature V4 鉴权。（已实现：Authorization Header、预签名 URL、15 分钟时间偏差校验及 unsigned aws-chunked trailer）
 5. S3 Access Key / Secret Key 管理。（已实现：每用户多凭据、一次展示、AES-256-GCM 加密、禁用/启用/撤销与使用时间）
 6. WebDAV `LOCK / UNLOCK` 持久锁。（已实现：RFC 4918 独占写锁、Depth 0/infinity、刷新、锁空资源、活动锁发现、超时清理与全入口写保护）
@@ -166,7 +166,7 @@ V2 可实现：
 
 1. 未登录用户可访问 `/`。
 2. 只显示公开存储源。
-3. public_mount_path 不暴露 source_id。
+3. public_mount_path 不暴露存储源内部 key。
 4. 禁用存储源后公开入口不可访问。
 
 ### 第 5 阶段：私有网盘前端
@@ -174,7 +174,7 @@ V2 可实现：
 任务：
 
 1. `/app` 存储源列表。
-2. `/app/sources/{source_id}?path=/` 文件管理器。
+2. `/app/sources/{storage_key}?path=/` 文件管理器；界面只展示存储源名称。
 3. 上传文件。
 4. 下载文件。
 5. 删除确认。
@@ -197,7 +197,7 @@ V2 可实现：
 1. WebDAV Token 生成和重置。
 2. Basic Auth。
 3. `/dav` 虚拟根目录。
-4. `/dav/{source_id}`。
+4. `/dav/{storage_key}`（由系统生成并通过连接信息提供）。
 5. `OPTIONS`。
 6. `PROPFIND Depth 0/1`。
 7. `GET / HEAD / PUT / MKCOL / DELETE / MOVE`。
@@ -207,7 +207,7 @@ V2 可实现：
 
 1. WebDAV 客户端能挂载 `/dav`。
 2. 可看到自己有权限的存储源。
-3. 可直接挂载 `/dav/{source_id}`。
+3. 可直接挂载系统提供的 `/dav/{storage_key}`。
 4. 只读权限不能写。
 5. `COPY / LOCK / UNLOCK` 返回 501。
 
@@ -230,7 +230,7 @@ V2 可实现：
 
 1. 用户只能选择有读写权限且启用图床的存储源。
 2. 上传后返回 `/i/img_xxx.jpg`。
-3. URL 不暴露 source_id。
+3. URL 不暴露存储源内部 key。
 4. 历史墙只显示当前用户图片。
 5. PicGo Token 可以上传。
 

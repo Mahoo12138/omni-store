@@ -125,7 +125,7 @@ func (h *Handler) serveBucket(w http.ResponseWriter, r *http.Request, user *mode
 	case r.Method == http.MethodPost && r.URL.Query().Has("delete"):
 		h.deleteObjects(w, r, user, src)
 	default:
-		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", src.SourceID)
+		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", src.Key)
 	}
 }
 
@@ -194,9 +194,9 @@ func (h *Handler) listBuckets(w http.ResponseWriter, r *http.Request, user *mode
 	}
 	items := make([]bucket, 0, len(views))
 	for _, view := range views {
-		src, err := h.sources.Get(view.SourceID)
+		src, err := h.sources.Get(view.Key)
 		if err == nil {
-			items = append(items, bucket{Name: src.SourceID, CreationDate: src.CreatedAt.UTC()})
+			items = append(items, bucket{Name: src.Key, CreationDate: src.CreatedAt.UTC()})
 		}
 	}
 	h.writeXML(w, http.StatusOK, listAllMyBucketsResult{
@@ -238,14 +238,14 @@ func (h *Handler) listObjectsV2(w http.ResponseWriter, r *http.Request, src *mod
 	prefix := query.Get("prefix")
 	delimiter := query.Get("delimiter")
 	if delimiter != "" && delimiter != "/" {
-		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "仅支持 '/' delimiter", src.SourceID)
+		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "仅支持 '/' delimiter", src.Key)
 		return
 	}
 	maxKeys := 1000
 	if raw := query.Get("max-keys"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value < 0 {
-			h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "max-keys 非法", src.SourceID)
+			h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "max-keys 非法", src.Key)
 			return
 		}
 		if value < maxKeys {
@@ -258,24 +258,24 @@ func (h *Handler) listObjectsV2(w http.ResponseWriter, r *http.Request, src *mod
 	if continuationToken != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(continuationToken)
 		if err != nil {
-			h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "continuation-token 非法", src.SourceID)
+			h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "continuation-token 非法", src.Key)
 			return
 		}
 		after = string(decoded)
 	}
 	encodingType := query.Get("encoding-type")
 	if encodingType != "" && encodingType != "url" {
-		h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "encoding-type 非法", src.SourceID)
+		h.writeError(w, r, http.StatusBadRequest, "InvalidArgument", "encoding-type 非法", src.Key)
 		return
 	}
 
 	entries, err := h.files.ListObjects(src)
 	if err != nil {
-		h.writeFileError(w, r, err, src.SourceID)
+		h.writeFileError(w, r, err, src.Key)
 		return
 	}
 	result := listBucketResult{
-		XMLNS: xmlNamespace, Name: src.SourceID, Prefix: prefix, MaxKeys: maxKeys,
+		XMLNS: xmlNamespace, Name: src.Key, Prefix: prefix, MaxKeys: maxKeys,
 		Delimiter: delimiter, ContinuationToken: continuationToken, StartAfter: startAfter,
 		EncodingType: encodingType,
 	}
@@ -349,7 +349,7 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request, src *models.
 	}
 	defer unlock()
 	defer f.Close()
-	etag, known, err := h.multipart.ObjectETag(src.SourceID, key, info.Size(), info.ModTime())
+	etag, known, err := h.multipart.ObjectETag(src.ID, key, info.Size(), info.ModTime())
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "读取对象 ETag 失败", key)
 		return
@@ -451,10 +451,10 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request, authenticate
 		w.Header().Set(chunked.checksumName, chunked.trailerValue)
 	}
 	w.WriteHeader(http.StatusOK)
-	if err := h.multipart.ForgetObjectETag(src.SourceID, key); err != nil {
-		h.logger.Warn("清理旧 S3 Multipart ETag 失败", "err", err, "source_id", src.SourceID, "key", key)
+	if err := h.multipart.ForgetObjectETag(src.ID, key); err != nil {
+		h.logger.Warn("清理旧 S3 Multipart ETag 失败", "err", err, "storage_source_id", src.ID, "key", key)
 	}
-	h.logMutation(r, authenticated.User, "put_object", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, authenticated.User, "put_object", src, key, audit.StatusSuccess, "")
 }
 
 func (h *Handler) deleteObject(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource, key string, writeResponse bool) bool {
@@ -489,10 +489,10 @@ func (h *Handler) deleteObject(w http.ResponseWriter, r *http.Request, user *mod
 	if writeResponse {
 		w.WriteHeader(http.StatusNoContent)
 	}
-	if err := h.multipart.ForgetObjectETag(src.SourceID, key); err != nil {
-		h.logger.Warn("清理 S3 Multipart ETag 失败", "err", err, "source_id", src.SourceID, "key", key)
+	if err := h.multipart.ForgetObjectETag(src.ID, key); err != nil {
+		h.logger.Warn("清理 S3 Multipart ETag 失败", "err", err, "storage_source_id", src.ID, "key", key)
 	}
-	h.logMutation(r, user, "delete_object", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, user, "delete_object", src, key, audit.StatusSuccess, "")
 	return true
 }
 
@@ -516,20 +516,20 @@ type deleteError struct{ Key, Code, Message string }
 func (h *Handler) deleteObjects(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 2<<20))
 	if err != nil {
-		h.writeError(w, r, http.StatusBadRequest, "MalformedXML", "无法读取删除请求", src.SourceID)
+		h.writeError(w, r, http.StatusBadRequest, "MalformedXML", "无法读取删除请求", src.Key)
 		return
 	}
 	if contentMD5 := r.Header.Get("Content-MD5"); contentMD5 != "" {
 		sum := md5.Sum(body)
 		expected, err := base64.StdEncoding.DecodeString(contentMD5)
 		if err != nil || subtle.ConstantTimeCompare(sum[:], expected) != 1 {
-			h.writeError(w, r, http.StatusBadRequest, "BadDigest", "Content-MD5 不匹配", src.SourceID)
+			h.writeError(w, r, http.StatusBadRequest, "BadDigest", "Content-MD5 不匹配", src.Key)
 			return
 		}
 	}
 	var request deleteRequest
 	if err := xml.Unmarshal(body, &request); err != nil || len(request.Objects) > 1000 {
-		h.writeError(w, r, http.StatusBadRequest, "MalformedXML", "删除请求 XML 非法", src.SourceID)
+		h.writeError(w, r, http.StatusBadRequest, "MalformedXML", "删除请求 XML 非法", src.Key)
 		return
 	}
 	result := deleteResult{XMLNS: xmlNamespace}
@@ -550,7 +550,7 @@ func (h *Handler) deleteObjects(w http.ResponseWriter, r *http.Request, user *mo
 }
 
 func (h *Handler) objectETag(src *models.StorageSource, key string, size int64, mtime time.Time) (string, error) {
-	if etag, known, err := h.multipart.ObjectETag(src.SourceID, key, size, mtime); err != nil {
+	if etag, known, err := h.multipart.ObjectETag(src.ID, key, size, mtime); err != nil {
 		return "", err
 	} else if known {
 		return etag, nil
@@ -647,10 +647,10 @@ func (h *Handler) writeXML(w http.ResponseWriter, status int, value any) {
 	_ = xml.NewEncoder(w).Encode(value)
 }
 
-func (h *Handler) logMutation(r *http.Request, user *models.User, action, sourceID, key, status, errorCode string) {
+func (h *Handler) logMutation(r *http.Request, user *models.User, action string, src *models.StorageSource, key, status, errorCode string) {
 	h.audit.Log(audit.Entry{
 		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryS3,
-		Action: action, SourceID: sourceID, RelativePath: key,
+		Action: action, StorageSourceID: &src.ID, RelativePath: key,
 		IPAddress: h.proxy.ClientIP(r), UserAgent: r.UserAgent(), Status: status, ErrorCode: errorCode,
 	})
 }

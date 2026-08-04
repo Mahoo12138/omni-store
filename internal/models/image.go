@@ -14,7 +14,7 @@ type Image struct {
 	ImageID          string    `json:"image_id"`
 	OwnerType        string    `json:"owner_type"`
 	OwnerUserID      *int64    `json:"owner_user_id"`
-	SourceID         string    `json:"source_id"`
+	StorageSourceID  int64     `json:"storage_source_id"`
 	RelativePath     string    `json:"relative_path"`
 	OriginalFilename string    `json:"original_filename"`
 	PublicURL        string    `json:"public_url"`

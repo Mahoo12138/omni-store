@@ -1,12 +1,44 @@
 package sources
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/omni-store/omnistore/internal/db"
 )
+
+func TestCreateGeneratesOpaqueUniqueKeysAndRequiresName(t *testing.T) {
+	service, base := newPreflightService(t)
+	firstRoot := filepath.Join(base, "first")
+	secondRoot := filepath.Join(base, "second")
+	for _, root := range []string{firstRoot, secondRoot} {
+		if err := os.Mkdir(root, 0o755); err != nil {
+			t.Fatalf("create root: %v", err)
+		}
+	}
+
+	if _, err := service.Create(CreateInput{RootPath: firstRoot}); !errors.Is(err, ErrNameRequired) {
+		t.Fatalf("missing name error = %v", err)
+	}
+	first, err := service.Create(CreateInput{Name: "团队文件", RootPath: firstRoot})
+	if err != nil {
+		t.Fatalf("create first source: %v", err)
+	}
+	second, err := service.Create(CreateInput{Name: "演示资料", RootPath: secondRoot})
+	if err != nil {
+		t.Fatalf("create second source: %v", err)
+	}
+	keyPattern := regexp.MustCompile(`^src-[0-9a-f]{16}$`)
+	if !keyPattern.MatchString(first.Key) || !keyPattern.MatchString(second.Key) {
+		t.Fatalf("unexpected generated keys: %q %q", first.Key, second.Key)
+	}
+	if first.Key == second.Key || first.Key == first.Name {
+		t.Fatalf("keys are not opaque and unique: first=%+v second=%+v", first, second)
+	}
+}
 
 func newPreflightService(t *testing.T) (*Service, string) {
 	t.Helper()
@@ -89,7 +121,7 @@ func TestPreflightRejectsPathOverlappingExistingSource(t *testing.T) {
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatalf("create root: %v", err)
 	}
-	if _, err := service.Create(CreateInput{SourceID: "registered-source", RootPath: root}); err != nil {
+	if _, err := service.Create(CreateInput{Name: "registered-source", RootPath: root}); err != nil {
 		t.Fatalf("create source: %v", err)
 	}
 

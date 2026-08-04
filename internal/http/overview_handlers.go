@@ -20,7 +20,7 @@ type overviewUser struct {
 }
 
 type overviewSource struct {
-	SourceID          string `json:"source_id"`
+	Key               string `json:"key"`
 	Name              string `json:"name"`
 	RootPath          string `json:"root_path"`
 	PublicMountPath   string `json:"public_mount_path,omitempty"`
@@ -36,7 +36,7 @@ type overviewAudit struct {
 	Status     string  `json:"status"`
 	ActorName  string  `json:"actor_name"`
 	ActorType  string  `json:"actor_type"`
-	SourceID   *string `json:"source_id,omitempty"`
+	SourceName *string `json:"source_name,omitempty"`
 	CreatedAt  string  `json:"created_at"`
 	HumanTitle string  `json:"title"`
 }
@@ -91,7 +91,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3) 存储源列表（限制 4 条与首页表格接近）
-	srcRows, err := s.db.Query(`SELECT source_id, name, root_path, COALESCE(public_mount_path, ''), webdav_enabled, image_bed_enabled, public_read_enabled, is_disabled
+	srcRows, err := s.db.Query(`SELECT key, name, root_path, COALESCE(public_mount_path, ''), webdav_enabled, image_bed_enabled, public_read_enabled, is_disabled
   FROM storage_sources ORDER BY id LIMIT 4`)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
@@ -99,7 +99,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	for srcRows.Next() {
 		var os overviewSource
-		if err := srcRows.Scan(&os.SourceID, &os.Name, &os.RootPath, &os.PublicMountPath, &os.WebdavEnabled, &os.ImageBedEnabled, &os.PublicReadEnabled, &os.IsDisabled); err != nil {
+		if err := srcRows.Scan(&os.Key, &os.Name, &os.RootPath, &os.PublicMountPath, &os.WebdavEnabled, &os.ImageBedEnabled, &os.PublicReadEnabled, &os.IsDisabled); err != nil {
 			srcRows.Close()
 			WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
 			return
@@ -147,9 +147,9 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 				ActorType: e.ActorType, CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
 				HumanTitle: humanizeAuditAction(e),
 			}
-			if e.SourceID != nil && *e.SourceID != "" {
-				sid := *e.SourceID
-				oa.SourceID = &sid
+			if e.StorageSourceName != nil && *e.StorageSourceName != "" {
+				name := *e.StorageSourceName
+				oa.SourceName = &name
 			}
 			if e.ActorType == audit.ActorUser && e.ActorUserID != nil {
 				oa.ActorName = uname[*e.ActorUserID]

@@ -24,16 +24,16 @@ type initiateMultipartUploadResult struct {
 }
 
 func (h *Handler) createMultipartUpload(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource, key string) {
-	upload, err := h.multipart.Create(user.ID, src.SourceID, key)
+	upload, err := h.multipart.Create(user.ID, src.ID, key)
 	if err != nil {
-		h.logger.Error("创建 S3 Multipart Upload 失败", "err", err, "source_id", src.SourceID, "key", key)
+		h.logger.Error("创建 S3 Multipart Upload 失败", "err", err, "storage_source_id", src.ID, "key", key)
 		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "创建 Multipart Upload 失败", key)
 		return
 	}
 	h.writeXML(w, http.StatusOK, initiateMultipartUploadResult{
-		XMLNS: xmlNamespace, Bucket: src.SourceID, Key: key, UploadID: upload.UploadID,
+		XMLNS: xmlNamespace, Bucket: src.Key, Key: key, UploadID: upload.UploadID,
 	})
-	h.logMutation(r, user, "create_multipart_upload", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, user, "create_multipart_upload", src, key, audit.StatusSuccess, "")
 }
 
 func (h *Handler) uploadPart(w http.ResponseWriter, r *http.Request, authenticated *authenticatedRequest, src *models.StorageSource, key string) {
@@ -47,7 +47,7 @@ func (h *Handler) uploadPart(w http.ResponseWriter, r *http.Request, authenticat
 		h.writePayloadError(w, r, err, key)
 		return
 	}
-	part, err := h.multipart.UploadPart(authenticated.User.ID, src.SourceID, key,
+	part, err := h.multipart.UploadPart(authenticated.User.ID, src.ID, key,
 		r.URL.Query().Get("uploadId"), partNumber, body)
 	if err != nil {
 		if isPayloadReadError(err) {
@@ -62,7 +62,7 @@ func (h *Handler) uploadPart(w http.ResponseWriter, r *http.Request, authenticat
 		w.Header().Set(chunked.checksumName, chunked.trailerValue)
 	}
 	w.WriteHeader(http.StatusOK)
-	h.logMutation(r, authenticated.User, "upload_part", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, authenticated.User, "upload_part", src, key, audit.StatusSuccess, "")
 }
 
 type listPartsResult struct {
@@ -97,13 +97,13 @@ func (h *Handler) listParts(w http.ResponseWriter, r *http.Request, user *models
 		return
 	}
 	uploadID := r.URL.Query().Get("uploadId")
-	parts, err := h.multipart.ListParts(user.ID, src.SourceID, key, uploadID)
+	parts, err := h.multipart.ListParts(user.ID, src.ID, key, uploadID)
 	if err != nil {
 		h.writeMultipartError(w, r, err, key)
 		return
 	}
 	result := listPartsResult{
-		XMLNS: xmlNamespace, Bucket: src.SourceID, Key: key, UploadID: uploadID,
+		XMLNS: xmlNamespace, Bucket: src.Key, Key: key, UploadID: uploadID,
 		PartNumberMarker: marker, MaxParts: maxParts,
 	}
 	for _, part := range parts {
@@ -168,20 +168,20 @@ func (h *Handler) completeMultipartUpload(w http.ResponseWriter, r *http.Request
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	location := (&url.URL{Scheme: scheme, Host: r.Host, Path: "/" + src.SourceID + "/" + key}).String()
+	location := (&url.URL{Scheme: scheme, Host: r.Host, Path: "/" + src.Key + "/" + key}).String()
 	h.writeXML(w, http.StatusOK, completeMultipartUploadResult{
-		XMLNS: xmlNamespace, Location: location, Bucket: src.SourceID, Key: key, ETag: etag,
+		XMLNS: xmlNamespace, Location: location, Bucket: src.Key, Key: key, ETag: etag,
 	})
-	h.logMutation(r, authenticated.User, "complete_multipart_upload", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, authenticated.User, "complete_multipart_upload", src, key, audit.StatusSuccess, "")
 }
 
 func (h *Handler) abortMultipartUpload(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource, key string) {
-	if err := h.multipart.Abort(user.ID, src.SourceID, key, r.URL.Query().Get("uploadId")); err != nil {
+	if err := h.multipart.Abort(user.ID, src.ID, key, r.URL.Query().Get("uploadId")); err != nil {
 		h.writeMultipartError(w, r, err, key)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-	h.logMutation(r, user, "abort_multipart_upload", src.SourceID, key, audit.StatusSuccess, "")
+	h.logMutation(r, user, "abort_multipart_upload", src, key, audit.StatusSuccess, "")
 }
 
 func multipartPayloadReader(r *http.Request, payloadHash string) (io.Reader, *awsChunkedReader, error) {

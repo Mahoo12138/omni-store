@@ -63,7 +63,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解析 /dav 之后的路径：/dav/{source_id}/inner...
+	// 解析 /dav 之后的路径：/dav/{source_key}/inner...
 	rest := strings.TrimPrefix(r.URL.Path, "/dav")
 	rest = strings.Trim(rest, "/")
 
@@ -99,8 +99,8 @@ func (h *Handler) handleOptions(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// splitPath 拆出 source_id 和源内相对路径。
-func splitPath(rest string) (sourceID, inner string) {
+// splitPath 拆出不透明存储源 key 和源内相对路径。
+func splitPath(rest string) (sourceKey, inner string) {
 	if rest == "" {
 		return "", ""
 	}
@@ -113,8 +113,8 @@ func splitPath(rest string) (sourceID, inner string) {
 
 // resolveSource 执行 WebDAV 检查链路（README §16.6）：
 // 存储源存在 -> 未禁用 -> webdav_enabled -> 用户权限。
-func (h *Handler) resolveSource(user *models.User, sourceID string, needWrite bool) (*models.StorageSource, int) {
-	src, err := h.sources.Get(sourceID)
+func (h *Handler) resolveSource(user *models.User, sourceKey string, needWrite bool) (*models.StorageSource, int) {
+	src, err := h.sources.Get(sourceKey)
 	if err != nil {
 		return nil, http.StatusNotFound
 	}
@@ -123,9 +123,9 @@ func (h *Handler) resolveSource(user *models.User, sourceID string, needWrite bo
 	}
 	var allowed bool
 	if needWrite {
-		allowed, err = h.sources.CanWriteSource(user, sourceID)
+		allowed, err = h.sources.CanWriteSource(user, sourceKey)
 	} else {
-		allowed, err = h.sources.CanReadSource(user, sourceID)
+		allowed, err = h.sources.CanReadSource(user, sourceKey)
 	}
 	if err != nil || !allowed {
 		return nil, http.StatusForbidden
@@ -233,8 +233,8 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 
 	var responses []propfindResponse
 
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" {
 		// /dav 虚拟根目录：列出可访问且启用 WebDAV 的存储源（README §16.2）。
 		responses = append(responses, dirResponse(davHref(), "dav"))
 		if depth == "1" {
@@ -244,8 +244,8 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 				return
 			}
 			for _, v := range list {
-				response := dirResponse(davHref(v.SourceID), v.Name)
-				if err := h.addLockProperties(r, &response, v.SourceID, ""); err != nil {
+				response := dirResponse(davHref(v.Key), v.Name)
+				if err := h.addLockProperties(r, &response, v.Key, ""); err != nil {
 					h.writeError(w, err)
 					return
 				}
@@ -253,7 +253,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 			}
 		}
 	} else {
-		src, status := h.resolveSource(user, sourceID, false)
+		src, status := h.resolveSource(user, sourceKey, false)
 		if status != 0 {
 			http.Error(w, http.StatusText(status), status)
 			return
@@ -264,11 +264,11 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 			return
 		}
 
-		selfHref := davHref(sourceID, inner)
+		selfHref := davHref(sourceKey, inner)
 		switch entry.Type {
 		case files.TypeDir:
 			response := dirResponse(selfHref, entry.Name)
-			if err := h.addLockProperties(r, &response, sourceID, inner); err != nil {
+			if err := h.addLockProperties(r, &response, sourceKey, inner); err != nil {
 				h.writeError(w, err)
 				return
 			}
@@ -281,18 +281,18 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 					return
 				}
 				for _, e := range result.Items {
-					childHref := davHref(sourceID, strings.TrimPrefix(inner+"/"+e.Name, "/"))
+					childHref := davHref(sourceKey, strings.TrimPrefix(inner+"/"+e.Name, "/"))
 					childRel := strings.TrimPrefix(inner+"/"+e.Name, "/")
 					if e.Type == files.TypeDir {
 						response := dirResponse(childHref, e.Name)
-						if err := h.addLockProperties(r, &response, sourceID, childRel); err != nil {
+						if err := h.addLockProperties(r, &response, sourceKey, childRel); err != nil {
 							h.writeError(w, err)
 							return
 						}
 						responses = append(responses, response)
 					} else if e.Type == files.TypeFile {
 						response := fileResponse(childHref, e.Name, e.Size, e.MTime)
-						if err := h.addLockProperties(r, &response, sourceID, childRel); err != nil {
+						if err := h.addLockProperties(r, &response, sourceKey, childRel); err != nil {
 							h.writeError(w, err)
 							return
 						}
@@ -303,7 +303,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 			}
 		case files.TypeFile:
 			response := fileResponse(selfHref, entry.Name, entry.Size, entry.MTime)
-			if err := h.addLockProperties(r, &response, sourceID, inner); err != nil {
+			if err := h.addLockProperties(r, &response, sourceKey, inner); err != nil {
 				h.writeError(w, err)
 				return
 			}
@@ -323,12 +323,12 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 // --- GET / HEAD ---
 
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" {
 		http.Error(w, "method not allowed on collection", http.StatusMethodNotAllowed)
 		return
 	}
-	src, status := h.resolveSource(user, sourceID, false)
+	src, status := h.resolveSource(user, sourceKey, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -349,13 +349,13 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request, user *models
 // --- PUT ---
 
 func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" || inner == "" {
-		// /dav 和 /dav/{source_id} 不能作为文件写入（README §16.2）。
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" || inner == "" {
+		// /dav 和 /dav/{key} 不能作为文件写入（README §16.2）。
 		http.Error(w, "cannot PUT here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceID, true)
+	src, status := h.resolveSource(user, sourceKey, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -368,7 +368,7 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request, user *models
 	// WebDAV PUT 按协议习惯覆盖文件（README §13.4）。
 	relPath, _, err := h.files.UploadWithLockTokens(src, dir, name, r.Body, true, extractLockTokens(r.Header.Get("If")), &user.ID)
 
-	h.logAudit(r, user, "upload", sourceID, strings.TrimPrefix(inner, "/"), "", err)
+	h.logAudit(r, user, "upload", sourceKey, strings.TrimPrefix(inner, "/"), "", err)
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
@@ -385,13 +385,13 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request, user *models
 // --- MKCOL ---
 
 func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" || inner == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" || inner == "" {
 		// 禁止在 /dav 下创建存储源（README §16.2）。
 		http.Error(w, "cannot create collection here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceID, true)
+	src, status := h.resolveSource(user, sourceKey, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -400,7 +400,7 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request, user *mode
 	dir := path.Dir("/" + inner)
 	name := path.Base("/" + inner)
 	_, err := h.files.MkdirWithLockTokens(src, dir, name, extractLockTokens(r.Header.Get("If")), &user.ID)
-	h.logAudit(r, user, "create_folder", sourceID, inner, "", err)
+	h.logAudit(r, user, "create_folder", sourceKey, inner, "", err)
 	if err != nil {
 		if errors.Is(err, files.ErrAlreadyExists) {
 			http.Error(w, "already exists", http.StatusMethodNotAllowed) // RFC 4918: 405
@@ -415,19 +415,19 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request, user *mode
 // --- DELETE ---
 
 func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" || inner == "" {
-		// 禁止 DELETE /dav/{source_id} 删除存储源（README §16.2）。
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" || inner == "" {
+		// 禁止 DELETE /dav/{key} 删除存储源（README §16.2）。
 		http.Error(w, "cannot delete here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceID, true)
+	src, status := h.resolveSource(user, sourceKey, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
 	err := h.files.DeleteWithLockTokens(src, inner, extractLockTokens(r.Header.Get("If")), &user.ID)
-	h.logAudit(r, user, "delete", sourceID, inner, "", err)
+	h.logAudit(r, user, "delete", sourceKey, inner, "", err)
 	if err != nil {
 		h.writeError(w, err)
 		return
@@ -438,8 +438,8 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request, user *mod
 // --- MOVE ---
 
 func (h *Handler) handleMove(w http.ResponseWriter, r *http.Request, user *models.User, rest string) {
-	sourceID, inner := splitPath(rest)
-	if sourceID == "" || inner == "" {
+	sourceKey, inner := splitPath(rest)
+	if sourceKey == "" || inner == "" {
 		http.Error(w, "cannot move here", http.StatusForbidden)
 		return
 	}
@@ -455,25 +455,25 @@ func (h *Handler) handleMove(w http.ResponseWriter, r *http.Request, user *model
 		return
 	}
 	destPath := strings.Trim(strings.TrimPrefix(destURL.Path, "/dav"), "/")
-	destSourceID, destInner := splitPath(destPath)
-	if destSourceID == "" || destInner == "" {
+	destKey, destInner := splitPath(destPath)
+	if destKey == "" || destInner == "" {
 		http.Error(w, "invalid Destination", http.StatusBadRequest)
 		return
 	}
 	// MVP 不支持跨存储源移动（README §16.5）。
-	if destSourceID != sourceID {
+	if destKey != sourceKey {
 		http.Error(w, "cross-source MOVE is not supported", http.StatusBadGateway)
 		return
 	}
 
-	src, status := h.resolveSource(user, sourceID, true)
+	src, status := h.resolveSource(user, sourceKey, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
 
 	newRel, err := h.files.MoveWithLockTokens(src, inner, destInner, extractLockTokens(r.Header.Get("If")), &user.ID)
-	h.logAudit(r, user, "move", sourceID, inner, newRel, err)
+	h.logAudit(r, user, "move", sourceKey, inner, newRel, err)
 	if err != nil {
 		if errors.Is(err, files.ErrAlreadyExists) {
 			// 不覆盖（README §13.6），按 RFC 返回 412。
@@ -506,13 +506,16 @@ func (h *Handler) writeError(w http.ResponseWriter, err error) {
 	}
 }
 
-func (h *Handler) logAudit(r *http.Request, user *models.User, action, sourceID, relPath, targetRel string, opErr error) {
+func (h *Handler) logAudit(r *http.Request, user *models.User, action, sourceKey, relPath, targetRel string, opErr error) {
 	e := audit.Entry{
 		ActorType: audit.ActorUser, ActorUserID: &user.ID,
 		EntryType: audit.EntryWebDAV, Action: action,
-		SourceID: sourceID, RelativePath: relPath, TargetRelativePath: targetRel,
+		RelativePath: relPath, TargetRelativePath: targetRel,
 		IPAddress: h.proxy.ClientIP(r), UserAgent: r.UserAgent(),
 		Status: audit.StatusSuccess,
+	}
+	if src, err := h.sources.Get(sourceKey); err == nil {
+		e.StorageSourceID = &src.ID
 	}
 	if opErr != nil {
 		e.Status = audit.StatusFailed

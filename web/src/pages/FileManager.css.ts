@@ -72,7 +72,7 @@ export const pageDescription = style({
   lineHeight: 1.6,
 })
 
-// 状态行：Source ID / 真实路径 / 公开挂载路径
+// 状态行：权限 / 公开挂载路径 / 服务状态
 export const metaRow = style({
   display: 'flex',
   flexWrap: 'wrap',

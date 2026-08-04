@@ -32,7 +32,7 @@ func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, 
 	if err != nil {
 		return nil, nil, "", err
 	}
-	src, err := s.sources.Get(img.SourceID)
+	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err != nil || src.IsDisabled {
 		return nil, nil, "", ErrNotFound
 	}
@@ -44,7 +44,7 @@ func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, 
 	defer releaseOriginal()
 	defer original.Close()
 
-	fingerprint := thumbnailFingerprint(img.SourceID, img.RelativePath, imageID, originalInfo)
+	fingerprint := thumbnailFingerprint(img.StorageSourceID, img.RelativePath, imageID, originalInfo)
 	cacheDir := filepath.Join(s.thumbnailCache, thumbnailShard(imageID))
 	cachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%d-%s.jpg", imageID, ThumbnailMaxEdge, fingerprint))
 	etag := `"` + fingerprint + `"`
@@ -73,9 +73,9 @@ func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, 
 	return cached, info, etag, nil
 }
 
-func thumbnailFingerprint(sourceID, relativePath, imageID string, info os.FileInfo) string {
-	raw := fmt.Sprintf("%s:%d:%s:%s:%s:%d:%d", thumbnailCacheVersion, ThumbnailMaxEdge,
-		sourceID, relativePath, imageID, info.Size(), info.ModTime().UnixNano())
+func thumbnailFingerprint(storageSourceID int64, relativePath, imageID string, info os.FileInfo) string {
+	raw := fmt.Sprintf("%s:%d:%d:%s:%s:%d:%d", thumbnailCacheVersion, ThumbnailMaxEdge,
+		storageSourceID, relativePath, imageID, info.Size(), info.ModTime().UnixNano())
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:12])
 }
