@@ -399,6 +399,7 @@ export const imageTokenDates = style({
 export const imageTokenEmpty = style({ padding: `${vars.space.md} 0`, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.5 })
 export const imageTokenError = style([imageTokenEmpty, { color: vars.color.danger }])
 export const tokenRevealRow = style({ display: 'flex', gap: vars.space.sm })
+export const s3CredentialActions = style({ display: 'flex', alignItems: 'center', gap: vars.space.xs })
 
 export const settingsFooter = style({
   marginTop: vars.space.xl,

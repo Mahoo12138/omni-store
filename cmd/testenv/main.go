@@ -18,6 +18,7 @@ import (
 	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/s3api"
 	"github.com/omni-store/omnistore/internal/sources"
 	"github.com/omni-store/omnistore/internal/users"
 )
@@ -121,12 +122,38 @@ func seed(configFile, fixtureRoot string) error {
 		return err
 	}
 
+	// 测试环境每次 seed 都轮换一个演示 S3 Key，并保存到被忽略的 .testdata 中。
+	credentials := s3api.NewCredentials(conn, cfg.Data.Dir, cfg.Security.MasterKey)
+	existingCredentials, err := credentials.List(demo.ID)
+	if err != nil {
+		return err
+	}
+	for _, existing := range existingCredentials {
+		if err := credentials.Delete(demo.ID, existing.AccessKeyID); err != nil {
+			return err
+		}
+	}
+	s3Credential, s3Secret, err := credentials.Create(demo.ID, "本地测试环境")
+	if err != nil {
+		return err
+	}
+	credentialFile := filepath.Join(filepath.Dir(cfg.Data.Dir), "s3-credentials.txt")
+	credentialText := fmt.Sprintf("endpoint=http://%s\naccess_key_id=%s\nsecret_access_key=%s\nregion=us-east-1\n",
+		cfg.Server.S3Addr, s3Credential.AccessKeyID, s3Secret)
+	if err := os.WriteFile(credentialFile, []byte(credentialText), 0o600); err != nil {
+		return err
+	}
+
 	fmt.Println("测试环境种子数据已就绪")
 	fmt.Printf("地址: %s\n", cfg.Server.PublicURL)
 	fmt.Printf("管理员: %s / %s\n", adminUsername, adminPassword)
 	fmt.Printf("演示用户: %s / %s\n", demoUsername, demoPassword)
 	fmt.Printf("数据目录: %s\n", cfg.Data.Dir)
 	fmt.Printf("存储目录: %s\n", fixtureRoot)
+	if cfg.Server.S3Enabled {
+		fmt.Printf("S3 地址: http://%s（Path-style）\n", cfg.Server.S3Addr)
+		fmt.Printf("S3 凭据: %s\n", credentialFile)
+	}
 	return nil
 }
 

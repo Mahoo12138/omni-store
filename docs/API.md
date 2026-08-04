@@ -148,6 +148,22 @@ DELETE /api/v1/me/tokens/image-bed/{token_id}
 
 兼容接口 `POST /api/v1/me/tokens/image-bed/reset` 仍可用，其语义为撤销当前用户的全部图床 Token，并创建一个新的“默认 Token”。
 
+## S3 凭据管理
+
+登录用户管理自己的 S3 Access Key：
+
+```http
+GET    /api/v1/me/s3-credentials
+POST   /api/v1/me/s3-credentials
+POST   /api/v1/me/s3-credentials/{access_key_id}/disable
+POST   /api/v1/me/s3-credentials/{access_key_id}/enable
+DELETE /api/v1/me/s3-credentials/{access_key_id}
+```
+
+创建请求为 `{ "name": "MacBook rclone" }`。响应中的 `secret_access_key` 只返回一次；
+后续列表仅包含 Access Key ID、名称、禁用状态、创建时间和最近使用时间。每用户最多 10 个，
+所有写接口要求 Cookie Session 和 CSRF Token。
+
 ## 图床缩略图
 
 图床图片记录新增派生字段：
@@ -182,7 +198,7 @@ GET /api/v1/admin/audit-logs
 | `page` | `1` | 页码，必须为正整数 |
 | `page_size` | `50` | 每页条数，范围为 1–200 |
 | `actor_type` | 空 | `user`、`anonymous` 或 `system` |
-| `entry_type` | 空 | `web`、`webdav`、`image_bed`、`anonymous_image_bed`、`admin` 或 `cli` |
+| `entry_type` | 空 | `web`、`webdav`、`s3`、`image_bed`、`anonymous_image_bed`、`admin` 或 `cli` |
 | `status` | 空 | `success` 或 `failed` |
 | `q` | 空 | 在动作、存储源、源/目标路径、IP 和错误码中进行文字匹配，最多 128 个字符 |
 

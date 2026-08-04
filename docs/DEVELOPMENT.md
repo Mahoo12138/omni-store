@@ -67,7 +67,7 @@ Vite dev server 将 `/api`、`/raw`、`/i` 与 `/dav` 代理到 `http://localhos
 
 ## 隔离测试与演示环境
 
-项目提供 `config.test.yaml`、幂等种子命令和独立的 `.testdata/` 数据目录。测试服务只监听 `127.0.0.1:18080`，不会读写默认 `./data` 或生产配置。
+项目提供 `config.test.yaml`、幂等种子命令和独立的 `.testdata/` 数据目录。Web 测试服务监听 `127.0.0.1:18080`，S3 测试服务监听 `127.0.0.1:18081`，不会读写默认 `./data` 或生产配置。
 
 准备演示用户、两个存储源及示例文件：
 
@@ -96,6 +96,22 @@ pnpm run dev:test
 ```
 
 每次执行 `seed` 都会恢复上述显示名、密码、启用状态、权限和功能开关，并保留用户在演示存储源中新建的其他文件。`.testdata/` 已加入 `.gitignore`，需要完全重置时应先停止测试服务，再手动删除该目录。
+
+测试环境会为 `demo` 用户轮换一组 S3 凭据并写入 `.testdata/s3-credentials.txt`（权限 `0600`）。可以用 AWS CLI 验证基础对象操作：
+
+```bash
+set -a
+source .testdata/s3-credentials.txt
+set +a
+AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
+  aws --endpoint-url "$endpoint" --region "$region" --no-verify-ssl \
+  s3api list-objects-v2 --bucket team-files
+```
+
+生产环境通过 `server.s3_enabled: true` 或 `OMNISTORE_S3_ENABLED=true` 显式启用；可用
+`OMNISTORE_S3_ADDR` 修改专用监听地址。`OMNISTORE_MASTER_KEY` 必须解码为 32 字节，建议使用
+`openssl rand -base64 32` 生成。如果未提供，系统首次创建 S3 凭据时会生成
+`data.dir/keys/s3-master.key`；该文件丢失后现有 Secret 无法恢复，必须与数据库一起备份。
 
 ### E2E
 

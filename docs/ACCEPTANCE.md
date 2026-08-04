@@ -90,6 +90,18 @@
 4. 缓存只写入系统 `cache/thumbnails/`，用户存储源中不产生缩略图或 sidecar。
 5. 超过 30 天未访问的缓存会在启动时及每日清理；禁用存储源后缩略图返回 404。
 
+### V1.1 S3
+
+1. `s3_enabled=false` 时不监听专用端口；显式启用时只在 `s3_addr` 启动 Path-style 服务。
+2. 用户可创建多个独立 Access/Secret，Secret 只展示一次并以 AES-256-GCM 加密保存。
+3. master key 可由 `OMNISTORE_MASTER_KEY` 提供；本地生成的 key 会进入系统配置包。
+4. Authorization Header 和预签名 URL 的 Signature V4 可用，错误签名、过期请求与禁用凭据被拒绝。
+5. ListBuckets、HeadBucket、ListObjectsV2、Head/Get/Put/DeleteObject 和 DeleteObjects 可用。
+6. GET 支持 Range；PUT 支持普通 payload、`UNSIGNED-PAYLOAD` 和 unsigned aws-chunked trailer 校验。
+7. S3 复用用户存储源读写权限；禁用存储源、排除路径、symlink 和只读写入均不可绕过。
+8. S3 写操作不能绕过 WebDAV 持久锁，并写入 `entry_type=s3` 审计日志。
+9. 不支持的 ACL、Policy、Multipart 等操作返回 S3 XML `NotImplemented`，不伪装成功。
+
 ### 安全
 
 1. Cookie HttpOnly。

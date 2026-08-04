@@ -66,7 +66,7 @@ export interface AuditLogQuery {
   page: number
   page_size: number
   actor_type?: 'user' | 'anonymous' | 'system'
-  entry_type?: 'web' | 'webdav' | 'image_bed' | 'anonymous_image_bed' | 'admin' | 'cli'
+  entry_type?: 'web' | 'webdav' | 's3' | 'image_bed' | 'anonymous_image_bed' | 'admin' | 'cli'
   status?: 'success' | 'failed'
   q?: string
 }

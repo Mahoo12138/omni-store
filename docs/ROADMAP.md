@@ -6,11 +6,11 @@
 
 V1.1 可实现：
 
-1. S3 基础对象存储子集。
-2. S3 专用端口 `8081`。
-3. S3 Path-style 路由。
-4. AWS Signature V4 鉴权。
-5. S3 Access Key / Secret Key 管理。
+1. S3 基础对象存储子集。（已实现：Bucket 列举/检查、ListObjectsV2、对象 HEAD/GET/PUT/DELETE 与批量删除）
+2. S3 专用端口 `8081`。（已实现：默认关闭，`s3_enabled` 显式启用后独立监听）
+3. S3 Path-style 路由。（已实现：`/{source_id}/{object_key}`，不支持 virtual-host-style）
+4. AWS Signature V4 鉴权。（已实现：Authorization Header、预签名 URL、15 分钟时间偏差校验及 unsigned aws-chunked trailer）
+5. S3 Access Key / Secret Key 管理。（已实现：每用户多凭据、一次展示、AES-256-GCM 加密、禁用/启用/撤销与使用时间）
 6. WebDAV `LOCK / UNLOCK` 持久锁。（已实现：RFC 4918 独占写锁、Depth 0/infinity、刷新、锁空资源、活动锁发现、超时清理与全入口写保护）
 7. 后端缩略图生成和缓存。（已实现：480px 最长边按需生成、原图 size + modTime 缓存失效、并发去重、系统缓存目录、30 天清理与历史墙接入）
 8. 上传临时文件残留清理。（已实现：启动时及每小时扫描，默认清理超过 24 小时的严格保留命名文件）

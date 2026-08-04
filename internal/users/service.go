@@ -177,6 +177,7 @@ func (s *Service) Delete(id int64) error {
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM user_tokens WHERE user_id = ?`,
 		`DELETE FROM image_bed_tokens WHERE user_id = ?`,
+		`DELETE FROM s3_credentials WHERE owner_user_id = ?`,
 		`DELETE FROM user_source_permissions WHERE user_id = ?`,
 		`DELETE FROM user_preferences WHERE user_id = ?`,
 	} {

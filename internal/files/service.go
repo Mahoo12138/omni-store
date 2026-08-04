@@ -53,6 +53,13 @@ type Entry struct {
 	MTime time.Time `json:"mtime"`
 }
 
+// ObjectEntry 是 S3 列举使用的扁平对象视图；目录本身不作为对象返回。
+type ObjectEntry struct {
+	Key   string
+	Size  int64
+	MTime time.Time
+}
+
 // Service 提供核心文件操作，REST、WebDAV、图床、公开网盘共用。
 type Service struct {
 	db              *sql.DB
@@ -212,6 +219,86 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 		Total:    total,
 		HasNext:  int64(end) < total,
 	}, nil
+}
+
+// ListObjects 递归扫描一个存储源，返回经过排除规则过滤的普通文件。
+// S3 的 prefix、delimiter 和分页在协议层处理。
+func (s *Service) ListObjects(src *models.StorageSource) ([]ObjectEntry, error) {
+	_, root, err := s.prepare(src, "")
+	if err != nil {
+		return nil, err
+	}
+	matcher, err := s.sources.Matcher(src.SourceID)
+	if err != nil {
+		return nil, err
+	}
+	out := []ObjectEntry{}
+	err = filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if absPath == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, absPath)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if matcher.MatchPrefix(rel) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(entry.Name(), ".omnistore-upload-") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.Mode().IsRegular() {
+			out = append(out, ObjectEntry{Key: rel, Size: info.Size(), MTime: info.ModTime()})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
+}
+
+// EnsureObjectParents 创建对象 Key 所需的父目录，复用统一路径与锁检查。
+func (s *Service) EnsureObjectParents(src *models.StorageSource, objectKey string) error {
+	normalized, err := security.NormalizeRelPath(objectKey)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalid, err)
+	}
+	parent := path.Dir(normalized)
+	if parent == "." || parent == "" {
+		return nil
+	}
+	current := ""
+	for _, segment := range strings.Split(parent, "/") {
+		_, err := s.Mkdir(src, current, segment)
+		if err != nil && !errors.Is(err, ErrAlreadyExists) {
+			return err
+		}
+		if current == "" {
+			current = segment
+		} else {
+			current += "/" + segment
+		}
+	}
+	return nil
 }
 
 // sortEntries 排序：目录永远排在文件前（README §13.8），同键值内按名称升序。

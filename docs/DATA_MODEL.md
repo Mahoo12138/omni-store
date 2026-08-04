@@ -97,6 +97,25 @@ CREATE TABLE image_bed_tokens (
 3. 每个用户最多 10 条记录，限制由服务层在事务内执行。
 4. 删除用户时必须同步删除其图床 Token。
 
+### s3_credentials
+
+```sql
+CREATE TABLE s3_credentials (
+  access_key_id TEXT PRIMARY KEY,
+  secret_access_key_encrypted BLOB NOT NULL,
+  secret_key_nonce BLOB NOT NULL,
+  owner_user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  is_disabled BOOLEAN NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  last_used_at DATETIME,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+`access_key_id` 可明文保存；Secret Access Key 使用实例 master key 做 AES-256-GCM
+可恢复加密，明文只在创建时返回。每个用户最多保留 10 个 S3 凭据。
+
 ### storage_sources
 
 ```sql

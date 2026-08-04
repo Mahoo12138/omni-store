@@ -18,6 +18,7 @@ import (
 	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/publicdisk"
+	"github.com/omni-store/omnistore/internal/s3api"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
 	"github.com/omni-store/omnistore/internal/users"
@@ -43,6 +44,8 @@ type Server struct {
 	anonLimiter *imagebed.RateLimiter
 	audit       *audit.Logger
 	proxy       *security.ProxyResolver
+	s3Keys      *s3api.Credentials
+	s3Handler   http.Handler
 }
 
 // New 创建 HTTP Server，同时返回内部 Server 以便 main 启动后台任务。
@@ -60,6 +63,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
 	s.public = publicdisk.NewService(dbConn, s.sources, s.files)
 	s.tokens = auth.NewTokens(dbConn)
+	s.s3Keys = s3api.NewCredentials(dbConn, cfg.Data.Dir, cfg.Security.MasterKey)
+	s.s3Handler = s3api.NewHandler(s.s3Keys, s.sources, s.files, s.audit, s.proxy, logger, cfg.Upload.MaxFileSizeMB)
 	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
 		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.files)
 	if err != nil {
@@ -94,6 +99,11 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/me/tokens/image-bed", s.requireAuth(s.handleListImageBedTokens))
 	mux.HandleFunc("POST /api/v1/me/tokens/image-bed", s.requireAuth(s.handleCreateImageBedToken))
 	mux.HandleFunc("DELETE /api/v1/me/tokens/image-bed/{token_id}", s.requireAuth(s.handleDeleteImageBedToken))
+	mux.HandleFunc("GET /api/v1/me/s3-credentials", s.requireAuth(s.handleListS3Credentials))
+	mux.HandleFunc("POST /api/v1/me/s3-credentials", s.requireAuth(s.handleCreateS3Credential))
+	mux.HandleFunc("POST /api/v1/me/s3-credentials/{access_key_id}/disable", s.requireAuth(s.handleSetS3CredentialDisabled(true)))
+	mux.HandleFunc("POST /api/v1/me/s3-credentials/{access_key_id}/enable", s.requireAuth(s.handleSetS3CredentialDisabled(false)))
+	mux.HandleFunc("DELETE /api/v1/me/s3-credentials/{access_key_id}", s.requireAuth(s.handleDeleteS3Credential))
 
 	// 管理员：用户管理
 	mux.HandleFunc("GET /api/v1/admin/users", s.requireAdmin(s.handleAdminListUsers))
@@ -229,6 +239,14 @@ func (s *Server) Files() *files.Service {
 // ImageBed 暴露图床服务供 main 启动缩略图缓存清理任务。
 func (s *Server) ImageBed() *imagebed.Service {
 	return s.imagebed
+}
+
+// S3Server 返回仅承载 S3 Path-style API 的专用 HTTP Server。
+func (s *Server) S3Server() *http.Server {
+	return &http.Server{
+		Addr: s.cfg.Server.S3Addr, Handler: s.s3Handler,
+		ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
+	}
 }
 
 // StartUploadCleanup 在启动时及之后每小时清理一次过期上传临时文件。

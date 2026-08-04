@@ -8,13 +8,13 @@ import (
 )
 
 func TestParseAuditQuery(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/v1/admin/audit-logs?page=2&page_size=25&actor_type=user&entry_type=webdav&status=failed&q=move", nil)
+	req := httptest.NewRequest("GET", "/api/v1/admin/audit-logs?page=2&page_size=25&actor_type=user&entry_type=s3&status=failed&q=move", nil)
 	opts, err := parseAuditQuery(req)
 	if err != nil {
 		t.Fatalf("parse query: %v", err)
 	}
 	if opts.Page != 2 || opts.PageSize != 25 || opts.ActorType != audit.ActorUser ||
-		opts.EntryType != audit.EntryWebDAV || opts.Status != audit.StatusFailed || opts.SearchText != "move" {
+		opts.EntryType != audit.EntryS3 || opts.Status != audit.StatusFailed || opts.SearchText != "move" {
 		t.Fatalf("unexpected options: %+v", opts)
 	}
 }
@@ -24,7 +24,7 @@ func TestParseAuditQueryRejectsInvalidValues(t *testing.T) {
 		"?page=0",
 		"?page_size=201",
 		"?actor_type=guest",
-		"?entry_type=s3",
+		"?entry_type=ftp",
 		"?status=pending",
 	}
 	for _, query := range tests {

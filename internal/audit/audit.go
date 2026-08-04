@@ -23,6 +23,7 @@ const (
 	EntryAnonymousImageBed = "anonymous_image_bed"
 	EntryAdmin             = "admin"
 	EntryCLI               = "cli"
+	EntryS3                = "s3"
 )
 
 // status 取值。

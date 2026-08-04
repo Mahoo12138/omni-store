@@ -290,7 +290,7 @@ OMNISTORE_IMAGE_BED_USER_MAX_FILE_SIZE_MB=20
 OMNISTORE_IMAGE_BED_ANONYMOUS_MAX_FILE_SIZE_MB=10
 ```
 
-后续 S3 Secret 加密需要：
+S3 Secret 加密使用：
 
 ```bash
 OMNISTORE_MASTER_KEY=...
@@ -360,7 +360,7 @@ OMNISTORE_DATA_DIR/omnistore.db
 OMNISTORE_DATA_DIR/keys/
 ```
 
-后续如果启用 S3 Secret 加密，必须备份 master key。否则数据库恢复后已有 S3 Secret 无法解密。
+启用 S3 后必须备份 master key。否则数据库恢复后已有 S3 Secret 无法解密。
 
 可以不备份：
 
@@ -471,7 +471,7 @@ V1.1 增加 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范
 id
 actor_type             user / anonymous / system
 actor_user_id          可为空
-entry_type             web / webdav / image_bed / anonymous_image_bed / admin / cli
+entry_type             web / webdav / s3 / image_bed / anonymous_image_bed / admin / cli
 action                 upload / delete / move / login_success 等
 source_id              可为空
 relative_path          可为空

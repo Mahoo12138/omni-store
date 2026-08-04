@@ -8,7 +8,7 @@ server:
   trusted_proxies:
     - "127.0.0.1"
   s3_addr: "127.0.0.1:18081"
-  s3_enabled: false
+  s3_enabled: true
 
 data:
   dir: "./.testdata/data"

@@ -41,7 +41,7 @@ func parseAuditQuery(r *http.Request) (audit.QueryOptions, error) {
 	}
 	entryType := strings.TrimSpace(query.Get("entry_type"))
 	if !oneOf(entryType, "", audit.EntryWeb, audit.EntryWebDAV, audit.EntryImageBed,
-		audit.EntryAnonymousImageBed, audit.EntryAdmin, audit.EntryCLI) {
+		audit.EntryS3, audit.EntryAnonymousImageBed, audit.EntryAdmin, audit.EntryCLI) {
 		return audit.QueryOptions{}, fmt.Errorf("entry_type 无效")
 	}
 	status := strings.TrimSpace(query.Get("status"))

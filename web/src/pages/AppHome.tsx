@@ -366,6 +366,12 @@ const activityLabels: Record<string, string> = {
   reset_token_image_bed: '重置图床 Token',
   create_image_bed_token: '创建图床 Token',
   delete_image_bed_token: '撤销图床 Token',
+  create_s3_credential: '创建 S3 凭据',
+  enable_s3_credential: '启用 S3 凭据',
+  disable_s3_credential: '禁用 S3 凭据',
+  delete_s3_credential: '撤销 S3 凭据',
+  put_object: 'S3 上传对象',
+  delete_object: 'S3 删除对象',
   update_anonymous_image_bed: '更新匿名图床设置',
 }
 

@@ -237,7 +237,7 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	// S3 兼容存储
 	out.S3.Enabled = s.cfg.Server.S3Enabled
 	out.S3.Status = ternary(s.cfg.Server.S3Enabled, "已启用", "未启用")
-	out.S3.Hint = "尚未配置任何 S3 存储源"
+	out.S3.Hint = ternary(s.cfg.Server.S3Enabled, "S3 Path-style 服务运行正常", "在配置中显式启用后可使用")
 
 	// WebDAV 服务
 	out.WebDAV.Enabled = true
@@ -342,6 +342,24 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "创建图床 Token"
 	case "delete_image_bed_token":
 		return "撤销图床 Token"
+	case "create_s3_credential":
+		return "创建 S3 凭据"
+	case "enable_s3_credential":
+		return "启用 S3 凭据"
+	case "disable_s3_credential":
+		return "禁用 S3 凭据"
+	case "delete_s3_credential":
+		return "撤销 S3 凭据"
+	case "put_object":
+		if filename != "" {
+			return "S3 上传 " + filename
+		}
+		return "S3 上传对象"
+	case "delete_object":
+		if filename != "" {
+			return "S3 删除 " + filename
+		}
+		return "S3 删除对象"
 	default:
 		return e.Action
 	}

@@ -105,27 +105,44 @@ func runServer(args []string) error {
 	httpserver.StartThumbnailCacheCleanup(app.ImageBed(), logger, stopCleanup)
 	defer close(stopCleanup)
 
-	errCh := make(chan error, 1)
+	servers := []*http.Server{srv}
+	errCh := make(chan error, 2)
 	go func() {
 		logger.Info("HTTP 服务启动", "addr", cfg.Server.HTTPAddr, "public_url", cfg.Server.PublicURL)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
+	if cfg.Server.S3Enabled {
+		s3Srv := app.S3Server()
+		servers = append(servers, s3Srv)
+		go func() {
+			logger.Info("S3 服务启动", "addr", cfg.Server.S3Addr, "style", "path")
+			if err := s3Srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- err
+			}
+		}()
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
+	var runErr error
 	select {
 	case err := <-errCh:
-		return err
+		runErr = err
 	case sig := <-stop:
 		logger.Info("收到退出信号，正在关闭", "signal", sig.String())
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(ctx)
+	for _, running := range servers {
+		if err := running.Shutdown(ctx); err != nil && runErr == nil {
+			runErr = err
+		}
+	}
+	return runErr
 }
 
 // runAdmin 处理 admin 子命令。MVP 只有 reset-password（README §8.8）。

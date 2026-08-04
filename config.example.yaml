@@ -8,7 +8,7 @@ server:
   trusted_proxies:
     - "127.0.0.1"
     - "172.16.0.0/12"
-  # S3 为 V1.1 规划，MVP 不启动
+  # V1.1 S3 兼容接口；默认关闭，启用后使用独立端口和 Path-style URL
   s3_addr: "0.0.0.0:8081"
   s3_enabled: false
 
@@ -21,6 +21,8 @@ database:
 security:
   cookie_secure: true
   session_ttl_hours: 168
+  # S3 master key 只能通过 OMNISTORE_MASTER_KEY 提供，不写入 YAML。
+  # 未提供时首次创建 S3 凭据会生成 data.dir/keys/s3-master.key，请务必备份。
 
 upload:
   max_file_size_mb: 1024

@@ -285,6 +285,23 @@ PicGo / 第三方工具上传图片
 8. 不能用于 WebDAV。
 9. 不能用于管理后台。
 
+### S3 Access Key / Secret Access Key
+
+每个用户最多创建 10 个命名 S3 凭据，可分别禁用、启用或撤销。
+
+规则：
+
+1. Access Key ID 可明文保存和重复查看。
+2. Secret Access Key 只在创建响应中展示一次。
+3. Secret 必须使用实例 master key 做 AES-256-GCM 可恢复加密，不能写入日志。
+4. `OMNISTORE_MASTER_KEY` 只允许通过环境变量提供，必须解码为 32 字节。
+5. 未配置环境变量时生成 `data.dir/keys/s3-master.key`，权限为 `0600`。
+6. master key 与 SQLite 必须成对备份；key 丢失后只能撤销旧凭据并重新创建。
+7. S3 只接受 Signature V4，不接受网页登录密码、WebDAV Token 或图床 Token。
+8. 用户或单个 S3 凭据禁用后立即拒绝签名请求。
+9. 签名通过后仍复用存储源状态、用户读写权限、路径安全、排除规则和持久锁检查。
+10. 生产环境应把 S3 专用端口放在支持原始 Host、路径和查询参数透传的 HTTPS 代理后。
+
 ### 命令行管理员紧急恢复
 
 MVP 提供本机命令行恢复能力。
@@ -334,7 +351,7 @@ server:
 
 1. 图床公开 URL。
 2. 前端复制链接。
-3. 后续 S3 签名和代理感知。
+3. S3 客户端连接说明中的外部主机参考。
 
 MVP 支持独立域名或根路径部署：
 
@@ -418,7 +435,7 @@ updated_at
 6. 不允许看起来像 IP 地址。
 7. 全局唯一。
 
-这样是为了兼容后续 S3 Bucket 命名。
+这样是为了兼容 S3 Bucket 命名。
 
 ### root_path 规则
 

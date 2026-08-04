@@ -51,6 +51,22 @@ CREATE TABLE IF NOT EXISTS image_bed_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_image_bed_tokens_user ON image_bed_tokens(user_id, created_at);
 
+-- S3 Signature V4 需要使用原始 Secret 重新计算签名，因此 Secret 使用 master key
+-- 做可恢复加密；明文只在创建时返回。
+CREATE TABLE IF NOT EXISTS s3_credentials (
+  access_key_id TEXT PRIMARY KEY,
+  secret_access_key_encrypted BLOB NOT NULL,
+  secret_key_nonce BLOB NOT NULL,
+  owner_user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  is_disabled BOOLEAN NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  last_used_at DATETIME,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_s3_credentials_owner ON s3_credentials(owner_user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS storage_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   source_id TEXT NOT NULL UNIQUE,
@@ -126,7 +142,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor_type TEXT NOT NULL, -- user / anonymous / system
   actor_user_id INTEGER,
-  entry_type TEXT NOT NULL, -- web / webdav / image_bed / anonymous_image_bed / admin / cli
+  entry_type TEXT NOT NULL, -- web / webdav / s3 / image_bed / anonymous_image_bed / admin / cli
   action TEXT NOT NULL,
   source_id TEXT,
   relative_path TEXT,
