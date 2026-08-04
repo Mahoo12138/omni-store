@@ -22,6 +22,18 @@ type Mount struct {
 	Description string `json:"description"`
 }
 
+func matchMount(rel, mountPath string) (string, bool) {
+	mount := strings.TrimPrefix(mountPath, "/")
+	switch {
+	case rel == mount:
+		return "", true
+	case strings.HasPrefix(rel, mount+"/"):
+		return rel[len(mount)+1:], true
+	default:
+		return "", false
+	}
+}
+
 // Service 提供公开网盘能力。复用核心文件服务，不绕过任何安全检查。
 type Service struct {
 	db      *sql.DB
@@ -70,14 +82,8 @@ func (s *Service) Resolve(virtualPath string) (*models.StorageSource, string, er
 		return nil, "", err
 	}
 	for _, m := range mounts {
-		mount := strings.TrimPrefix(m.MountPath, "/")
-		var inner string
-		switch {
-		case rel == mount:
-			inner = ""
-		case strings.HasPrefix(rel, mount+"/"):
-			inner = rel[len(mount)+1:]
-		default:
+		inner, matched := matchMount(rel, m.MountPath)
+		if !matched {
 			continue
 		}
 
@@ -97,6 +103,45 @@ func (s *Service) Resolve(virtualPath string) (*models.StorageSource, string, er
 		return src, inner, nil
 	}
 	return nil, "", ErrNotFound
+}
+
+// RedirectPath 将命中旧挂载路径的虚拟路径改写为当前挂载路径，并保留源内子路径。
+// 只有存储源仍启用且公开时才返回重定向，避免旧链接绕过状态检查。
+func (s *Service) RedirectPath(virtualPath string) (string, bool, error) {
+	rel, err := security.NormalizeRelPath(virtualPath)
+	if err != nil || rel == "" {
+		return "", false, nil
+	}
+
+	rows, err := s.db.Query(`SELECT r.mount_path, s.public_mount_path
+  FROM public_mount_redirects r
+  JOIN storage_sources s ON s.source_id = r.source_id
+  WHERE s.is_disabled = 0 AND s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL
+  ORDER BY length(r.mount_path) DESC`)
+	if err != nil {
+		return "", false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var oldPath, currentPath string
+		if err := rows.Scan(&oldPath, &currentPath); err != nil {
+			return "", false, err
+		}
+		inner, matched := matchMount(rel, oldPath)
+		if !matched {
+			continue
+		}
+		target := currentPath
+		if inner != "" {
+			target += "/" + inner
+		}
+		return target, true, nil
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, err
+	}
+	return "", false, nil
 }
 
 // List 浏览公开目录。公开侧隐藏 symlink（README §10.7）。

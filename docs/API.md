@@ -161,4 +161,25 @@ GET /api/v1/admin/audit-logs
 
 筛选条件之间采用 AND 关系，结果按 `id` 倒序返回。响应沿用统一列表结构，`total` 表示筛选后的记录总数。非法参数返回 `VALIDATION_ERROR`。
 
+## 公开挂载路径重定向
+
+管理员修改存储源的 `public_mount_path` 时，原路径会自动保存为该存储源的旧路径。旧路径不会出现在公开挂载列表中，但继续参与挂载路径的唯一性和互相包含校验，不能被其他存储源占用。
+
+以下入口命中旧路径时返回 `308 Permanent Redirect`：
+
+```http
+GET /p/{old_mount_path...}
+GET /raw/{old_mount_path...}
+GET /api/v1/public/browse?path={old_mount_path...}
+```
+
+重定向会保留挂载路径之后的子路径和原查询参数。例如 `/raw/photos/2026/a.jpg?download=1` 在挂载路径从 `/photos` 改为 `/archive` 后，会重定向到 `/raw/archive/2026/a.jpg?download=1`。
+
+旧路径动态指向同一存储源的当前挂载路径，因此连续修改不会形成重定向链。出现以下任一情况时，旧路径返回 404 而不重定向：
+
+1. 存储源已禁用。
+2. 公开访问已关闭。
+3. 当前公开挂载路径已清空。
+4. 存储源已删除。
+
 ---

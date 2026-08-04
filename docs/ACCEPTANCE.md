@@ -47,7 +47,7 @@
 2. `/p/*` 可浏览公开目录。
 3. `/raw/*` 可访问公开文件。
 4. public_mount_path 隐藏 source_id。
-5. 修改 public_mount_path 后旧链接失效。
+5. 修改 public_mount_path 后，旧目录页和 raw 链接重定向到新路径；禁用公开访问或存储源后旧链接不可访问。
 
 ### WebDAV
 

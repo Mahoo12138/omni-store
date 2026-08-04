@@ -1335,7 +1335,7 @@ function EditSourceDialog({
 
       <Field
         label="公开挂载路径"
-        hint="如 /photos，修改后旧链接失效"
+        hint="如 /photos，修改后旧链接会自动重定向到新路径"
         required={publicOn ?? src.public_read_enabled}
       >
         <div style={{ display: 'flex', gap: 8 }}>

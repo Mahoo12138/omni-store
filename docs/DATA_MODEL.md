@@ -126,6 +126,27 @@ CREATE TABLE storage_source_exclude_patterns (
 );
 ```
 
+### public_mount_redirects
+
+保存公开挂载路径修改前的旧路径；请求命中时动态重定向到同一存储源的当前 `public_mount_path`。
+
+```sql
+CREATE TABLE public_mount_redirects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id TEXT NOT NULL,
+  mount_path TEXT NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(source_id) REFERENCES storage_sources(source_id) ON DELETE CASCADE
+);
+```
+
+约束：
+
+1. 旧路径不作为公开挂载入口展示。
+2. 当前挂载路径和旧路径共同参与唯一性及互相包含校验。
+3. 存储源删除或当前挂载路径清空时删除对应旧路径。
+4. 禁用存储源或关闭公开访问时保留记录，但不提供重定向。
+
 ### user_source_permissions
 
 ```sql

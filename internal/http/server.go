@@ -174,7 +174,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeFileNotFound, "接口不存在", nil)
 	})
-	mux.Handle("/", s.spaHandler())
+	spa := s.spaHandler()
+	mux.HandleFunc("GET /p/{virtual_path...}", s.handlePublicPage(spa))
+	mux.Handle("/", spa)
 
 	var handler http.Handler = mux
 	handler = WithRecover(logger, handler)

@@ -186,6 +186,10 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 	if err != nil {
 		return nil, err
 	}
+	var previousMountPath string
+	if src.PublicMountPath != nil {
+		previousMountPath = *src.PublicMountPath
+	}
 
 	if in.Name != nil {
 		if v := strings.TrimSpace(*in.Name); v != "" {
@@ -208,26 +212,58 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 		src.PublicMountPath = in.PublicMountPath
 	}
 
-	if src.PublicReadEnabled {
-		if src.PublicMountPath == nil || *src.PublicMountPath == "" {
-			return nil, fmt.Errorf("开启公开访问时必须配置公开挂载路径")
-		}
-		others, err := s.otherMountPaths(sourceID)
-		if err != nil {
-			return nil, err
-		}
-		normalized, err := NormalizeMountPath(*src.PublicMountPath, others)
-		if err != nil {
-			return nil, err
-		}
-		src.PublicMountPath = &normalized
-	}
-	// 关闭公开访问时挂载路径可以保留为空。
-	if src.PublicMountPath != nil && *src.PublicMountPath == "" {
+	// 关闭公开访问时挂载路径可以留空；非空路径始终校验并预留，避免后续开启时产生冲突。
+	if src.PublicMountPath != nil && strings.TrimSpace(*src.PublicMountPath) == "" {
 		src.PublicMountPath = nil
 	}
+	if src.PublicReadEnabled && src.PublicMountPath == nil {
+		return nil, fmt.Errorf("开启公开访问时必须配置公开挂载路径")
+	}
 
-	_, err = s.db.Exec(`UPDATE storage_sources SET
+	var normalizedMountPath string
+	if src.PublicMountPath != nil {
+		normalizedMountPath, err = NormalizeMountPath(*src.PublicMountPath, nil)
+		if err != nil {
+			return nil, err
+		}
+		src.PublicMountPath = &normalizedMountPath
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if src.PublicMountPath != nil {
+		reserved, err := reservedMountPaths(tx, sourceID, normalizedMountPath)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := NormalizeMountPath(normalizedMountPath, reserved); err != nil {
+			return nil, err
+		}
+		// 允许存储源把当前路径改回自己的某个旧路径。
+		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE source_id = ? AND mount_path = ?`,
+			sourceID, normalizedMountPath); err != nil {
+			return nil, err
+		}
+	}
+
+	if previousMountPath != "" && previousMountPath != normalizedMountPath && src.PublicMountPath != nil {
+		if _, err := tx.Exec(`INSERT INTO public_mount_redirects (source_id, mount_path, created_at)
+  VALUES (?, ?, ?) ON CONFLICT(mount_path) DO NOTHING`, sourceID, previousMountPath, time.Now().UTC()); err != nil {
+			return nil, err
+		}
+	}
+	if src.PublicMountPath == nil {
+		// 没有新的目标路径时，旧路径无法安全重定向，不再继续占用。
+		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE source_id = ?`, sourceID); err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = tx.Exec(`UPDATE storage_sources SET
   name = ?, description = ?, public_read_enabled = ?, public_mount_path = ?,
   webdav_enabled = ?, image_bed_enabled = ?, updated_at = ?
   WHERE source_id = ?`,
@@ -236,12 +272,23 @@ func (s *Service) Update(sourceID string, in UpdateInput) (*models.StorageSource
 	if err != nil {
 		return nil, fmt.Errorf("更新存储源失败: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return s.Get(sourceID)
 }
 
-func (s *Service) otherMountPaths(excludeSourceID string) ([]string, error) {
-	rows, err := s.db.Query(`SELECT public_mount_path FROM storage_sources
-  WHERE public_mount_path IS NOT NULL AND source_id != ?`, excludeSourceID)
+type queryer interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+// reservedMountPaths 返回其他当前挂载和全部旧路径。当前存储源准备恢复的同名旧路径除外。
+func reservedMountPaths(q queryer, excludeSourceID, allowedRedirectPath string) ([]string, error) {
+	rows, err := q.Query(`SELECT public_mount_path FROM storage_sources
+  WHERE public_mount_path IS NOT NULL AND source_id != ?
+UNION ALL
+SELECT mount_path FROM public_mount_redirects
+  WHERE NOT (source_id = ? AND mount_path = ?)`, excludeSourceID, excludeSourceID, allowedRedirectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +328,7 @@ func (s *Service) Delete(sourceID string) error {
 	for _, q := range []string{
 		`DELETE FROM user_source_permissions WHERE source_id = ?`,
 		`DELETE FROM storage_source_exclude_patterns WHERE source_id = ?`,
+		`DELETE FROM public_mount_redirects WHERE source_id = ?`,
 		`UPDATE user_preferences SET default_image_bed_source_id = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE default_image_bed_source_id = ?`,
 		`DELETE FROM images WHERE source_id = ?`,
