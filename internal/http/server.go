@@ -170,6 +170,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 管理员：审计日志（筛选与分页）
 	mux.HandleFunc("GET /api/v1/admin/audit-logs", s.requireAdmin(s.handleAdminAuditLogs))
 
+	// 管理员：手动导出系统配置包
+	mux.HandleFunc("GET /api/v1/admin/system/config-export", s.requireAdmin(s.handleAdminExportSystemConfig))
+
 	// API 未匹配路由统一返回 JSON 404，避免落入 SPA fallback。
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeFileNotFound, "接口不存在", nil)

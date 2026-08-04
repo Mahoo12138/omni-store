@@ -14,7 +14,7 @@ OmniStore 是一款以本地目录为真实数据源的轻量级自部署存储�
 
 ## 快速开始
 
-环境要求：Go 1.25+、Node.js 24+ / npm 11+。
+环境要求：Go 1.25+、Node.js 24+ / Corepack + pnpm 10+。
 
 ```bash
 cd web
@@ -27,6 +27,8 @@ go build -o omnistore ./cmd/omnistore
 ```
 
 默认监听 `0.0.0.0:8080`，数据目录为 `./data`。配置项及 Docker 部署方式参见[开发指南](docs/DEVELOPMENT.md)。
+
+需要隔离的开发、演示或 E2E 环境时，可运行 `./scripts/test-env.sh run`，服务将使用 `config.test.yaml` 和被忽略的 `.testdata/`，监听 `127.0.0.1:18080`。测试账号和 E2E 命令参见[开发指南](docs/DEVELOPMENT.md#隔离测试与演示环境)。
 
 ## 项目文档
 

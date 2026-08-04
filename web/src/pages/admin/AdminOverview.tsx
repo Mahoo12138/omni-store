@@ -8,6 +8,7 @@ import {
   adminCreateUser,
   adminDeleteSource,
   adminDeleteUser,
+  adminExportSystemConfig,
   adminFetchAuditLogs,
   adminGetAnonymousSettings,
   adminGetSource,
@@ -48,6 +49,7 @@ import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
   IconArrowUp,
+  IconDownload,
   IconGlobe,
   IconImage,
   IconInfo,
@@ -74,6 +76,7 @@ type SectionKey =
   | 'sources'
   | 'users'
   | 'audit'
+  | 'backup'
   | 'image-bed'
 
 const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
@@ -122,6 +125,7 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'sources', label: '存储源', icon: <IconServer size={15} /> },
   { key: 'users', label: '用户', icon: <IconUser size={15} /> },
   { key: 'audit', label: '审计日志', icon: <IconActivity size={15} /> },
+  { key: 'backup', label: '配置导出', icon: <IconDownload size={15} /> },
   { key: 'image-bed', label: '匿名图床', icon: <IconImage size={15} /> },
 ]
 
@@ -182,6 +186,7 @@ export function AdminOverviewPage() {
           {section === 'sources' && <SourcesSection />}
           {section === 'users' && <UsersSection />}
           {section === 'audit' && <AuditSection />}
+          {section === 'backup' && <BackupSection />}
           {section === 'image-bed' && <ImageBedSection />}
         </div>
       </div>
@@ -685,6 +690,56 @@ function PreferencesSection() {
       </div>
       <div className={css.sectionBody}>
         <span className={css.kvLabel}>暂无可配置项。</span>
+      </div>
+    </section>
+  )
+}
+
+// --- 系统配置包导出 ---
+
+function BackupSection() {
+  const [message, setMessage] = useState('')
+  const exportMutation = useMutation({
+    mutationFn: adminExportSystemConfig,
+    onSuccess: (filename) => setMessage(`已生成并下载 ${filename}`),
+    onError: (error) => setMessage(error instanceof ApiRequestError ? error.message : '导出失败，请稍后重试'),
+  })
+
+  return (
+    <section className={css.section}>
+      <div className={css.sectionHeader}>
+        <h2 className={css.sectionTitle}>导出系统配置包</h2>
+        <p className={css.sectionHint}>生成当前实例的可迁移配置快照，用于人工备份或故障恢复。</p>
+      </div>
+      <div className={css.sectionBody}>
+        <div className={css.exportSummary}>
+          <span className={css.exportIcon}><IconDownload size={22} /></span>
+          <div className={css.exportCopy}>
+            <strong>数据库、配置与密钥材料</strong>
+            <span className={css.exportCopySecondary}>包含 SQLite 一致性快照、生效配置、恢复说明，以及 keys 目录中的普通文件。</span>
+          </div>
+          <div className={css.exportAction}>
+            <Button
+              onClick={() => {
+                setMessage('')
+                exportMutation.mutate()
+              }}
+              disabled={exportMutation.isPending}
+            >
+              <IconDownload size={16} />
+              {exportMutation.isPending ? '正在生成…' : '导出配置包'}
+            </Button>
+          </div>
+        </div>
+        <div className={css.exportNotice} role="note">
+          <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
+          <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
+        </div>
+        {message ? (
+          <p className={exportMutation.isError ? css.exportMessageError : css.exportMessage} role="status">
+            {message}
+          </p>
+        ) : null}
       </div>
     </section>
   )

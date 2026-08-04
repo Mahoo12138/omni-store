@@ -182,4 +182,28 @@ GET /api/v1/public/browse?path={old_mount_path...}
 3. 当前公开挂载路径已清空。
 4. 存储源已删除。
 
+## 导出系统配置包
+
+超级管理员可以手动下载当前实例的系统配置包：
+
+```http
+GET /api/v1/admin/system/config-export
+```
+
+成功响应为 `application/zip` 附件，不使用 JSON envelope。文件名格式为：
+
+```text
+omnistore-system-config-YYYYMMDDTHHMMSSZ.zip
+```
+
+ZIP 包含：
+
+1. `manifest.json`：格式版本、应用版本、导出时间、内容清单和敏感标记。
+2. `config/effective-config.yaml`：默认值、配置文件和环境变量合并后的生效配置。
+3. `database/omnistore.db`：通过 SQLite `VACUUM INTO` 生成的一致性快照。
+4. `keys/`：系统数据目录中 `keys/` 下的普通文件，不跟随符号链接。
+5. `RESTORE.md`：恢复边界和操作提示。
+
+配置包明确不包含真实存储源文件、缓存、上传临时文件和日志。响应使用 `Cache-Control: private, no-store`；成功与失败都会记录 `export_system_config` 管理审计事件。配置包包含密码及 Token 哈希，也可能包含密钥材料，应按敏感备份凭据保管。
+
 ---

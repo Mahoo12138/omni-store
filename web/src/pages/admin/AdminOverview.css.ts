@@ -443,6 +443,73 @@ export const sectionBody = style({
   gap: vars.space.md,
 })
 
+export const exportSummary = style({
+  display: 'grid',
+  gridTemplateColumns: '44px minmax(0, 1fr) auto',
+  gap: vars.space.md,
+  alignItems: 'center',
+  '@media': {
+    'screen and (max-width: 640px)': {
+      gridTemplateColumns: '44px minmax(0, 1fr)',
+      alignItems: 'start',
+    },
+  },
+})
+
+export const exportIcon = style({
+  display: 'grid',
+  placeItems: 'center',
+  width: 44,
+  height: 44,
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.primarySubtle,
+  color: vars.color.primary,
+})
+
+export const exportCopy = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+  color: vars.color.text,
+  fontSize: vars.fontSize.sm,
+  lineHeight: 1.55,
+})
+
+export const exportCopySecondary = style({ color: vars.color.textSecondary })
+
+export const exportAction = style({
+  display: 'flex',
+  justifyContent: 'flex-end',
+  '@media': {
+    'screen and (max-width: 640px)': {
+      gridColumn: '1 / -1',
+      justifyContent: 'flex-start',
+      paddingLeft: 60,
+    },
+  },
+})
+
+export const exportNotice = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+  padding: vars.space.md,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.background,
+  color: vars.color.text,
+  fontSize: vars.fontSize.sm,
+  lineHeight: 1.55,
+})
+
+export const exportMessage = style({
+  margin: 0,
+  color: vars.color.success,
+  fontSize: vars.fontSize.sm,
+})
+
+export const exportMessageError = style([exportMessage, { color: vars.color.danger }])
+
 export const auditFilters = style({
   display: 'grid',
   gridTemplateColumns: 'repeat(3, minmax(130px, 0.7fr)) minmax(240px, 1.5fr) auto',

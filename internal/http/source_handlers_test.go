@@ -49,7 +49,11 @@ func TestHandleAdminPreflightSource(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.RootPath != filepath.Clean(root) || response.Data.Summary.Files != 1 {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("resolve root path: %v", err)
+	}
+	if response.Data.RootPath != filepath.Clean(realRoot) || response.Data.Summary.Files != 1 {
 		t.Fatalf("unexpected response: %+v", response.Data)
 	}
 }

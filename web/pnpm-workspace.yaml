@@ -1,12 +1,5 @@
-onlyBuiltDependencies:
-  - '"'
-  - '['
-  - ']'
-  - b
-  - d
-  - e
-  - esbuild
-  - i
-  - l
-  - s
-  - u
+packages:
+  - '.'
+
+allowBuilds:
+  esbuild: true

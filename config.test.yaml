@@ -1,0 +1,41 @@
+# Isolated local environment for development, demonstrations and E2E tests.
+# Seed with: ./scripts/test-env.sh seed
+# Run with:  ./scripts/test-env.sh run
+
+server:
+  http_addr: "127.0.0.1:18080"
+  public_url: "http://127.0.0.1:18080"
+  trusted_proxies:
+    - "127.0.0.1"
+  s3_addr: "127.0.0.1:18081"
+  s3_enabled: false
+
+data:
+  dir: "./.testdata/data"
+
+database:
+  path: ""
+
+security:
+  cookie_secure: false
+  session_ttl_hours: 24
+
+upload:
+  max_file_size_mb: 64
+  cleanup_stale_files: true
+  temp_file_max_age_hours: 1
+
+image_bed:
+  root_path: "/images"
+  user_max_file_size_mb: 10
+  anonymous_max_file_size_mb: 5
+  anonymous_rate_limit:
+    enabled: false
+    per_ip_per_hour: 1000
+
+audit:
+  enabled: true
+  max_entries: 1000
+
+log:
+  level: "debug"

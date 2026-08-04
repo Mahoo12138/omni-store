@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, ApiRequestError } from './client'
 import type { User } from './auth'
 
 // --- 管理员 API ---
@@ -223,6 +223,43 @@ export async function adminFetchAuditLogs(query: AuditLogQuery): Promise<AuditLo
 
   const data = await apiFetch<AuditLogPage>(`/api/v1/admin/audit-logs?${params}`)
   return { items: data.items ?? [], total: data.total ?? 0 }
+}
+
+// 系统配置包导出（ZIP 二进制响应，不走 JSON envelope）。
+export async function adminExportSystemConfig(): Promise<string> {
+  const response = await fetch('/api/v1/admin/system/config-export', {
+    headers: { Accept: 'application/zip' },
+  })
+  if (!response.ok) {
+    let message = '导出系统配置包失败'
+    let code = 'INTERNAL_ERROR'
+    let requestId = ''
+    try {
+      const body = await response.json() as {
+        error?: { code?: string; message?: string }
+        request_id?: string
+      }
+      message = body.error?.message ?? message
+      code = body.error?.code ?? code
+      requestId = body.request_id ?? ''
+    } catch {
+      // 非 JSON 错误响应使用通用提示。
+    }
+    throw new ApiRequestError({ code, message }, requestId)
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = match?.[1] ?? 'omnistore-system-config.zip'
+  const objectURL = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = objectURL
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(objectURL)
+  return filename
 }
 
 // 概览 dashboard

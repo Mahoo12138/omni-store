@@ -37,7 +37,11 @@ func TestPreflightExistingDirectoryUsesDefaultExcludes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preflight directory: %v", err)
 	}
-	if preview.RootPath != filepath.Clean(root) || preview.IsEmpty {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("resolve root path: %v", err)
+	}
+	if preview.RootPath != filepath.Clean(realRoot) || preview.IsEmpty {
 		t.Fatalf("unexpected root preview: %+v", preview)
 	}
 	if preview.Summary.TotalEntries != 3 || preview.Summary.VisibleEntries != 2 ||
