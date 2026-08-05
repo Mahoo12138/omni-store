@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Select as BaseSelect } from '@base-ui-components/react'
+import { Select as BaseSelect } from '@base-ui-components/react/select'
 import { IconCheck, IconChevronDown } from './Icon'
 import * as css from './Select.css'
 

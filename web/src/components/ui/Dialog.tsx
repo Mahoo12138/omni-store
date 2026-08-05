@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Dialog } from '@base-ui-components/react'
+import { Dialog } from '@base-ui-components/react/dialog'
 import * as css from './Dialog.css'
 
 // base-ui Dialog 包装：受控 / 非受控均可。

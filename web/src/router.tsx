@@ -2,18 +2,9 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
 } from '@tanstack/react-router'
-import { HomePage } from './pages/Home'
-import { LoginPage } from './pages/Login'
-import { SetupPage } from './pages/Setup'
-import { AppHomePage } from './pages/AppHome'
-import { FileManagerPage } from './pages/FileManager'
-import { PublicBrowsePage } from './pages/PublicBrowse'
-import { AnonymousUploadPage } from './pages/AnonymousUpload'
-import { ImageBedPage } from './pages/ImageBed'
-import { AboutPage } from './pages/About'
-import { AdminOverviewPage } from './pages/admin/AdminOverview'
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -23,44 +14,44 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage,
+  component: lazyRouteComponent(() => import('./pages/Home'), 'HomePage'),
 })
 
 const publicBrowseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$',
-  component: PublicBrowsePage,
+  component: lazyRouteComponent(() => import('./pages/PublicBrowse'), 'PublicBrowsePage'),
 })
 
 const anonymousUploadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/upload',
-  component: AnonymousUploadPage,
+  component: lazyRouteComponent(() => import('./pages/AnonymousUpload'), 'AnonymousUploadPage'),
 })
 
 const aboutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/about',
-  component: AboutPage,
+  component: lazyRouteComponent(() => import('./pages/About'), 'AboutPage'),
 })
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  component: LoginPage,
+  component: lazyRouteComponent(() => import('./pages/Login'), 'LoginPage'),
 })
 
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
-  component: SetupPage,
+  component: lazyRouteComponent(() => import('./pages/Setup'), 'SetupPage'),
 })
 
 // 登录用户侧（README §24.2）
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app',
-  component: AppHomePage,
+  component: lazyRouteComponent(() => import('./pages/AppHome'), 'AppHomePage'),
 })
 
 interface FileManagerSearch {
@@ -71,7 +62,7 @@ interface FileManagerSearch {
 const fileManagerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/sources/$sourceKey',
-  component: FileManagerPage,
+  component: lazyRouteComponent(() => import('./pages/FileManager'), 'FileManagerPage'),
   validateSearch: (search: Record<string, unknown>): FileManagerSearch => ({
     path: typeof search.path === 'string' && search.path ? search.path : '/',
     page: Number(search.page) >= 1 ? Number(search.page) : 1,
@@ -81,7 +72,7 @@ const fileManagerRoute = createRoute({
 const imageBedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/image-bed',
-  component: ImageBedPage,
+  component: lazyRouteComponent(() => import('./pages/ImageBed'), 'ImageBedPage'),
 })
 
 // 管理员侧（README §24.3）
@@ -89,7 +80,7 @@ const imageBedRoute = createRoute({
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/admin',
-  component: AdminOverviewPage,
+  component: lazyRouteComponent(() => import('./pages/admin/AdminOverview'), 'AdminOverviewPage'),
 })
 
 const routeTree = rootRoute.addChildren([
