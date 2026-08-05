@@ -18,11 +18,34 @@ export interface AdminSource {
   updated_at: string
 }
 
-export interface SourcePermission {
-  user_id: number
-  username: string
-  permission: 'read_only' | 'read_write'
+export type AccessPermission = 'read_only' | 'read_write'
+
+export interface AccessPolicy {
+  key: string
+  name: string
+  description: string
+  sources: Array<{
+    source_key: string
+    source_name: string
+    permission: AccessPermission
+  }>
+  users: Array<{
+    user_id: number
+    username: string
+    display_name: string
+  }>
+  created_at: string
   updated_at: string
+}
+
+export interface AccessPolicyInput {
+  name: string
+  description: string
+  sources: Array<{
+    source_key: string
+    permission: AccessPermission
+  }>
+  user_ids: number[]
 }
 
 export interface SourcePreflight {
@@ -166,29 +189,25 @@ export async function adminSetExcludePatterns(sourceKey: string, patterns: strin
   })
 }
 
-// 权限分配
-export async function adminListPermissions(sourceKey: string): Promise<SourcePermission[]> {
-  const data = await apiFetch<{ items: SourcePermission[]; total: number }>(
-    `/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions`,
-  )
+// 访问策略
+export async function adminListPolicies(): Promise<AccessPolicy[]> {
+  const data = await apiFetch<{ items: AccessPolicy[]; total: number }>('/api/v1/admin/policies')
   return data.items ?? []
 }
 
-export async function adminSetPermission(
-  sourceKey: string,
-  userId: number,
-  permission: 'read_only' | 'read_write',
-): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions/${userId}`, {
+export async function adminCreatePolicy(input: AccessPolicyInput): Promise<AccessPolicy> {
+  return apiFetch('/api/v1/admin/policies', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function adminUpdatePolicy(policyKey: string, input: AccessPolicyInput): Promise<AccessPolicy> {
+  return apiFetch(`/api/v1/admin/policies/${encodeURIComponent(policyKey)}`, {
     method: 'PUT',
-    body: JSON.stringify({ permission }),
+    body: JSON.stringify(input),
   })
 }
 
-export async function adminRemovePermission(sourceKey: string, userId: number): Promise<void> {
-  await apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/permissions/${userId}`, {
-    method: 'DELETE',
-  })
+export async function adminDeletePolicy(policyKey: string): Promise<void> {
+  await apiFetch(`/api/v1/admin/policies/${encodeURIComponent(policyKey)}`, { method: 'DELETE' })
 }
 
 // 匿名图床配置

@@ -144,7 +144,7 @@ func TestMigrateUpgradesLegacySourceIdentifiersWithoutLosingRelations(t *testing
 	}
 
 	for _, table := range []string{
-		"storage_source_exclude_patterns", "user_source_permissions", "images", "audit_logs",
+		"storage_source_exclude_patterns", "images", "audit_logs",
 		"public_mount_redirects", "webdav_locks", "s3_multipart_uploads", "s3_object_etags",
 	} {
 		var storageSourceID int64
@@ -154,6 +154,11 @@ func TestMigrateUpgradesLegacySourceIdentifiersWithoutLosingRelations(t *testing
 		if storageSourceID != 7 {
 			t.Fatalf("relation %s mapped to %d", table, storageSourceID)
 		}
+	}
+	var legacyPermissionTable int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master
+  WHERE type = 'table' AND name = 'user_source_permissions'`).Scan(&legacyPermissionTable); err != nil || legacyPermissionTable != 0 {
+		t.Fatalf("legacy direct permission table remained: count=%d err=%v", legacyPermissionTable, err)
 	}
 	var defaultID int64
 	if err := conn.QueryRow(`SELECT default_image_bed_storage_source_id FROM user_preferences WHERE user_id = 1`).Scan(&defaultID); err != nil || defaultID != 7 {

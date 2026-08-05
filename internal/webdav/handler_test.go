@@ -65,8 +65,11 @@ func newWebDAVTestEnv(t *testing.T) *webDAVTestEnv {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	if err := sourceService.SetPermission(user.ID, source.Key, models.PermissionReadWrite); err != nil {
-		t.Fatalf("set permission: %v", err)
+	if _, err := sourceService.CreatePolicy(sources.PolicyInput{
+		Name: "WebDAV test", UserIDs: []int64{user.ID},
+		Sources: []sources.PolicySourceInput{{SourceKey: source.Key, Permission: models.PermissionReadWrite}},
+	}); err != nil {
+		t.Fatalf("create access policy: %v", err)
 	}
 	fileService := files.NewService(conn, sourceService, lockpkg.NewManager())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

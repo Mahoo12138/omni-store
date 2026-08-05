@@ -112,7 +112,7 @@ func splitPath(rest string) (sourceKey, inner string) {
 }
 
 // resolveSource 执行 WebDAV 检查链路（README §16.6）：
-// 存储源存在 -> 未禁用 -> webdav_enabled -> 用户权限。
+// 存储源存在 -> 未禁用 -> webdav_enabled -> 访问策略。
 func (h *Handler) resolveSource(user *models.User, sourceKey string, needWrite bool) (*models.StorageSource, int) {
 	src, err := h.sources.Get(sourceKey)
 	if err != nil {

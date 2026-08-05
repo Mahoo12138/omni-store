@@ -145,10 +145,12 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminDeleteSource))
 	mux.HandleFunc("PUT /api/v1/admin/sources/{key}/exclude-patterns", s.requireAdmin(s.handleAdminSetExcludePatterns))
 
-	// 管理员：权限分配
-	mux.HandleFunc("GET /api/v1/admin/sources/{key}/permissions", s.requireAdmin(s.handleAdminListPermissions))
-	mux.HandleFunc("PUT /api/v1/admin/sources/{key}/permissions/{id}", s.requireAdmin(s.handleAdminSetPermission))
-	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}/permissions/{id}", s.requireAdmin(s.handleAdminRemovePermission))
+	// 管理员：访问策略
+	mux.HandleFunc("GET /api/v1/admin/policies", s.requireAdmin(s.handleAdminListPolicies))
+	mux.HandleFunc("POST /api/v1/admin/policies", s.requireAdmin(s.handleAdminCreatePolicy))
+	mux.HandleFunc("GET /api/v1/admin/policies/{key}", s.requireAdmin(s.handleAdminGetPolicy))
+	mux.HandleFunc("PUT /api/v1/admin/policies/{key}", s.requireAdmin(s.handleAdminUpdatePolicy))
+	mux.HandleFunc("DELETE /api/v1/admin/policies/{key}", s.requireAdmin(s.handleAdminDeletePolicy))
 
 	// 公开网盘（匿名可访问，README §12.5）
 	mux.HandleFunc("GET /api/v1/public/mounts", s.handlePublicMounts)

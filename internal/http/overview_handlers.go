@@ -178,7 +178,10 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func loadPermissionCounts(db *sql.DB) (map[int64]int, error) {
-	rows, err := db.Query(`SELECT user_id, COUNT(*) FROM user_source_permissions GROUP BY user_id`)
+	rows, err := db.Query(`SELECT up.user_id, COUNT(DISTINCT ps.storage_source_id)
+  FROM user_access_policies up
+  JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
+  GROUP BY up.user_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -296,10 +299,12 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "启用用户"
 	case "disable_user":
 		return "禁用用户"
-	case "grant_permission":
-		return "分配存储源权限"
-	case "revoke_permission":
-		return "移除存储源权限"
+	case "create_access_policy":
+		return "创建访问策略"
+	case "update_access_policy":
+		return "更新访问策略"
+	case "delete_access_policy":
+		return "删除访问策略"
 	case "image_upload":
 		if filename != "" {
 			return "上传图片 " + filename

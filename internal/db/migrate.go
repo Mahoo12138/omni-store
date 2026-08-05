@@ -39,6 +39,10 @@ func Migrate(conn *sql.DB) error {
 )`); err != nil {
 		return fmt.Errorf("创建 schema_migrations 失败: %w", err)
 	}
+	// v1.0.0 尚未发布，访问授权已直接改为 Policy，旧直连权限表不保留也不转换。
+	if _, err := conn.Exec(`DROP TABLE IF EXISTS user_source_permissions`); err != nil {
+		return fmt.Errorf("清理开发期旧权限表失败: %w", err)
+	}
 	if err := upgradePreReleaseSourceSchema(conn); err != nil {
 		return err
 	}
@@ -182,15 +186,12 @@ func tableHasColumn(conn *sql.DB, table, column string) (bool, error) {
 
 // Very early development databases may predate one or more source-related
 // feature tables. Empty legacy-shaped tables let the single rebuild below stay
-// deterministic; CREATE TABLE IF NOT EXISTS preserves every table that exists.
+// deterministic; the removed direct-permission table is deliberately discarded.
 const preReleaseSourceSchemaCompatibilitySQL = `
 CREATE TABLE IF NOT EXISTS storage_source_exclude_patterns (
   id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL, pattern TEXT NOT NULL, created_at DATETIME NOT NULL
 );
-CREATE TABLE IF NOT EXISTS user_source_permissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, source_id TEXT NOT NULL,
-  permission TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
-);
+DROP TABLE IF EXISTS user_source_permissions;
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id INTEGER PRIMARY KEY, default_image_bed_source_id TEXT, updated_at DATETIME NOT NULL
 );
@@ -235,7 +236,6 @@ ALTER TABLE s3_multipart_parts RENAME TO s3_multipart_parts_legacy;
 ALTER TABLE s3_multipart_uploads RENAME TO s3_multipart_uploads_legacy;
 ALTER TABLE s3_object_etags RENAME TO s3_object_etags_legacy;
 ALTER TABLE storage_source_exclude_patterns RENAME TO storage_source_exclude_patterns_legacy;
-ALTER TABLE user_source_permissions RENAME TO user_source_permissions_legacy;
 ALTER TABLE user_preferences RENAME TO user_preferences_legacy;
 ALTER TABLE images RENAME TO images_legacy;
 ALTER TABLE audit_logs RENAME TO audit_logs_legacy;
@@ -275,23 +275,6 @@ CREATE TABLE storage_source_exclude_patterns (
 INSERT INTO storage_source_exclude_patterns (id, storage_source_id, pattern, created_at)
 SELECT legacy.id, source.id, legacy.pattern, legacy.created_at
 FROM storage_source_exclude_patterns_legacy legacy
-JOIN storage_sources_legacy source ON source.source_id = legacy.source_id;
-
-CREATE TABLE user_source_permissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  storage_source_id INTEGER NOT NULL,
-  permission TEXT NOT NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
-  UNIQUE(user_id, storage_source_id)
-);
-INSERT INTO user_source_permissions
-  (id, user_id, storage_source_id, permission, created_at, updated_at)
-SELECT legacy.id, legacy.user_id, source.id, legacy.permission, legacy.created_at, legacy.updated_at
-FROM user_source_permissions_legacy legacy
 JOIN storage_sources_legacy source ON source.source_id = legacy.source_id;
 
 CREATE TABLE user_preferences (
@@ -449,7 +432,6 @@ DROP TABLE s3_multipart_parts_legacy;
 DROP TABLE s3_multipart_uploads_legacy;
 DROP TABLE s3_object_etags_legacy;
 DROP TABLE storage_source_exclude_patterns_legacy;
-DROP TABLE user_source_permissions_legacy;
 DROP TABLE user_preferences_legacy;
 DROP TABLE images_legacy;
 DROP TABLE audit_logs_legacy;

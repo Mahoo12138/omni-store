@@ -345,7 +345,7 @@ func (s *Service) Delete(key string) error {
 	defer tx.Rollback()
 
 	for _, q := range []string{
-		`DELETE FROM user_source_permissions WHERE storage_source_id = ?`,
+		`DELETE FROM access_policy_sources WHERE storage_source_id = ?`,
 		`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`,
 		`DELETE FROM public_mount_redirects WHERE storage_source_id = ?`,
 		`UPDATE user_preferences SET default_image_bed_storage_source_id = NULL, updated_at = CURRENT_TIMESTAMP

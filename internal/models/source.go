@@ -37,10 +37,28 @@ type UserSourceView struct {
 	ImageBedEnabled   bool   `json:"image_bed_enabled"`
 }
 
-// SourcePermission 对应 user_source_permissions 表。
-type SourcePermission struct {
-	UserID     int64     `json:"user_id"`
-	Username   string    `json:"username"`
-	Permission string    `json:"permission"`
-	UpdatedAt  time.Time `json:"updated_at"`
+// AccessPolicy 是一组可复用的存储源访问规则。
+type AccessPolicy struct {
+	ID          int64                     `json:"id"`
+	Key         string                    `json:"key"`
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	Sources     []AccessPolicySourceRule  `json:"sources"`
+	Users       []AccessPolicyUserBinding `json:"users"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+}
+
+// AccessPolicySourceRule 是策略内的一条存储源权限规则。
+type AccessPolicySourceRule struct {
+	SourceKey  string `json:"source_key"`
+	SourceName string `json:"source_name"`
+	Permission string `json:"permission"`
+}
+
+// AccessPolicyUserBinding 是策略绑定的用户摘要。
+type AccessPolicyUserBinding struct {
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
 }

@@ -42,6 +42,7 @@
 UNAUTHORIZED
 FORBIDDEN
 SOURCE_NOT_FOUND
+POLICY_NOT_FOUND
 SOURCE_DISABLED
 PATH_INVALID
 PATH_EXCLUDED
@@ -127,6 +128,38 @@ POST /api/v1/admin/sources/preflight
 预检只读取目录首层，不建立文件索引、不移动或修改已有内容。读写能力校验会创建并立即删除一个严格命名的临时测试文件。`POST /api/v1/admin/sources` 在真正写入配置前仍会重新执行全部路径校验，不能把预检结果当作长期授权凭据。
 
 正式创建请求必须提供 `name` 与 `root_path`，可选 `description`、`exclude_patterns`；不接受用户自定义存储源标识。服务端生成 `src-` 加 16 位小写十六进制随机 key 并随响应返回，前端仅将其作为不透明路由参数。
+
+## 访问策略
+
+超级管理员通过以下接口管理存储源级访问策略：
+
+```http
+GET    /api/v1/admin/policies
+POST   /api/v1/admin/policies
+GET    /api/v1/admin/policies/{policy_key}
+PUT    /api/v1/admin/policies/{policy_key}
+DELETE /api/v1/admin/policies/{policy_key}
+```
+
+创建和更新均采用整体替换语义：
+
+```json
+{
+  "name": "内容团队",
+  "description": "内容团队日常访问",
+  "sources": [
+    { "source_key": "src-generated-value", "permission": "read_write" },
+    { "source_key": "src-another-value", "permission": "read_only" }
+  ],
+  "user_ids": [2, 3]
+}
+```
+
+`policy_key` 由服务端生成，格式为 `pol-` 加 16 位小写十六进制随机字符串。
+普通用户只能访问其绑定策略授予的存储源；多个策略命中同一存储源时，
+`read_write` 高于 `read_only`。超级管理员始终拥有全部存储源读写权限。
+策略可以暂时不包含规则或用户，便于先创建再配置。删除策略会立即撤销由该策略产生的权限，
+不会删除存储源或真实文件。
 
 ## 图床 Token 管理
 

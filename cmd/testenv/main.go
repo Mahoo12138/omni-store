@@ -101,10 +101,7 @@ func seed(configFile, fixtureRoot string) error {
 	if err != nil {
 		return err
 	}
-	if err := sourceService.SetPermission(demo.ID, publicSource.Key, models.PermissionReadOnly); err != nil {
-		return err
-	}
-	if err := sourceService.SetPermission(demo.ID, teamSource.Key, models.PermissionReadWrite); err != nil {
+	if err := ensureDemoPolicy(sourceService, demo.ID, publicSource.Key, teamSource.Key); err != nil {
 		return err
 	}
 
@@ -157,6 +154,30 @@ func seed(configFile, fixtureRoot string) error {
 		fmt.Printf("S3 凭据: %s\n", credentialFile)
 	}
 	return nil
+}
+
+func ensureDemoPolicy(service *sources.Service, userID int64, publicKey, teamKey string) error {
+	input := sources.PolicyInput{
+		Name:        "演示用户基础访问",
+		Description: "测试环境自动维护的演示访问策略",
+		UserIDs:     []int64{userID},
+		Sources: []sources.PolicySourceInput{
+			{SourceKey: publicKey, Permission: models.PermissionReadOnly},
+			{SourceKey: teamKey, Permission: models.PermissionReadWrite},
+		},
+	}
+	policies, err := service.ListPolicies()
+	if err != nil {
+		return err
+	}
+	for _, policy := range policies {
+		if policy.Name == input.Name {
+			_, err = service.UpdatePolicy(policy.Key, input)
+			return err
+		}
+	}
+	_, err = service.CreatePolicy(input)
+	return err
 }
 
 func ensureUser(service *users.Service, username, displayName, password, role string) (*models.User, error) {

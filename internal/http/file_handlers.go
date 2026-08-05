@@ -15,7 +15,7 @@ import (
 )
 
 // resolveSource 解析系统生成的不透明 key 并执行统一检查链路（README §28）：
-// 存储源存在 -> 未禁用 -> 用户权限。needWrite 为 true 时要求读写权限。
+// 存储源存在 -> 未禁用 -> 访问策略。needWrite 为 true 时要求读写权限。
 func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request, needWrite bool) *models.StorageSource {
 	sourceKey := r.PathValue("key")
 	src, err := s.sources.Get(sourceKey)

@@ -211,19 +211,36 @@ CREATE TABLE public_mount_redirects (
 3. 存储源删除或当前挂载路径清空时删除对应旧路径。
 4. 禁用存储源或关闭公开访问时保留记录，但不提供重定向。
 
-### user_source_permissions
+### access_policies
 
 ```sql
-CREATE TABLE user_source_permissions (
+CREATE TABLE access_policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE access_policy_sources (
+  policy_id INTEGER NOT NULL,
   storage_source_id INTEGER NOT NULL,
   permission TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
-  UNIQUE(user_id, storage_source_id)
+  PRIMARY KEY(policy_id, storage_source_id),
+  FOREIGN KEY(policy_id) REFERENCES access_policies(id) ON DELETE CASCADE,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_access_policies (
+  user_id INTEGER NOT NULL,
+  policy_id INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY(user_id, policy_id),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(policy_id) REFERENCES access_policies(id) ON DELETE CASCADE
 );
 ```
 
@@ -233,6 +250,11 @@ CREATE TABLE user_source_permissions (
 read_only
 read_write
 ```
+
+策略 key 由服务端生成，格式为 `pol-` 加 16 位小写十六进制随机字符串，仅用于管理 API 定位。
+一个策略可以绑定多个用户和多个存储源；同一用户通过多个策略命中同一存储源时，
+`read_write` 高于 `read_only`。超级管理员不需要绑定策略，始终拥有全部存储源的读写权限。
+当前策略只描述存储源级权限，子路径规则在后续增量中实现。
 
 ### user_preferences
 

@@ -164,7 +164,7 @@ func (s *Service) SetDisabled(id int64, disabled bool) error {
 	return nil
 }
 
-// Delete 删除用户及其关联系统数据（Session、Token、权限、偏好）。
+// Delete 删除用户及其关联系统数据（Session、Token、策略绑定、偏好）。
 // 不触碰任何真实文件。
 func (s *Service) Delete(id int64) error {
 	tx, err := s.db.Begin()
@@ -178,7 +178,7 @@ func (s *Service) Delete(id int64) error {
 		`DELETE FROM user_tokens WHERE user_id = ?`,
 		`DELETE FROM image_bed_tokens WHERE user_id = ?`,
 		`DELETE FROM s3_credentials WHERE owner_user_id = ?`,
-		`DELETE FROM user_source_permissions WHERE user_id = ?`,
+		`DELETE FROM user_access_policies WHERE user_id = ?`,
 		`DELETE FROM user_preferences WHERE user_id = ?`,
 	} {
 		if _, err := tx.Exec(q, id); err != nil {

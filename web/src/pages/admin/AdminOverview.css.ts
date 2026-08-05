@@ -635,6 +635,61 @@ export const formRowLabel = style({
   marginBottom: '4px',
 })
 
+export const policySummary = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: vars.space.xs,
+})
+
+export const policyEditorList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  maxHeight: 240,
+  overflowY: 'auto',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+})
+
+export const policyEditorRow = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: vars.space.md,
+  minHeight: 48,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  selectors: {
+    '&:last-child': { borderBottom: 'none' },
+  },
+  '@media': {
+    'screen and (max-width: 520px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      gap: vars.space.sm,
+    },
+  },
+})
+
+export const policyEditorIdentity = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  minWidth: 0,
+  color: vars.color.text,
+  fontSize: vars.fontSize.sm,
+})
+
+export const policyEditorMeta = style({
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+})
+
+export const policyEditorEmpty = style({
+  margin: 0,
+  padding: vars.space.md,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
 export const sourcePreview = style({
   display: 'flex',
   flexDirection: 'column',

@@ -6,27 +6,31 @@ import { apiFetch, ApiRequestError } from '../../api/client'
 import {
   adminCreateSource,
   adminCreateUser,
+  adminCreatePolicy,
+  adminDeletePolicy,
   adminDeleteSource,
   adminDeleteUser,
   adminExportSystemConfig,
   adminFetchAuditLogs,
   adminGetAnonymousSettings,
   adminGetSource,
-  adminListPermissions,
+  adminListPolicies,
   adminListSources,
   adminListUsers,
   adminPreflightSource,
-  adminRemovePermission,
   adminSetAnonymousSettings,
   adminSetExcludePatterns,
-  adminSetPermission,
   adminSetSourceDisabled,
   adminSetUserDisabled,
   adminUpdateSource,
+  adminUpdatePolicy,
   changePassword,
   fetchAdminOverview,
   updateProfile,
   type AdminSource,
+  type AccessPermission,
+  type AccessPolicy,
+  type AccessPolicyInput,
   type OverviewSystem,
   type SourcePreflight,
 } from '../../api/admin'
@@ -65,6 +69,7 @@ import {
   IconPlus,
   IconServer,
   IconSettings,
+  IconShield,
   IconTrash,
   IconUser,
   IconUserPlus,
@@ -82,6 +87,7 @@ type SectionKey =
   | 'preferences'
   | 'stats'
   | 'sources'
+  | 'policies'
   | 'users'
   | 'audit'
   | 'backup'
@@ -132,6 +138,7 @@ const emptyAuditFilters: AuditFilters = {
 const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'stats', label: '仪表盘', icon: <IconInfo size={15} /> },
   { key: 'sources', label: '存储源', icon: <IconServer size={15} /> },
+  { key: 'policies', label: '访问策略', icon: <IconShield size={15} /> },
   { key: 'users', label: '用户', icon: <IconUser size={15} /> },
   { key: 'audit', label: '审计日志', icon: <IconActivity size={15} /> },
   { key: 'backup', label: '配置导出', icon: <IconDownload size={15} /> },
@@ -193,6 +200,7 @@ export function AdminOverviewPage() {
           {section === 'preferences' && <PreferencesSection />}
           {section === 'stats' && <StatsSection />}
           {section === 'sources' && <SourcesSection />}
+          {section === 'policies' && <PoliciesSection />}
           {section === 'users' && <UsersSection />}
           {section === 'audit' && <AuditSection />}
           {section === 'backup' && <BackupSection />}
@@ -1463,7 +1471,7 @@ function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
   )
 }
 
-// --- 编辑存储源 弹窗（WebDAV/图床/公开访问 + 排除规则 + 用户权限）---
+// --- 编辑存储源 弹窗（WebDAV/图床/公开访问 + 排除规则）---
 
 function EditSourceDialog({
   sourceKey,
@@ -1474,8 +1482,6 @@ function EditSourceDialog({
 }) {
   const queryClient = useQueryClient()
   const detail = useQuery({ queryKey: ['admin-source', sourceKey], queryFn: () => adminGetSource(sourceKey) })
-  const perms = useQuery({ queryKey: ['admin-perms', sourceKey], queryFn: () => adminListPermissions(sourceKey) })
-  const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
 
   const [mountPath, setMountPath] = useState<string | null>(null)
   const [patterns, setPatterns] = useState<string | null>(null)
@@ -1483,8 +1489,6 @@ function EditSourceDialog({
   const [webdavOn, setWebdavOn] = useState<boolean | null>(null)
   const [imageBedOn, setImageBedOn] = useState<boolean | null>(null)
   const [msg, setMsg] = useState('')
-  const [permUserId, setPermUserId] = useState('')
-  const [permLevel, setPermLevel] = useState<'read_only' | 'read_write'>('read_only')
 
   // 打开弹窗时，把当前值同步到本地 state
   useEffect(() => {
@@ -1507,21 +1511,8 @@ function EditSourceDialog({
     onSuccess: () => { setMsg('排除规则已保存'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
-  const setPermMut = useMutation({
-    mutationFn: ({ userId, level }: { userId: number; level: 'read_only' | 'read_write' }) =>
-      adminSetPermission(sourceKey, userId, level),
-    onSuccess: () => { setMsg('权限已更新'); refresh() },
-    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '操作失败'),
-  })
-  const removePermMut = useMutation({
-    mutationFn: (userId: number) => adminRemovePermission(sourceKey, userId),
-    onSuccess: () => { setMsg('已取消权限'); refresh() },
-    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '操作失败'),
-  })
-
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['admin-source', sourceKey] })
-    queryClient.invalidateQueries({ queryKey: ['admin-perms', sourceKey] })
     queryClient.invalidateQueries({ queryKey: ['admin-sources'] })
   }
 
@@ -1633,78 +1624,6 @@ function EditSourceDialog({
         </div>
       </Field>
 
-      <Field
-        label="用户权限"
-        hint="为用户分配该存储源的访问权限"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {perms.data?.length === 0 && (
-            <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
-              还没有授权用户。
-            </span>
-          )}
-          {perms.data?.map((p) => (
-            <div
-              key={p.user_id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '6px 0',
-              }}
-            >
-              <span style={{ minWidth: 120, fontSize: vars.fontSize.sm }}>{p.username}</span>
-              <Badge color={p.permission === 'read_write' ? 'blue' : 'gray'}>
-                {p.permission === 'read_write' ? '读写' : '只读'}
-              </Badge>
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  setPermMut.mutate({
-                    userId: p.user_id,
-                    level: p.permission === 'read_write' ? 'read_only' : 'read_write',
-                  })
-                }
-              >
-                切换
-              </Button>
-              <Button variant="danger" onClick={() => removePermMut.mutate(p.user_id)}>
-                取消权限
-              </Button>
-            </div>
-          ))}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Select
-              value={permUserId}
-              onValueChange={setPermUserId}
-              options={users.data
-                ?.filter((u) => !perms.data?.some((p) => p.user_id === u.id))
-                .map((u) => ({ value: String(u.id), label: u.username })) ?? []}
-              placeholder="选择用户…"
-              ariaLabel="选择要授权的用户"
-              width="wide"
-            />
-            <Select
-              value={permLevel}
-              onValueChange={(nextValue) => setPermLevel(nextValue as 'read_only' | 'read_write')}
-              options={[
-                { value: 'read_only', label: '只读' },
-                { value: 'read_write', label: '读写' },
-              ]}
-              ariaLabel="权限级别"
-              width="content"
-            />
-            <Button
-              variant="secondary"
-              disabled={!permUserId}
-              onClick={() => setPermMut.mutate({ userId: Number(permUserId), level: permLevel })}
-            >
-              分配权限
-            </Button>
-          </div>
-        </div>
-      </Field>
-
       {msg && (
         <div
           style={{
@@ -1716,6 +1635,324 @@ function EditSourceDialog({
           {msg}
         </div>
       )}
+    </DialogWrap>
+  )
+}
+
+// --- 访问策略 ---
+
+function PoliciesSection() {
+  const queryClient = useQueryClient()
+  const policies = useQuery({ queryKey: ['admin-policies'], queryFn: adminListPolicies })
+  const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
+  const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editing, setEditing] = useState<AccessPolicy | null>(null)
+  const [deleting, setDeleting] = useState<AccessPolicy | null>(null)
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-policies'] })
+    queryClient.invalidateQueries({ queryKey: ['admin-overview'] })
+  }
+  const deleteMutation = useMutation({
+    mutationFn: adminDeletePolicy,
+    onSuccess: () => {
+      setDeleting(null)
+      refresh()
+    },
+    onError: (error) => alert(error instanceof ApiRequestError ? error.message : '删除失败'),
+  })
+
+  return (
+    <>
+      <section className={css.section}>
+        <div className={css.sectionHeader}>
+          <h2 className={css.sectionTitle}>访问策略</h2>
+          <p className={css.sectionHint}>
+            将多个存储源权限组合成策略，再统一绑定用户；多策略重叠时自动采用更高权限。
+          </p>
+        </div>
+        <div className={css.sectionBody}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
+              共 {policies.data?.length ?? 0} 个策略
+            </span>
+            <Button onClick={() => setCreateOpen(true)}>
+              <IconPlus size={14} /> 新建策略
+            </Button>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className={css.compactTable}>
+            <thead>
+              <tr>
+                <th className={css.compactTh}>名称</th>
+                <th className={css.compactTh}>存储源规则</th>
+                <th className={css.compactTh}>用户</th>
+                <th className={css.compactTh}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {policies.data?.map((policy) => (
+                <tr key={policy.key} className={css.compactTr}>
+                  <td className={css.compactTd}>
+                    <div style={{ fontWeight: 600 }}>{policy.name}</div>
+                    {policy.description ? (
+                      <div className={css.policyEditorMeta}>{policy.description}</div>
+                    ) : null}
+                  </td>
+                  <td className={css.compactTd}>
+                    <div className={css.policySummary}>
+                      {policy.sources.length === 0 ? '—' : policy.sources.map((rule) => (
+                        <Badge key={rule.source_key} color={rule.permission === 'read_write' ? 'blue' : 'gray'}>
+                          {rule.source_name} · {rule.permission === 'read_write' ? '读写' : '只读'}
+                        </Badge>
+                      ))}
+                    </div>
+                  </td>
+                  <td className={css.compactTd}>
+                    {policy.users.length === 0
+                      ? '—'
+                      : policy.users.map((user) => user.display_name || user.username).join('、')}
+                  </td>
+                  <td className={css.compactTd}>
+                    <div className={css.formRow}>
+                      <Button variant="ghost" onClick={() => setEditing(policy)}>编辑</Button>
+                      <Button
+                        variant="danger"
+                        aria-label={`删除策略 ${policy.name}`}
+                        onClick={() => setDeleting(policy)}
+                      >
+                        <IconTrash size={14} />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {policies.isSuccess && policies.data.length === 0 ? (
+            <p className={css.policyEditorEmpty}>还没有访问策略，普通用户暂时无法访问私有存储源。</p>
+          ) : null}
+        </div>
+      </section>
+
+      <PolicyDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        sources={sources.data ?? []}
+        users={users.data ?? []}
+        onSaved={refresh}
+      />
+      {editing ? (
+        <PolicyDialog
+          open
+          policy={editing}
+          onOpenChange={(open) => { if (!open) setEditing(null) }}
+          sources={sources.data ?? []}
+          users={users.data ?? []}
+          onSaved={() => {
+            setEditing(null)
+            refresh()
+          }}
+        />
+      ) : null}
+      <DialogWrap
+        open={!!deleting}
+        onOpenChange={(open) => { if (!open) setDeleting(null) }}
+        title="删除访问策略"
+        description={`确定删除「${deleting?.name ?? ''}」吗？`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleting(null)}>取消</Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleting && deleteMutation.mutate(deleting.key)}
+            >
+              {deleteMutation.isPending ? '删除中…' : '确认删除'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, color: vars.color.text, fontSize: vars.fontSize.sm }}>
+          删除后，依赖该策略获得的访问权限会立即失效，不会删除存储源或真实文件。
+        </p>
+      </DialogWrap>
+    </>
+  )
+}
+
+function PolicyDialog({
+  open,
+  policy,
+  sources,
+  users,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean
+  policy?: AccessPolicy
+  sources: AdminSource[]
+  users: User[]
+  onOpenChange: (open: boolean) => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [sourcePermissions, setSourcePermissions] = useState<Record<string, AccessPermission>>({})
+  const [userIDs, setUserIDs] = useState<number[]>([])
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setName(policy?.name ?? '')
+    setDescription(policy?.description ?? '')
+    setSourcePermissions(Object.fromEntries(
+      policy?.sources.map((rule) => [rule.source_key, rule.permission]) ?? [],
+    ))
+    setUserIDs(policy?.users.map((user) => user.user_id) ?? [])
+    setMessage('')
+  }, [open, policy])
+
+  const saveMutation = useMutation({
+    mutationFn: (input: AccessPolicyInput) => policy
+      ? adminUpdatePolicy(policy.key, input)
+      : adminCreatePolicy(input),
+    onSuccess: () => {
+      onSaved()
+      onOpenChange(false)
+    },
+    onError: (error) => setMessage(error instanceof ApiRequestError ? error.message : '保存失败'),
+  })
+
+  function toggleSource(sourceKey: string, checked: boolean) {
+    setSourcePermissions((current) => {
+      if (checked) return { ...current, [sourceKey]: current[sourceKey] ?? 'read_only' }
+      const next = { ...current }
+      delete next[sourceKey]
+      return next
+    })
+  }
+
+  function toggleUser(userID: number, checked: boolean) {
+    setUserIDs((current) => checked
+      ? current.includes(userID) ? current : [...current, userID]
+      : current.filter((id) => id !== userID))
+  }
+
+  function save() {
+    if (!name.trim()) {
+      setMessage('请输入策略名称')
+      return
+    }
+    saveMutation.mutate({
+      name: name.trim(),
+      description: description.trim(),
+      sources: sources.flatMap((source) => {
+        const permission = sourcePermissions[source.key]
+        return permission ? [{ source_key: source.key, permission }] : []
+      }),
+      user_ids: userIDs,
+    })
+  }
+
+  const assignableUsers = users.filter((user) => user.role !== 'super_admin')
+  return (
+    <DialogWrap
+      open={open}
+      onOpenChange={onOpenChange}
+      title={policy ? '编辑访问策略' : '新建访问策略'}
+      description="策略统一描述用户可以访问哪些存储源，以及每个存储源的权限级别。"
+      wide
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button disabled={saveMutation.isPending || !name.trim()} onClick={save}>
+            {saveMutation.isPending ? '保存中…' : '保存策略'}
+          </Button>
+        </>
+      }
+    >
+      <Field label="策略名称" required>
+        <Input
+          autoFocus
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="例如：内容团队"
+        />
+      </Field>
+      <Field label="说明" hint="说明策略适用的人群或用途">
+        <textarea
+          className={fieldCss.textarea}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="例如：内容团队日常读写权限"
+        />
+      </Field>
+      <Field label="存储源规则" hint="未选中的存储源不会通过此策略授予权限">
+        <div className={css.policyEditorList}>
+          {sources.length === 0 ? <p className={css.policyEditorEmpty}>请先创建存储源。</p> : null}
+          {sources.map((source) => {
+            const permission = sourcePermissions[source.key]
+            return (
+              <div key={source.key} className={css.policyEditorRow}>
+                <label className={css.policyEditorIdentity}>
+                  <input
+                    type="checkbox"
+                    className={fieldCss.checkbox}
+                    checked={!!permission}
+                    onChange={(event) => toggleSource(source.key, event.target.checked)}
+                  />
+                  <span>
+                    {source.name}
+                    {source.is_disabled ? <span className={css.policyEditorMeta}> · 已禁用</span> : null}
+                  </span>
+                </label>
+                {permission ? (
+                  <Select
+                    value={permission}
+                    onValueChange={(value) => setSourcePermissions((current) => ({
+                      ...current,
+                      [source.key]: value as AccessPermission,
+                    }))}
+                    options={[
+                      { value: 'read_only', label: '只读' },
+                      { value: 'read_write', label: '读写' },
+                    ]}
+                    ariaLabel={`${source.name}权限`}
+                    width="content"
+                  />
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      </Field>
+      <Field label="绑定用户" hint="超级管理员无需绑定，始终拥有全部读写权限">
+        <div className={css.policyEditorList}>
+          {assignableUsers.length === 0 ? <p className={css.policyEditorEmpty}>还没有可绑定的普通用户。</p> : null}
+          {assignableUsers.map((user) => (
+            <label key={user.id} className={css.policyEditorRow}>
+              <span className={css.policyEditorIdentity}>
+                <input
+                  type="checkbox"
+                  className={fieldCss.checkbox}
+                  checked={userIDs.includes(user.id)}
+                  onChange={(event) => toggleUser(user.id, event.target.checked)}
+                />
+                <span>{user.display_name || user.username}</span>
+              </span>
+              <span className={css.policyEditorMeta}>@{user.username}</span>
+            </label>
+          ))}
+        </div>
+      </Field>
+      {message ? (
+        <p role="status" style={{ margin: 0, color: vars.color.danger, fontSize: vars.fontSize.sm }}>
+          {message}
+        </p>
+      ) : null}
     </DialogWrap>
   )
 }

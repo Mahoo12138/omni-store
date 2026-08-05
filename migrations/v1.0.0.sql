@@ -127,16 +127,33 @@ CREATE TABLE IF NOT EXISTS storage_source_exclude_patterns (
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS user_source_permissions (
+CREATE TABLE IF NOT EXISTS access_policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
+  key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS access_policy_sources (
+  policy_id INTEGER NOT NULL,
   storage_source_id INTEGER NOT NULL,
   permission TEXT NOT NULL, -- read_only / read_write
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
-  UNIQUE(user_id, storage_source_id)
+  PRIMARY KEY(policy_id, storage_source_id),
+  FOREIGN KEY(policy_id) REFERENCES access_policies(id) ON DELETE CASCADE,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_access_policies (
+  user_id INTEGER NOT NULL,
+  policy_id INTEGER NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY(user_id, policy_id),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(policy_id) REFERENCES access_policies(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS user_preferences (

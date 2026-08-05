@@ -169,59 +169,6 @@ func (s *Server) handleAdminSetExcludePatterns(w http.ResponseWriter, r *http.Re
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
-// --- 管理员：权限分配 ---
-
-func (s *Server) handleAdminListPermissions(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.sources.Get(r.PathValue("key")); err != nil {
-		s.writeSourceError(w, r, err)
-		return
-	}
-	list, err := s.sources.PermissionsOfSource(r.PathValue("key"))
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询权限失败", nil)
-		return
-	}
-	WriteData(w, r, ListData{Items: list, Total: int64(len(list))})
-}
-
-func (s *Server) handleAdminSetPermission(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
-	if !ok {
-		WriteError(w, r, CodeValidationError, "非法用户 ID", nil)
-		return
-	}
-	var req struct {
-		Permission string `json:"permission"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if _, err := s.users.GetByID(id); err != nil {
-		WriteError(w, r, CodeValidationError, "用户不存在", nil)
-		return
-	}
-	if err := s.sources.SetPermission(id, r.PathValue("key"), req.Permission); err != nil {
-		s.writeSourceError(w, r, err)
-		return
-	}
-	s.adminAudit(r, "grant_permission", audit.StatusSuccess, "")
-	WriteData(w, r, map[string]any{"ok": true})
-}
-
-func (s *Server) handleAdminRemovePermission(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
-	if !ok {
-		WriteError(w, r, CodeValidationError, "非法用户 ID", nil)
-		return
-	}
-	if err := s.sources.RemovePermission(id, r.PathValue("key")); err != nil {
-		WriteError(w, r, CodeInternalError, "取消权限失败", nil)
-		return
-	}
-	s.adminAudit(r, "revoke_permission", audit.StatusSuccess, "")
-	WriteData(w, r, map[string]any{"ok": true})
-}
-
 // --- 登录用户：可访问存储源列表 ---
 
 func (s *Server) handleListMySources(w http.ResponseWriter, r *http.Request) {
