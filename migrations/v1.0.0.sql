@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS storage_sources (
   public_mount_path TEXT UNIQUE,
   webdav_enabled BOOLEAN NOT NULL DEFAULT 1,
   image_bed_enabled BOOLEAN NOT NULL DEFAULT 0,
+  quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0),
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -145,6 +146,18 @@ CREATE TABLE IF NOT EXISTS access_policy_sources (
   PRIMARY KEY(policy_id, storage_source_id),
   FOREIGN KEY(policy_id) REFERENCES access_policies(id) ON DELETE CASCADE,
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS access_policy_path_rules (
+  policy_id INTEGER NOT NULL,
+  storage_source_id INTEGER NOT NULL,
+  path_prefix TEXT NOT NULL,
+  permission TEXT NOT NULL, -- read_only / read_write
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY(policy_id, storage_source_id, path_prefix),
+  FOREIGN KEY(policy_id, storage_source_id)
+    REFERENCES access_policy_sources(policy_id, storage_source_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS user_access_policies (

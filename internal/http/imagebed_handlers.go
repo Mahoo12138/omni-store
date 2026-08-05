@@ -11,6 +11,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/models"
 )
@@ -46,6 +47,8 @@ func writeImageBedError(w http.ResponseWriter, r *http.Request, err error) {
 		WriteError(w, r, CodeForbidden, err.Error(), nil)
 	case errors.As(err, &maxBytesErr):
 		WriteError(w, r, CodePayloadTooLarge, "图片超过大小限制", nil)
+	case errors.Is(err, files.ErrQuotaExceeded):
+		WriteError(w, r, CodeInsufficientStorage, err.Error(), nil)
 	default:
 		WriteError(w, r, CodeInternalError, "图床操作失败", nil)
 	}
@@ -251,6 +254,10 @@ func (s *Server) handlePicGoUpload(w http.ResponseWriter, r *http.Request) {
 			msg = err.Error()
 		case errors.As(err, &maxBytesErr):
 			msg = "图片超过大小限制"
+		case errors.Is(err, files.ErrQuotaExceeded):
+			msg = err.Error()
+			writePicGo(w, http.StatusInsufficientStorage, map[string]any{"success": false, "message": msg})
+			return
 		}
 		writePicGo(w, http.StatusBadRequest, map[string]any{"success": false, "message": msg})
 		return

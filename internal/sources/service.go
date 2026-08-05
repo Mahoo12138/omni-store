@@ -18,6 +18,8 @@ var (
 	ErrNotFound = errors.New("存储源不存在")
 	// ErrNameRequired 存储源名称不能为空。
 	ErrNameRequired = errors.New("存储源名称不能为空")
+	// ErrQuotaInvalid 存储源配额不能为负数。
+	ErrQuotaInvalid = errors.New("存储源配额不能为负数")
 )
 
 // DefaultExcludePatterns 是新建存储源默认建议排除规则（README §11.3）。
@@ -46,14 +48,14 @@ func NewService(db *sql.DB, dataDir string) *Service {
 }
 
 const sourceColumns = `id, key, name, description, root_path, is_disabled,
-  public_read_enabled, public_mount_path, webdav_enabled, image_bed_enabled, created_at, updated_at`
+  public_read_enabled, public_mount_path, webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at`
 
 func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, error) {
 	var s models.StorageSource
 	var desc sql.NullString
 	err := row.Scan(&s.ID, &s.Key, &s.Name, &desc, &s.RootPath, &s.IsDisabled,
 		&s.PublicReadEnabled, &s.PublicMountPath, &s.WebdavEnabled, &s.ImageBedEnabled,
-		&s.CreatedAt, &s.UpdatedAt)
+		&s.QuotaBytes, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -192,6 +194,7 @@ type UpdateInput struct {
 	PublicMountPath   *string
 	WebdavEnabled     *bool
 	ImageBedEnabled   *bool
+	QuotaBytes        *int64
 }
 
 // Update 修改存储源配置。开启公开访问时校验挂载路径格式和冲突（README §12.3/§12.4）。
@@ -221,6 +224,12 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 	}
 	if in.ImageBedEnabled != nil {
 		src.ImageBedEnabled = *in.ImageBedEnabled
+	}
+	if in.QuotaBytes != nil {
+		if *in.QuotaBytes < 0 {
+			return nil, ErrQuotaInvalid
+		}
+		src.QuotaBytes = *in.QuotaBytes
 	}
 	if in.PublicMountPath != nil {
 		src.PublicMountPath = in.PublicMountPath
@@ -279,10 +288,10 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 
 	_, err = tx.Exec(`UPDATE storage_sources SET
   name = ?, description = ?, public_read_enabled = ?, public_mount_path = ?,
-  webdav_enabled = ?, image_bed_enabled = ?, updated_at = ?
+  webdav_enabled = ?, image_bed_enabled = ?, quota_bytes = ?, updated_at = ?
   WHERE id = ?`,
 		src.Name, src.Description, src.PublicReadEnabled, src.PublicMountPath,
-		src.WebdavEnabled, src.ImageBedEnabled, time.Now().UTC(), src.ID)
+		src.WebdavEnabled, src.ImageBedEnabled, src.QuotaBytes, time.Now().UTC(), src.ID)
 	if err != nil {
 		return nil, fmt.Errorf("更新存储源失败: %w", err)
 	}

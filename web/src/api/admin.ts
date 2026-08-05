@@ -14,11 +14,17 @@ export interface AdminSource {
   public_mount_path: string | null
   webdav_enabled: boolean
   image_bed_enabled: boolean
+  quota_bytes: number
   created_at: string
   updated_at: string
 }
 
 export type AccessPermission = 'read_only' | 'read_write'
+
+export interface AccessPolicyPathRule {
+  path_prefix: string
+  permission: AccessPermission
+}
 
 export interface AccessPolicy {
   key: string
@@ -28,6 +34,7 @@ export interface AccessPolicy {
     source_key: string
     source_name: string
     permission: AccessPermission
+    path_rules: AccessPolicyPathRule[]
   }>
   users: Array<{
     user_id: number
@@ -44,8 +51,16 @@ export interface AccessPolicyInput {
   sources: Array<{
     source_key: string
     permission: AccessPermission
+    path_rules: AccessPolicyPathRule[]
   }>
   user_ids: number[]
+}
+
+export interface StorageQuota {
+  usage_bytes: number
+  quota_bytes: number
+  remaining_bytes: number
+  unlimited: boolean
 }
 
 export interface SourcePreflight {
@@ -150,6 +165,7 @@ export async function adminPreflightSource(input: {
 export async function adminGetSource(sourceKey: string): Promise<{
   source: AdminSource
   exclude_patterns: string[]
+  quota: StorageQuota
 }> {
   return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`)
 }
@@ -163,6 +179,7 @@ export async function adminUpdateSource(
     public_mount_path: string
     webdav_enabled: boolean
     image_bed_enabled: boolean
+    quota_bytes: number
   }>,
 ): Promise<AdminSource> {
   return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`, {

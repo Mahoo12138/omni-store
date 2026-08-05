@@ -9,6 +9,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/security"
 )
 
 var (
@@ -18,7 +19,14 @@ var (
 
 // PolicySourceInput 是访问策略内的一条存储源授权规则。
 type PolicySourceInput struct {
-	SourceKey  string `json:"source_key"`
+	SourceKey  string                `json:"source_key"`
+	Permission string                `json:"permission"`
+	PathRules  []PolicyPathRuleInput `json:"path_rules"`
+}
+
+// PolicyPathRuleInput 是存储源内的一条相对路径权限覆盖规则。
+type PolicyPathRuleInput struct {
+	PathPrefix string `json:"path_prefix"`
 	Permission string `json:"permission"`
 }
 
@@ -134,6 +142,28 @@ func replacePolicyBindings(tx *sql.Tx, policyID int64, in PolicyInput, now time.
 			policyID, sourceID, rule.Permission, now, now); err != nil {
 			return err
 		}
+		seenPaths := make(map[string]struct{}, len(rule.PathRules))
+		for _, pathRule := range rule.PathRules {
+			pathPrefix, err := security.NormalizeRelPath(pathRule.PathPrefix)
+			if err != nil {
+				return fmt.Errorf("非法子路径 %q: %w", pathRule.PathPrefix, err)
+			}
+			if pathPrefix == "" {
+				return fmt.Errorf("子路径规则不能指向存储源根目录")
+			}
+			if pathRule.Permission != models.PermissionReadOnly && pathRule.Permission != models.PermissionReadWrite {
+				return fmt.Errorf("非法权限级别: %s", pathRule.Permission)
+			}
+			if _, exists := seenPaths[pathPrefix]; exists {
+				return fmt.Errorf("子路径规则重复: %s", pathPrefix)
+			}
+			seenPaths[pathPrefix] = struct{}{}
+			if _, err := tx.Exec(`INSERT INTO access_policy_path_rules
+  (policy_id, storage_source_id, path_prefix, permission, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?)`, policyID, sourceID, pathPrefix, pathRule.Permission, now, now); err != nil {
+				return err
+			}
+		}
 	}
 
 	seenUsers := make(map[int64]struct{}, len(in.UserIDs))
@@ -238,7 +268,36 @@ func (s *Service) loadPolicyBindings(policy *models.AccessPolicy) error {
 			rows.Close()
 			return err
 		}
+		rule.PathRules = []models.AccessPolicyPathRule{}
 		policy.Sources = append(policy.Sources, rule)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	sourceIndexes := make(map[string]int, len(policy.Sources))
+	for i := range policy.Sources {
+		sourceIndexes[policy.Sources[i].SourceKey] = i
+	}
+	rows, err = s.db.Query(`SELECT ss.key, pr.path_prefix, pr.permission
+  FROM access_policy_path_rules pr
+  JOIN storage_sources ss ON ss.id = pr.storage_source_id
+  WHERE pr.policy_id = ? ORDER BY ss.id, pr.path_prefix`, policy.ID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var sourceKey string
+		var pathRule models.AccessPolicyPathRule
+		if err := rows.Scan(&sourceKey, &pathRule.PathPrefix, &pathRule.Permission); err != nil {
+			rows.Close()
+			return err
+		}
+		if index, ok := sourceIndexes[sourceKey]; ok {
+			policy.Sources[index].PathRules = append(policy.Sources[index].PathRules, pathRule)
+		}
 	}
 	if err := rows.Close(); err != nil {
 		return err
@@ -263,26 +322,88 @@ func (s *Service) loadPolicyBindings(policy *models.AccessPolicy) error {
 	return rows.Err()
 }
 
-// permissionOf 返回用户从全部访问策略合并得到的权限；超级管理员隐式拥有读写权限。
-func (s *Service) permissionOf(user *models.User, storageSourceID int64) (string, error) {
+func permissionLevel(permission string) int {
+	if permission == models.PermissionReadWrite {
+		return 2
+	}
+	if permission == models.PermissionReadOnly {
+		return 1
+	}
+	return 0
+}
+
+func permissionFromLevel(level int) string {
+	if level >= 2 {
+		return models.PermissionReadWrite
+	}
+	if level == 1 {
+		return models.PermissionReadOnly
+	}
+	return ""
+}
+
+func pathPrefixMatches(relPath, prefix string) bool {
+	return relPath == prefix || strings.HasPrefix(relPath, prefix+"/")
+}
+
+// permissionOf 返回用户在指定路径上从全部访问策略合并得到的权限。
+// 单个策略内由最长路径前缀覆盖源级默认权限，多个策略之间取最高权限；超级管理员隐式拥有读写权限。
+func (s *Service) permissionOf(user *models.User, storageSourceID int64, relPath string) (string, error) {
 	if user.IsAdmin() {
 		return models.PermissionReadWrite, nil
 	}
-	var level sql.NullInt64
-	err := s.db.QueryRow(`SELECT MAX(CASE ps.permission WHEN 'read_write' THEN 2 WHEN 'read_only' THEN 1 ELSE 0 END)
-  FROM user_access_policies up
-  JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
-  WHERE up.user_id = ? AND ps.storage_source_id = ?`, user.ID, storageSourceID).Scan(&level)
+	normalized, err := security.NormalizeRelPath(relPath)
 	if err != nil {
 		return "", err
 	}
-	if !level.Valid || level.Int64 == 0 {
-		return "", nil
+	rows, err := s.db.Query(`SELECT ps.policy_id, ps.permission, pr.path_prefix, pr.permission
+  FROM user_access_policies up
+  JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
+	LEFT JOIN access_policy_path_rules pr
+	  ON pr.policy_id = ps.policy_id AND pr.storage_source_id = ps.storage_source_id
+  WHERE up.user_id = ? AND ps.storage_source_id = ?
+  ORDER BY ps.policy_id`, user.ID, storageSourceID)
+	if err != nil {
+		return "", err
 	}
-	if level.Int64 == 2 {
-		return models.PermissionReadWrite, nil
+	defer rows.Close()
+
+	bestLevel := 0
+	var currentPolicyID int64 = -1
+	currentPermission := ""
+	longestPrefix := -1
+	flush := func() {
+		if level := permissionLevel(currentPermission); level > bestLevel {
+			bestLevel = level
+		}
 	}
-	return models.PermissionReadOnly, nil
+	for rows.Next() {
+		var policyID int64
+		var basePermission string
+		var pathPrefix, pathPermission sql.NullString
+		if err := rows.Scan(&policyID, &basePermission, &pathPrefix, &pathPermission); err != nil {
+			return "", err
+		}
+		if policyID != currentPolicyID {
+			if currentPolicyID != -1 {
+				flush()
+			}
+			currentPolicyID = policyID
+			currentPermission = basePermission
+			longestPrefix = -1
+		}
+		if pathPrefix.Valid && pathPermission.Valid && pathPrefixMatches(normalized, pathPrefix.String) && len(pathPrefix.String) > longestPrefix {
+			currentPermission = pathPermission.String
+			longestPrefix = len(pathPrefix.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if currentPolicyID != -1 {
+		flush()
+	}
+	return permissionFromLevel(bestLevel), nil
 }
 
 // CanReadSource 要求存储源存在、未禁用且至少有一个策略授予读取权限。
@@ -294,7 +415,7 @@ func (s *Service) CanReadSource(user *models.User, sourceKey string) (bool, erro
 	if src.IsDisabled {
 		return false, nil
 	}
-	permission, err := s.permissionOf(user, src.ID)
+	permission, err := s.permissionOf(user, src.ID, "")
 	if err != nil {
 		return false, err
 	}
@@ -310,11 +431,94 @@ func (s *Service) CanWriteSource(user *models.User, sourceKey string) (bool, err
 	if src.IsDisabled {
 		return false, nil
 	}
-	permission, err := s.permissionOf(user, src.ID)
+	permission, err := s.permissionOf(user, src.ID, "")
 	if err != nil {
 		return false, err
 	}
 	return permission == models.PermissionReadWrite, nil
+}
+
+// PermissionAtPath 返回用户在指定存储源路径的最终权限；禁用源不返回权限。
+func (s *Service) PermissionAtPath(user *models.User, sourceKey, relPath string) (string, error) {
+	src, err := s.Get(sourceKey)
+	if err != nil {
+		return "", err
+	}
+	if src.IsDisabled {
+		return "", nil
+	}
+	return s.permissionOf(user, src.ID, relPath)
+}
+
+// CanReadPath 检查指定路径的最终读取权限。
+func (s *Service) CanReadPath(user *models.User, sourceKey, relPath string) (bool, error) {
+	permission, err := s.PermissionAtPath(user, sourceKey, relPath)
+	if err != nil {
+		return false, err
+	}
+	return permission == models.PermissionReadOnly || permission == models.PermissionReadWrite, nil
+}
+
+// CanWritePath 检查指定路径的最终写入权限。
+func (s *Service) CanWritePath(user *models.User, sourceKey, relPath string) (bool, error) {
+	permission, err := s.PermissionAtPath(user, sourceKey, relPath)
+	if err != nil {
+		return false, err
+	}
+	return permission == models.PermissionReadWrite, nil
+}
+
+// CanWriteSubtree 检查会影响整棵子树的操作，避免通过删除或移动父目录绕过更深层的只读规则。
+func (s *Service) CanWriteSubtree(user *models.User, sourceKey, relPath string) (bool, error) {
+	src, err := s.Get(sourceKey)
+	if err != nil {
+		return false, err
+	}
+	if src.IsDisabled {
+		return false, nil
+	}
+	normalized, err := security.NormalizeRelPath(relPath)
+	if err != nil {
+		return false, err
+	}
+	permission, err := s.permissionOf(user, src.ID, normalized)
+	if err != nil || permission != models.PermissionReadWrite {
+		return false, err
+	}
+	if user.IsAdmin() {
+		return true, nil
+	}
+	rows, err := s.db.Query(`SELECT DISTINCT pr.path_prefix
+  FROM user_access_policies up
+  JOIN access_policy_path_rules pr ON pr.policy_id = up.policy_id
+  WHERE up.user_id = ? AND pr.storage_source_id = ?`, user.ID, src.ID)
+	if err != nil {
+		return false, err
+	}
+	var descendants []string
+	for rows.Next() {
+		var prefix string
+		if err := rows.Scan(&prefix); err != nil {
+			rows.Close()
+			return false, err
+		}
+		if normalized == "" || strings.HasPrefix(prefix, normalized+"/") {
+			descendants = append(descendants, prefix)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	for _, prefix := range descendants {
+		permission, err := s.permissionOf(user, src.ID, prefix)
+		if err != nil || permission != models.PermissionReadWrite {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // ListForUser 返回用户从全部策略合并后可访问的存储源视图。
@@ -337,6 +541,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 				Key: source.Key, Name: source.Name, Description: source.Description,
 				Permission: models.PermissionReadWrite, PublicReadEnabled: source.PublicReadEnabled,
 				PublicMountPath: mount, WebdavEnabled: source.WebdavEnabled, ImageBedEnabled: source.ImageBedEnabled,
+				QuotaBytes: source.QuotaBytes,
 			})
 		}
 		return out, nil
@@ -345,7 +550,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 	rows, err := s.db.Query(`SELECT s.key, s.name, s.description,
   CASE MAX(CASE ps.permission WHEN 'read_write' THEN 2 ELSE 1 END)
     WHEN 2 THEN 'read_write' ELSE 'read_only' END,
-  s.public_read_enabled, COALESCE(s.public_mount_path, ''), s.webdav_enabled, s.image_bed_enabled
+  s.public_read_enabled, COALESCE(s.public_mount_path, ''), s.webdav_enabled, s.image_bed_enabled, s.quota_bytes
   FROM user_access_policies up
   JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
   JOIN storage_sources s ON s.id = ps.storage_source_id
@@ -361,7 +566,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 		var view models.UserSourceView
 		var description sql.NullString
 		if err := rows.Scan(&view.Key, &view.Name, &description, &view.Permission,
-			&view.PublicReadEnabled, &view.PublicMountPath, &view.WebdavEnabled, &view.ImageBedEnabled); err != nil {
+			&view.PublicReadEnabled, &view.PublicMountPath, &view.WebdavEnabled, &view.ImageBedEnabled, &view.QuotaBytes); err != nil {
 			return nil, err
 		}
 		view.Description = description.String

@@ -112,8 +112,8 @@ func splitPath(rest string) (sourceKey, inner string) {
 }
 
 // resolveSource 执行 WebDAV 检查链路（README §16.6）：
-// 存储源存在 -> 未禁用 -> webdav_enabled -> 访问策略。
-func (h *Handler) resolveSource(user *models.User, sourceKey string, needWrite bool) (*models.StorageSource, int) {
+// 存储源存在 -> 未禁用 -> webdav_enabled -> 路径访问策略。
+func (h *Handler) resolveSource(user *models.User, sourceKey, relPath string, needWrite, subtree bool) (*models.StorageSource, int) {
 	src, err := h.sources.Get(sourceKey)
 	if err != nil {
 		return nil, http.StatusNotFound
@@ -121,11 +121,17 @@ func (h *Handler) resolveSource(user *models.User, sourceKey string, needWrite b
 	if src.IsDisabled || !src.WebdavEnabled {
 		return nil, http.StatusNotFound
 	}
+	normalized, err := security.NormalizeRelPath(relPath)
+	if err != nil {
+		return nil, http.StatusBadRequest
+	}
 	var allowed bool
-	if needWrite {
-		allowed, err = h.sources.CanWriteSource(user, sourceKey)
+	if subtree {
+		allowed, err = h.sources.CanWriteSubtree(user, sourceKey, normalized)
+	} else if needWrite {
+		allowed, err = h.sources.CanWritePath(user, sourceKey, normalized)
 	} else {
-		allowed, err = h.sources.CanReadSource(user, sourceKey)
+		allowed, err = h.sources.CanReadPath(user, sourceKey, normalized)
 	}
 	if err != nil || !allowed {
 		return nil, http.StatusForbidden
@@ -253,7 +259,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request, user *m
 			}
 		}
 	} else {
-		src, status := h.resolveSource(user, sourceKey, false)
+		src, status := h.resolveSource(user, sourceKey, inner, false, false)
 		if status != 0 {
 			http.Error(w, http.StatusText(status), status)
 			return
@@ -328,7 +334,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request, user *models
 		http.Error(w, "method not allowed on collection", http.StatusMethodNotAllowed)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, false)
+	src, status := h.resolveSource(user, sourceKey, inner, false, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -355,7 +361,7 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request, user *models
 		http.Error(w, "cannot PUT here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -391,7 +397,7 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request, user *mode
 		http.Error(w, "cannot create collection here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -421,7 +427,7 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request, user *mod
 		http.Error(w, "cannot delete here", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -466,9 +472,14 @@ func (h *Handler) handleMove(w http.ResponseWriter, r *http.Request, user *model
 		return
 	}
 
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, true)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	allowed, err := h.sources.CanWriteSubtree(user, sourceKey, destInner)
+	if err != nil || !allowed {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 
@@ -500,6 +511,8 @@ func (h *Handler) writeError(w http.ResponseWriter, err error) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 	case errors.Is(err, files.ErrLocked):
 		http.Error(w, "locked", http.StatusLocked)
+	case errors.Is(err, files.ErrQuotaExceeded):
+		http.Error(w, "insufficient storage", http.StatusInsufficientStorage)
 	default:
 		h.logger.Error("webdav 内部错误", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

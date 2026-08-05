@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"errors"
+	"fmt"
 	"mime"
 	"net/http"
 	"path"
@@ -11,12 +12,13 @@ import (
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
-// resolveSource 解析系统生成的不透明 key 并执行统一检查链路（README §28）：
-// 存储源存在 -> 未禁用 -> 访问策略。needWrite 为 true 时要求读写权限。
-func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request, needWrite bool) *models.StorageSource {
+// resolveSource 解析系统生成的不透明 key，并检查存储源存在且未禁用。
+// 路径级权限必须在规范化实际操作路径后由 authorizeSourcePath 检查。
+func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request) *models.StorageSource {
 	sourceKey := r.PathValue("key")
 	src, err := s.sources.Get(sourceKey)
 	if err != nil {
@@ -32,22 +34,47 @@ func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request, needWrite
 		return nil
 	}
 
+	return src
+}
+
+func (s *Server) authorizeSourcePath(w http.ResponseWriter, r *http.Request, src *models.StorageSource, relPath string, needWrite, subtree bool) bool {
+	normalized, err := security.NormalizeRelPath(relPath)
+	if err != nil {
+		WriteError(w, r, CodePathInvalid, err.Error(), nil)
+		return false
+	}
 	user := CurrentUser(r.Context())
 	var allowed bool
-	if needWrite {
-		allowed, err = s.sources.CanWriteSource(user, sourceKey)
+	if subtree {
+		allowed, err = s.sources.CanWriteSubtree(user, src.Key, normalized)
+	} else if needWrite {
+		allowed, err = s.sources.CanWritePath(user, src.Key, normalized)
 	} else {
-		allowed, err = s.sources.CanReadSource(user, sourceKey)
+		allowed, err = s.sources.CanReadPath(user, src.Key, normalized)
 	}
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "权限检查失败", nil)
-		return nil
+		return false
 	}
 	if !allowed {
-		WriteError(w, r, CodeForbidden, "没有该存储源的访问权限", nil)
-		return nil
+		WriteError(w, r, CodeForbidden, "没有该路径的访问权限", nil)
+		return false
 	}
-	return src
+	return true
+}
+
+func joinPolicyPath(parent, name string) (string, error) {
+	parent, err := security.NormalizeRelPath(parent)
+	if err != nil {
+		return "", err
+	}
+	if err := security.ValidateFileName(name); err != nil {
+		return "", err
+	}
+	if parent == "" {
+		return name, nil
+	}
+	return parent + "/" + name, nil
 }
 
 // writeFileError 映射文件服务错误到统一错误码。
@@ -66,6 +93,8 @@ func writeFileError(w http.ResponseWriter, r *http.Request, err error) {
 		WriteError(w, r, CodePathInvalid, err.Error(), nil)
 	case errors.Is(err, files.ErrLocked):
 		WriteError(w, r, CodeLocked, "资源已被 WebDAV 锁定", nil)
+	case errors.Is(err, files.ErrQuotaExceeded):
+		WriteError(w, r, CodeInsufficientStorage, err.Error(), nil)
 	case errors.As(err, &maxBytesErr):
 		WriteError(w, r, CodePayloadTooLarge, "文件超过大小限制", nil)
 	default:
@@ -93,11 +122,14 @@ func (s *Server) fileAudit(r *http.Request, action string, src *models.StorageSo
 // --- 文件列表 / 信息 ---
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, false)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
 	q := r.URL.Query()
+	if !s.authorizeSourcePath(w, r, src, q.Get("path"), false, false) {
+		return
+	}
 	page, _ := strconv.Atoi(q.Get("page"))
 	pageSize, _ := strconv.Atoi(q.Get("page_size"))
 
@@ -113,8 +145,11 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, false)
+	src := s.resolveSource(w, r)
 	if src == nil {
+		return
+	}
+	if !s.authorizeSourcePath(w, r, src, r.URL.Query().Get("path"), false, false) {
 		return
 	}
 	entry, err := s.files.Stat(src, r.URL.Query().Get("path"))
@@ -134,11 +169,14 @@ func sanitizeFilename(name string) string {
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, false)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
 	relPath := r.URL.Query().Get("path")
+	if !s.authorizeSourcePath(w, r, src, relPath, false, false) {
+		return
+	}
 	f, info, unlock, err := s.files.OpenForRead(src, relPath)
 	if err != nil {
 		writeFileError(w, r, err)
@@ -157,7 +195,7 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 // --- 写操作 ---
 
 func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, true)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
@@ -166,6 +204,14 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	target, err := joinPolicyPath(req.Path, req.Name)
+	if err != nil {
+		writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, err))
+		return
+	}
+	if !s.authorizeSourcePath(w, r, src, target, true, false) {
 		return
 	}
 	relPath, err := s.files.Mkdir(src, req.Path, req.Name)
@@ -178,7 +224,7 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, true)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
@@ -205,6 +251,14 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		filename := path.Base(part.FileName())
+		target, pathErr := joinPolicyPath(dirRel, filename)
+		if pathErr != nil {
+			writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, pathErr))
+			return
+		}
+		if !s.authorizeSourcePath(w, r, src, target, true, false) {
+			return
+		}
 		relPath, size, err := s.files.Upload(src, dirRel, filename, part, overwrite)
 		if err != nil {
 			s.fileAudit(r, "upload", src, dirRel+"/"+filename, "", err)
@@ -218,11 +272,14 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, true)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
 	relPath := r.URL.Query().Get("path")
+	if !s.authorizeSourcePath(w, r, src, relPath, true, true) {
+		return
+	}
 	if err := s.files.Delete(src, relPath); err != nil {
 		writeFileError(w, r, err)
 		return
@@ -232,7 +289,7 @@ func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, true)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
@@ -243,7 +300,24 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	newRel, err := s.files.Rename(src, req.Path, req.NewName)
+	oldRel, err := security.NormalizeRelPath(req.Path)
+	if err != nil || oldRel == "" {
+		writeFileError(w, r, fmt.Errorf("%w: 非法路径", files.ErrInvalid))
+		return
+	}
+	parent := path.Dir(oldRel)
+	if parent == "." {
+		parent = ""
+	}
+	newRel, err := joinPolicyPath(parent, req.NewName)
+	if err != nil {
+		writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, err))
+		return
+	}
+	if !s.authorizeSourcePath(w, r, src, oldRel, true, true) || !s.authorizeSourcePath(w, r, src, newRel, true, true) {
+		return
+	}
+	newRel, err = s.files.Rename(src, req.Path, req.NewName)
 	if err != nil {
 		writeFileError(w, r, err)
 		return
@@ -253,7 +327,7 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
-	src := s.resolveSource(w, r, true)
+	src := s.resolveSource(w, r)
 	if src == nil {
 		return
 	}
@@ -264,6 +338,9 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if !s.authorizeSourcePath(w, r, src, req.Path, true, true) || !s.authorizeSourcePath(w, r, src, req.TargetPath, true, true) {
+		return
+	}
 	newRel, err := s.files.Move(src, req.Path, req.TargetPath)
 	if err != nil {
 		writeFileError(w, r, err)
@@ -271,4 +348,26 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), newRel, nil)
 	WriteData(w, r, map[string]any{"path": "/" + newRel})
+}
+
+func (s *Server) handlePathPermission(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	relPath, err := security.NormalizeRelPath(r.URL.Query().Get("path"))
+	if err != nil {
+		WriteError(w, r, CodePathInvalid, err.Error(), nil)
+		return
+	}
+	permission, err := s.sources.PermissionAtPath(CurrentUser(r.Context()), src.Key, relPath)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "权限检查失败", nil)
+		return
+	}
+	if permission == "" {
+		WriteError(w, r, CodeForbidden, "没有该路径的访问权限", nil)
+		return
+	}
+	WriteData(w, r, map[string]string{"permission": permission})
 }

@@ -163,6 +163,23 @@ func TestS3ObjectLifecycleAndList(t *testing.T) {
 	}
 }
 
+func TestS3PutReturnsInsufficientStorageWhenQuotaExceeded(t *testing.T) {
+	f := newS3Fixture(t)
+	quotaBytes := int64(3)
+	if _, err := f.handler.sources.Update(f.bucket, sources.UpdateInput{QuotaBytes: &quotaBytes}); err != nil {
+		t.Fatalf("set quota: %v", err)
+	}
+
+	response := perform(f.handler, f.signedRequest(t, http.MethodPut,
+		"http://s3.test/"+f.bucket+"/too-large.txt", []byte("1234")))
+	if response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), "InsufficientStorage") {
+		t.Fatalf("PUT status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "too-large.txt")); !os.IsNotExist(err) {
+		t.Fatalf("quota rejection left final file: %v", err)
+	}
+}
+
 func TestS3PresignedGetAndTamperedSignature(t *testing.T) {
 	f := newS3Fixture(t)
 	if err := os.WriteFile(filepath.Join(f.root, "demo.txt"), []byte("demo"), 0o644); err != nil {

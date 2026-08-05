@@ -218,13 +218,14 @@ SQLite / 管理后台负责产品运行状态：
 6. 公开挂载路径。
 7. 存储源是否启用 WebDAV。
 8. 存储源是否启用图床。
-9. 用户默认图床目标。
-10. 匿名公共图床是否启用。
-11. 匿名公共图床目标存储源。
-12. Session。
-13. Token 哈希。
-14. 图床图片记录。
-15. 审计日志。
+9. 存储源硬配额。
+10. 用户默认图床目标。
+11. 匿名公共图床是否启用。
+12. 匿名公共图床目标存储源。
+13. Session。
+14. Token 哈希。
+15. 图床图片记录。
+16. 审计日志。
 
 ### 配置示例
 
@@ -433,6 +434,12 @@ V1.1 增加 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范
 
 过期锁在每次持久锁访问时惰性删除，并由后台任务每小时清理。当前仍为单实例架构，不提供分布式锁协调。
 
+### 存储源配额写守卫
+
+有限额存储源的 REST、WebDAV、S3、Multipart Complete 与图床最终写入共享同一进程级 `quota:{source_key}` 写守卫。守卫内实时递归统计全部普通文件，再计算本次最终文件允许占用的最大大小；覆盖写会扣除旧文件大小。内容先写同目录临时文件，发现超限后删除临时文件，不触碰最终路径。
+
+用量统计不跟随 symlink，排除规则不减少物理用量，并只忽略严格匹配 OmniStore 上传临时文件命名的文件。无限额写入只持有共享协调锁，彼此仍可并发；管理员更新配额需要独占同一协调锁，因此会等待进行中的写入结束，新写入也会重新读取最新配额。当前实现以单实例和正确性优先；后续 `file_records` 与校准扫描完成后，可把常规查询和写前统计改为增量台账，同时保留物理校准机制。
+
 ---
 
 ## 审计日志
@@ -609,13 +616,15 @@ migrations/
 4. 路径安全函数集中在 `internal/security`。
 5. 存储源路径校验集中在 `internal/sources`。
 6. 权限检查必须统一。
-7. WebDAV、REST、图床、公开网盘必须复用核心文件服务。
+7. WebDAV、REST、S3、图床、公开网盘必须复用核心文件服务；登录用户入口必须复用路径权限计算。
 
 统一权限函数示例：
 
 ```go
-CanReadSource(userID, sourceID string) bool
-CanWriteSource(userID, sourceID string) bool
+PermissionAtPath(user, sourceKey, relativePath string) string
+CanReadPath(user, sourceKey, relativePath string) bool
+CanWritePath(user, sourceKey, relativePath string) bool
+CanWriteSubtree(user, sourceKey, relativePath string) bool
 IsPathExcluded(sourceID, relativePath string) bool
 ```
 

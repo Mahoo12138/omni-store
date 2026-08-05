@@ -9,6 +9,14 @@ export interface UserSource {
   public_mount_path: string
   webdav_enabled: boolean
   image_bed_enabled: boolean
+  quota_bytes: number
+}
+
+export interface StorageQuota {
+  usage_bytes: number
+  quota_bytes: number
+  remaining_bytes: number
+  unlimited: boolean
 }
 
 export interface FileEntry {
@@ -29,6 +37,15 @@ export interface FileListResult {
 export async function fetchMySources(): Promise<UserSource[]> {
   const data = await apiFetch<{ items: UserSource[]; total: number }>('/api/v1/sources')
   return data.items ?? []
+}
+
+export async function fetchPathPermission(sourceKey: string, path: string): Promise<{ permission: 'read_only' | 'read_write' }> {
+  const query = new URLSearchParams({ path })
+  return apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/permission?${query}`)
+}
+
+export async function fetchSourceQuota(sourceKey: string): Promise<StorageQuota> {
+  return apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/quota`)
 }
 
 export interface ListFilesParams {

@@ -31,6 +31,7 @@ import {
   type AccessPermission,
   type AccessPolicy,
   type AccessPolicyInput,
+  type AccessPolicyPathRule,
   type OverviewSystem,
   type SourcePreflight,
 } from '../../api/admin'
@@ -76,7 +77,7 @@ import {
 } from '../../components/ui/Icon'
 import { AdminLayout, AdminPageHeader } from './AdminLayout'
 import { vars } from '../../styles/theme.css'
-import { formatDate } from '../../utils/format'
+import { formatBytes, formatDate } from '../../utils/format'
 import * as css from './AdminOverview.css'
 
 // 系统设置页（docs/settings-layout.png）：左侧分组的子导航 + 右侧多 section。
@@ -1191,6 +1192,7 @@ function SourcesSection() {
                 <th className={css.compactTh}>名称</th>
                 <th className={css.compactTh}>路径</th>
                 <th className={css.compactTh}>状态</th>
+                <th className={css.compactTh}>配额</th>
                 <th className={css.compactTh}>公开</th>
                 <th className={css.compactTh}>操作</th>
               </tr>
@@ -1206,6 +1208,9 @@ function SourcesSection() {
                     <Badge color={s.is_disabled ? 'gray' : 'green'}>
                       {s.is_disabled ? '已禁用' : '正常'}
                     </Badge>
+                  </td>
+                  <td className={css.compactTd}>
+                    {s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}
                   </td>
                   <td className={css.compactTd}>
                     {s.public_read_enabled ? <Badge color="green">公开</Badge> : '—'}
@@ -1488,6 +1493,7 @@ function EditSourceDialog({
   const [publicOn, setPublicOn] = useState<boolean | null>(null)
   const [webdavOn, setWebdavOn] = useState<boolean | null>(null)
   const [imageBedOn, setImageBedOn] = useState<boolean | null>(null)
+  const [quotaGiB, setQuotaGiB] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
 
   // 打开弹窗时，把当前值同步到本地 state
@@ -1498,6 +1504,9 @@ function EditSourceDialog({
       setPublicOn(detail.data.source.public_read_enabled)
       setWebdavOn(detail.data.source.webdav_enabled)
       setImageBedOn(detail.data.source.image_bed_enabled)
+      setQuotaGiB(detail.data.source.quota_bytes > 0
+        ? String(detail.data.source.quota_bytes / (1024 ** 3))
+        : '0')
     }
   }, [detail.isSuccess, detail.data])
 
@@ -1520,6 +1529,7 @@ function EditSourceDialog({
   const src: AdminSource = detail.data.source
   const mountValue = mountPath ?? src.public_mount_path ?? ''
   const patternsValue = patterns ?? detail.data.exclude_patterns.join('\n')
+  const quotaValue = quotaGiB ?? (src.quota_bytes > 0 ? String(src.quota_bytes / (1024 ** 3)) : '0')
 
   return (
     <DialogWrap
@@ -1577,6 +1587,30 @@ function EditSourceDialog({
             />
             公开访问（无需登录即可按挂载路径只读浏览）
           </label>
+        </div>
+      </Field>
+
+      <Field
+        label="存储源硬配额"
+        hint={`当前已使用 ${formatBytes(detail.data.quota.usage_bytes)}；填 0 表示不限制。配额不会删除已有文件。`}
+      >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Input
+            type="number"
+            min="0"
+            step="0.1"
+            value={quotaValue}
+            onChange={(event) => setQuotaGiB(event.target.value)}
+            aria-label="存储源配额 GiB"
+          />
+          <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>GiB</span>
+          <Button
+            variant="secondary"
+            disabled={updateMut.isPending || Number(quotaValue) < 0 || !Number.isFinite(Number(quotaValue))}
+            onClick={() => updateMut.mutate({ quota_bytes: Math.round(Number(quotaValue) * 1024 ** 3) })}
+          >
+            保存配额
+          </Button>
         </div>
       </Field>
 
@@ -1706,6 +1740,7 @@ function PoliciesSection() {
                       {policy.sources.length === 0 ? '—' : policy.sources.map((rule) => (
                         <Badge key={rule.source_key} color={rule.permission === 'read_write' ? 'blue' : 'gray'}>
                           {rule.source_name} · {rule.permission === 'read_write' ? '读写' : '只读'}
+                          {rule.path_rules.length > 0 ? ` · ${rule.path_rules.length} 个子路径` : ''}
                         </Badge>
                       ))}
                     </div>
@@ -1801,6 +1836,7 @@ function PolicyDialog({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [sourcePermissions, setSourcePermissions] = useState<Record<string, AccessPermission>>({})
+  const [sourcePathRules, setSourcePathRules] = useState<Record<string, Array<AccessPolicyPathRule & { id: string }>>>({})
   const [userIDs, setUserIDs] = useState<number[]>([])
   const [message, setMessage] = useState('')
 
@@ -1810,6 +1846,12 @@ function PolicyDialog({
     setDescription(policy?.description ?? '')
     setSourcePermissions(Object.fromEntries(
       policy?.sources.map((rule) => [rule.source_key, rule.permission]) ?? [],
+    ))
+    setSourcePathRules(Object.fromEntries(
+      policy?.sources.map((rule) => [rule.source_key, rule.path_rules.map((pathRule) => ({
+        ...pathRule,
+        id: crypto.randomUUID(),
+      }))]) ?? [],
     ))
     setUserIDs(policy?.users.map((user) => user.user_id) ?? [])
     setMessage('')
@@ -1833,6 +1875,37 @@ function PolicyDialog({
       delete next[sourceKey]
       return next
     })
+    if (!checked) {
+      setSourcePathRules((current) => {
+        const next = { ...current }
+        delete next[sourceKey]
+        return next
+      })
+    }
+  }
+
+  function addPathRule(sourceKey: string) {
+    setSourcePathRules((current) => ({
+      ...current,
+      [sourceKey]: [
+        ...(current[sourceKey] ?? []),
+        { id: crypto.randomUUID(), path_prefix: '', permission: 'read_write' },
+      ],
+    }))
+  }
+
+  function updatePathRule(sourceKey: string, id: string, patch: Partial<AccessPolicyPathRule>) {
+    setSourcePathRules((current) => ({
+      ...current,
+      [sourceKey]: (current[sourceKey] ?? []).map((rule) => rule.id === id ? { ...rule, ...patch } : rule),
+    }))
+  }
+
+  function removePathRule(sourceKey: string, id: string) {
+    setSourcePathRules((current) => ({
+      ...current,
+      [sourceKey]: (current[sourceKey] ?? []).filter((rule) => rule.id !== id),
+    }))
   }
 
   function toggleUser(userID: number, checked: boolean) {
@@ -1846,12 +1919,23 @@ function PolicyDialog({
       setMessage('请输入策略名称')
       return
     }
+    if (Object.values(sourcePathRules).some((rules) => rules.some((rule) => !rule.path_prefix.trim()))) {
+      setMessage('请填写完整的子路径，或删除空规则')
+      return
+    }
     saveMutation.mutate({
       name: name.trim(),
       description: description.trim(),
       sources: sources.flatMap((source) => {
         const permission = sourcePermissions[source.key]
-        return permission ? [{ source_key: source.key, permission }] : []
+        return permission ? [{
+          source_key: source.key,
+          permission,
+          path_rules: (sourcePathRules[source.key] ?? []).map(({ path_prefix, permission: pathPermission }) => ({
+            path_prefix: path_prefix.trim(),
+            permission: pathPermission,
+          })),
+        }] : []
       }),
       user_ids: userIDs,
     })
@@ -1863,7 +1947,7 @@ function PolicyDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={policy ? '编辑访问策略' : '新建访问策略'}
-      description="策略统一描述用户可以访问哪些存储源，以及每个存储源的权限级别。"
+      description="先设置存储源默认权限，再按需用最长路径前缀覆盖子目录权限。"
       wide
       footer={
         <>
@@ -1890,39 +1974,78 @@ function PolicyDialog({
           placeholder="例如：内容团队日常读写权限"
         />
       </Field>
-      <Field label="存储源规则" hint="未选中的存储源不会通过此策略授予权限">
+      <Field label="存储源规则" hint="未选中的存储源不授权；子路径使用源内相对路径，不以 / 开头">
         <div className={css.policyEditorList}>
           {sources.length === 0 ? <p className={css.policyEditorEmpty}>请先创建存储源。</p> : null}
           {sources.map((source) => {
             const permission = sourcePermissions[source.key]
+            const pathRules = sourcePathRules[source.key] ?? []
             return (
-              <div key={source.key} className={css.policyEditorRow}>
-                <label className={css.policyEditorIdentity}>
-                  <input
-                    type="checkbox"
-                    className={fieldCss.checkbox}
-                    checked={!!permission}
-                    onChange={(event) => toggleSource(source.key, event.target.checked)}
-                  />
-                  <span>
-                    {source.name}
-                    {source.is_disabled ? <span className={css.policyEditorMeta}> · 已禁用</span> : null}
-                  </span>
-                </label>
+              <div key={source.key} className={css.policySourceBlock}>
+                <div className={css.policyEditorRow}>
+                  <label className={css.policyEditorIdentity}>
+                    <input
+                      type="checkbox"
+                      className={fieldCss.checkbox}
+                      checked={!!permission}
+                      onChange={(event) => toggleSource(source.key, event.target.checked)}
+                    />
+                    <span>
+                      {source.name}
+                      {source.is_disabled ? <span className={css.policyEditorMeta}> · 已禁用</span> : null}
+                    </span>
+                  </label>
+                  {permission ? (
+                    <Select
+                      value={permission}
+                      onValueChange={(value) => setSourcePermissions((current) => ({
+                        ...current,
+                        [source.key]: value as AccessPermission,
+                      }))}
+                      options={[
+                        { value: 'read_only', label: '默认只读' },
+                        { value: 'read_write', label: '默认读写' },
+                      ]}
+                      ariaLabel={`${source.name}默认权限`}
+                      width="content"
+                    />
+                  ) : null}
+                </div>
                 {permission ? (
-                  <Select
-                    value={permission}
-                    onValueChange={(value) => setSourcePermissions((current) => ({
-                      ...current,
-                      [source.key]: value as AccessPermission,
-                    }))}
-                    options={[
-                      { value: 'read_only', label: '只读' },
-                      { value: 'read_write', label: '读写' },
-                    ]}
-                    ariaLabel={`${source.name}权限`}
-                    width="content"
-                  />
+                  <div className={css.policyPathRules}>
+                    {pathRules.map((pathRule) => (
+                      <div key={pathRule.id} className={css.policyPathRuleRow}>
+                        <Input
+                          value={pathRule.path_prefix}
+                          onChange={(event) => updatePathRule(source.key, pathRule.id, { path_prefix: event.target.value })}
+                          placeholder="例如：team/drafts"
+                          aria-label={`${source.name}子路径`}
+                        />
+                        <Select
+                          value={pathRule.permission}
+                          onValueChange={(value) => updatePathRule(source.key, pathRule.id, {
+                            permission: value as AccessPermission,
+                          })}
+                          options={[
+                            { value: 'read_only', label: '只读' },
+                            { value: 'read_write', label: '读写' },
+                          ]}
+                          ariaLabel={`${pathRule.path_prefix || source.name}子路径权限`}
+                          width="content"
+                        />
+                        <Button
+                          variant="ghost"
+                          aria-label={`删除 ${source.name} 子路径规则`}
+                          onClick={() => removePathRule(source.key, pathRule.id)}
+                        >
+                          <IconTrash size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="ghost" onClick={() => addPathRule(source.key)}>
+                      <IconPlus size={14} /> 添加子路径覆盖
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             )

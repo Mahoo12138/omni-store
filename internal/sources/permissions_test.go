@@ -98,6 +98,90 @@ func TestAccessPolicyRejectsInvalidOrDuplicateRules(t *testing.T) {
 	}
 }
 
+func TestAccessPolicyPathRulesUseLongestPrefixAndMergePolicies(t *testing.T) {
+	base := t.TempDir()
+	dataDir := filepath.Join(base, "data")
+	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	user, err := users.NewService(conn).Create("path-user", "Path User", "test-password", models.RoleUser)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	service := NewService(conn, dataDir)
+	source := createPolicyTestSource(t, service, base, "paths")
+	policy, err := service.CreatePolicy(PolicyInput{
+		Name:    "Path editors",
+		UserIDs: []int64{user.ID},
+		Sources: []PolicySourceInput{{
+			SourceKey: source.Key, Permission: models.PermissionReadOnly,
+			PathRules: []PolicyPathRuleInput{
+				{PathPrefix: "/team", Permission: models.PermissionReadWrite},
+				{PathPrefix: "team/archive", Permission: models.PermissionReadOnly},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create path policy: %v", err)
+	}
+	if len(policy.Sources) != 1 || len(policy.Sources[0].PathRules) != 2 || policy.Sources[0].PathRules[0].PathPrefix != "team" {
+		t.Fatalf("unexpected normalized path rules: %+v", policy.Sources)
+	}
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"", models.PermissionReadOnly},
+		{"other/file.txt", models.PermissionReadOnly},
+		{"team", models.PermissionReadWrite},
+		{"team/file.txt", models.PermissionReadWrite},
+		{"teamwork/file.txt", models.PermissionReadOnly},
+		{"team/archive", models.PermissionReadOnly},
+		{"team/archive/old.txt", models.PermissionReadOnly},
+	}
+	for _, tc := range cases {
+		got, err := service.PermissionAtPath(user, source.Key, tc.path)
+		if err != nil || got != tc.want {
+			t.Fatalf("permission at %q: got=%q want=%q err=%v", tc.path, got, tc.want, err)
+		}
+	}
+	if allowed, err := service.CanWriteSubtree(user, source.Key, "team"); err != nil || allowed {
+		t.Fatalf("subtree write ignored nested read-only rule: allowed=%v err=%v", allowed, err)
+	}
+
+	if _, err := service.CreatePolicy(PolicyInput{
+		Name: "Archive editors", UserIDs: []int64{user.ID},
+		Sources: []PolicySourceInput{{SourceKey: source.Key, Permission: models.PermissionReadOnly,
+			PathRules: []PolicyPathRuleInput{{PathPrefix: "team/archive", Permission: models.PermissionReadWrite}}}},
+	}); err != nil {
+		t.Fatalf("create merging policy: %v", err)
+	}
+	if allowed, err := service.CanWritePath(user, source.Key, "team/archive/old.txt"); err != nil || !allowed {
+		t.Fatalf("multiple policies did not merge to write: allowed=%v err=%v", allowed, err)
+	}
+}
+
+func TestAccessPolicyRejectsInvalidPathRules(t *testing.T) {
+	service, base := newPreflightService(t)
+	source := createPolicyTestSource(t, service, base, "source")
+	for _, pathRules := range [][]PolicyPathRuleInput{
+		{{PathPrefix: "/", Permission: models.PermissionReadOnly}},
+		{{PathPrefix: "../private", Permission: models.PermissionReadOnly}},
+		{{PathPrefix: "team", Permission: "owner"}},
+		{{PathPrefix: "/team/", Permission: models.PermissionReadOnly}, {PathPrefix: "team", Permission: models.PermissionReadWrite}},
+	} {
+		if _, err := service.CreatePolicy(PolicyInput{Name: "Invalid paths", Sources: []PolicySourceInput{{
+			SourceKey: source.Key, Permission: models.PermissionReadOnly, PathRules: pathRules,
+		}}}); err == nil {
+			t.Fatalf("expected invalid path rules to fail: %+v", pathRules)
+		}
+	}
+}
+
 func createPolicyTestSource(t *testing.T, service *Service, base, name string) *models.StorageSource {
 	t.Helper()
 	root := filepath.Join(base, name)

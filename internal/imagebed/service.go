@@ -70,7 +70,7 @@ func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *
 
 // --- 图床目标（README §17.3） ---
 
-// Targets 返回用户可用图床目标：读写权限 + 未禁用 + image_bed_enabled。
+// Targets 返回用户当前图床目录可写且已启用图床的存储源。
 func (s *Service) Targets(user *models.User) ([]*models.UserSourceView, error) {
 	list, err := s.sources.ListForUser(user)
 	if err != nil {
@@ -78,7 +78,15 @@ func (s *Service) Targets(user *models.User) ([]*models.UserSourceView, error) {
 	}
 	out := []*models.UserSourceView{}
 	for _, v := range list {
-		if v.Permission == models.PermissionReadWrite && v.ImageBedEnabled {
+		if !v.ImageBedEnabled {
+			continue
+		}
+		allowed, err := s.sources.CanWritePath(user, v.Key, s.userImageRelDir(user, time.Now().UTC()))
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			v.Permission = models.PermissionReadWrite
 			out = append(out, v)
 		}
 	}
@@ -102,7 +110,7 @@ func (s *Service) DefaultTarget(userID int64) (string, error) {
 
 // SetDefaultTarget 设置用户默认图床目标。
 func (s *Service) SetDefaultTarget(user *models.User, sourceKey string) error {
-	src, err := s.checkTarget(user, sourceKey)
+	src, err := s.checkTarget(user, sourceKey, s.userImageRelDir(user, time.Now().UTC()))
 	if err != nil {
 		return err
 	}
@@ -115,7 +123,7 @@ func (s *Service) SetDefaultTarget(user *models.User, sourceKey string) error {
 }
 
 // checkTarget 校验存储源可作为该用户的图床目标。
-func (s *Service) checkTarget(user *models.User, sourceKey string) (*models.StorageSource, error) {
+func (s *Service) checkTarget(user *models.User, sourceKey, relPath string) (*models.StorageSource, error) {
 	src, err := s.sources.Get(sourceKey)
 	if err != nil {
 		return nil, ErrTargetInvalid
@@ -123,11 +131,15 @@ func (s *Service) checkTarget(user *models.User, sourceKey string) (*models.Stor
 	if src.IsDisabled || !src.ImageBedEnabled {
 		return nil, ErrTargetInvalid
 	}
-	ok, err := s.sources.CanWriteSource(user, sourceKey)
+	ok, err := s.sources.CanWritePath(user, sourceKey, relPath)
 	if err != nil || !ok {
 		return nil, ErrTargetInvalid
 	}
 	return src, nil
+}
+
+func (s *Service) userImageRelDir(user *models.User, now time.Time) string {
+	return fmt.Sprintf("%s/users/%s/%04d/%02d", s.rootRel, user.UserPublicID, now.Year(), int(now.Month()))
 }
 
 // --- 上传 ---
@@ -144,13 +156,12 @@ func (s *Service) UploadForUser(user *models.User, sourceKey, originalFilename s
 			return nil, ErrNoTarget
 		}
 	}
-	src, err := s.checkTarget(user, sourceKey)
+	now := time.Now().UTC()
+	relDir := s.userImageRelDir(user, now)
+	src, err := s.checkTarget(user, sourceKey, relDir)
 	if err != nil {
 		return nil, ErrTargetInvalid
 	}
-
-	now := time.Now().UTC()
-	relDir := fmt.Sprintf("%s/users/%s/%04d/%02d", s.rootRel, user.UserPublicID, now.Year(), int(now.Month()))
 	return s.upload(src, relDir, originalFilename, models.ImageOwnerUser, &user.ID, body)
 }
 
@@ -168,25 +179,36 @@ func (s *Service) GetAnonymousSettings() (*AnonymousSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	var storageSourceID int64
 	for rows.Next() {
 		var k, v string
 		if err := rows.Scan(&k, &v); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		switch k {
 		case SettingAnonymousEnabled:
 			out.Enabled = v == "true"
 		case SettingAnonymousStorageSourceID:
-			id, parseErr := strconv.ParseInt(v, 10, 64)
-			if parseErr == nil {
-				if src, getErr := s.sources.GetByID(id); getErr == nil {
-					out.Key = src.Key
-				}
+			if id, parseErr := strconv.ParseInt(v, 10, 64); parseErr == nil {
+				storageSourceID = id
 			}
 		}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	// db.Open 采用单连接；必须在关闭 rows 后再查询存储源，避免连接自等待。
+	if storageSourceID > 0 {
+		if src, getErr := s.sources.GetByID(storageSourceID); getErr == nil {
+			out.Key = src.Key
+		}
+	}
+	return out, nil
 }
 
 // SetAnonymousSettings 更新匿名图床配置（仅超级管理员入口调用）。
@@ -248,6 +270,11 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	if err != nil {
 		return nil, err
 	}
+	quotaGuard, err := s.files.BeginQuotaWrite(src, "")
+	if err != nil {
+		return nil, err
+	}
+	defer quotaGuard.Close()
 
 	// 排除规则检查（README §11.4 图床上传）。
 	matcher, err := s.sources.Matcher(src.ID)
@@ -272,13 +299,23 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	if err != nil {
 		return nil, fmt.Errorf("创建临时文件失败: %w", err)
 	}
-	size, err := io.Copy(tmp, body)
+	reader := body
+	maxBytes, limited := quotaGuard.MaxBytes()
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if limited && maxBytes < maxInt64 {
+		reader = io.LimitReader(body, maxBytes+1)
+	}
+	size, err := io.Copy(tmp, reader)
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		os.Remove(tmpPath)
 		return nil, fmt.Errorf("写入失败: %w", err)
+	}
+	if limited && size > maxBytes {
+		os.Remove(tmpPath)
+		return nil, files.ErrQuotaExceeded
 	}
 
 	// 真实格式校验。
@@ -449,7 +486,7 @@ func (s *Service) DeleteByUser(user *models.User, imageID string) error {
 	if err != nil {
 		return ErrTargetInvalid
 	}
-	ok, err := s.sources.CanWriteSource(user, src.Key)
+	ok, err := s.sources.CanWritePath(user, src.Key, img.RelativePath)
 	if err != nil || !ok {
 		return ErrTargetInvalid
 	}

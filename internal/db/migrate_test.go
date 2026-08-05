@@ -76,6 +76,15 @@ func TestOpenAppliesSquashedInitialMigration(t *testing.T) {
 	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'webdav_locks'`).Scan(&tableName); err != nil {
 		t.Fatalf("replayed baseline missing WebDAV locks table: %v", err)
 	}
+	if _, err := conn.Exec(`ALTER TABLE storage_sources DROP COLUMN quota_bytes`); err != nil {
+		t.Fatalf("simulate pre-quota development schema: %v", err)
+	}
+	if err := Migrate(conn); err != nil {
+		t.Fatalf("add unreleased quota column: %v", err)
+	}
+	if hasQuota, err := tableHasColumn(conn, "storage_sources", "quota_bytes"); err != nil || !hasQuota {
+		t.Fatalf("replayed baseline missing quota column: present=%v err=%v", hasQuota, err)
+	}
 }
 
 func TestMigrateReconcilesLegacyPreReleaseVersions(t *testing.T) {
@@ -137,6 +146,10 @@ func TestMigrateUpgradesLegacySourceIdentifiersWithoutLosingRelations(t *testing
 	}
 	if !regexp.MustCompile(`^src-[0-9a-f]{16}$`).MatchString(key) || name != "Legacy Photos" {
 		t.Fatalf("unexpected upgraded source: key=%q name=%q", key, name)
+	}
+	var quotaBytes int64
+	if err := conn.QueryRow(`SELECT quota_bytes FROM storage_sources WHERE id = 7`).Scan(&quotaBytes); err != nil || quotaBytes != 0 {
+		t.Fatalf("legacy source quota default: quota=%d err=%v", quotaBytes, err)
 	}
 	legacyColumn, err := tableHasColumn(conn, "storage_sources", "source_id")
 	if err != nil || legacyColumn {

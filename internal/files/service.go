@@ -36,6 +36,8 @@ var (
 	ErrUnsupported = errors.New("不支持的文件类型")
 	// ErrLocked 路径受 WebDAV 持久写锁保护，且未提交匹配 Token。
 	ErrLocked = locks.ErrPersistentLocked
+	// ErrQuotaExceeded 写入会超过存储源硬配额。
+	ErrQuotaExceeded = errors.New("存储源可用空间不足")
 )
 
 // 条目类型。
@@ -60,6 +62,26 @@ type ObjectEntry struct {
 	MTime time.Time
 }
 
+// QuotaWriteGuard 在一次最终文件写入期间串行化同一存储源的配额计算。
+type QuotaWriteGuard struct {
+	maxBytes int64
+	limited  bool
+	release  func()
+}
+
+// MaxBytes 返回本次写入可占用的最终文件大小；limited=false 表示不限制。
+func (g *QuotaWriteGuard) MaxBytes() (maxBytes int64, limited bool) {
+	return g.maxBytes, g.limited
+}
+
+// Close 释放配额写锁。
+func (g *QuotaWriteGuard) Close() {
+	if g.release != nil {
+		g.release()
+		g.release = nil
+	}
+}
+
 // Service 提供核心文件操作，REST、WebDAV、图床、公开网盘共用。
 type Service struct {
 	db              *sql.DB
@@ -81,6 +103,124 @@ func (s *Service) Locks() *locks.Manager {
 // PersistentLocks 暴露 WebDAV 持久锁存储，供协议层和后台清理复用。
 func (s *Service) PersistentLocks() *locks.PersistentStore {
 	return s.persistentLocks
+}
+
+// StorageUsage 实时统计存储源内全部普通文件，不跟随 symlink；排除规则不减少物理用量。
+// OmniStore 严格命名的上传临时文件不计入最终用量。
+func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
+	root, err := security.ResolveInSource(src.RootPath, "")
+	if err != nil {
+		return 0, err
+	}
+	var usage int64
+	err = filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if os.IsNotExist(walkErr) {
+				return nil
+			}
+			return walkErr
+		}
+		if absPath == root {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if info.Mode().IsRegular() && !uploadTempName.MatchString(entry.Name()) {
+			usage += info.Size()
+		}
+		return nil
+	})
+	return usage, err
+}
+
+// StorageQuota 返回实时用量和剩余配额。
+func (s *Service) StorageQuota(src *models.StorageSource) (*models.StorageQuota, error) {
+	usage, err := s.StorageUsage(src)
+	if err != nil {
+		return nil, err
+	}
+	quota := &models.StorageQuota{UsageBytes: usage, QuotaBytes: src.QuotaBytes, Unlimited: src.QuotaBytes == 0}
+	if quota.Unlimited {
+		return quota, nil
+	}
+	quota.RemainingBytes = src.QuotaBytes - usage
+	if quota.RemainingBytes < 0 {
+		quota.RemainingBytes = 0
+	}
+	return quota, nil
+}
+
+func quotaLockKey(sourceKey string) string {
+	return "quota:" + sourceKey
+}
+
+// LockQuotaUpdate 阻止新的最终文件写入并等待当前写入完成，用于原子更新配额配置。
+func (s *Service) LockQuotaUpdate(sourceKey string) func() {
+	return s.locks.Lock(quotaLockKey(sourceKey))
+}
+
+// BeginQuotaWrite 为最终路径计算可写大小。覆盖已有普通文件时会返还旧文件占用。
+// 不限额写入持有共享协调锁但不会互相串行；有限额写入持有独占锁并实时统计。
+func (s *Service) BeginQuotaWrite(src *models.StorageSource, replacingRelPath string) (*QuotaWriteGuard, error) {
+	guard := &QuotaWriteGuard{}
+	for {
+		releaseRead := s.locks.RLock(quotaLockKey(src.Key))
+		current, err := s.sources.Get(src.Key)
+		if err != nil {
+			releaseRead()
+			return nil, err
+		}
+		if current.QuotaBytes == 0 {
+			guard.release = releaseRead
+			return guard, nil
+		}
+		releaseRead()
+
+		releaseWrite := s.locks.Lock(quotaLockKey(src.Key))
+		current, err = s.sources.Get(src.Key)
+		if err != nil {
+			releaseWrite()
+			return nil, err
+		}
+		if current.QuotaBytes == 0 {
+			releaseWrite()
+			continue
+		}
+		guard.release = releaseWrite
+		usage, err := s.StorageUsage(current)
+		if err != nil {
+			guard.Close()
+			return nil, err
+		}
+		var replacedBytes int64
+		if replacingRelPath != "" {
+			_, absPath, err := s.prepare(current, replacingRelPath)
+			if err != nil {
+				guard.Close()
+				return nil, err
+			}
+			if info, err := os.Lstat(absPath); err == nil && info.Mode().IsRegular() {
+				replacedBytes = info.Size()
+			} else if err != nil && !os.IsNotExist(err) {
+				guard.Close()
+				return nil, err
+			}
+		}
+		guard.limited = true
+		guard.maxBytes = current.QuotaBytes - usage + replacedBytes
+		if guard.maxBytes < 0 {
+			guard.maxBytes = 0
+		}
+		return guard, nil
+	}
 }
 
 // prepare 执行统一前置检查：规范化路径 -> 排除规则 -> symlink 检查。
@@ -497,6 +637,11 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 		return "", 0, err
 	}
 	defer releasePersistent()
+	quotaGuard, err := s.BeginQuotaWrite(src, relPath)
+	if err != nil {
+		return "", 0, err
+	}
+	defer quotaGuard.Close()
 
 	unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 	defer unlock()
@@ -519,7 +664,8 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 		return "", 0, fmt.Errorf("%w: 目标目录不存在", ErrInvalid)
 	}
 
-	written, err := writeViaTemp(parentAbs, absPath, body)
+	maxBytes, limited := quotaGuard.MaxBytes()
+	written, err := writeViaTemp(parentAbs, absPath, body, maxBytes, limited)
 	if err != nil {
 		return "", 0, err
 	}
@@ -527,7 +673,7 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 }
 
 // writeViaTemp 写同目录临时文件后原子重命名到目标（README §14.3/§14.4）。
-func writeViaTemp(dirAbs, targetAbs string, body io.Reader) (int64, error) {
+func writeViaTemp(dirAbs, targetAbs string, body io.Reader, maxBytes int64, limited bool) (int64, error) {
 	tmpPath := filepath.Join(dirAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
 	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -539,10 +685,19 @@ func writeViaTemp(dirAbs, targetAbs string, body io.Reader) (int64, error) {
 		os.Remove(tmpPath)
 	}
 
-	written, err := io.Copy(tmp, body)
+	reader := body
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if limited && maxBytes < maxInt64 {
+		reader = io.LimitReader(body, maxBytes+1)
+	}
+	written, err := io.Copy(tmp, reader)
 	if err != nil {
 		cleanup()
 		return 0, fmt.Errorf("写入失败: %w", err)
+	}
+	if limited && written > maxBytes {
+		cleanup()
+		return 0, ErrQuotaExceeded
 	}
 	if err := tmp.Sync(); err != nil {
 		cleanup()

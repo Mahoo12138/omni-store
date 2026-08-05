@@ -123,8 +123,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 
 	// 登录用户：可访问存储源
 	mux.HandleFunc("GET /api/v1/sources", s.requireAuth(s.handleListMySources))
+	mux.HandleFunc("GET /api/v1/sources/{key}/quota", s.requireAuth(s.handleSourceQuota))
 
 	// 私有网盘文件操作（README §13.2）
+	mux.HandleFunc("GET /api/v1/sources/{key}/permission", s.requireAuth(s.handlePathPermission))
 	mux.HandleFunc("GET /api/v1/sources/{key}/files", s.requireAuth(s.handleListFiles))
 	mux.HandleFunc("GET /api/v1/sources/{key}/files/stat", s.requireAuth(s.handleStatFile))
 	mux.HandleFunc("GET /api/v1/sources/{key}/download", s.requireAuth(s.handleDownloadFile))

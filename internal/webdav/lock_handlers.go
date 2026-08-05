@@ -89,7 +89,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request, user *model
 		http.Error(w, "cannot lock virtual root", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -206,7 +206,7 @@ func (h *Handler) handleUnlock(w http.ResponseWriter, r *http.Request, user *mod
 		http.Error(w, "cannot unlock virtual root", http.StatusForbidden)
 		return
 	}
-	src, status := h.resolveSource(user, sourceKey, true)
+	src, status := h.resolveSource(user, sourceKey, inner, true, false)
 	if status != 0 {
 		http.Error(w, http.StatusText(status), status)
 		return

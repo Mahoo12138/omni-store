@@ -644,10 +644,17 @@ export const policySummary = style({
 export const policyEditorList = style({
   display: 'flex',
   flexDirection: 'column',
-  maxHeight: 240,
+  maxHeight: 420,
   overflowY: 'auto',
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.md,
+})
+
+export const policySourceBlock = style({
+  borderBottom: `1px solid ${vars.color.border}`,
+  selectors: {
+    '&:last-child': { borderBottom: 'none' },
+  },
 })
 
 export const policyEditorRow = style({
@@ -657,14 +664,32 @@ export const policyEditorRow = style({
   gap: vars.space.md,
   minHeight: 48,
   padding: `${vars.space.sm} ${vars.space.md}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-  selectors: {
-    '&:last-child': { borderBottom: 'none' },
-  },
   '@media': {
     'screen and (max-width: 520px)': {
       gridTemplateColumns: 'minmax(0, 1fr)',
       gap: vars.space.sm,
+    },
+  },
+})
+
+export const policyPathRules = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: vars.space.sm,
+  padding: `0 ${vars.space.md} ${vars.space.md} 42px`,
+})
+
+export const policyPathRuleRow = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(180px, 1fr) auto auto',
+  gap: vars.space.sm,
+  alignItems: 'center',
+  width: '100%',
+  '@media': {
+    'screen and (max-width: 520px)': {
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      paddingLeft: 0,
     },
   },
 })

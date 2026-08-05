@@ -6,11 +6,14 @@ import {
   deleteFile,
   downloadFileUrl,
   fetchMySources,
+  fetchPathPermission,
+  fetchSourceQuota,
   listFiles,
   moveFile,
   renameFile,
   uploadFile,
   type FileEntry,
+  type StorageQuota,
   type UserSource,
 } from '../api/sources'
 import { ApiRequestError } from '../api/client'
@@ -43,6 +46,7 @@ import {
   IconUpload,
 } from '../components/ui/Icon'
 import { vars } from '../styles/theme.css'
+import { formatBytes } from '../utils/format'
 import * as css from './FileManager.css'
 
 type ViewMode = 'list' | 'grid'
@@ -110,7 +114,16 @@ function FileManagerView({ source }: { source: UserSource }) {
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
-  const canWrite = source.permission === 'read_write'
+  const permissionQuery = useQuery({
+    queryKey: ['source-permission', sourceKey, currentPath],
+    queryFn: () => fetchPathPermission(sourceKey, currentPath),
+  })
+  const currentPermission = permissionQuery.data?.permission ?? 'read_only'
+  const canWrite = currentPermission === 'read_write'
+  const quotaQuery = useQuery({
+    queryKey: ['source-quota', sourceKey],
+    queryFn: () => fetchSourceQuota(sourceKey),
+  })
 
   const filesQuery = useQuery({
     queryKey: ['files', sourceKey, currentPath, page, pageSize],
@@ -122,6 +135,7 @@ function FileManagerView({ source }: { source: UserSource }) {
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['files', sourceKey] })
+    queryClient.invalidateQueries({ queryKey: ['source-quota', sourceKey] })
   }
 
   function goTo(seg: string) {
@@ -196,7 +210,7 @@ function FileManagerView({ source }: { source: UserSource }) {
           <h1 className={css.pageTitle}>{source.name}</h1>
           <p className={css.pageDescription}>{source.description || '管理此存储源中的文件。'}</p>
           <div className={css.statusRow}>
-            <span>{source.permission === 'read_write' ? '读写权限' : '只读权限'}</span>
+            <span>{currentPermission === 'read_write' ? '当前目录可读写' : '当前目录只读'}</span>
             {source.webdav_enabled && <span>WebDAV</span>}
             {source.image_bed_enabled && <span>图床</span>}
             {source.public_read_enabled && source.public_mount_path && (
@@ -452,7 +466,7 @@ function FileManagerView({ source }: { source: UserSource }) {
           )}
         </div>
 
-        <SourceInfoCard source={source} />
+        <SourceInfoCard source={source} currentPermission={currentPermission} quota={quotaQuery.data} />
 
       </div>
 
@@ -650,7 +664,21 @@ function GridView({
 
 // --- 右栏：存储源信息卡 ---
 
-function SourceInfoCard({ source }: { source: UserSource }) {
+function quotaLabel(quota?: StorageQuota): string {
+  if (!quota) return '统计中…'
+  if (quota.unlimited) return `${formatBytes(quota.usage_bytes)} / 不限`
+  return `${formatBytes(quota.usage_bytes)} / ${formatBytes(quota.quota_bytes)}`
+}
+
+function SourceInfoCard({
+  source,
+  currentPermission,
+  quota,
+}: {
+  source: UserSource
+  currentPermission: 'read_only' | 'read_write'
+  quota?: StorageQuota
+}) {
   return (
     <aside className={css.sideCol}>
       <section className={css.sidePanel}>
@@ -658,9 +686,13 @@ function SourceInfoCard({ source }: { source: UserSource }) {
         <div className={css.sidePanelBody}>
           <Row label="存储源名称" value={source.name} />
           <Row
-            label="权限"
-            value={source.permission === 'read_write' ? '读写' : '只读'}
-            badge={source.permission === 'read_write' ? 'blue' : 'gray'}
+            label="当前目录权限"
+            value={currentPermission === 'read_write' ? '读写' : '只读'}
+            badge={currentPermission === 'read_write' ? 'blue' : 'gray'}
+          />
+          <Row
+            label="存储用量"
+            value={quotaLabel(quota)}
           />
           <Row
             label="公开挂载路径"

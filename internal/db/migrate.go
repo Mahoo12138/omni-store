@@ -46,6 +46,9 @@ func Migrate(conn *sql.DB) error {
 	if err := upgradePreReleaseSourceSchema(conn); err != nil {
 		return err
 	}
+	if err := ensurePreReleaseBaselineColumns(conn); err != nil {
+		return err
+	}
 	if err := reconcilePreReleaseMigrations(conn); err != nil {
 		return err
 	}
@@ -103,6 +106,28 @@ func Migrate(conn *sql.DB) error {
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("提交迁移 %s 失败: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// ensurePreReleaseBaselineColumns lets an already-recorded, unreleased v1.0.0
+// database receive columns that CREATE TABLE IF NOT EXISTS cannot add on replay.
+func ensurePreReleaseBaselineColumns(conn *sql.DB) error {
+	var tableCount int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'storage_sources'`).Scan(&tableCount); err != nil {
+		return fmt.Errorf("检查开发期基线表失败: %w", err)
+	}
+	if tableCount == 0 {
+		return nil
+	}
+	hasQuota, err := tableHasColumn(conn, "storage_sources", "quota_bytes")
+	if err != nil {
+		return fmt.Errorf("检查开发期配额字段失败: %w", err)
+	}
+	if !hasQuota {
+		if _, err := conn.Exec(`ALTER TABLE storage_sources ADD COLUMN quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0)`); err != nil {
+			return fmt.Errorf("补充开发期配额字段失败: %w", err)
 		}
 	}
 	return nil
@@ -254,15 +279,16 @@ CREATE TABLE storage_sources (
   public_mount_path TEXT UNIQUE,
   webdav_enabled BOOLEAN NOT NULL DEFAULT 1,
   image_bed_enabled BOOLEAN NOT NULL DEFAULT 0,
+  quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0),
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
 INSERT INTO storage_sources
   (id, key, name, description, root_path, is_disabled, public_read_enabled,
-   public_mount_path, webdav_enabled, image_bed_enabled, created_at, updated_at)
+   public_mount_path, webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at)
 SELECT id, 'src-' || lower(hex(randomblob(8))), name, description, root_path,
        is_disabled, public_read_enabled, public_mount_path, webdav_enabled,
-       image_bed_enabled, created_at, updated_at
+       image_bed_enabled, 0, created_at, updated_at
 FROM storage_sources_legacy;
 
 CREATE TABLE storage_source_exclude_patterns (

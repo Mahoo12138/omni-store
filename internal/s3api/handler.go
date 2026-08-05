@@ -79,17 +79,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	write := r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPost
-	allowed, err := h.allowed(authenticated.User, bucket, write)
-	if err != nil {
-		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "权限检查失败", bucket)
-		return
-	}
-	if !allowed {
-		h.writeError(w, r, http.StatusForbidden, "AccessDenied", "没有访问该存储源的权限", bucket)
-		return
-	}
-
 	if key == "" {
 		h.serveBucket(w, r, authenticated.User, src)
 		return
@@ -97,11 +86,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.serveObject(w, r, authenticated, src, key)
 }
 
-func (h *Handler) allowed(user *models.User, bucket string, write bool) (bool, error) {
-	if write {
-		return h.sources.CanWriteSource(user, bucket)
+func (h *Handler) authorize(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource, key string, write, subtree bool) bool {
+	normalized, err := security.NormalizeRelPath(strings.TrimSuffix(key, "/"))
+	if err != nil {
+		h.writeError(w, r, http.StatusBadRequest, "InvalidObjectName", "对象 Key 非法", key)
+		return false
 	}
-	return h.sources.CanReadSource(user, bucket)
+	var allowed bool
+	if subtree {
+		allowed, err = h.sources.CanWriteSubtree(user, src.Key, normalized)
+	} else if write {
+		allowed, err = h.sources.CanWritePath(user, src.Key, normalized)
+	} else {
+		allowed, err = h.sources.CanReadPath(user, src.Key, normalized)
+	}
+	if err != nil {
+		h.writeError(w, r, http.StatusInternalServerError, "InternalError", "权限检查失败", key)
+		return false
+	}
+	if !allowed {
+		h.writeError(w, r, http.StatusForbidden, "AccessDenied", "没有访问该路径的权限", key)
+		return false
+	}
+	return true
 }
 
 func splitPath(urlPath string) (string, string) {
@@ -119,8 +126,14 @@ func splitPath(urlPath string) (string, string) {
 func (h *Handler) serveBucket(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource) {
 	switch {
 	case r.Method == http.MethodHead:
+		if !h.authorize(w, r, user, src, "", false, false) {
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	case r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2":
+		if !h.authorize(w, r, user, src, r.URL.Query().Get("prefix"), false, false) {
+			return
+		}
 		h.listObjectsV2(w, r, src)
 	case r.Method == http.MethodPost && r.URL.Query().Has("delete"):
 		h.deleteObjects(w, r, user, src)
@@ -135,6 +148,11 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request, authentica
 		return
 	}
 	query := r.URL.Query()
+	write := r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPost
+	subtree := r.Method == http.MethodDelete && !query.Has("uploadId")
+	if !h.authorize(w, r, authenticated.User, src, strings.TrimSuffix(key, "/"), write, subtree) {
+		return
+	}
 	switch {
 	case r.Method == http.MethodPost && query.Has("uploads"):
 		h.createMultipartUpload(w, r, authenticated.User, src, key)
@@ -538,6 +556,10 @@ func (h *Handler) deleteObjects(w http.ResponseWriter, r *http.Request, user *mo
 			result.Errors = append(result.Errors, deleteError{Key: item.Key, Code: "InvalidObjectName", Message: "对象 Key 非法"})
 			continue
 		}
+		if !h.authorizeDeleteItem(user, src, item.Key) {
+			result.Errors = append(result.Errors, deleteError{Key: item.Key, Code: "AccessDenied", Message: "没有访问该路径的权限"})
+			continue
+		}
 		if h.deleteObject(w, r, user, src, item.Key, false) {
 			if !request.Quiet {
 				result.Deleted = append(result.Deleted, deletedItem{Key: item.Key})
@@ -547,6 +569,11 @@ func (h *Handler) deleteObjects(w http.ResponseWriter, r *http.Request, user *mo
 		}
 	}
 	h.writeXML(w, http.StatusOK, result)
+}
+
+func (h *Handler) authorizeDeleteItem(user *models.User, src *models.StorageSource, key string) bool {
+	allowed, err := h.sources.CanWriteSubtree(user, src.Key, strings.TrimSuffix(key, "/"))
+	return err == nil && allowed
 }
 
 func (h *Handler) objectETag(src *models.StorageSource, key string, size int64, mtime time.Time) (string, error) {
@@ -620,6 +647,8 @@ func (h *Handler) writeFileError(w http.ResponseWriter, r *http.Request, err err
 		h.writeError(w, r, http.StatusForbidden, "AccessDenied", "对象不可访问", resource)
 	case errors.Is(err, files.ErrLocked):
 		h.writeError(w, r, http.StatusLocked, "OperationAborted", "对象被锁定", resource)
+	case errors.Is(err, files.ErrQuotaExceeded):
+		h.writeError(w, r, http.StatusInsufficientStorage, "InsufficientStorage", "存储源可用空间不足", resource)
 	case errors.Is(err, files.ErrInvalid):
 		h.writeError(w, r, http.StatusBadRequest, "InvalidObjectName", err.Error(), resource)
 	default:

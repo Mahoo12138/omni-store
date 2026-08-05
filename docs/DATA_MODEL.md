@@ -171,12 +171,14 @@ CREATE TABLE storage_sources (
   public_mount_path TEXT UNIQUE,
   webdav_enabled BOOLEAN NOT NULL DEFAULT 1,
   image_bed_enabled BOOLEAN NOT NULL DEFAULT 0,
+  quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0),
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
 ```
 
 `id` 只用于 SQLite 内部外键；`key` 在创建时由服务端生成，格式为 `src-` 加 16 位小写十六进制随机字符串。Web、WebDAV 和 S3 把 key 当不透明协议值，常规界面使用 `name` 识别存储源。
+`quota_bytes=0` 表示不限制；大于 0 时表示该存储源全部普通文件的物理硬配额。V2 第一阶段通过实时扫描计算用量，不依赖文件台账。
 
 ### storage_source_exclude_patterns
 
@@ -234,6 +236,18 @@ CREATE TABLE access_policy_sources (
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
+CREATE TABLE access_policy_path_rules (
+  policy_id INTEGER NOT NULL,
+  storage_source_id INTEGER NOT NULL,
+  path_prefix TEXT NOT NULL,
+  permission TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY(policy_id, storage_source_id, path_prefix),
+  FOREIGN KEY(policy_id, storage_source_id)
+    REFERENCES access_policy_sources(policy_id, storage_source_id) ON DELETE CASCADE
+);
+
 CREATE TABLE user_access_policies (
   user_id INTEGER NOT NULL,
   policy_id INTEGER NOT NULL,
@@ -254,7 +268,12 @@ read_write
 策略 key 由服务端生成，格式为 `pol-` 加 16 位小写十六进制随机字符串，仅用于管理 API 定位。
 一个策略可以绑定多个用户和多个存储源；同一用户通过多个策略命中同一存储源时，
 `read_write` 高于 `read_only`。超级管理员不需要绑定策略，始终拥有全部存储源的读写权限。
-当前策略只描述存储源级权限，子路径规则在后续增量中实现。
+
+`access_policy_sources.permission` 是该策略在整个存储源上的默认权限。可选的
+`access_policy_path_rules` 使用规范化后的源内相对路径（无前导 `/`）覆盖默认权限：同一策略内
+匹配目标路径本身或其祖先路径的规则中，路径前缀最长者生效；再将用户绑定的全部策略按
+`read_write` 高于 `read_only` 合并。根目录继续使用源级默认权限，不能创建空路径规则。
+路径规则不表示独立存储源，也不维护文件级 ACL。
 
 ### user_preferences
 
@@ -373,7 +392,7 @@ CREATE TABLE webdav_locks (
 
 ### V2 file_records 规划
 
-V2 配额系统再增加：
+存储源硬配额已直接落在 `storage_sources.quota_bytes`。用户归属、用户级配额和增量用量统计仍需增加：
 
 ```text
 file_records

@@ -98,6 +98,24 @@ const exclusiveLockBody = `<?xml version="1.0" encoding="utf-8"?>
   <D:owner><D:href>urn:omnistore:test-owner</D:href></D:owner>
 </D:lockinfo>`
 
+func TestWebDAVPutReturnsInsufficientStorageWhenQuotaExceeded(t *testing.T) {
+	env := newWebDAVTestEnv(t)
+	quotaBytes := int64(3)
+	source, err := env.sources.Update(env.source.Key, sources.UpdateInput{QuotaBytes: &quotaBytes})
+	if err != nil {
+		t.Fatalf("set quota: %v", err)
+	}
+	env.source = source
+
+	response := env.request(t, http.MethodPut, env.path("/too-large.txt"), "1234", nil)
+	if response.Code != http.StatusInsufficientStorage {
+		t.Fatalf("PUT status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(env.root, "too-large.txt")); !os.IsNotExist(err) {
+		t.Fatalf("quota rejection left final file: %v", err)
+	}
+}
+
 func TestPersistentWebDAVLockLifecycleAndWriteEnforcement(t *testing.T) {
 	env := newWebDAVTestEnv(t)
 	if err := os.WriteFile(filepath.Join(env.root, "document.txt"), []byte("before"), 0o644); err != nil {

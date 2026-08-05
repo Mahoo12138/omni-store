@@ -93,11 +93,11 @@ func seed(configFile, fixtureRoot string) error {
 	_ = sessions.DeleteByUser(demo.ID)
 
 	sourceService := sources.NewService(conn, cfg.Data.Dir)
-	publicSource, err := ensureSource(sourceService, "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, true, "/demo", true)
+	publicSource, err := ensureSource(sourceService, "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, true, "/demo", true, 32*1024*1024)
 	if err != nil {
 		return err
 	}
-	teamSource, err := ensureSource(sourceService, "团队文件", "用于测试读写权限和文件操作", teamRoot, false, "", true)
+	teamSource, err := ensureSource(sourceService, "团队文件", "用于测试读写权限和文件操作", teamRoot, false, "", true, 128*1024*1024)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,12 @@ func ensureDemoPolicy(service *sources.Service, userID int64, publicKey, teamKey
 		UserIDs:     []int64{userID},
 		Sources: []sources.PolicySourceInput{
 			{SourceKey: publicKey, Permission: models.PermissionReadOnly},
-			{SourceKey: teamKey, Permission: models.PermissionReadWrite},
+			{
+				SourceKey: teamKey, Permission: models.PermissionReadWrite,
+				PathRules: []sources.PolicyPathRuleInput{{
+					PathPrefix: "projects", Permission: models.PermissionReadOnly,
+				}},
+			},
 		},
 	}
 	policies, err := service.ListPolicies()
@@ -203,7 +208,7 @@ func ensureUser(service *users.Service, username, displayName, password, role st
 	return service.GetByID(user.ID)
 }
 
-func ensureSource(service *sources.Service, name, description, root string, public bool, mountPath string, imageBed bool) (*models.StorageSource, error) {
+func ensureSource(service *sources.Service, name, description, root string, public bool, mountPath string, imageBed bool, quotaBytes int64) (*models.StorageSource, error) {
 	var source *models.StorageSource
 	list, err := service.List()
 	if err != nil {
@@ -231,6 +236,7 @@ func ensureSource(service *sources.Service, name, description, root string, publ
 		PublicReadEnabled: &public,
 		WebdavEnabled:     &webdav,
 		ImageBedEnabled:   &imageBed,
+		QuotaBytes:        &quotaBytes,
 	}
 	if public || mountPath != "" {
 		input.PublicMountPath = &mountPath

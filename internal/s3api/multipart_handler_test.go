@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/locks"
+	"github.com/omni-store/omnistore/internal/sources"
 )
 
 func TestS3MultipartLifecycle(t *testing.T) {
@@ -158,6 +159,30 @@ func TestS3MultipartCompleteRespectsPersistentLock(t *testing.T) {
 	}
 	if _, err := f.multipart.Get(1, f.storageSourceID, key, uploadID); err != nil {
 		t.Fatalf("failed completion removed upload state: %v", err)
+	}
+}
+
+func TestS3MultipartCompleteReturnsInsufficientStorage(t *testing.T) {
+	f := newS3Fixture(t)
+	key := "quota.bin"
+	uploadID := initiateMultipart(t, f, key)
+	etag := uploadMultipartPart(t, f, key, uploadID, 1, []byte("1234"))
+	quotaBytes := int64(3)
+	if _, err := f.handler.sources.Update(f.bucket, sources.UpdateInput{QuotaBytes: &quotaBytes}); err != nil {
+		t.Fatalf("set quota: %v", err)
+	}
+
+	body := []byte(fmt.Sprintf(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>%s</ETag></Part></CompleteMultipartUpload>`, etag))
+	target := fmt.Sprintf("http://s3.test/%s/%s?uploadId=%s", f.bucket, key, uploadID)
+	response := perform(f.handler, f.signedRequest(t, http.MethodPost, target, body))
+	if response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), "InsufficientStorage") {
+		t.Fatalf("quota completion status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := f.multipart.Get(1, f.storageSourceID, key, uploadID); err != nil {
+		t.Fatalf("quota rejection removed retryable upload state: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, key)); !os.IsNotExist(err) {
+		t.Fatalf("quota rejection left final object: %v", err)
 	}
 }
 

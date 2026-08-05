@@ -92,7 +92,12 @@ func (s *Server) handleAdminGetSource(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "查询排除规则失败", nil)
 		return
 	}
-	WriteData(w, r, map[string]any{"source": src, "exclude_patterns": patterns})
+	quota, err := s.files.StorageQuota(src)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "统计存储源用量失败", nil)
+		return
+	}
+	WriteData(w, r, map[string]any{"source": src, "exclude_patterns": patterns, "quota": quota})
 }
 
 func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request) {
@@ -103,9 +108,14 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 		PublicMountPath   *string `json:"public_mount_path"`
 		WebdavEnabled     *bool   `json:"webdav_enabled"`
 		ImageBedEnabled   *bool   `json:"image_bed_enabled"`
+		QuotaBytes        *int64  `json:"quota_bytes"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
+	}
+	if req.QuotaBytes != nil {
+		releaseQuota := s.files.LockQuotaUpdate(r.PathValue("key"))
+		defer releaseQuota()
 	}
 
 	src, err := s.sources.Update(r.PathValue("key"), sources.UpdateInput{
@@ -115,6 +125,7 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 		PublicMountPath:   req.PublicMountPath,
 		WebdavEnabled:     req.WebdavEnabled,
 		ImageBedEnabled:   req.ImageBedEnabled,
+		QuotaBytes:        req.QuotaBytes,
 	})
 	if err != nil {
 		s.writeSourceError(w, r, err)
@@ -178,4 +189,20 @@ func (s *Server) handleListMySources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteData(w, r, ListData{Items: list, Total: int64(len(list))})
+}
+
+func (s *Server) handleSourceQuota(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	if !s.authorizeSourcePath(w, r, src, "", false, false) {
+		return
+	}
+	quota, err := s.files.StorageQuota(src)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "统计存储源用量失败", nil)
+		return
+	}
+	WriteData(w, r, quota)
 }

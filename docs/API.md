@@ -129,9 +129,35 @@ POST /api/v1/admin/sources/preflight
 
 正式创建请求必须提供 `name` 与 `root_path`，可选 `description`、`exclude_patterns`；不接受用户自定义存储源标识。服务端生成 `src-` 加 16 位小写十六进制随机 key 并随响应返回，前端仅将其作为不透明路由参数。
 
+## 存储源硬配额
+
+管理员通过存储源更新接口设置 `quota_bytes`，单位为字节；`0` 表示不限制，负数返回 `400 VALIDATION_ERROR`。管理员详情响应除 `source` 和 `exclude_patterns` 外还包含实时 `quota` 摘要。
+
+有该存储源读取权限的登录用户可以查询：
+
+```http
+GET /api/v1/sources/{source_key}/quota
+```
+
+响应示例：
+
+```json
+{
+  "data": {
+    "usage_bytes": 1048576,
+    "quota_bytes": 1073741824,
+    "remaining_bytes": 1072693248,
+    "unlimited": false
+  },
+  "request_id": "req_xxx"
+}
+```
+
+用量是存储源全部普通文件的实时物理统计。超过硬配额的 REST 或图床写入返回 `507 INSUFFICIENT_STORAGE`；WebDAV 返回 HTTP 507；S3 返回 HTTP 507 和 XML 错误码 `InsufficientStorage`。覆盖文件超限时原文件不变，降低配额不会自动删除已有文件。
+
 ## 访问策略
 
-超级管理员通过以下接口管理存储源级访问策略：
+超级管理员通过以下接口管理存储源及子路径访问策略：
 
 ```http
 GET    /api/v1/admin/policies
@@ -148,8 +174,15 @@ DELETE /api/v1/admin/policies/{policy_key}
   "name": "内容团队",
   "description": "内容团队日常访问",
   "sources": [
-    { "source_key": "src-generated-value", "permission": "read_write" },
-    { "source_key": "src-another-value", "permission": "read_only" }
+    {
+      "source_key": "src-generated-value",
+      "permission": "read_only",
+      "path_rules": [
+        { "path_prefix": "team/drafts", "permission": "read_write" },
+        { "path_prefix": "team/drafts/archive", "permission": "read_only" }
+      ]
+    },
+    { "source_key": "src-another-value", "permission": "read_only", "path_rules": [] }
   ],
   "user_ids": [2, 3]
 }
@@ -160,6 +193,19 @@ DELETE /api/v1/admin/policies/{policy_key}
 `read_write` 高于 `read_only`。超级管理员始终拥有全部存储源读写权限。
 策略可以暂时不包含规则或用户，便于先创建再配置。删除策略会立即撤销由该策略产生的权限，
 不会删除存储源或真实文件。
+
+`permission` 是单个策略的源级默认权限；`path_rules` 可省略或为空。`path_prefix` 必须是非空的
+源内相对路径，服务端会折叠斜杠并拒绝 `.`、`..`、控制字符及规范化后重复规则。同一策略采用
+最长路径前缀，多策略再取最高权限。目录删除、重命名和移动还要求整棵受影响子树可写。
+
+文件管理器可查询当前目录的最终权限：
+
+```http
+GET /api/v1/sources/{source_key}/permission?path=/team/drafts
+```
+
+响应为 `{ "permission": "read_only" }` 或 `{ "permission": "read_write" }`。文件 API、WebDAV、
+S3 和登录用户图床在执行实际操作时仍会独立校验，客户端不得把该响应当作长期授权凭据。
 
 ## 图床 Token 管理
 
