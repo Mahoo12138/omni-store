@@ -152,10 +152,11 @@ AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
 ```bash
 go test -count=1 -coverprofile=/tmp/omnistore-cover.out ./...
 go tool cover -func=/tmp/omnistore-cover.out
+go test -race -count=1 ./...
 cd web && pnpm test
 ```
 
-发布检查默认要求全仓 Go 语句覆盖率不低于 52%，防止新增功能只扩大未测试代码面。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高门槛，但正式发布不得通过降低该值规避失败。当前 1.0.0 候选基线为 56.6%。
+发布检查默认要求全仓 Go 语句覆盖率不低于 52%，并要求全仓竞态检测通过，防止新增功能只扩大未测试代码面。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高门槛，但正式发布不得通过降低该值规避失败。本地与 GitHub 发布流水线统一执行 `scripts/verify-release.sh`。
 
 ### E2E
 

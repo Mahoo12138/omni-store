@@ -5,7 +5,7 @@
 ## 发布事实与不可变边界
 
 1. 候选标签使用 `v1.0.0-rc.N`，稳定标签使用 `v1.0.0`。
-2. `migrations/v1.0.0.sql` 在稳定标签创建后永久冻结。后续数据库变化必须进入下一目标版本的新迁移。
+2. `migrations/v1.0.0.sql` 已在 RC 前永久冻结。后续数据库变化必须进入下一目标版本的新迁移。
 3. Git 标签、GitHub Release、二进制 `omnistore version` 和容器 OCI 标签中的版本必须一致。
 4. RC 创建为 GitHub Prerelease，不更新容器 `latest`；只有不带预发布标识的稳定 SemVer 标签可以更新 `latest`。
 5. 已发布标签不得移动或覆盖。发布后发现问题应停止推广并发布新的 RC 或 PATCH。
@@ -25,17 +25,21 @@
 使用项目要求的 Go、Node 和 pnpm 版本，并确保 Docker 可用以验证 Compose：
 
 ```bash
-OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 ./scripts/release-check.sh
+OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 ./scripts/verify-release.sh
 ```
 
 脚本会检查：
 
 1. SemVer、干净工作区和迁移命名。
 2. Go 格式、vet、禁用缓存的全量测试与不低于 52% 的语句覆盖率门禁。
-3. 前端单元测试、生产构建和浏览器 E2E。
-4. 带版本/提交/构建时间的嵌入式前端二进制。
-5. Linux amd64、arm64 静态交叉编译。
-6. Docker Compose 配置和 Git diff 空白错误。
+3. 全仓 `go test -race` 竞态检测。
+4. 前端单元测试、生产构建和浏览器 E2E。
+5. 带版本/提交/构建时间的嵌入式前端二进制。
+6. Linux amd64、arm64 静态交叉编译。
+7. Docker Compose 配置和 Git diff 空白错误。
+
+GitHub 的 `Unified release gate` Job 调用同一脚本；Docker 镜像、二进制归档和 GitHub Release
+全部硬依赖该 Job。`scripts/release-check.sh` 仅保留为兼容包装器，不包含独立检查逻辑。
 
 开发中排查脚本本身时可临时设置 `OMNISTORE_ALLOW_DIRTY=1`；这不允许用于正式候选签发。
 
@@ -45,7 +49,7 @@ OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 ./scripts/release-check.sh
 
 ```bash
 git tag -a v1.0.0-rc.1 -m "OmniStore 1.0.0-rc.1"
-OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 OMNISTORE_REQUIRE_TAG=1 ./scripts/release-check.sh
+OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 OMNISTORE_REQUIRE_TAG=1 ./scripts/verify-release.sh
 git push origin v1.0.0-rc.1
 ```
 
@@ -75,14 +79,14 @@ git push origin v1.0.0-rc.1
 RC 通过后，把 Changelog 的 `Unreleased` 改为带日期的 `1.0.0`，提交并再次执行完整检查：
 
 ```bash
-OMNISTORE_RELEASE_VERSION=1.0.0 ./scripts/release-check.sh
+OMNISTORE_RELEASE_VERSION=1.0.0 ./scripts/verify-release.sh
 git tag -a v1.0.0 -m "OmniStore 1.0.0"
-OMNISTORE_RELEASE_VERSION=1.0.0 OMNISTORE_REQUIRE_TAG=1 ./scripts/release-check.sh
+OMNISTORE_RELEASE_VERSION=1.0.0 OMNISTORE_REQUIRE_TAG=1 ./scripts/verify-release.sh
 git push origin main
 git push origin v1.0.0
 ```
 
-稳定流水线完成后确认 GitHub Release 非 Prerelease、压缩包和校验和齐全、GHCR `1.0.0` 与 `latest` 指向同一 digest。随后冻结 `migrations/v1.0.0.sql`。
+稳定流水线完成后确认 GitHub Release 非 Prerelease、压缩包和校验和齐全、GHCR `1.0.0` 与 `latest` 指向同一 digest。`migrations/v1.0.0.sql` 继续保持冻结。
 
 ## 发布后
 
