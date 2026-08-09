@@ -39,6 +39,7 @@ type Server struct {
 	public         *publicdisk.Service
 	shares         *shares.Service
 	sessions       *auth.Sessions
+	loginLimiter   *auth.LoginLimiter
 	tokens         *auth.Tokens
 	imagebed       *imagebed.Service
 	anonLimiter    *imagebed.RateLimiter
@@ -66,6 +67,16 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 		proxy:          security.NewProxyResolver(cfg.Server.TrustedProxies),
 		bootstrapToken: bootstrapToken,
 	}
+	loginLimit := cfg.Security.LoginRateLimit
+	if !loginLimit.Enabled {
+		loginLimit.MaxFailuresPerIP = 0
+		loginLimit.MaxFailuresPerUsername = 0
+	}
+	s.loginLimiter = auth.NewLoginLimiter(
+		time.Duration(loginLimit.WindowMinutes)*time.Minute,
+		loginLimit.MaxFailuresPerIP,
+		loginLimit.MaxFailuresPerUsername,
+	)
 	if count, err := s.users.Count(); err == nil && count == 0 {
 		logger.Warn("首次管理员初始化需要一次性凭据", "bootstrap_token", bootstrapToken)
 	}

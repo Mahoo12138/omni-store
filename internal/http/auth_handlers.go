@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
@@ -131,8 +133,31 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	ip := s.proxy.ClientIP(r)
 	ua := r.UserAgent()
+	attempt, retryAfter, allowed := s.loginLimiter.Begin(ip, req.Username)
+	if !allowed {
+		seconds := int((retryAfter + time.Second - 1) / time.Second)
+		if seconds < 1 {
+			seconds = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		s.audit.Log(audit.Entry{
+			ActorType: audit.ActorAnonymous,
+			EntryType: audit.EntryWeb, Action: "login_failed",
+			IPAddress: ip, UserAgent: ua,
+			Status: audit.StatusFailed, ErrorCode: CodeRateLimited,
+		})
+		WriteError(w, r, CodeRateLimited, "登录尝试过于频繁，请稍后再试", nil)
+		return
+	}
+	attemptFinished := false
+	defer func() {
+		if !attemptFinished {
+			s.loginLimiter.Cancel(attempt)
+		}
+	}()
 
 	fail := func(userID *int64) {
+		attemptFinished = true
 		s.audit.Log(audit.Entry{
 			ActorType: audit.ActorAnonymous, ActorUserID: userID,
 			EntryType: audit.EntryWeb, Action: "login_failed",
@@ -145,8 +170,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	u, err := s.users.GetByUsername(req.Username)
 	if err != nil {
 		if errors.Is(err, users.ErrNotFound) {
-			// 仍执行一次哈希比较，避免用户名枚举时间差。
-			auth.VerifyPassword("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy", req.Password)
+			// 使用与真实密码一致的 bcrypt cost，避免用户名枚举时间差。
+			auth.VerifyLoginPassword("", req.Password)
 			fail(nil)
 			return
 		}
@@ -155,7 +180,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hash, err := s.users.PasswordHashByUsername(req.Username)
-	if err != nil || !auth.VerifyPassword(hash, req.Password) {
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "登录失败", nil)
+		return
+	}
+	if !auth.VerifyLoginPassword(hash, req.Password) {
 		fail(&u.ID)
 		return
 	}
@@ -169,6 +198,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "创建会话失败", nil)
 		return
 	}
+	s.loginLimiter.Success(attempt)
+	attemptFinished = true
 	s.setSessionCookie(w, sessionID)
 
 	s.audit.Log(audit.Entry{

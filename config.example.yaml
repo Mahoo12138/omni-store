@@ -21,6 +21,11 @@ database:
 security:
   cookie_secure: true
   session_ttl_hours: 168
+  login_rate_limit:
+    enabled: true
+    window_minutes: 15
+    max_failures_per_ip: 50
+    max_failures_per_username: 10
   # S3 master key 只能通过 OMNISTORE_MASTER_KEY 提供，不写入 YAML。
   # 未提供时首次创建 S3 凭据会生成 data.dir/keys/s3-master.key，请务必备份。
   # 首次管理员初始化凭据只通过 OMNISTORE_BOOTSTRAP_TOKEN 提供，不写入 YAML。

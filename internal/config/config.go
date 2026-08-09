@@ -44,12 +44,20 @@ type DatabaseConfig struct {
 }
 
 type SecurityConfig struct {
-	CookieSecure    bool `yaml:"cookie_secure"`
-	SessionTTLHours int  `yaml:"session_ttl_hours"`
+	CookieSecure    bool                 `yaml:"cookie_secure"`
+	SessionTTLHours int                  `yaml:"session_ttl_hours"`
+	LoginRateLimit  LoginRateLimitConfig `yaml:"login_rate_limit"`
 	// MasterKey 只允许从 OMNISTORE_MASTER_KEY 注入，不序列化到配置导出。
 	MasterKey string `yaml:"-"`
 	// BootstrapToken 只允许从环境变量注入；留空时首次启动会随机生成并写入日志。
 	BootstrapToken string `yaml:"-"`
+}
+
+type LoginRateLimitConfig struct {
+	Enabled                bool `yaml:"enabled"`
+	WindowMinutes          int  `yaml:"window_minutes"`
+	MaxFailuresPerIP       int  `yaml:"max_failures_per_ip"`
+	MaxFailuresPerUsername int  `yaml:"max_failures_per_username"`
 }
 
 type UploadConfig struct {
@@ -96,6 +104,12 @@ func Default() *Config {
 		Security: SecurityConfig{
 			CookieSecure:    false,
 			SessionTTLHours: 168,
+			LoginRateLimit: LoginRateLimitConfig{
+				Enabled:                true,
+				WindowMinutes:          15,
+				MaxFailuresPerIP:       50,
+				MaxFailuresPerUsername: 10,
+			},
 		},
 		Upload: UploadConfig{
 			MaxFileSizeMB:       1024,
@@ -190,6 +204,10 @@ func applyEnvOverrides(cfg *Config) {
 	setStr("OMNISTORE_DATABASE_PATH", &cfg.Database.Path)
 	setBool("OMNISTORE_COOKIE_SECURE", &cfg.Security.CookieSecure)
 	setInt("OMNISTORE_SESSION_TTL_HOURS", &cfg.Security.SessionTTLHours)
+	setBool("OMNISTORE_LOGIN_RATE_LIMIT_ENABLED", &cfg.Security.LoginRateLimit.Enabled)
+	setInt("OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES", &cfg.Security.LoginRateLimit.WindowMinutes)
+	setInt("OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP", &cfg.Security.LoginRateLimit.MaxFailuresPerIP)
+	setInt("OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME", &cfg.Security.LoginRateLimit.MaxFailuresPerUsername)
 	setStr("OMNISTORE_MASTER_KEY", &cfg.Security.MasterKey)
 	setStr("OMNISTORE_BOOTSTRAP_TOKEN", &cfg.Security.BootstrapToken)
 	setInt64("OMNISTORE_UPLOAD_MAX_FILE_SIZE_MB", &cfg.Upload.MaxFileSizeMB)
@@ -227,6 +245,15 @@ func (c *Config) normalize() error {
 	}
 	if c.Security.SessionTTLHours <= 0 {
 		c.Security.SessionTTLHours = 168
+	}
+	if c.Security.LoginRateLimit.WindowMinutes <= 0 {
+		c.Security.LoginRateLimit.WindowMinutes = 15
+	}
+	if c.Security.LoginRateLimit.MaxFailuresPerIP <= 0 {
+		c.Security.LoginRateLimit.MaxFailuresPerIP = 50
+	}
+	if c.Security.LoginRateLimit.MaxFailuresPerUsername <= 0 {
+		c.Security.LoginRateLimit.MaxFailuresPerUsername = 10
 	}
 	if c.Upload.MaxFileSizeMB <= 0 {
 		c.Upload.MaxFileSizeMB = 1024

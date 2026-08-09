@@ -19,6 +19,11 @@ database:
 security:
   cookie_secure: false
   session_ttl_hours: 24
+  login_rate_limit:
+    enabled: true
+    window_minutes: 15
+    max_failures_per_ip: 50
+    max_failures_per_username: 10
 
 upload:
   max_file_size_mb: 64

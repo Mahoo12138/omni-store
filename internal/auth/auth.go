@@ -13,6 +13,10 @@ import (
 
 const bcryptCost = 12
 
+// dummyPasswordHash 使用与真实密码相同的 bcrypt cost。登录用户名不存在时
+// 仍执行完整比较，避免通过响应耗时枚举账号。
+const dummyPasswordHash = "$2a$12$naHxBNeXUsJQtXSYxESJDezsFQSKf2JoEpkM1zxPumdHqaYcv6JMe"
+
 // HashPassword 使用 bcrypt 哈希密码。禁止明文存储（README §8.3）。
 func HashPassword(password string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
@@ -25,6 +29,14 @@ func HashPassword(password string) (string, error) {
 // VerifyPassword 校验密码与 bcrypt 哈希是否匹配。
 func VerifyPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+// VerifyLoginPassword 校验登录密码；hash 为空时使用等成本 dummy hash。
+func VerifyLoginPassword(hash, password string) bool {
+	if hash == "" {
+		hash = dummyPasswordHash
+	}
+	return VerifyPassword(hash, password)
 }
 
 // NewRandomToken 生成 nBytes 随机数的十六进制 Token，可带前缀。

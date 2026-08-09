@@ -75,6 +75,8 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+`POST /api/v1/auth/login` 的不存在用户名和错误密码统一返回 `401 UNAUTHORIZED`。登录失败超过安全配置中的 IP 或用户名滑动窗口阈值后返回 `429 RATE_LIMITED`，并携带整数秒 `Retry-After` 响应头；成功登录会重置该用户名的失败窗口。
+
 ## 账号安全与凭据恢复
 
 登录用户修改自己的密码：

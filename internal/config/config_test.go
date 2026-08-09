@@ -67,3 +67,36 @@ security:
 		t.Fatal("bootstrap token environment override missing")
 	}
 }
+
+func TestLoginRateLimitDefaultsAndEnvironmentOverrides(t *testing.T) {
+	defaults := Default().Security.LoginRateLimit
+	if !defaults.Enabled || defaults.WindowMinutes != 15 || defaults.MaxFailuresPerIP != 50 || defaults.MaxFailuresPerUsername != 10 {
+		t.Fatalf("unexpected login rate-limit defaults: %+v", defaults)
+	}
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte(`
+data:
+  dir: ./test-data
+security:
+  login_rate_limit:
+    enabled: false
+    window_minutes: 30
+    max_failures_per_ip: 80
+    max_failures_per_username: 20
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMNISTORE_LOGIN_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES", "5")
+	t.Setenv("OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP", "25")
+	t.Setenv("OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME", "6")
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.Security.LoginRateLimit
+	if !got.Enabled || got.WindowMinutes != 5 || got.MaxFailuresPerIP != 25 || got.MaxFailuresPerUsername != 6 {
+		t.Fatalf("environment did not override login rate limit: %+v", got)
+	}
+}

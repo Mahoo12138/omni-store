@@ -59,6 +59,8 @@ go build -o omnistore.exe ./cmd/omnistore
 
 默认监听 `0.0.0.0:8080`，数据目录 `./data`（可用 `OMNISTORE_DATA_DIR` 覆盖）。
 
+网页登录失败限流默认开启，配置位于 `security.login_rate_limit`；环境变量分别为 `OMNISTORE_LOGIN_RATE_LIMIT_ENABLED`、`OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES`、`OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP` 和 `OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME`。限流状态仅在当前进程内存中维护，修改配置需要重启服务。
+
 ### 前端热更新开发
 
 ```bash

@@ -178,7 +178,68 @@ VALUES ('OSAKRECOVERY', X'01', X'02', ?, 'Recovery', CURRENT_TIMESTAMP)`, member
 	assertErrorResponse(t, missingAPI, http.StatusNotFound, CodeFileNotFound)
 }
 
+func TestLoginRateLimitAndSuccessfulReset(t *testing.T) {
+	server, internalServer := newAuthIntegrationServerWithConfig(t, func(cfg *config.Config) {
+		cfg.Security.LoginRateLimit.Enabled = true
+		cfg.Security.LoginRateLimit.WindowMinutes = 1
+		cfg.Security.LoginRateLimit.MaxFailuresPerIP = 50
+		cfg.Security.LoginRateLimit.MaxFailuresPerUsername = 2
+	})
+	setupBody := `{"username":"admin","display_name":"Rate Admin","password":"admin-password","bootstrap_token":"integration-bootstrap-token"}`
+	setup := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/setup/admin", setupBody, nil, "")
+	if setup.Code != http.StatusOK {
+		t.Fatalf("setup status=%d body=%s", setup.Code, setup.Body.String())
+	}
+	member, err := internalServer.users.Create("rate-member", "Rate Member", "member-password", models.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wrongMember := `{"username":"rate-member","password":"wrong-password"}`
+	firstFailure := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", wrongMember, nil, "")
+	assertErrorResponse(t, firstFailure, http.StatusUnauthorized, CodeUnauthorized)
+	success := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
+		`{"username":"rate-member","password":"member-password"}`, nil, "")
+	parseLoginResponse(t, success)
+	for attempt := 0; attempt < 2; attempt++ {
+		failure := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", wrongMember, nil, "")
+		assertErrorResponse(t, failure, http.StatusUnauthorized, CodeUnauthorized)
+	}
+	limited := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
+		`{"username":"rate-member","password":"member-password"}`, nil, "")
+	assertErrorResponse(t, limited, http.StatusTooManyRequests, CodeRateLimited)
+	if limited.Header().Get("Retry-After") == "" {
+		t.Fatal("rate-limited login response missing Retry-After")
+	}
+
+	// Unknown usernames follow the same failure and rate-limit path.
+	for attempt := 0; attempt < 2; attempt++ {
+		missing := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
+			`{"username":"missing-user","password":"wrong-password"}`, nil, "")
+		assertErrorResponse(t, missing, http.StatusUnauthorized, CodeUnauthorized)
+	}
+	missingLimited := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
+		`{"username":"missing-user","password":"wrong-password"}`, nil, "")
+	assertErrorResponse(t, missingLimited, http.StatusTooManyRequests, CodeRateLimited)
+
+	var limitedAudits int
+	if err := internalServer.db.QueryRow(`SELECT COUNT(*) FROM audit_logs
+WHERE action = 'login_failed' AND error_code = ?`, CodeRateLimited).Scan(&limitedAudits); err != nil {
+		t.Fatal(err)
+	}
+	if limitedAudits != 2 {
+		t.Fatalf("rate-limited audit count=%d want=2", limitedAudits)
+	}
+	if _, err := internalServer.users.GetByID(member.ID); err != nil {
+		t.Fatalf("rate limiting affected user: %v", err)
+	}
+}
+
 func newAuthIntegrationServer(t *testing.T) (*http.Server, *Server) {
+	return newAuthIntegrationServerWithConfig(t, nil)
+}
+
+func newAuthIntegrationServerWithConfig(t *testing.T, configure func(*config.Config)) (*http.Server, *Server) {
 	t.Helper()
 	dataDir := filepath.Join(t.TempDir(), "data")
 	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
@@ -191,6 +252,9 @@ func newAuthIntegrationServer(t *testing.T) (*http.Server, *Server) {
 	cfg.Database.Path = filepath.Join(dataDir, "omnistore.db")
 	cfg.Server.PublicURL = "http://example.test"
 	cfg.Security.BootstrapToken = "integration-bootstrap-token"
+	if configure != nil {
+		configure(cfg)
+	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server, internalServer := New(cfg, conn, logger)
 	return server, internalServer
