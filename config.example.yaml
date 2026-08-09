@@ -8,7 +8,7 @@ server:
   trusted_proxies:
     - "127.0.0.1"
     - "172.16.0.0/12"
-  # V1.1 S3 兼容接口；默认关闭，启用后使用独立端口和 Path-style URL
+  # 1.0.0 / V1 S3 兼容接口；默认关闭，启用后使用独立端口和 Path-style URL
   s3_addr: "0.0.0.0:8081"
   s3_enabled: false
 

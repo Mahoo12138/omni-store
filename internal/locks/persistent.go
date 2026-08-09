@@ -126,7 +126,7 @@ func (s *PersistentStore) GuardMutations(ctx context.Context, mutations []Source
 	}, nil
 }
 
-// Create 创建独占写锁。OmniStore V1.1 只实现 RFC 4918 要求的独占锁。
+// Create 创建独占写锁。OmniStore 1.0.0 / V1 只实现 RFC 4918 要求的独占锁。
 func (s *PersistentStore) Create(ctx context.Context, storageSourceID int64, relPath, depth, ownerXML string, ownerUserID int64, timeout time.Duration) (*PersistentLock, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

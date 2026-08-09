@@ -29,6 +29,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          [[ "$GITHUB_REF_NAME" == v* && "$version" =~ $semver ]] || {
+            echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          }
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -116,6 +127,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -123,7 +136,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=OmniStore
             org.opencontainers.image.description=Unified file storage and image hosting service
@@ -180,7 +193,7 @@ jobs:
           package="omnistore_${version}_linux_${GOARCH}"
           mkdir -p "$package"
           GOOS=linux CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags" -o "$package/omnistore" ./cmd/omnistore
-          cp README.md config.example.yaml "$package/"
+          cp README.md CHANGELOG.md LICENSE config.example.yaml "$package/"
           tar -czf "$package.tar.gz" "$package"
 
       - name: Upload release archive
@@ -215,6 +228,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          version="${GITHUB_REF_NAME#v}"
+          release_flags=(--verify-tag --generate-notes --title "OmniStore $version")
+          if [[ "$version" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "OmniStore ${GITHUB_REF_NAME#v}"
+            gh release create "$GITHUB_REF_NAME" "${release_flags[@]}"
           gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber

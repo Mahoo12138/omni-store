@@ -19,6 +19,7 @@
 | [数据模型](DATA_MODEL.md) | SQLite 表结构与字段语义；迁移文件为最终事实来源 |
 | [API 约定](API.md) | 统一响应、分页与错误码 |
 | [开发指南](DEVELOPMENT.md) | 环境、启动、构建、配置与备份 |
+| [发布流程](RELEASING.md) | RC、稳定标签、产物验收、迁移冻结与发布后检查 |
 | [Agent 开发规则](AGENT_GUIDE.md) | Agent 修改项目时必须遵守的边界与工作顺序 |
 
 ## 功能规范

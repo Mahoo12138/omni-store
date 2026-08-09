@@ -144,6 +144,18 @@ AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
 `openssl rand -base64 32` 生成。如果未提供，系统首次创建 S3 凭据时会生成
 `data.dir/keys/s3-master.key`；该文件丢失后现有 Secret 无法恢复，必须与数据库一起备份。
 
+### 单元测试
+
+提交前先运行后端和前端单元测试；需要查看后端语句覆盖率时生成临时 profile：
+
+```bash
+go test -count=1 -coverprofile=/tmp/omnistore-cover.out ./...
+go tool cover -func=/tmp/omnistore-cover.out
+cd web && pnpm test
+```
+
+发布检查默认要求全仓 Go 语句覆盖率不低于 52%，防止新增功能只扩大未测试代码面。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高门槛，但正式发布不得通过降低该值规避失败。当前 1.0.0 候选基线为 56.6%。
+
 ### E2E
 
 首次运行先安装 Chromium：
@@ -159,7 +171,7 @@ pnpm exec playwright install chromium
 pnpm run test:e2e
 ```
 
-Playwright 默认调用 `scripts/test-env.sh run` 启动并复用 `http://127.0.0.1:18080`，验证公开演示目录、管理员登录和配置包下载。若测试服务已由外部环境管理，可设置 `OMNISTORE_E2E_BASE_URL` 跳过内置启动流程。
+Playwright 默认调用 `scripts/test-env.sh run` 启动并复用 `http://127.0.0.1:18080`，覆盖未登录保护与登录退出、公开目录浏览与筛选、目录级权限、上传与搜索、新建/重命名/复制/移动、回收恢复与永久清理、图床上传/公开访问/删除、密码分享以及管理员配置包下载。新增会修改数据的用例必须使用唯一名称，并在成功路径末尾清理夹具。若测试服务已由外部环境管理，可设置 `OMNISTORE_E2E_BASE_URL` 跳过内置启动流程。
 
 ### 配置
 
@@ -176,8 +188,10 @@ docker compose build
 
 ```bash
 cd web && pnpm run build && cd ..
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o omnistore ./cmd/omnistore
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o omnistore ./cmd/omnistore
 ```
+
+冻结候选、创建 RC/稳定标签和验收发布产物时，必须遵循[发布流程](RELEASING.md)。不要直接用未注入版本元数据的普通 `go build` 产物作为正式发布包。
 
 ## 备份边界（生产）
 
