@@ -207,6 +207,25 @@ GET /api/v1/sources/{source_key}/permission?path=/team/drafts
 响应为 `{ "permission": "read_only" }` 或 `{ "permission": "read_write" }`。文件 API、WebDAV、
 S3 和登录用户图床在执行实际操作时仍会独立校验，客户端不得把该响应当作长期授权凭据。
 
+## 文件复制与移动
+
+复制和移动使用完整目标路径；`target_source_key` 可省略，省略时表示当前存储源：
+
+```http
+POST /api/v1/sources/{source_key}/files/copy
+POST /api/v1/sources/{source_key}/files/move
+```
+
+```json
+{
+  "path": "/photos/a.jpg",
+  "target_source_key": "src-target-key",
+  "target_path": "/archive/a.jpg"
+}
+```
+
+源路径必须可读；移动还要求源子树可写，目标子树始终要求可写。目标父目录必须存在，目标本身不能存在。成功响应包含 `path`、`files`、`bytes`、`source_key`、`target_source_key` 和 `was_move`。复制的新文件归执行用户所有；跨来源移动保留原台账归属。
+
 ## 图床 Token 管理
 
 登录用户可以管理自己的命名图床 Token：

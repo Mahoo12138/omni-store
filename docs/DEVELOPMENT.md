@@ -28,6 +28,8 @@ OmniStore 遵循 [Semantic Versioning 2.0.0](https://semver.org/lang/zh-CN/)：
 
 当前开发版本为 `1.0.0-dev`，首个稳定版本 `1.0.0` **尚未发布**。
 
+路线图中的 `V1`、`V2` 是 `1.0.0` 的内部开发阶段，不参与 SemVer 版本编号；两阶段范围全部完成并通过验收后，才允许创建 `v1.0.0` 标签。历史提交中出现的 `V1.1`、`V1.2` 仅表示 V1 阶段内的实施批次，不代表将发布 `1.1.0` 或 `1.2.0`。
+
 SQL 迁移文件与稳定版本一一对应，命名为 `migrations/vMAJOR.MINOR.PATCH.sql`，`schema_migrations.version` 保存不含 `.sql` 的完整版本号。迁移器会按照 SemVer 数值顺序执行文件，例如 `v1.2.0` 必须早于 `v1.10.0`。
 
 迁移维护规则：
@@ -182,4 +184,4 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o omnistore ./cmd/omnistore
 必须备份：`config.yaml`、`$OMNISTORE_DATA_DIR/omnistore.db`、`$OMNISTORE_DATA_DIR/keys/`。
 可不备份：`cache/`、`tmp/`。其中 `cache/thumbnails/` 是可按需重建的图床缩略图缓存，服务启动时及每天清理超过 30 天未访问的文件。用户存储源文件由管理员自行备份。
 
-V1.1 可在管理后台“配置导出”下载上述系统配置包。该文件包含敏感系统数据且不包含真实存储源文件，不能替代完整备份策略。
+1.0.0 / V1 可在管理后台“配置导出”下载上述系统配置包。该文件包含敏感系统数据且不包含真实存储源文件，不能替代完整备份策略。

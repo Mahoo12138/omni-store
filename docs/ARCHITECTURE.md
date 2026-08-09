@@ -330,7 +330,7 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
 
 1. `omnistore.db`：SQLite 数据库。
 2. `keys/`：后续保存 master key 或密钥材料。
-3. `cache/`：可重建缓存；V1.1 使用 `cache/thumbnails/` 保存图床缩略图。
+3. `cache/`：可重建缓存；1.0.0 / V1 使用 `cache/thumbnails/` 保存图床缩略图。
 4. `tmp/`：内部临时任务目录；S3 Multipart 分片位于 `tmp/multipart/{upload_id}/`。
 5. `logs/`：可选。MVP 可以只输出 stdout。
 
@@ -351,7 +351,7 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
 
 ## 备份边界
 
-MVP 不提供 Web UI 备份/恢复，不提供定时备份任务。V1.1 提供管理员手动导出系统配置包，但仍不提供自动备份或一键恢复。
+1.0.0 不提供 Web UI 备份/恢复或定时备份任务；V1 阶段提供管理员手动导出系统配置包，但仍不提供自动备份或一键恢复。
 
 必须在部署文档中明确需要备份：
 
@@ -372,7 +372,7 @@ OMNISTORE_DATA_DIR/tmp/
 
 用户真实存储源文件不由 OmniStore MVP 负责备份。管理员应使用自己的 NAS、rsync、restic、borg、文件系统快照或云备份方案。
 
-V1.1 配置包包含生效 YAML、SQLite 一致性快照、`keys/` 普通文件、清单和恢复说明。导出过程在系统数据目录的 `tmp/` 下创建权限为 `0600` 的临时 ZIP，响应结束后立即删除。密钥收集不跟随 symlink；配置包不包含真实存储源、缓存、上传临时文件或日志。
+1.0.0 / V1 配置包包含生效 YAML、SQLite 一致性快照、`keys/` 普通文件、清单和恢复说明。导出过程在系统数据目录的 `tmp/` 下创建权限为 `0600` 的临时 ZIP，响应结束后立即删除。密钥收集不跟随 symlink；配置包不包含真实存储源、缓存、上传临时文件或日志。
 
 ---
 
@@ -414,19 +414,23 @@ storage_source_id + normalized_relative_path
 3. 重命名。
 4. 移动。
 5. 创建目录。
+6. 复制。
+7. 跨来源移动。
 
-移动 / 重命名涉及源路径和目标路径：
+复制、移动和重命名涉及源路径和目标路径：
 
 1. 计算两个锁 key。
 2. 排序。
 3. 按固定顺序加锁。
 4. 避免死锁。
 
+跨来源操作把两个存储源 key 也纳入锁 key，并按固定顺序获取。WebDAV 持久锁使用一次多来源原子检查，不能串联两个单来源守卫造成自锁或检查窗口。
+
 目录操作可粗粒度锁住目录根路径，不要求递归锁每个子文件。
 
 ### WebDAV 持久写锁
 
-V1.1 增加 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范围为 `storage_source_id + normalized_relative_path + depth`，支持 `Depth: 0` 和 `Depth: infinity`，并保存创建者、owner XML、刷新时间和过期时间。
+1.0.0 / V1 使用 SQLite `webdav_locks` 表，只实现 RFC 4918 独占写锁。锁范围为 `storage_source_id + normalized_relative_path + depth`，支持 `Depth: 0` 和 `Depth: infinity`，并保存创建者、owner XML、刷新时间和过期时间。
 
 持久锁检查位于核心文件服务中，因此 REST、WebDAV、图床等入口无法绕过。文件写操作持有进程级持久锁检查守卫直到真实文件操作完成，避免“检查通过后才创建 LOCK”的竞态；之后仍获取原有请求级路径锁。
 

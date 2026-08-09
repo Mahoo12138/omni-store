@@ -1,4 +1,4 @@
-name: Build and publish Docker image
+name: Validate and publish
 
 on:
   push:
@@ -19,8 +19,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: Test and build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Enable pnpm
+        run: corepack enable && corepack install --global pnpm@11.9.0
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Test and build frontend
+        working-directory: web
+        run: pnpm test && pnpm run build
+
+      - name: Vet and test backend
+        run: go vet ./... && go test ./...
+
+      - name: Install Chromium
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser E2E
+        working-directory: web
+        run: pnpm exec playwright test
+
+      - name: Upload embedded frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          if-no-files-found: error
+          retention-days: 1
+
   docker:
     name: Build${{ github.event_name != 'pull_request' && ' and publish' || '' }}
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,6 +84,18 @@ jobs:
       - name: Prepare image name
         shell: bash
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Prepare build metadata
+        id: build
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="1.0.0-dev+sha.${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -73,5 +136,85 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.build.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build.outputs.build_time }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  binaries:
+    name: Linux ${{ matrix.arch }} binary
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Download embedded frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Build release archive
+        shell: bash
+        env:
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ldflags="-s -w -X github.com/omni-store/omnistore/internal/buildinfo.Version=$version -X github.com/omni-store/omnistore/internal/buildinfo.Commit=$GITHUB_SHA -X github.com/omni-store/omnistore/internal/buildinfo.BuildTime=$build_time"
+          package="omnistore_${version}_linux_${GOARCH}"
+          mkdir -p "$package"
+          GOOS=linux CGO_ENABLED=0 go build -trimpath -ldflags "$ldflags" -o "$package/omnistore" ./cmd/omnistore
+          cp README.md config.example.yaml "$package/"
+          tar -czf "$package.tar.gz" "$package"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: omnistore_*_linux_${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [docker, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: release-assets
+        run: sha256sum *.tar.gz > checksums.txt
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "OmniStore ${GITHUB_REF_NAME#v}"
+          gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber

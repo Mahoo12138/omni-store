@@ -4,16 +4,27 @@ services:
     image: omnistore:latest
     ports:
       - "8080:8080"
+      # 启用 server.s3_enabled 后同时取消下一行注释
+      # - "8081:8081"
     environment:
       OMNISTORE_DATA_DIR: /data
-      OMNISTORE_PUBLIC_URL: https://store.example.com
-      # 生产环境放在 HTTPS 反向代理后时开启
-      OMNISTORE_COOKIE_SECURE: "true"
+      # 本文件默认用于本机 HTTP 快速体验；生产部署请改为真实 HTTPS 地址并设为 true。
+      OMNISTORE_PUBLIC_URL: http://localhost:8080
+      OMNISTORE_COOKIE_SECURE: "false"
     volumes:
       # 系统数据目录（数据库、密钥），必须备份
-      - ./omnistore-data:/data
+      - omnistore-data:/data
       # 用户存储源：宿主机目录挂载到 /mnt/sources/*，
       # 后台创建存储源时填写容器内路径，例如 /mnt/sources/photos
       # - /mnt/photos:/mnt/sources/photos
       # - /mnt/downloads:/mnt/sources/downloads
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     restart: unless-stopped
+
+volumes:
+  omnistore-data:

@@ -178,7 +178,7 @@ CREATE TABLE storage_sources (
 ```
 
 `id` 只用于 SQLite 内部外键；`key` 在创建时由服务端生成，格式为 `src-` 加 16 位小写十六进制随机字符串。Web、WebDAV 和 S3 把 key 当不透明协议值，常规界面使用 `name` 识别存储源。
-`quota_bytes=0` 表示不限制；大于 0 时表示该存储源全部普通文件的物理硬配额。V2 第一阶段通过实时扫描计算用量，不依赖文件台账。
+`quota_bytes=0` 表示不限制；大于 0 时表示该存储源全部普通文件的物理硬配额。1.0.0 / V2 通过实时扫描计算物理用量，并使用文件台账提供校准视图和所有权统计。
 
 ### storage_source_exclude_patterns
 
@@ -390,15 +390,15 @@ CREATE TABLE webdav_locks (
 
 `expires_at` 用于访问时惰性清理和每小时后台清理；存储源或锁创建者删除后，关联锁级联删除。
 
-### V2 file_records 规划
+### file_records
 
-存储源硬配额已直接落在 `storage_sources.quota_bytes`。用户归属、用户级配额和增量用量统计仍需增加：
+`file_records` 是 1.0.0 / V2 的普通文件元数据台账，用于所有权、用户配额、来源用量校准和搜索；真实文件系统仍是内容与目录结构的最终事实来源。
 
 ```text
 file_records
 ```
 
-字段建议：
+核心字段：
 
 ```text
 id
@@ -409,7 +409,7 @@ owner_user_id
 owner_type
 created_by_user_id
 updated_by_user_id
-mtime
+mtime_unix_nano
 record_status
 created_at
 updated_at
@@ -424,7 +424,9 @@ system
 unowned
 ```
 
-已有文件通过扫描导入进入台账。
+`(storage_source_id, relative_path)` 唯一。`record_status` 当前使用 `active`，回收站完成后使用 `trash`；常规写入口同步 upsert，删除和移动同步清理或变更路径。已有文件通过校准扫描导入并标记为 `unowned`，扫描会保留已知所有权，只校准大小、mtime 和缺失记录。
+
+`users.quota_bytes=0` 表示不限；大于 0 时，用户拥有的全部 `active` 文件大小之和不得超过该值。复制计入执行用户，跨来源移动保留归属且全局用户用量不重复增长。
 
 不使用 xattr、sidecar 文件或 OmniStore 特殊标签污染用户目录。
 

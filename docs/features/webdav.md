@@ -24,7 +24,7 @@ WebDAV Token
 
 ### 路由
 
-MVP 支持：
+1.0.0 / V1 支持：
 
 ```text
 /dav
@@ -77,7 +77,7 @@ Depth: 1
 
 `Depth: infinity` 返回明确错误，避免大目录扫爆。
 
-V1.1 的 `LOCK / UNLOCK` 支持 RFC 4918 独占写锁：
+1.0.0 / V1 的 `LOCK / UNLOCK` 支持 RFC 4918 独占写锁：
 
 1. `Depth: 0` 只锁定请求资源；省略 `Depth` 等价于 `Depth: infinity`。
 2. 新建锁返回 `Lock-Token` 和 `DAV:lockdiscovery`；无请求体的 `LOCK` 搭配 `If` 头用于刷新。
@@ -124,7 +124,7 @@ MOVE /dav/photos/a.jpg -> /dav/photos/b.jpg
 MOVE /dav/photos/a.jpg -> /dav/backup/a.jpg
 ```
 
-MVP 不支持跨存储源移动。
+WebDAV `MOVE` 不支持跨存储源移动；跨来源移动只通过登录用户 REST 文件接口提供。
 
 ### WebDAV 检查顺序
 
