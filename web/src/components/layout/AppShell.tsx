@@ -9,6 +9,7 @@ import {
   IconImage,
   IconLogout,
   IconQuestion,
+  IconLink,
   IconSearch,
   IconSettings,
   LogoMark,
@@ -52,6 +53,7 @@ export function AppShell({
   const navItems = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
     { to: '/app/search', label: '搜索', icon: <IconSearch />, active: pathname.startsWith('/app/search') },
+    { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
   ]
   // 仅 super_admin 显示"系统设置"入口。

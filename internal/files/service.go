@@ -857,6 +857,7 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 
 	// 同步清理 Images 表，避免图床历史残留失效图片（README §13.5/§17.12）。
 	s.cleanupImageRecords(src.ID, relPath, isDir)
+	s.cleanupShareRecords(src.ID, relPath, isDir)
 	if err := s.deleteFileRecords(src.ID, relPath, isDir); err != nil {
 		return fmt.Errorf("清理文件台账失败: %w", err)
 	}
@@ -873,6 +874,15 @@ func (s *Service) cleanupImageRecords(storageSourceID int64, relPath string, isD
 		return
 	}
 	_, _ = s.db.Exec(`DELETE FROM images WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
+}
+
+func (s *Service) cleanupShareRecords(storageSourceID int64, relPath string, isDir bool) {
+	if isDir {
+		_, _ = s.db.Exec(`DELETE FROM file_shares WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
+			storageSourceID, relPath, relPath+"/%")
+		return
+	}
+	_, _ = s.db.Exec(`DELETE FROM file_shares WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
 }
 
 // --- 重命名 / 移动（README §13.6 只支持同存储源） ---
@@ -974,6 +984,7 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 
 	// 同步更新图床记录路径，保持公开 URL 有效。
 	s.syncImageRecordsMove(src.ID, fromRel, toRel, info.IsDir())
+	s.syncShareRecordsMove(src.ID, fromRel, toRel, info.IsDir())
 	if err := s.moveFileRecords(src.ID, fromRel, toRel, info.IsDir(), lockOwnerUserID); err != nil {
 		return "", fmt.Errorf("更新文件台账失败: %w", err)
 	}
@@ -1013,5 +1024,36 @@ func (s *Service) syncImageRecordsMove(storageSourceID int64, fromRel, toRel str
 		return
 	}
 	_, _ = s.db.Exec(`UPDATE images SET relative_path = ? WHERE storage_source_id = ? AND relative_path = ?`,
+		toRel, storageSourceID, fromRel)
+}
+
+func (s *Service) syncShareRecordsMove(storageSourceID int64, fromRel, toRel string, isDir bool) {
+	if isDir {
+		rows, err := s.db.Query(`SELECT id, relative_path FROM file_shares
+  WHERE storage_source_id = ? AND trash_key IS NULL AND (relative_path = ? OR relative_path LIKE ?)`,
+			storageSourceID, fromRel, fromRel+"/%")
+		if err != nil {
+			return
+		}
+		type sharePath struct {
+			id  int64
+			rel string
+		}
+		var paths []sharePath
+		for rows.Next() {
+			var item sharePath
+			if err := rows.Scan(&item.id, &item.rel); err != nil {
+				rows.Close()
+				return
+			}
+			paths = append(paths, item)
+		}
+		rows.Close()
+		for _, item := range paths {
+			_, _ = s.db.Exec(`UPDATE file_shares SET relative_path = ? WHERE id = ?`, toRel+strings.TrimPrefix(item.rel, fromRel), item.id)
+		}
+		return
+	}
+	_, _ = s.db.Exec(`UPDATE file_shares SET relative_path = ? WHERE storage_source_id = ? AND relative_path = ? AND trash_key IS NULL`,
 		toRel, storageSourceID, fromRel)
 }

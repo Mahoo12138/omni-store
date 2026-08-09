@@ -334,6 +334,12 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "重命名文件"
 	case "move":
 		return "移动文件"
+	case "create_share":
+		return "创建文件分享"
+	case "revoke_share":
+		return "撤销文件分享"
+	case "share_download":
+		return "通过分享下载文件"
 	case "change_password":
 		return "修改密码"
 	case "login_success":

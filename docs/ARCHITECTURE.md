@@ -448,6 +448,8 @@ storage_source_id + normalized_relative_path
 
 全局搜索不引入独立后台任务：`file_records` 的 SQLite 触发器同步维护 `file_search_index` FTS5 trigram 索引。常规写入口即时可搜索；外部直接修改通过管理员校准扫描写入台账和索引。目录实时列表仍直接读取真实文件系统。
 
+文件分享由 `internal/shares` 管理 SQLite 元数据与公开授权，真实文件读取继续复用 `internal/files`。分享不复制内容：同源/跨源移动事务同步其来源与路径；移入回收站时记录 `trash_key` 并停用，恢复时更新路径，永久删除或清理时删除关系。密码解锁会话仅存 Token 哈希并在访问时惰性清理，不新增后台任务。下载次数通过 SQLite 条件更新原子预留，内容仍由 `http.ServeContent` 流式返回。
+
 ---
 
 ## 审计日志
@@ -471,14 +473,15 @@ storage_source_id + normalized_relative_path
 13. 登录用户图床上传。
 14. 匿名公共图床上传。
 15. Token 生成或重置。
-16. 命令行重置管理员密码。
+16. 分享创建、撤销和匿名分享下载。
+17. 命令行重置管理员密码。
 
 不记录：
 
 1. 普通下载。
 2. 目录浏览。
 3. 公开图片访问。
-4. 公开 raw 文件访问。
+4. 公开 raw 文件访问（分享 raw 下载除外，后者需要记录匿名下载审计）。
 
 ### 审计日志字段
 
@@ -595,6 +598,9 @@ internal/s3api/
 
 internal/publicdisk/
   公开网盘虚拟挂载解析、公开目录浏览、raw 文件访问
+
+internal/shares/
+  文件与目录分享、密码会话、有效期、下载次数和生命周期同步
 
 internal/audit/
   审计日志

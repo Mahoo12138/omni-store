@@ -21,6 +21,7 @@ import (
 	"github.com/omni-store/omnistore/internal/publicdisk"
 	"github.com/omni-store/omnistore/internal/s3api"
 	"github.com/omni-store/omnistore/internal/security"
+	"github.com/omni-store/omnistore/internal/shares"
 	"github.com/omni-store/omnistore/internal/sources"
 	"github.com/omni-store/omnistore/internal/users"
 	"github.com/omni-store/omnistore/internal/webdav"
@@ -36,6 +37,7 @@ type Server struct {
 	sources     *sources.Service
 	files       *files.Service
 	public      *publicdisk.Service
+	shares      *shares.Service
 	sessions    *auth.Sessions
 	tokens      *auth.Tokens
 	imagebed    *imagebed.Service
@@ -61,6 +63,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.sources = sources.NewService(dbConn, cfg.Data.Dir)
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
 	s.public = publicdisk.NewService(dbConn, s.sources, s.files)
+	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
 	s.s3Keys = s3api.NewCredentials(dbConn, cfg.Data.Dir, cfg.Security.MasterKey)
 	s.s3Multipart = s3api.NewMultipartStore(dbConn, cfg.Data.Dir, s.files, cfg.Upload.MaxFileSizeMB)
@@ -124,6 +127,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 登录用户：可访问存储源
 	mux.HandleFunc("GET /api/v1/sources", s.requireAuth(s.handleListMySources))
 	mux.HandleFunc("GET /api/v1/search", s.requireAuth(s.handleSearchFiles))
+	mux.HandleFunc("GET /api/v1/shares", s.requireAuth(s.handleListShares))
+	mux.HandleFunc("POST /api/v1/shares", s.requireAuth(s.handleCreateShare))
+	mux.HandleFunc("DELETE /api/v1/shares/{shareKey}", s.requireAuth(s.handleDeleteShare))
 	mux.HandleFunc("GET /api/v1/sources/{key}/quota", s.requireAuth(s.handleSourceQuota))
 
 	// 私有网盘文件操作（README §13.2）
@@ -163,7 +169,14 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 公开网盘（匿名可访问，README §12.5）
 	mux.HandleFunc("GET /api/v1/public/mounts", s.handlePublicMounts)
 	mux.HandleFunc("GET /api/v1/public/browse", s.handlePublicBrowse)
+	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}", s.handlePublicShareInfo)
+	mux.HandleFunc("POST /api/v1/public/shares/{shareKey}/unlock", s.handlePublicShareUnlock)
+	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}/browse", s.handlePublicShareBrowse)
 	mux.HandleFunc("GET /raw/{virtual_path...}", s.handlePublicRaw)
+	mux.HandleFunc("GET /share/{shareKey}/raw", s.handlePublicShareRaw)
+	mux.HandleFunc("HEAD /share/{shareKey}/raw", s.handlePublicShareRaw)
+	mux.HandleFunc("GET /share/{shareKey}/raw/{childPath...}", s.handlePublicShareRaw)
+	mux.HandleFunc("HEAD /share/{shareKey}/raw/{childPath...}", s.handlePublicShareRaw)
 
 	// WebDAV（README §16）
 	davHandler := webdav.New(s.tokens, s.sources, s.files, s.audit, s.proxy, logger, cfg.Upload.MaxFileSizeMB)

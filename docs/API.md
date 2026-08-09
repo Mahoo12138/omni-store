@@ -75,6 +75,42 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+## 文件与目录分享
+
+登录用户管理分享：
+
+```http
+GET    /api/v1/shares
+POST   /api/v1/shares
+DELETE /api/v1/shares/{share_key}
+```
+
+创建请求示例：
+
+```json
+{
+  "source_key": "src-generated-value",
+  "path": "/team/demo.pdf",
+  "password": "optional-password",
+  "expires_at": "2026-08-16T12:00:00Z",
+  "max_downloads": 20
+}
+```
+
+目标可以是普通文件或目录。创建者必须对目标文件或整个目录子树具备写权限；密码可空，有效期可空且最长 365 天，`max_downloads=0` 表示不限。成功响应包含系统生成的 `share_key` 和由 `public_url` 组成的完整 `url`。
+
+公开访问接口：
+
+```http
+GET  /api/v1/public/shares/{share_key}
+POST /api/v1/public/shares/{share_key}/unlock
+GET  /api/v1/public/shares/{share_key}/browse?path=&page=1&page_size=50
+GET  /share/{share_key}/raw/{child_path...}
+HEAD /share/{share_key}/raw/{child_path...}
+```
+
+公开摘要只返回显示所需的名称、类型、是否需要密码、当前会话是否已解锁、有效期和下载计数。解锁请求为 `{ "password": "..." }`，成功后设置短期 HttpOnly Cookie。`GET raw` 消耗一次下载额度，`HEAD` 不消耗；`download=1` 强制 attachment。失效、撤销、次数耗尽、目标缺失和禁用来源在公开侧统一为 404。
+
 ## WebDAV 持久锁
 
 `/dav/{storage_key}/{path}` 支持 RFC 4918 `LOCK / UNLOCK`。`storage_key` 由系统生成，客户端应直接使用连接信息中给出的地址。新建独占写锁时请求体使用 `DAV:lockinfo`，响应返回 `Lock-Token` 与 `DAV:lockdiscovery`；刷新锁使用无请求体的 `LOCK` 和包含单个 Token 的 `If` 头；解锁使用 `Lock-Token` 头。

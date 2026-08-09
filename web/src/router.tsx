@@ -29,6 +29,21 @@ const anonymousUploadRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/AnonymousUpload'), 'AnonymousUploadPage'),
 })
 
+interface PublicShareSearch {
+  path: string
+  page: number
+}
+
+const publicShareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/s/$shareKey',
+  component: lazyRouteComponent(() => import('./pages/PublicShare'), 'PublicSharePage'),
+  validateSearch: (search: Record<string, unknown>): PublicShareSearch => ({
+    path: typeof search.path === 'string' ? search.path.replace(/^\/+|\/+$/g, '') : '',
+    page: Number(search.page) >= 1 ? Number(search.page) : 1,
+  }),
+})
+
 const aboutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/about',
@@ -98,6 +113,12 @@ const imageBedRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ImageBed'), 'ImageBedPage'),
 })
 
+const sharesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/app/shares',
+  component: lazyRouteComponent(() => import('./pages/Shares'), 'SharesPage'),
+})
+
 // 管理员侧（README §24.3）
 // 系统设置页（多 section 布局）：侧边栏"系统设置"入口，左侧分组导航 + 右侧内容。
 const adminRoute = createRoute({
@@ -110,6 +131,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
   anonymousUploadRoute,
+  publicShareRoute,
   aboutRoute,
   loginRoute,
   setupRoute,
@@ -118,6 +140,7 @@ const routeTree = rootRoute.addChildren([
   fileManagerRoute,
   trashRoute,
   imageBedRoute,
+  sharesRoute,
   adminRoute,
 ])
 

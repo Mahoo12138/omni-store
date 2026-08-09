@@ -41,6 +41,11 @@ export const nav = style({
   flex: 1,
   justifyContent: 'center',
   alignSelf: 'stretch',
+  '@media': {
+    'screen and (max-width: 640px)': {
+      display: 'none',
+    },
+  },
 })
 
 export const navLink = style({
@@ -94,6 +99,12 @@ export const headerCta = style({
   selectors: {
     '&:hover': { backgroundColor: vars.color.primaryHover },
     '&:active': { backgroundColor: vars.color.primaryActive, transform: 'translateY(1px)' },
+  },
+  '@media': {
+    'screen and (max-width: 640px)': {
+      minWidth: '72px',
+      padding: '0 12px',
+    },
   },
 })
 
@@ -189,6 +200,7 @@ export const footer = style({
 export const headerResponsive = style({
   '@media': {
     'screen and (max-width: 640px)': {
+      justifyContent: 'space-between',
       gap: vars.space.sm,
       padding: `0 ${vars.space.md}`,
     },

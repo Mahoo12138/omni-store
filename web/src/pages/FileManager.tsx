@@ -18,6 +18,7 @@ import {
   type UserSource,
 } from '../api/sources'
 import { ApiRequestError } from '../api/client'
+import { createShare, type FileShare } from '../api/shares'
 import { fetchMyQuota, type UserQuota } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
 import { FileTable } from '../components/files/FileTable'
@@ -114,6 +115,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
   const [transferTarget, setTransferTarget] = useState<{ name: string; mode: 'copy' | 'move' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
+  const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const permissionQuery = useQuery({
@@ -359,6 +361,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                         <>
                           <button
                             className={css.actionBtn}
+                            title="创建分享"
+                            onClick={() => setShareTarget({ name: entry.name, type: 'file' })}
+                          >
+                            <IconLink size={15} />
+                          </button>
+                          <button
+                            className={css.actionBtn}
                             title="重命名"
                             onClick={() => setRenameTarget({ name: entry.name })}
                           >
@@ -397,6 +406,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                       <>
                         <button
                           className={css.actionBtn}
+                          title="创建分享"
+                          onClick={() => setShareTarget({ name: entry.name, type: 'dir' })}
+                        >
+                          <IconLink size={15} />
+                        </button>
+                        <button
+                          className={css.actionBtn}
                           title="重命名"
                           onClick={() => setRenameTarget({ name: entry.name })}
                         >
@@ -431,6 +447,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               onRename={(name) => setRenameTarget({ name })}
               onCopy={(name) => setTransferTarget({ name, mode: 'copy' })}
               onMove={(name) => setTransferTarget({ name, mode: 'move' })}
+              onShare={(name, type) => setShareTarget({ name, type })}
               canWrite={canWrite}
               filter={filter}
             />
@@ -540,6 +557,16 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         />
       )}
 
+      {/* 创建分享 */}
+      {shareTarget && (
+        <ShareDialog
+          sourceKey={sourceKey}
+          currentPath={currentPath}
+          target={shareTarget}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
+
       {/* 删除 */}
       {deleteTarget && (
         <DeleteDialog
@@ -619,6 +646,7 @@ function GridView({
   onRename,
   onCopy,
   onMove,
+  onShare,
   canWrite,
   filter,
 }: {
@@ -629,6 +657,7 @@ function GridView({
   onRename: (name: string) => void
   onCopy: (name: string) => void
   onMove: (name: string) => void
+  onShare: (name: string, type: 'file' | 'dir') => void
   canWrite: boolean
   filter: string
 }) {
@@ -686,6 +715,13 @@ function GridView({
               </button>
               {canWrite && (
                 <>
+                  <button
+                    className={css.actionBtn}
+                    title="创建分享"
+                    onClick={() => onShare(e.name, e.type as 'file' | 'dir')}
+                  >
+                    <IconLink size={12} />
+                  </button>
                   <button className={css.actionBtn} title="重命名" onClick={() => onRename(e.name)}>
                     <IconEdit size={12} />
                   </button>
@@ -1082,6 +1118,132 @@ function TransferDialog({
       <Field label="目标路径" required error={err} hint="例如：/photos/2026">
         <Input autoFocus value={toPath} onChange={(e) => setToPath(e.target.value)} />
       </Field>
+    </DialogWrap>
+  )
+}
+
+function ShareDialog({
+  sourceKey,
+  currentPath,
+  target,
+  onClose,
+}: {
+  sourceKey: string
+  currentPath: string
+  target: { name: string; type: 'file' | 'dir' }
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [password, setPassword] = useState('')
+  const [expiryDays, setExpiryDays] = useState('0')
+  const [maxDownloads, setMaxDownloads] = useState('0')
+  const [error, setError] = useState('')
+  const [created, setCreated] = useState<FileShare | null>(null)
+  const [copied, setCopied] = useState(false)
+  const fullPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const days = Number(expiryDays)
+      return createShare({
+        sourceKey,
+        path: fullPath,
+        password: password.trim(),
+        expiresAt: days > 0 ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : undefined,
+        maxDownloads: Number(maxDownloads || 0),
+      })
+    },
+    onSuccess: async (share) => {
+      setCreated(share)
+      await queryClient.invalidateQueries({ queryKey: ['shares'] })
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : '创建分享失败'),
+  })
+
+  function submit() {
+    setError('')
+    const limit = Number(maxDownloads || 0)
+    if (!Number.isInteger(limit) || limit < 0 || limit > 1_000_000) {
+      setError('下载次数上限必须是 0 到 1000000 之间的整数')
+      return
+    }
+    if (password.trim() && [...password.trim()].length < 4) {
+      setError('访问密码至少需要 4 个字符')
+      return
+    }
+    mutation.mutate()
+  }
+
+  async function copyCreatedLink() {
+    if (!created) return
+    await navigator.clipboard.writeText(created.url)
+    setCopied(true)
+  }
+
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={created ? '分享已创建' : `分享${target.type === 'dir' ? '文件夹' : '文件'}`}
+      description={fullPath}
+      wide
+      footer={created ? (
+        <>
+          <Button variant="secondary" onClick={copyCreatedLink}>
+            <IconCopy size={14} /> {copied ? '已复制' : '复制链接'}
+          </Button>
+          <Button onClick={onClose}>完成</Button>
+        </>
+      ) : (
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button disabled={mutation.isPending} onClick={submit}>
+            {mutation.isPending ? '创建中…' : '创建分享'}
+          </Button>
+        </>
+      )}
+    >
+      {created ? (
+        <Field label="分享链接" hint="链接可随时在“分享”页面复制或撤销。">
+          <Input readOnly value={created.url} onFocus={(event) => event.currentTarget.select()} />
+        </Field>
+      ) : (
+        <>
+          <Field label="访问密码" hint="选填；设置后访问者需要先验证密码。">
+            <Input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="留空表示无需密码"
+              maxLength={128}
+            />
+          </Field>
+          <Field label="有效期">
+            <Select
+              value={expiryDays}
+              onValueChange={setExpiryDays}
+              options={[
+                { value: '0', label: '永久有效' },
+                { value: '1', label: '1 天' },
+                { value: '7', label: '7 天' },
+                { value: '30', label: '30 天' },
+                { value: '90', label: '90 天' },
+              ]}
+              ariaLabel="分享有效期"
+            />
+          </Field>
+          <Field label="下载次数上限" hint="填写 0 表示不限制；目录内每次文件下载均计数。" error={error}>
+            <Input
+              type="number"
+              min={0}
+              max={1000000}
+              step={1}
+              value={maxDownloads}
+              onChange={(event) => setMaxDownloads(event.target.value)}
+            />
+          </Field>
+        </>
+      )}
     </DialogWrap>
   )
 }

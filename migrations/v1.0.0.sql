@@ -149,6 +149,46 @@ CREATE INDEX IF NOT EXISTS idx_trash_entries_source_deleted
 CREATE INDEX IF NOT EXISTS idx_trash_entries_user_deleted
   ON trash_entries(deleted_by_user_id, deleted_at DESC);
 
+-- 登录用户创建的临时公开分享；随机 key 是唯一公开定位符。
+CREATE TABLE IF NOT EXISTS file_shares (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  share_key TEXT NOT NULL UNIQUE,
+  storage_source_id INTEGER NOT NULL,
+  relative_path TEXT NOT NULL,
+  entry_type TEXT NOT NULL CHECK(entry_type IN ('file', 'dir')),
+  created_by_user_id INTEGER NOT NULL,
+  password_hash TEXT,
+  expires_at DATETIME,
+  max_downloads INTEGER NOT NULL DEFAULT 0 CHECK(max_downloads >= 0),
+  download_count INTEGER NOT NULL DEFAULT 0 CHECK(download_count >= 0),
+  trash_key TEXT,
+  last_accessed_at DATETIME,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(trash_key) REFERENCES trash_entries(trash_key) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_shares_owner_created
+  ON file_shares(created_by_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_file_shares_source_path
+  ON file_shares(storage_source_id, relative_path);
+CREATE INDEX IF NOT EXISTS idx_file_shares_trash
+  ON file_shares(trash_key);
+
+-- 密码分享解锁后使用短期 HttpOnly Cookie；数据库只保存随机 Token 哈希。
+CREATE TABLE IF NOT EXISTS share_access_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  share_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(share_id) REFERENCES file_shares(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_access_sessions_expiry
+  ON share_access_sessions(expires_at);
+
 -- 文件台账只保存普通文件元数据，不保存内容，也不在存储源中写 sidecar。
 CREATE TABLE IF NOT EXISTS file_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

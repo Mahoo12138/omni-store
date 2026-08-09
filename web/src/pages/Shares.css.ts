@@ -1,0 +1,23 @@
+import { globalStyle, style } from '@vanilla-extract/css'
+import { vars } from '../styles/theme.css'
+
+export const header = style({ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: vars.space.md, marginBottom: vars.space.lg })
+export const title = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.display, letterSpacing: '-0.04em' })
+export const description = style({ margin: '8px 0 0', color: vars.color.textSecondary, lineHeight: 1.6 })
+export const notice = style({ marginBottom: vars.space.md, padding: '11px 14px', color: 'oklch(0.42 0.12 150)', background: vars.color.successSubtle, borderRadius: vars.radius.md, fontSize: vars.fontSize.sm })
+export const list = style({ display: 'grid', gap: vars.space.sm })
+export const card = style({ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr) auto', alignItems: 'center', gap: vars.space.md, padding: '15px 17px', background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.lg, boxShadow: vars.shadow.sm, '@media': { 'screen and (max-width: 680px)': { gridTemplateColumns: '40px minmax(0, 1fr)', alignItems: 'start' } } })
+export const icon = style({ width: 42, height: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary, background: vars.color.primarySubtle, borderRadius: vars.radius.md })
+export const identity = style({ minWidth: 0 })
+export const nameRow = style({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: vars.space.sm })
+export const name = style({ overflow: 'hidden', color: vars.color.text, fontSize: vars.fontSize.md, fontWeight: 650, textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+export const path = style({ overflow: 'hidden', marginTop: 4, color: vars.color.textSecondary, fontFamily: vars.font.mono, fontSize: vars.fontSize.xs, textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+export const meta = style({ display: 'flex', flexWrap: 'wrap', gap: '5px 12px', marginTop: 7, color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const actions = style({ display: 'flex', alignItems: 'center', gap: vars.space.xs, '@media': { 'screen and (max-width: 680px)': { gridColumn: '1 / -1', justifyContent: 'flex-end' } } })
+export const linkButton = style({ width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, color: vars.color.textSecondary, background: 'transparent', border: 0, borderRadius: vars.radius.sm, cursor: 'pointer', textDecoration: 'none', selectors: { '&:hover': { color: vars.color.primary, background: vars.color.primarySubtle }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 1 } } })
+export const dangerButton = style([linkButton, { selectors: { '&:hover': { color: vars.color.danger, background: vars.color.dangerSubtle } } }])
+export const empty = style({ minHeight: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: vars.space.sm, color: vars.color.textSecondary, textAlign: 'center', background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.lg })
+globalStyle(`${empty} h2`, { margin: 0, color: vars.color.text, fontSize: vars.fontSize.lg })
+globalStyle(`${empty} p`, { maxWidth: 460, margin: 0, lineHeight: 1.6 })
+export const emptyIcon = style({ width: 58, height: 58, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, color: vars.color.primary, background: vars.color.primarySubtle, borderRadius: vars.radius.tile })
+export const loading = style({ padding: vars.space.xl, color: vars.color.textSecondary, textAlign: 'center' })

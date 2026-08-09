@@ -435,6 +435,44 @@ unowned
 
 `users.quota_bytes=0` 表示不限；大于 0 时，用户拥有的 `active + trash` 文件大小之和不得超过该值。回收站仍计入用户配额，永久清理后释放；复制计入执行用户，跨来源移动保留归属且全局用户用量不重复增长。
 
+### file_shares
+
+`file_shares` 保存登录用户创建的文件或目录分享关系，不保存或复制文件内容。核心字段：
+
+```text
+id
+share_key
+storage_source_id
+relative_path
+entry_type
+created_by_user_id
+password_hash
+expires_at
+max_downloads
+download_count
+trash_key
+last_accessed_at
+created_at
+```
+
+`share_key` 是密码学安全随机生成的唯一公开定位符。`password_hash` 可空且只保存 bcrypt 哈希。`max_downloads=0` 表示不限制；下载前通过单条条件更新原子增加计数。`trash_key` 可空，目标进入回收站时关联对应条目并暂时停用；恢复时更新来源内路径并清空，永久清理通过外键级联删除分享。
+
+同源或跨来源移动同步更新 `storage_source_id + relative_path`；永久删除清理目标及目录子树上的分享。删除来源或创建者会级联撤销关联分享，不影响真实文件。
+
+### share_access_sessions
+
+密码分享解锁后使用短期访问会话：
+
+```text
+id
+share_id
+token_hash
+expires_at
+created_at
+```
+
+浏览器只持有随机明文 Token 的 `HttpOnly` Cookie，数据库只保存哈希。会话最长 12 小时且不超过分享有效期；撤销分享时级联删除，过期记录在校验时惰性清理。
+
 ### trash_entries
 
 回收站顶层条目保存 `trash_key`、来源、原路径、类型、文件数、总大小、删除用户和时间。物理内容位于系统 `data/trash/{trash_key}/payload`，不属于任何用户存储源。`file_records.trash_key` 和 `images.trash_key` 关联条目；图片在回收期间不参与历史墙或公开读取，恢复后继续使用原 `image_id` 与公开 URL。

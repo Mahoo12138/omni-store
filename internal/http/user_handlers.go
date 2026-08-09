@@ -340,6 +340,16 @@ func humanizeActivity(action, relPath, sourceName string) string {
 			return "复制了 " + filename
 		}
 		return "复制了文件"
+	case "create_share":
+		if filename != "" {
+			return "分享了 " + filename
+		}
+		return "创建了文件分享"
+	case "revoke_share":
+		if filename != "" {
+			return "撤销了 " + filename + " 的分享"
+		}
+		return "撤销了文件分享"
 	default:
 		// 未知动作：保留原文。
 		return action

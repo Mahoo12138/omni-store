@@ -27,6 +27,7 @@
 | --- | --- |
 | [公开网盘](features/public-drive.md) | 公开挂载、路由与匿名访问 |
 | [私有网盘与文件操作](features/private-drive.md) | 浏览、上传、下载、复制、移动、回收站、全局搜索与缓存 |
+| [文件与目录分享](features/sharing.md) | 随机链接、密码、有效期、下载限制、撤销与文件生命周期 |
 | [WebDAV](features/webdav.md) | 鉴权、方法支持和操作语义 |
 | [图床](features/image-bed.md) | 登录 / 匿名图床、图片校验、历史与 PicGo |
 | [S3 兼容接口](features/s3.md) | 1.0.0 V1 阶段的基础对象接口与 Multipart Upload |

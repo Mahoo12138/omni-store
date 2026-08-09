@@ -331,6 +331,9 @@ func (s *Service) syncTransferRecords(source, target *models.StorageSource, plan
 		if err := moveImageRecordsTx(tx, source.ID, target.ID, plan.sourceRel, plan.targetRel); err != nil {
 			return err
 		}
+		if err := moveShareRecordsTx(tx, source.ID, target.ID, plan.sourceRel, plan.targetRel); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -373,11 +376,44 @@ func moveImageRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel str
 	return nil
 }
 
+func moveShareRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel string) error {
+	rows, err := tx.Query(`SELECT id, relative_path FROM file_shares
+  WHERE storage_source_id = ? AND trash_key IS NULL AND (relative_path = ? OR relative_path LIKE ?)`,
+		sourceID, fromRel, fromRel+"/%")
+	if err != nil {
+		return err
+	}
+	type sharePath struct {
+		id  int64
+		rel string
+	}
+	var paths []sharePath
+	for rows.Next() {
+		var item sharePath
+		if err := rows.Scan(&item.id, &item.rel); err != nil {
+			rows.Close()
+			return err
+		}
+		paths = append(paths, item)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, item := range paths {
+		newRel := toRel + strings.TrimPrefix(item.rel, fromRel)
+		if _, err := tx.Exec(`UPDATE file_shares SET storage_source_id = ?, relative_path = ? WHERE id = ?`, targetID, newRel, item.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) rollbackTransferRecords(source, target *models.StorageSource, plan *transferPlan) error {
 	// 物理删除源失败时恢复图床定位，再用校准恢复源台账并清掉目标台账。
 	tx, txErr := s.db.Begin()
 	if txErr == nil {
 		_ = moveImageRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
+		_ = moveShareRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
 		_, _ = tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
 			target.ID, plan.targetRel, plan.targetRel+"/%")
 		txErr = tx.Commit()

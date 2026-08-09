@@ -178,7 +178,11 @@ func (s *Service) moveRecordsToTrashTx(tx *sql.Tx, src *models.StorageSource, tr
 			}
 		}
 	}
-	_, err := tx.Exec(`UPDATE images SET trash_key = ? WHERE storage_source_id = ? AND
+	if _, err := tx.Exec(`UPDATE images SET trash_key = ? WHERE storage_source_id = ? AND
+	  (relative_path = ? OR relative_path LIKE ?)`, trashKey, src.ID, plan.sourceRel, plan.sourceRel+"/%"); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`UPDATE file_shares SET trash_key = ? WHERE storage_source_id = ? AND trash_key IS NULL AND
   (relative_path = ? OR relative_path LIKE ?)`, trashKey, src.ID, plan.sourceRel, plan.sourceRel+"/%")
 	return err
 }
@@ -396,6 +400,28 @@ func (s *Service) restoreRecordsTx(tx *sql.Tx, src *models.StorageSource, entry 
 	for _, image := range images {
 		newRel := targetRel + strings.TrimPrefix(image.rel, entry.OriginalRelativePath)
 		if _, err := tx.Exec(`UPDATE images SET relative_path = ?, trash_key = NULL WHERE id = ?`, newRel, image.id); err != nil {
+			return err
+		}
+	}
+	rows, err = tx.Query(`SELECT id, relative_path FROM file_shares WHERE trash_key = ?`, entry.Key)
+	if err != nil {
+		return err
+	}
+	var shares []recordPath
+	for rows.Next() {
+		var share recordPath
+		if err := rows.Scan(&share.id, &share.rel); err != nil {
+			rows.Close()
+			return err
+		}
+		shares = append(shares, share)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, share := range shares {
+		newRel := targetRel + strings.TrimPrefix(share.rel, entry.OriginalRelativePath)
+		if _, err := tx.Exec(`UPDATE file_shares SET relative_path = ?, trash_key = NULL WHERE id = ?`, newRel, share.id); err != nil {
 			return err
 		}
 	}

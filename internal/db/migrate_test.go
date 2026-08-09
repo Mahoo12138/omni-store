@@ -100,6 +100,11 @@ func TestOpenAppliesSquashedInitialMigration(t *testing.T) {
 	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'file_search_index'`).Scan(&tableName); err != nil {
 		t.Fatalf("replayed baseline missing file_search_index: %v", err)
 	}
+	for _, table := range []string{"file_shares", "share_access_sessions"} {
+		if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&tableName); err != nil {
+			t.Fatalf("replayed baseline missing %s: %v", table, err)
+		}
+	}
 	var searchTriggers int
 	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'trg_file_search_%'`).Scan(&searchTriggers); err != nil || searchTriggers != 3 {
 		t.Fatalf("replayed baseline search triggers=%d err=%v", searchTriggers, err)
