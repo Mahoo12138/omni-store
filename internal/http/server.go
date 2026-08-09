@@ -13,6 +13,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/buildinfo"
 	"github.com/omni-store/omnistore/internal/config"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
@@ -25,9 +26,6 @@ import (
 	"github.com/omni-store/omnistore/internal/webdav"
 	"github.com/omni-store/omnistore/web"
 )
-
-// Version 是当前开发版本；发布构建可通过 -ldflags 覆盖。
-var Version = "1.0.0-dev"
 
 // Server 聚合 HTTP 层依赖。
 type Server struct {
@@ -96,6 +94,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("PATCH /api/v1/me/profile", s.requireAuth(s.handleUpdateProfile))
 	mux.HandleFunc("POST /api/v1/me/password", s.requireAuth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/v1/me/activity", s.requireAuth(s.handleMyActivity))
+	mux.HandleFunc("GET /api/v1/me/quota", s.requireAuth(s.handleMyQuota))
 	mux.HandleFunc("GET /api/v1/me/tokens", s.requireAuth(s.handleTokenStatus))
 	mux.HandleFunc("POST /api/v1/me/tokens/webdav/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeWebDAV)))
 	mux.HandleFunc("POST /api/v1/me/tokens/image-bed/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeImageBed)))
@@ -113,6 +112,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/admin/users", s.requireAdmin(s.handleAdminCreateUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", s.requireAdmin(s.handleAdminSetUserDisabled(true)))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/enable", s.requireAdmin(s.handleAdminSetUserDisabled(false)))
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}/quota", s.requireAdmin(s.handleAdminSetUserQuota))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", s.requireAdmin(s.handleAdminDeleteUser))
 
 	// 管理员：概览（dashboard 聚合数据）
@@ -135,6 +135,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("DELETE /api/v1/sources/{key}/files", s.requireAuth(s.handleDeleteFile))
 	mux.HandleFunc("POST /api/v1/sources/{key}/files/rename", s.requireAuth(s.handleRenameFile))
 	mux.HandleFunc("POST /api/v1/sources/{key}/files/move", s.requireAuth(s.handleMoveFile))
+	mux.HandleFunc("POST /api/v1/sources/{key}/files/copy", s.requireAuth(s.handleCopyFile))
 
 	// 管理员：存储源管理
 	mux.HandleFunc("GET /api/v1/admin/sources", s.requireAdmin(s.handleAdminListSources))
@@ -142,6 +143,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/admin/sources", s.requireAdmin(s.handleAdminCreateSource))
 	mux.HandleFunc("GET /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminGetSource))
 	mux.HandleFunc("PATCH /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminUpdateSource))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/reconcile", s.requireAdmin(s.handleAdminReconcileSource))
 	mux.HandleFunc("POST /api/v1/admin/sources/{key}/disable", s.requireAdmin(s.handleAdminSetSourceDisabled(true)))
 	mux.HandleFunc("POST /api/v1/admin/sources/{key}/enable", s.requireAdmin(s.handleAdminSetSourceDisabled(false)))
 	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminDeleteSource))
@@ -374,8 +376,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteData(w, r, map[string]any{
-		"status":  "ok",
-		"version": Version,
+		"status":     "ok",
+		"version":    buildinfo.Version,
+		"commit":     buildinfo.Commit,
+		"build_time": buildinfo.BuildTime,
 	})
 }
 

@@ -470,6 +470,15 @@ func (s *Service) CanWritePath(user *models.User, sourceKey, relPath string) (bo
 
 // CanWriteSubtree 检查会影响整棵子树的操作，避免通过删除或移动父目录绕过更深层的只读规则。
 func (s *Service) CanWriteSubtree(user *models.User, sourceKey, relPath string) (bool, error) {
+	return s.canAccessSubtree(user, sourceKey, relPath, true)
+}
+
+// CanReadSubtree 检查读取整棵子树时不会穿过更深层的拒绝规则。
+func (s *Service) CanReadSubtree(user *models.User, sourceKey, relPath string) (bool, error) {
+	return s.canAccessSubtree(user, sourceKey, relPath, false)
+}
+
+func (s *Service) canAccessSubtree(user *models.User, sourceKey, relPath string, needWrite bool) (bool, error) {
 	src, err := s.Get(sourceKey)
 	if err != nil {
 		return false, err
@@ -482,7 +491,8 @@ func (s *Service) CanWriteSubtree(user *models.User, sourceKey, relPath string) 
 		return false, err
 	}
 	permission, err := s.permissionOf(user, src.ID, normalized)
-	if err != nil || permission != models.PermissionReadWrite {
+	allowed := permission == models.PermissionReadWrite || (!needWrite && permission == models.PermissionReadOnly)
+	if err != nil || !allowed {
 		return false, err
 	}
 	if user.IsAdmin() {
@@ -514,7 +524,8 @@ func (s *Service) CanWriteSubtree(user *models.User, sourceKey, relPath string) 
 	}
 	for _, prefix := range descendants {
 		permission, err := s.permissionOf(user, src.ID, prefix)
-		if err != nil || permission != models.PermissionReadWrite {
+		allowed := permission == models.PermissionReadWrite || (!needWrite && permission == models.PermissionReadOnly)
+		if err != nil || !allowed {
 			return false, err
 		}
 	}

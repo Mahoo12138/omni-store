@@ -42,6 +42,12 @@ type MutationScope struct {
 	IncludeDescendants bool
 }
 
+// SourceMutation 描述同一次操作在一个存储源内影响的路径范围。
+type SourceMutation struct {
+	StorageSourceID int64
+	Scopes          []MutationScope
+}
+
 // PersistentStore 管理跨请求、跨进程重启保留的 WebDAV 锁。
 // mu 将“检查锁 -> 文件变更”与 LOCK 创建串行化，避免检查后的竞态。
 type PersistentStore struct {
@@ -57,13 +63,24 @@ func NewPersistentStore(db *sql.DB) *PersistentStore {
 // 文件系统操作成功删除或移动资源时，把已消失的锁根路径传给结束函数，
 // 使锁记录清理和 LOCK 创建仍处于同一临界区。
 func (s *PersistentStore) GuardMutation(ctx context.Context, storageSourceID int64, scopes []MutationScope, submittedTokens []string, submittedOwnerUserID *int64) (func(...string) error, error) {
-	s.mu.Lock()
-	if err := s.cleanupExpired(ctx); err != nil {
-		s.mu.Unlock()
+	release, err := s.GuardMutations(ctx, []SourceMutation{{StorageSourceID: storageSourceID, Scopes: scopes}}, submittedTokens, submittedOwnerUserID)
+	if err != nil {
 		return nil, err
 	}
-	active, err := s.listSource(ctx, storageSourceID)
-	if err != nil {
+	return func(removedRoots ...string) error {
+		removed := make(map[int64][]string)
+		if len(removedRoots) > 0 {
+			removed[storageSourceID] = removedRoots
+		}
+		return release(removed)
+	}, nil
+}
+
+// GuardMutations 在同一临界区检查一次操作涉及的多个存储源，避免跨来源移动串联锁时自锁。
+// 调用方结束时可按存储源传入已经消失的锁根路径。
+func (s *PersistentStore) GuardMutations(ctx context.Context, mutations []SourceMutation, submittedTokens []string, submittedOwnerUserID *int64) (func(map[int64][]string) error, error) {
+	s.mu.Lock()
+	if err := s.cleanupExpired(ctx); err != nil {
 		s.mu.Unlock()
 		return nil, err
 	}
@@ -71,29 +88,38 @@ func (s *PersistentStore) GuardMutation(ctx context.Context, storageSourceID int
 	for _, token := range submittedTokens {
 		tokens[token] = struct{}{}
 	}
-	for _, lock := range active {
-		for _, scope := range scopes {
-			if mutationIntersectsLock(scope, lock) {
-				_, tokenSubmitted := tokens[lock.Token]
-				ownerMatches := submittedOwnerUserID != nil && lock.OwnerUserID == *submittedOwnerUserID
-				if !tokenSubmitted || !ownerMatches {
-					s.mu.Unlock()
-					return nil, ErrPersistentLocked
+	for _, mutation := range mutations {
+		active, err := s.listSource(ctx, mutation.StorageSourceID)
+		if err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+		for _, lock := range active {
+			for _, scope := range mutation.Scopes {
+				if mutationIntersectsLock(scope, lock) {
+					_, tokenSubmitted := tokens[lock.Token]
+					ownerMatches := submittedOwnerUserID != nil && lock.OwnerUserID == *submittedOwnerUserID
+					if !tokenSubmitted || !ownerMatches {
+						s.mu.Unlock()
+						return nil, ErrPersistentLocked
+					}
+					break
 				}
-				break
 			}
 		}
 	}
 	finished := false
-	return func(removedRoots ...string) error {
+	return func(removedRoots map[int64][]string) error {
 		if finished {
 			return nil
 		}
 		finished = true
 		defer s.mu.Unlock()
-		for _, root := range removedRoots {
-			if err := s.deleteLocksRootedAt(ctx, storageSourceID, root); err != nil {
-				return err
+		for storageSourceID, roots := range removedRoots {
+			for _, root := range roots {
+				if err := s.deleteLocksRootedAt(ctx, storageSourceID, root); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

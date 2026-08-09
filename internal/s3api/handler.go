@@ -450,7 +450,7 @@ func (h *Handler) putObject(w http.ResponseWriter, r *http.Request, authenticate
 	body = io.TeeReader(body, md5Hash)
 	dir, filename := path.Split(key)
 	dir = strings.TrimSuffix(dir, "/")
-	_, _, err := h.files.Upload(src, dir, filename, body, true)
+	_, _, err := h.files.UploadWithLockTokens(src, dir, filename, body, true, nil, &authenticated.User.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
 			h.writeError(w, r, http.StatusRequestEntityTooLarge, "EntityTooLarge", "对象超过上传大小限制", key)

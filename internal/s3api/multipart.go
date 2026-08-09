@@ -304,7 +304,7 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 	reader := &sequentialPartReader{store: s, uploadID: uploadID, parts: selected}
 	dir, filename := path.Split(objectKey)
 	dir = strings.TrimSuffix(dir, "/")
-	_, written, err := s.files.Upload(src, dir, filename, reader, true)
+	_, written, err := s.files.UploadWithLockTokens(src, dir, filename, reader, true, nil, &userID)
 	_ = reader.Close()
 	if err != nil {
 		return "", 0, err

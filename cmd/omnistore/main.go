@@ -4,6 +4,7 @@
 //
 //	omnistore server [--config path]                                启动 HTTP 服务
 //	omnistore admin reset-password --username <name> [--config path]  紧急重置密码
+//	omnistore version                                                查看构建版本
 package main
 
 import (
@@ -16,11 +17,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/buildinfo"
 	"github.com/omni-store/omnistore/internal/config"
 	"github.com/omni-store/omnistore/internal/db"
 	httpserver "github.com/omni-store/omnistore/internal/http"
@@ -39,6 +42,9 @@ func main() {
 		err = runServer(os.Args[2:])
 	case "admin":
 		err = runAdmin(os.Args[2:])
+	case "version", "-v", "--version":
+		printVersion()
+		return
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -62,7 +68,18 @@ func usage() {
 
   omnistore admin reset-password --username <name> [--password <new>] [--config path]
       紧急重置用户密码（只能在能访问数据库的机器上执行）
-      不指定 --password 时自动生成随机密码并打印一次`)
+      不指定 --password 时自动生成随机密码并打印一次
+
+  omnistore version
+      显示版本、Git commit、构建时间和 Go 版本`)
+}
+
+func printVersion() {
+	info := buildinfo.Current()
+	fmt.Printf("OmniStore %s\n", info.Version)
+	fmt.Printf("commit: %s\n", info.Commit)
+	fmt.Printf("built: %s\n", info.BuildTime)
+	fmt.Printf("go: %s (%s/%s)\n", info.GoVersion, runtime.GOOS, runtime.GOARCH)
 }
 
 func runServer(args []string) error {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/omni-store/omnistore/internal/audit"
+	"github.com/omni-store/omnistore/internal/buildinfo"
 )
 
 // 概览数据项
@@ -165,7 +166,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 
 	// 6) 系统状态
 	out.System = overviewSystem{
-		Version:      Version,
+		Version:      buildinfo.Version,
 		DataDir:      s.cfg.Data.Dir,
 		HTTPAddr:     s.cfg.Server.HTTPAddr,
 		PublicURL:    s.cfg.Server.PublicURL,
@@ -235,7 +236,7 @@ type systemStatusResponse struct {
 // handleSystemStatus 返回系统功能开关，供登录后首页右栏使用。
 // 不需要鉴权，只暴露开关与状态描述。
 func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
-	out := systemStatusResponse{Version: Version, PublicURL: s.cfg.Server.PublicURL}
+	out := systemStatusResponse{Version: buildinfo.Version, PublicURL: s.cfg.Server.PublicURL}
 
 	// S3 兼容存储
 	out.S3.Enabled = s.cfg.Server.S3Enabled

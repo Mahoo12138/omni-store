@@ -34,6 +34,15 @@ export interface FileListResult {
   has_next: boolean
 }
 
+export interface TransferResult {
+  path: string
+  files: number
+  bytes: number
+  source_key: string
+  target_source_key: string
+  was_move: boolean
+}
+
 export async function fetchMySources(): Promise<UserSource[]> {
   const data = await apiFetch<{ items: UserSource[]; total: number }>('/api/v1/sources')
   return data.items ?? []
@@ -106,9 +115,26 @@ export async function renameFile(sourceKey: string, path: string, newName: strin
   })
 }
 
-export async function moveFile(sourceKey: string, path: string, targetPath: string): Promise<void> {
-  await apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/files/move`, {
+export async function moveFile(
+  sourceKey: string,
+  path: string,
+  targetSourceKey: string,
+  targetPath: string,
+): Promise<TransferResult> {
+  return apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/files/move`, {
     method: 'POST',
-    body: JSON.stringify({ path, target_path: targetPath }),
+    body: JSON.stringify({ path, target_source_key: targetSourceKey, target_path: targetPath }),
+  })
+}
+
+export async function copyFile(
+  sourceKey: string,
+  path: string,
+  targetSourceKey: string,
+  targetPath: string,
+): Promise<TransferResult> {
+  return apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/files/copy`, {
+    method: 'POST',
+    body: JSON.stringify({ path, target_source_key: targetSourceKey, target_path: targetPath }),
   })
 }

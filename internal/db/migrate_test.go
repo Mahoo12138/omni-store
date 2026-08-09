@@ -79,11 +79,20 @@ func TestOpenAppliesSquashedInitialMigration(t *testing.T) {
 	if _, err := conn.Exec(`ALTER TABLE storage_sources DROP COLUMN quota_bytes`); err != nil {
 		t.Fatalf("simulate pre-quota development schema: %v", err)
 	}
+	if _, err := conn.Exec(`ALTER TABLE users DROP COLUMN quota_bytes`); err != nil {
+		t.Fatalf("simulate pre-user-quota development schema: %v", err)
+	}
 	if err := Migrate(conn); err != nil {
 		t.Fatalf("add unreleased quota column: %v", err)
 	}
 	if hasQuota, err := tableHasColumn(conn, "storage_sources", "quota_bytes"); err != nil || !hasQuota {
 		t.Fatalf("replayed baseline missing quota column: present=%v err=%v", hasQuota, err)
+	}
+	if hasQuota, err := tableHasColumn(conn, "users", "quota_bytes"); err != nil || !hasQuota {
+		t.Fatalf("replayed baseline missing user quota column: present=%v err=%v", hasQuota, err)
+	}
+	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'file_records'`).Scan(&tableName); err != nil {
+		t.Fatalf("replayed baseline missing file_records: %v", err)
 	}
 }
 

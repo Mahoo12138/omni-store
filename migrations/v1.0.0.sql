@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL, -- super_admin / user
   is_disabled BOOLEAN NOT NULL DEFAULT 0,
+  quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0),
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -127,6 +128,34 @@ CREATE TABLE IF NOT EXISTS storage_source_exclude_patterns (
   created_at DATETIME NOT NULL,
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
+
+-- 文件台账只保存普通文件元数据，不保存内容，也不在存储源中写 sidecar。
+CREATE TABLE IF NOT EXISTS file_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  storage_source_id INTEGER NOT NULL,
+  relative_path TEXT NOT NULL,
+  size INTEGER NOT NULL CHECK(size >= 0),
+  owner_user_id INTEGER,
+  owner_type TEXT NOT NULL CHECK(owner_type IN ('user', 'anonymous', 'system', 'unowned')),
+  created_by_user_id INTEGER,
+  updated_by_user_id INTEGER,
+  mtime_unix_nano INTEGER NOT NULL,
+  record_status TEXT NOT NULL DEFAULT 'active' CHECK(record_status IN ('active', 'trash')),
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  UNIQUE(storage_source_id, relative_path),
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_records_source_status_path
+  ON file_records(storage_source_id, record_status, relative_path);
+CREATE INDEX IF NOT EXISTS idx_file_records_owner_status
+  ON file_records(owner_user_id, record_status);
+CREATE INDEX IF NOT EXISTS idx_file_records_source_size
+  ON file_records(storage_source_id, record_status, size);
 
 CREATE TABLE IF NOT EXISTS access_policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

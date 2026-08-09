@@ -8,11 +8,12 @@ import (
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/backup"
+	"github.com/omni-store/omnistore/internal/buildinfo"
 )
 
 // handleAdminExportSystemConfig creates a point-in-time system configuration package.
 func (s *Server) handleAdminExportSystemConfig(w http.ResponseWriter, r *http.Request) {
-	pkg, err := backup.CreatePackage(r.Context(), s.cfg, s.db, Version, time.Now())
+	pkg, err := backup.CreatePackage(r.Context(), s.cfg, s.db, buildinfo.Version, time.Now())
 	if err != nil {
 		s.adminAudit(r, "export_system_config", audit.StatusFailed, CodeInternalError)
 		WriteError(w, r, CodeInternalError, "导出系统配置包失败", nil)

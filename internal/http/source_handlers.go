@@ -97,7 +97,32 @@ func (s *Server) handleAdminGetSource(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "统计存储源用量失败", nil)
 		return
 	}
-	WriteData(w, r, map[string]any{"source": src, "exclude_patterns": patterns, "quota": quota})
+	ledgerUsage, err := s.files.LedgerSourceUsage(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询文件台账用量失败", nil)
+		return
+	}
+	WriteData(w, r, map[string]any{
+		"source": src, "exclude_patterns": patterns, "quota": quota, "ledger_usage_bytes": ledgerUsage,
+	})
+}
+
+func (s *Server) handleAdminReconcileSource(w http.ResponseWriter, r *http.Request) {
+	src, err := s.sources.Get(r.PathValue("key"))
+	if err != nil {
+		s.writeSourceError(w, r, err)
+		return
+	}
+	release := s.files.LockQuotaUpdate(src.Key)
+	defer release()
+	result, err := s.files.ReconcileSource(src)
+	if err != nil {
+		s.adminAudit(r, "reconcile_source", audit.StatusFailed, CodeInternalError)
+		WriteError(w, r, CodeInternalError, "校准文件台账失败", nil)
+		return
+	}
+	s.adminAudit(r, "reconcile_source", audit.StatusSuccess, "")
+	WriteData(w, r, result)
 }
 
 func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request) {

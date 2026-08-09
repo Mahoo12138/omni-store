@@ -270,7 +270,11 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	if err != nil {
 		return nil, err
 	}
-	quotaGuard, err := s.files.BeginQuotaWrite(src, "")
+	quotaOwnerUserID := ownerUserID
+	if ownerType != models.ImageOwnerUser {
+		quotaOwnerUserID = nil
+	}
+	quotaGuard, err := s.files.BeginQuotaWriteForUser(src, "", quotaOwnerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -361,6 +365,16 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 			_, _ = s.db.Exec(`DELETE FROM images WHERE id = ?`, rowID)
 			os.Remove(tmpPath)
 			return nil, fmt.Errorf("落盘失败: %w", err)
+		}
+		fileOwnerType := models.FileOwnerAnonymous
+		if ownerType == models.ImageOwnerUser {
+			fileOwnerType = models.FileOwnerUser
+		}
+		if err := s.files.RecordFile(src, relPath, fileOwnerType, ownerUserID, ownerUserID); err != nil {
+			_ = os.Remove(absPath)
+			_, _ = s.db.Exec(`DELETE FROM images WHERE id = ?`, rowID)
+			unlock()
+			return nil, fmt.Errorf("更新文件台账失败: %w", err)
 		}
 		unlock()
 		return s.getByRowID(rowID)

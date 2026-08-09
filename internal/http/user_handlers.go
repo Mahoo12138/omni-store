@@ -33,7 +33,20 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "查询用户失败", nil)
 		return
 	}
-	WriteData(w, r, ListData{Items: list, Total: int64(len(list))})
+	type adminUserView struct {
+		*models.User
+		UsageBytes int64 `json:"usage_bytes"`
+	}
+	views := make([]adminUserView, 0, len(list))
+	for _, user := range list {
+		usage, err := s.files.UserUsage(user.ID)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "查询用户用量失败", nil)
+			return
+		}
+		views = append(views, adminUserView{User: user, UsageBytes: usage})
+	}
+	WriteData(w, r, ListData{Items: views, Total: int64(len(views))})
 }
 
 func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +55,7 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		DisplayName string `json:"display_name"`
 		Password    string `json:"password"`
 		Role        string `json:"role"`
+		QuotaBytes  int64  `json:"quota_bytes"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -49,14 +63,61 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = models.RoleUser
 	}
+	if req.QuotaBytes < 0 {
+		WriteError(w, r, CodeValidationError, "用户配额不能为负数", nil)
+		return
+	}
 
 	u, err := s.users.Create(req.Username, req.DisplayName, req.Password, req.Role)
 	if err != nil {
 		s.writeUserError(w, r, err)
 		return
 	}
+	if req.QuotaBytes != 0 {
+		if err := s.users.SetQuota(u.ID, req.QuotaBytes); err != nil {
+			s.writeUserError(w, r, err)
+			return
+		}
+		u, err = s.users.GetByID(u.ID)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "查询用户失败", nil)
+			return
+		}
+	}
 	s.adminAudit(r, "create_user", audit.StatusSuccess, "")
 	WriteData(w, r, u)
+}
+
+func (s *Server) handleAdminSetUserQuota(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		WriteError(w, r, CodeValidationError, "非法用户 ID", nil)
+		return
+	}
+	var req struct {
+		QuotaBytes int64 `json:"quota_bytes"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	release := s.files.LockUserQuotaUpdate(id)
+	defer release()
+	if err := s.users.SetQuota(id, req.QuotaBytes); err != nil {
+		s.writeUserError(w, r, err)
+		return
+	}
+	user, err := s.users.GetByID(id)
+	if err != nil {
+		s.writeUserError(w, r, err)
+		return
+	}
+	quota, err := s.files.UserQuota(user)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询用户配额失败", nil)
+		return
+	}
+	s.adminAudit(r, "update_user_quota", audit.StatusSuccess, "")
+	WriteData(w, r, quota)
 }
 
 // handleAdminSetUserDisabled 处理禁用与启用。
@@ -126,6 +187,15 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteData(w, r, updated)
+}
+
+func (s *Server) handleMyQuota(w http.ResponseWriter, r *http.Request) {
+	quota, err := s.files.UserQuota(CurrentUser(r.Context()))
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询用户配额失败", nil)
+		return
+	}
+	WriteData(w, r, quota)
 }
 
 // ActivityItem 是首页"最近活动"面板的一项（docs/home.png）。

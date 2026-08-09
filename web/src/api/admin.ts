@@ -1,6 +1,8 @@
 import { apiFetch, ApiRequestError } from './client'
 import type { User } from './auth'
 
+export type AdminUser = User & { usage_bytes: number }
+
 // --- 管理员 API ---
 
 export interface AdminSource {
@@ -63,6 +65,15 @@ export interface StorageQuota {
   unlimited: boolean
 }
 
+export interface ReconcileResult {
+  scanned_files: number
+  added: number
+  updated: number
+  removed: number
+  unowned: number
+  usage_bytes: number
+}
+
 export interface SourcePreflight {
   root_path: string
   is_empty: boolean
@@ -115,8 +126,8 @@ export interface AuditLogPage {
 }
 
 // 用户管理
-export async function adminListUsers(): Promise<User[]> {
-  const data = await apiFetch<{ items: User[]; total: number }>('/api/v1/admin/users')
+export async function adminListUsers(): Promise<AdminUser[]> {
+  const data = await apiFetch<{ items: AdminUser[]; total: number }>('/api/v1/admin/users')
   return data.items ?? []
 }
 
@@ -125,8 +136,16 @@ export async function adminCreateUser(input: {
   display_name: string
   password: string
   role: string
+  quota_bytes?: number
 }): Promise<User> {
   return apiFetch('/api/v1/admin/users', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function adminSetUserQuota(id: number, quotaBytes: number): Promise<StorageQuota> {
+  return apiFetch(`/api/v1/admin/users/${id}/quota`, {
+    method: 'PATCH',
+    body: JSON.stringify({ quota_bytes: quotaBytes }),
+  })
 }
 
 export async function adminSetUserDisabled(id: number, disabled: boolean): Promise<void> {
@@ -166,8 +185,13 @@ export async function adminGetSource(sourceKey: string): Promise<{
   source: AdminSource
   exclude_patterns: string[]
   quota: StorageQuota
+  ledger_usage_bytes: number
 }> {
   return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`)
+}
+
+export async function adminReconcileSource(sourceKey: string): Promise<ReconcileResult> {
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/reconcile`, { method: 'POST' })
 }
 
 export async function adminUpdateSource(

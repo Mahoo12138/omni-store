@@ -115,11 +115,20 @@ func Migrate(conn *sql.DB) error {
 // database receive columns that CREATE TABLE IF NOT EXISTS cannot add on replay.
 func ensurePreReleaseBaselineColumns(conn *sql.DB) error {
 	var tableCount int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'storage_sources'`).Scan(&tableCount); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'users'`).Scan(&tableCount); err != nil {
 		return fmt.Errorf("检查开发期基线表失败: %w", err)
 	}
 	if tableCount == 0 {
 		return nil
+	}
+	hasUserQuota, err := tableHasColumn(conn, "users", "quota_bytes")
+	if err != nil {
+		return fmt.Errorf("检查开发期用户配额字段失败: %w", err)
+	}
+	if !hasUserQuota {
+		if _, err := conn.Exec(`ALTER TABLE users ADD COLUMN quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK(quota_bytes >= 0)`); err != nil {
+			return fmt.Errorf("补充开发期用户配额字段失败: %w", err)
+		}
 	}
 	hasQuota, err := tableHasColumn(conn, "storage_sources", "quota_bytes")
 	if err != nil {

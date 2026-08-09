@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  copyFile,
   createFolder,
   deleteFile,
   downloadFileUrl,
@@ -17,6 +18,7 @@ import {
   type UserSource,
 } from '../api/sources'
 import { ApiRequestError } from '../api/client'
+import { fetchMyQuota, type UserQuota } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
 import { FileTable } from '../components/files/FileTable'
 import { Badge } from '../components/ui/Badge'
@@ -89,12 +91,12 @@ export function FileManagerPage() {
 
   // 4) 正常文件管理视图
   if (!source) return null
-  return <FileManagerView source={source} />
+  return <FileManagerView source={source} sources={sources.data ?? []} />
 }
 
 // --- 主视图 ---
 
-function FileManagerView({ source }: { source: UserSource }) {
+function FileManagerView({ source, sources }: { source: UserSource; sources: UserSource[] }) {
   const sourceKey = source.key
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -110,7 +112,7 @@ function FileManagerView({ source }: { source: UserSource }) {
   // 各种操作弹窗
   const [mkdirOpen, setMkdirOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
-  const [moveTarget, setMoveTarget] = useState<{ name: string } | null>(null)
+  const [transferTarget, setTransferTarget] = useState<{ name: string; mode: 'copy' | 'move' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
@@ -124,6 +126,7 @@ function FileManagerView({ source }: { source: UserSource }) {
     queryKey: ['source-quota', sourceKey],
     queryFn: () => fetchSourceQuota(sourceKey),
   })
+  const userQuotaQuery = useQuery({ queryKey: ['my-quota'], queryFn: fetchMyQuota })
 
   const filesQuery = useQuery({
     queryKey: ['files', sourceKey, currentPath, page, pageSize],
@@ -133,9 +136,12 @@ function FileManagerView({ source }: { source: UserSource }) {
   const total = filesQuery.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  function refresh() {
-    queryClient.invalidateQueries({ queryKey: ['files', sourceKey] })
-    queryClient.invalidateQueries({ queryKey: ['source-quota', sourceKey] })
+  function refresh(changedSourceKeys: string[] = [sourceKey]) {
+    for (const changedSourceKey of new Set(changedSourceKeys)) {
+      queryClient.invalidateQueries({ queryKey: ['files', changedSourceKey] })
+      queryClient.invalidateQueries({ queryKey: ['source-quota', changedSourceKey] })
+    }
+    queryClient.invalidateQueries({ queryKey: ['my-quota'] })
   }
 
   function goTo(seg: string) {
@@ -270,7 +276,7 @@ function FileManagerView({ source }: { source: UserSource }) {
                 onChange={(e) => setFilter(e.target.value)}
               />
             </span>
-            <button className={css.iconBtn} aria-label="刷新" onClick={refresh}>
+            <button className={css.iconBtn} aria-label="刷新" onClick={() => refresh()}>
               <IconRefresh size={16} />
             </button>
             <div className={css.viewToggle} role="tablist" aria-label="视图切换">
@@ -336,6 +342,13 @@ function FileManagerView({ source }: { source: UserSource }) {
                       >
                         <IconDownload size={15} />
                       </a>
+                      <button
+                        className={css.actionBtn}
+                        title="复制"
+                        onClick={() => setTransferTarget({ name: entry.name, mode: 'copy' })}
+                      >
+                        <IconCopy size={15} />
+                      </button>
                       {canWrite && (
                         <>
                           <button
@@ -348,7 +361,7 @@ function FileManagerView({ source }: { source: UserSource }) {
                           <button
                             className={css.actionBtn}
                             title="移动"
-                            onClick={() => setMoveTarget({ name: entry.name })}
+                            onClick={() => setTransferTarget({ name: entry.name, mode: 'move' })}
                           >
                             <IconMove size={15} />
                           </button>
@@ -365,30 +378,40 @@ function FileManagerView({ source }: { source: UserSource }) {
                   )
                 }
                 // dir
-                if (!canWrite) return null
                 return (
                   <span className={css.actions}>
                     <button
                       className={css.actionBtn}
-                      title="重命名"
-                      onClick={() => setRenameTarget({ name: entry.name })}
+                      title="复制"
+                      onClick={() => setTransferTarget({ name: entry.name, mode: 'copy' })}
                     >
-                      <IconEdit size={15} />
+                      <IconCopy size={15} />
                     </button>
-                    <button
-                      className={css.actionBtn}
-                      title="移动"
-                      onClick={() => setMoveTarget({ name: entry.name })}
-                    >
-                      <IconMove size={15} />
-                    </button>
-                    <button
-                      className={css.actionBtnDanger}
-                      title="删除"
-                      onClick={() => setDeleteTarget({ name: entry.name, type: entry.type })}
-                    >
-                      <IconTrash size={15} />
-                    </button>
+                    {canWrite && (
+                      <>
+                        <button
+                          className={css.actionBtn}
+                          title="重命名"
+                          onClick={() => setRenameTarget({ name: entry.name })}
+                        >
+                          <IconEdit size={15} />
+                        </button>
+                        <button
+                          className={css.actionBtn}
+                          title="移动"
+                          onClick={() => setTransferTarget({ name: entry.name, mode: 'move' })}
+                        >
+                          <IconMove size={15} />
+                        </button>
+                        <button
+                          className={css.actionBtnDanger}
+                          title="删除"
+                          onClick={() => setDeleteTarget({ name: entry.name, type: entry.type })}
+                        >
+                          <IconTrash size={15} />
+                        </button>
+                      </>
+                    )}
                   </span>
                 )
               }}
@@ -400,7 +423,8 @@ function FileManagerView({ source }: { source: UserSource }) {
               onOpenDir={goTo}
               onDelete={(name, type) => setDeleteTarget({ name, type })}
               onRename={(name) => setRenameTarget({ name })}
-              onMove={(name) => setMoveTarget({ name })}
+              onCopy={(name) => setTransferTarget({ name, mode: 'copy' })}
+              onMove={(name) => setTransferTarget({ name, mode: 'move' })}
               canWrite={canWrite}
               filter={filter}
             />
@@ -466,7 +490,12 @@ function FileManagerView({ source }: { source: UserSource }) {
           )}
         </div>
 
-        <SourceInfoCard source={source} currentPermission={currentPermission} quota={quotaQuery.data} />
+        <SourceInfoCard
+          source={source}
+          currentPermission={currentPermission}
+          quota={quotaQuery.data}
+          userQuota={userQuotaQuery.data}
+        />
 
       </div>
 
@@ -490,14 +519,18 @@ function FileManagerView({ source }: { source: UserSource }) {
         />
       )}
 
-      {/* 移动 */}
-      {moveTarget && (
-        <MoveDialog
+      {/* 复制 / 移动 */}
+      {transferTarget && (
+        <TransferDialog
           sourceKey={sourceKey}
           currentPath={currentPath}
-          target={moveTarget}
-          onClose={() => setMoveTarget(null)}
-          onChanged={refresh}
+          target={transferTarget}
+          sources={sources}
+          onClose={() => setTransferTarget(null)}
+          onChanged={(targetSourceKey, mode) => {
+            refresh([sourceKey, targetSourceKey])
+            setNotice({ kind: 'success', message: mode === 'copy' ? '复制完成。' : '移动完成。' })
+          }}
         />
       )}
 
@@ -578,6 +611,7 @@ function GridView({
   onOpenDir,
   onDelete,
   onRename,
+  onCopy,
   onMove,
   canWrite,
   filter,
@@ -587,6 +621,7 @@ function GridView({
   onOpenDir: (name: string) => void
   onDelete: (name: string, type: string) => void
   onRename: (name: string) => void
+  onCopy: (name: string) => void
   onMove: (name: string) => void
   canWrite: boolean
   filter: string
@@ -638,22 +673,28 @@ function GridView({
             )}
           </div>
           <span style={{ fontSize: vars.fontSize.sm, textAlign: 'center', wordBreak: 'break-all' }}>{e.name}</span>
-          {canWrite && e.type !== 'unsupported' && (
+          {e.type !== 'unsupported' && (
             <span style={{ display: 'flex', gap: 4 }}>
-              {e.type === 'file' && <span style={{ width: 12 }} />}
-              <button className={css.actionBtn} title="重命名" onClick={() => onRename(e.name)}>
-                <IconEdit size={12} />
+              <button className={css.actionBtn} title="复制" onClick={() => onCopy(e.name)}>
+                <IconCopy size={12} />
               </button>
-              <button className={css.actionBtn} title="移动" onClick={() => onMove(e.name)}>
-                <IconMove size={12} />
-              </button>
-              <button
-                className={css.actionBtnDanger}
-                title="删除"
-                onClick={() => onDelete(e.name, e.type)}
-              >
-                <IconTrash size={12} />
-              </button>
+              {canWrite && (
+                <>
+                  <button className={css.actionBtn} title="重命名" onClick={() => onRename(e.name)}>
+                    <IconEdit size={12} />
+                  </button>
+                  <button className={css.actionBtn} title="移动" onClick={() => onMove(e.name)}>
+                    <IconMove size={12} />
+                  </button>
+                  <button
+                    className={css.actionBtnDanger}
+                    title="删除"
+                    onClick={() => onDelete(e.name, e.type)}
+                  >
+                    <IconTrash size={12} />
+                  </button>
+                </>
+              )}
             </span>
           )}
         </div>
@@ -674,10 +715,12 @@ function SourceInfoCard({
   source,
   currentPermission,
   quota,
+  userQuota,
 }: {
   source: UserSource
   currentPermission: 'read_only' | 'read_write'
   quota?: StorageQuota
+  userQuota?: UserQuota
 }) {
   return (
     <aside className={css.sideCol}>
@@ -693,6 +736,10 @@ function SourceInfoCard({
           <Row
             label="存储用量"
             value={quotaLabel(quota)}
+          />
+          <Row
+            label="我的用量"
+            value={quotaLabel(userQuota)}
           />
           <Row
             label="公开挂载路径"
@@ -947,55 +994,84 @@ function RenameDialog({
   )
 }
 
-function MoveDialog({
+function TransferDialog({
   sourceKey,
   currentPath,
   target,
+  sources,
   onClose,
   onChanged,
 }: {
   sourceKey: string
   currentPath: string
-  target: { name: string }
+  target: { name: string; mode: 'copy' | 'move' }
+  sources: UserSource[]
   onClose: () => void
-  onChanged: () => void
+  onChanged: (targetSourceKey: string, mode: 'copy' | 'move') => void
 }) {
   const fromPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
+  const [targetSourceKey, setTargetSourceKey] = useState(sourceKey)
   const [toPath, setToPath] = useState(fromPath)
   const [err, setErr] = useState('')
-  useEffect(() => { setToPath(fromPath); setErr('') }, [fromPath])
+  useEffect(() => {
+    setTargetSourceKey(sourceKey)
+    setToPath(fromPath)
+    setErr('')
+  }, [fromPath, sourceKey, target.mode])
 
   const mut = useMutation({
-    mutationFn: () => moveFile(sourceKey, fromPath, toPath.trim()),
-    onSuccess: () => { onClose(); onChanged() },
-    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '移动失败'),
+    mutationFn: () => target.mode === 'copy'
+      ? copyFile(sourceKey, fromPath, targetSourceKey, toPath.trim())
+      : moveFile(sourceKey, fromPath, targetSourceKey, toPath.trim()),
+    onSuccess: () => {
+      onClose()
+      onChanged(targetSourceKey, target.mode)
+    },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : `${target.mode === 'copy' ? '复制' : '移动'}失败`),
   })
 
   function submit() {
     setErr('')
-    if (!toPath.trim() || toPath.trim() === fromPath) { onClose(); return }
+    if (!toPath.trim()) return
     if (!toPath.startsWith('/')) { setErr('目标路径必须是绝对路径（以 / 开头）'); return }
+    if (targetSourceKey === sourceKey && toPath.trim() === fromPath) {
+      setErr('同一存储源内的目标路径不能与原路径相同')
+      return
+    }
     mut.mutate()
   }
+
+  const verb = target.mode === 'copy' ? '复制' : '移动'
 
   return (
     <DialogWrap
       open
       onOpenChange={(o) => { if (!o) onClose() }}
-      title="移动"
-      description="在当前存储源内移动条目，目标路径必须是绝对路径。"
+      title={verb}
+      description={`${verb}到当前或其他存储源；不会覆盖已有目标。`}
       wide
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>取消</Button>
           <Button onClick={submit} disabled={mut.isPending || !toPath.trim()}>
-            {mut.isPending ? '移动中…' : '移动'}
+            {mut.isPending ? `${verb}中…` : verb}
           </Button>
         </>
       }
     >
       <Field label="原路径">
         <Input readOnly value={fromPath} />
+      </Field>
+      <Field label="目标存储源" required hint="最终权限会按目标路径再次校验。">
+        <Select
+          value={targetSourceKey}
+          onValueChange={setTargetSourceKey}
+          options={sources.map((item) => ({
+            value: item.key,
+            label: item.key === sourceKey ? `${item.name}（当前）` : item.name,
+          }))}
+          ariaLabel="目标存储源"
+        />
       </Field>
       <Field label="目标路径" required error={err} hint="例如：/photos/2026">
         <Input autoFocus value={toPath} onChange={(e) => setToPath(e.target.value)} />

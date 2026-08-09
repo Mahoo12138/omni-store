@@ -41,6 +41,13 @@ func TestStorageQuotaRejectsOverflowAndPreservesOverwriteTarget(t *testing.T) {
 	if err != nil || quota.UsageBytes != 6 || quota.RemainingBytes != 0 || quota.Unlimited {
 		t.Fatalf("unexpected quota summary: quota=%+v err=%v", quota, err)
 	}
+	lowered := int64(3)
+	if _, err := service.sources.Update(source.Key, sources.UpdateInput{QuotaBytes: &lowered}); err != nil {
+		t.Fatalf("lower source quota: %v", err)
+	}
+	if _, _, err := service.Upload(source, "", "old.txt", strings.NewReader("12"), true); err != nil {
+		t.Fatalf("shrink source while over quota: %v", err)
+	}
 }
 
 func TestStorageQuotaSerializesConcurrentUploads(t *testing.T) {
@@ -120,6 +127,32 @@ func TestBeginQuotaWriteReloadsLatestQuota(t *testing.T) {
 	defer guard.Close()
 	if maxBytes, limited := guard.MaxBytes(); !limited || maxBytes != 3 {
 		t.Fatalf("stale source used old quota: max=%d limited=%v", maxBytes, limited)
+	}
+}
+
+func TestUserQuotaRejectsOverflowAndAllowsShrinkingWhileOverQuota(t *testing.T) {
+	service, source, _ := newQuotaTestService(t, 0)
+	userID := int64(77)
+	if _, err := service.db.Exec(`INSERT INTO users
+  (id, user_public_id, username, display_name, password_hash, role, is_disabled, quota_bytes, created_at, updated_at)
+  VALUES (?, 'u-quota-owner', 'quota-owner', 'Quota Owner', 'hash', 'user', 0, 5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, userID); err != nil {
+		t.Fatalf("insert quota owner: %v", err)
+	}
+	if _, _, err := service.UploadWithLockTokens(source, "", "first.txt", strings.NewReader("1234"), false, nil, &userID); err != nil {
+		t.Fatalf("first upload: %v", err)
+	}
+	if _, _, err := service.UploadWithLockTokens(source, "", "second.txt", strings.NewReader("12"), false, nil, &userID); !errors.Is(err, ErrQuotaExceeded) {
+		t.Fatalf("overflow error=%v", err)
+	}
+	if _, err := service.db.Exec(`UPDATE users SET quota_bytes = 2 WHERE id = ?`, userID); err != nil {
+		t.Fatalf("lower quota: %v", err)
+	}
+	if _, _, err := service.UploadWithLockTokens(source, "", "first.txt", strings.NewReader("12"), true, nil, &userID); err != nil {
+		t.Fatalf("shrink while over quota: %v", err)
+	}
+	usage, err := service.UserUsage(userID)
+	if err != nil || usage != 2 {
+		t.Fatalf("usage=%d err=%v", usage, err)
 	}
 }
 

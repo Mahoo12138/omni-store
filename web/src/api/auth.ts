@@ -7,8 +7,20 @@ export interface User {
   display_name: string
   role: 'super_admin' | 'user'
   is_disabled: boolean
+  quota_bytes: number
   created_at: string
   updated_at: string
+}
+
+export interface UserQuota {
+  usage_bytes: number
+  quota_bytes: number
+  remaining_bytes: number
+  unlimited: boolean
+}
+
+export async function fetchMyQuota(): Promise<UserQuota> {
+  return apiFetch('/api/v1/me/quota')
 }
 
 interface AuthPayload {

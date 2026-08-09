@@ -22,6 +22,8 @@ var (
 	ErrInvalidUsername = errors.New("用户名只允许 3-32 位字母、数字、下划线、短横线")
 	// ErrWeakPassword 密码过短。
 	ErrWeakPassword = errors.New("密码长度至少 8 位")
+	// ErrQuotaInvalid 用户配额不能为负数。
+	ErrQuotaInvalid = errors.New("用户配额不能为负数")
 )
 
 var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
@@ -88,11 +90,11 @@ func (s *Service) Create(username, displayName, password, role string) (*models.
 	return nil, fmt.Errorf("生成 user_public_id 失败")
 }
 
-const userColumns = `id, user_public_id, username, display_name, role, is_disabled, created_at, updated_at`
+const userColumns = `id, user_public_id, username, display_name, role, is_disabled, quota_bytes, created_at, updated_at`
 
 func scanUser(row interface{ Scan(...any) error }) (*models.User, error) {
 	var u models.User
-	err := row.Scan(&u.ID, &u.UserPublicID, &u.Username, &u.DisplayName, &u.Role, &u.IsDisabled, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.UserPublicID, &u.Username, &u.DisplayName, &u.Role, &u.IsDisabled, &u.QuotaBytes, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -172,6 +174,10 @@ func (s *Service) Delete(id int64) error {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE file_records SET owner_user_id = NULL, owner_type = ?, updated_at = ? WHERE owner_user_id = ?`,
+		models.FileOwnerUnowned, time.Now().UTC(), id); err != nil {
+		return err
+	}
 
 	for _, q := range []string{
 		`DELETE FROM sessions WHERE user_id = ?`,
@@ -193,6 +199,21 @@ func (s *Service) Delete(id int64) error {
 		return ErrNotFound
 	}
 	return tx.Commit()
+}
+
+// SetQuota 设置用户拥有文件的硬配额；0 表示不限。
+func (s *Service) SetQuota(id, quotaBytes int64) error {
+	if quotaBytes < 0 {
+		return ErrQuotaInvalid
+	}
+	res, err := s.db.Exec(`UPDATE users SET quota_bytes = ?, updated_at = ? WHERE id = ?`, quotaBytes, time.Now().UTC(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateDisplayName 修改展示名。

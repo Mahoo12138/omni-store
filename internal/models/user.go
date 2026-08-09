@@ -17,6 +17,7 @@ type User struct {
 	DisplayName  string    `json:"display_name"`
 	Role         string    `json:"role"`
 	IsDisabled   bool      `json:"is_disabled"`
+	QuotaBytes   int64     `json:"quota_bytes"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

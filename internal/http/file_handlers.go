@@ -19,7 +19,10 @@ import (
 // resolveSource 解析系统生成的不透明 key，并检查存储源存在且未禁用。
 // 路径级权限必须在规范化实际操作路径后由 authorizeSourcePath 检查。
 func (s *Server) resolveSource(w http.ResponseWriter, r *http.Request) *models.StorageSource {
-	sourceKey := r.PathValue("key")
+	return s.resolveSourceKey(w, r, r.PathValue("key"))
+}
+
+func (s *Server) resolveSourceKey(w http.ResponseWriter, r *http.Request, sourceKey string) *models.StorageSource {
 	src, err := s.sources.Get(sourceKey)
 	if err != nil {
 		if errors.Is(err, sources.ErrNotFound) {
@@ -45,8 +48,10 @@ func (s *Server) authorizeSourcePath(w http.ResponseWriter, r *http.Request, src
 	}
 	user := CurrentUser(r.Context())
 	var allowed bool
-	if subtree {
+	if subtree && needWrite {
 		allowed, err = s.sources.CanWriteSubtree(user, src.Key, normalized)
+	} else if subtree {
+		allowed, err = s.sources.CanReadSubtree(user, src.Key, normalized)
 	} else if needWrite {
 		allowed, err = s.sources.CanWritePath(user, src.Key, normalized)
 	} else {
@@ -259,7 +264,8 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		if !s.authorizeSourcePath(w, r, src, target, true, false) {
 			return
 		}
-		relPath, size, err := s.files.Upload(src, dirRel, filename, part, overwrite)
+		user := CurrentUser(r.Context())
+		relPath, size, err := s.files.UploadWithLockTokens(src, dirRel, filename, part, overwrite, nil, &user.ID)
 		if err != nil {
 			s.fileAudit(r, "upload", src, dirRel+"/"+filename, "", err)
 			writeFileError(w, r, err)
@@ -317,7 +323,8 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 	if !s.authorizeSourcePath(w, r, src, oldRel, true, true) || !s.authorizeSourcePath(w, r, src, newRel, true, true) {
 		return
 	}
-	newRel, err = s.files.Rename(src, req.Path, req.NewName)
+	user := CurrentUser(r.Context())
+	newRel, err = s.files.RenameAs(src, req.Path, req.NewName, &user.ID)
 	if err != nil {
 		writeFileError(w, r, err)
 		return
@@ -332,22 +339,68 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Path       string `json:"path"`
-		TargetPath string `json:"target_path"`
+		Path            string `json:"path"`
+		TargetSourceKey string `json:"target_source_key"`
+		TargetPath      string `json:"target_path"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if !s.authorizeSourcePath(w, r, src, req.Path, true, true) || !s.authorizeSourcePath(w, r, src, req.TargetPath, true, true) {
+	target := src
+	if req.TargetSourceKey != "" && req.TargetSourceKey != src.Key {
+		target = s.resolveSourceKey(w, r, req.TargetSourceKey)
+		if target == nil {
+			return
+		}
+	}
+	if !s.authorizeSourcePath(w, r, src, req.Path, true, true) || !s.authorizeSourcePath(w, r, target, req.TargetPath, true, true) {
 		return
 	}
-	newRel, err := s.files.Move(src, req.Path, req.TargetPath)
+	user := CurrentUser(r.Context())
+	result, err := s.files.MoveAcrossSources(src, target, req.Path, req.TargetPath, &user.ID)
 	if err != nil {
+		s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), strings.TrimPrefix(req.TargetPath, "/"), err)
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), newRel, nil)
-	WriteData(w, r, map[string]any{"path": "/" + newRel})
+	s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), result.Path, nil)
+	result.Path = "/" + result.Path
+	WriteData(w, r, result)
+}
+
+func (s *Server) handleCopyFile(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	var req struct {
+		Path            string `json:"path"`
+		TargetSourceKey string `json:"target_source_key"`
+		TargetPath      string `json:"target_path"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	target := src
+	if req.TargetSourceKey != "" && req.TargetSourceKey != src.Key {
+		target = s.resolveSourceKey(w, r, req.TargetSourceKey)
+		if target == nil {
+			return
+		}
+	}
+	if !s.authorizeSourcePath(w, r, src, req.Path, false, true) || !s.authorizeSourcePath(w, r, target, req.TargetPath, true, true) {
+		return
+	}
+	user := CurrentUser(r.Context())
+	result, err := s.files.Copy(src, target, req.Path, req.TargetPath, &user.ID)
+	if err != nil {
+		s.fileAudit(r, "copy", src, strings.TrimPrefix(req.Path, "/"), strings.TrimPrefix(req.TargetPath, "/"), err)
+		writeFileError(w, r, err)
+		return
+	}
+	s.fileAudit(r, "copy", src, strings.TrimPrefix(req.Path, "/"), result.Path, nil)
+	result.Path = "/" + result.Path
+	WriteData(w, r, result)
 }
 
 func (s *Server) handlePathPermission(w http.ResponseWriter, r *http.Request) {

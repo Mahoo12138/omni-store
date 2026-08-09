@@ -66,7 +66,7 @@ type ObjectEntry struct {
 type QuotaWriteGuard struct {
 	maxBytes int64
 	limited  bool
-	release  func()
+	releases []func()
 }
 
 // MaxBytes 返回本次写入可占用的最终文件大小；limited=false 表示不限制。
@@ -76,10 +76,10 @@ func (g *QuotaWriteGuard) MaxBytes() (maxBytes int64, limited bool) {
 
 // Close 释放配额写锁。
 func (g *QuotaWriteGuard) Close() {
-	if g.release != nil {
-		g.release()
-		g.release = nil
+	for i := len(g.releases) - 1; i >= 0; i-- {
+		g.releases[i]()
 	}
+	g.releases = nil
 }
 
 // Service 提供核心文件操作，REST、WebDAV、图床、公开网盘共用。
@@ -167,9 +167,27 @@ func (s *Service) LockQuotaUpdate(sourceKey string) func() {
 	return s.locks.Lock(quotaLockKey(sourceKey))
 }
 
+func userQuotaLockKey(userID int64) string {
+	return fmt.Sprintf("user-quota:%d", userID)
+}
+
+// LockUserQuotaUpdate 等待该用户当前写入结束并阻止新写入，用于原子更新用户配额。
+func (s *Service) LockUserQuotaUpdate(userID int64) func() {
+	return s.locks.Lock(userQuotaLockKey(userID))
+}
+
 // BeginQuotaWrite 为最终路径计算可写大小。覆盖已有普通文件时会返还旧文件占用。
 // 不限额写入持有共享协调锁但不会互相串行；有限额写入持有独占锁并实时统计。
 func (s *Service) BeginQuotaWrite(src *models.StorageSource, replacingRelPath string) (*QuotaWriteGuard, error) {
+	return s.BeginQuotaWriteForUser(src, replacingRelPath, nil)
+}
+
+// BeginQuotaWriteForUser 同时计算存储源硬配额和文件所有者用户配额。
+func (s *Service) BeginQuotaWriteForUser(src *models.StorageSource, replacingRelPath string, ownerUserID *int64) (*QuotaWriteGuard, error) {
+	return s.beginQuotaWriteForUser(src, replacingRelPath, ownerUserID, 0)
+}
+
+func (s *Service) beginQuotaWriteForUser(src *models.StorageSource, replacingRelPath string, ownerUserID *int64, userCredit int64) (*QuotaWriteGuard, error) {
 	guard := &QuotaWriteGuard{}
 	for {
 		releaseRead := s.locks.RLock(quotaLockKey(src.Key))
@@ -179,8 +197,8 @@ func (s *Service) BeginQuotaWrite(src *models.StorageSource, replacingRelPath st
 			return nil, err
 		}
 		if current.QuotaBytes == 0 {
-			guard.release = releaseRead
-			return guard, nil
+			guard.releases = append(guard.releases, releaseRead)
+			break
 		}
 		releaseRead()
 
@@ -194,7 +212,7 @@ func (s *Service) BeginQuotaWrite(src *models.StorageSource, replacingRelPath st
 			releaseWrite()
 			continue
 		}
-		guard.release = releaseWrite
+		guard.releases = append(guard.releases, releaseWrite)
 		usage, err := s.StorageUsage(current)
 		if err != nil {
 			guard.Close()
@@ -215,11 +233,71 @@ func (s *Service) BeginQuotaWrite(src *models.StorageSource, replacingRelPath st
 			}
 		}
 		guard.limited = true
-		guard.maxBytes = current.QuotaBytes - usage + replacedBytes
-		if guard.maxBytes < 0 {
-			guard.maxBytes = 0
+		available := current.QuotaBytes - usage
+		if available < 0 {
+			available = 0
 		}
+		guard.maxBytes = available + replacedBytes
+		break
+	}
+	if ownerUserID == nil {
 		return guard, nil
+	}
+	if err := s.applyUserQuotaGuard(guard, *ownerUserID, src.ID, replacingRelPath, userCredit); err != nil {
+		guard.Close()
+		return nil, err
+	}
+	return guard, nil
+}
+
+func (s *Service) applyUserQuotaGuard(guard *QuotaWriteGuard, userID, storageSourceID int64, replacingRelPath string, userCredit int64) error {
+	for {
+		releaseRead := s.locks.RLock(userQuotaLockKey(userID))
+		var quotaBytes int64
+		if err := s.db.QueryRow(`SELECT quota_bytes FROM users WHERE id = ?`, userID).Scan(&quotaBytes); err != nil {
+			releaseRead()
+			return err
+		}
+		if quotaBytes == 0 {
+			guard.releases = append(guard.releases, releaseRead)
+			return nil
+		}
+		releaseRead()
+
+		releaseWrite := s.locks.Lock(userQuotaLockKey(userID))
+		if err := s.db.QueryRow(`SELECT quota_bytes FROM users WHERE id = ?`, userID).Scan(&quotaBytes); err != nil {
+			releaseWrite()
+			return err
+		}
+		if quotaBytes == 0 {
+			releaseWrite()
+			continue
+		}
+		guard.releases = append(guard.releases, releaseWrite)
+		usage, err := s.UserUsage(userID)
+		if err != nil {
+			return err
+		}
+		var replacedBytes int64
+		if replacingRelPath != "" {
+			relPath, err := security.NormalizeRelPath(replacingRelPath)
+			if err != nil {
+				return err
+			}
+			_ = s.db.QueryRow(`SELECT size FROM file_records
+  WHERE storage_source_id = ? AND relative_path = ? AND owner_user_id = ? AND owner_type = ? AND record_status = ?`,
+				storageSourceID, relPath, userID, models.FileOwnerUser, models.FileRecordActive).Scan(&replacedBytes)
+		}
+		available := quotaBytes - usage
+		if available < 0 {
+			available = 0
+		}
+		userMax := available + replacedBytes + userCredit
+		if !guard.limited || userMax < guard.maxBytes {
+			guard.maxBytes = userMax
+		}
+		guard.limited = true
+		return nil
 	}
 }
 
@@ -637,7 +715,7 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 		return "", 0, err
 	}
 	defer releasePersistent()
-	quotaGuard, err := s.BeginQuotaWrite(src, relPath)
+	quotaGuard, err := s.BeginQuotaWriteForUser(src, relPath, lockOwnerUserID)
 	if err != nil {
 		return "", 0, err
 	}
@@ -668,6 +746,15 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	written, err := writeViaTemp(parentAbs, absPath, body, maxBytes, limited)
 	if err != nil {
 		return "", 0, err
+	}
+	ownerType := models.FileOwnerUnowned
+	var ownerUserID *int64
+	if lockOwnerUserID != nil {
+		ownerType = models.FileOwnerUser
+		ownerUserID = lockOwnerUserID
+	}
+	if err := s.RecordFile(src, relPath, ownerType, ownerUserID, lockOwnerUserID); err != nil {
+		return "", 0, fmt.Errorf("更新文件台账失败: %w", err)
 	}
 	return relPath, written, nil
 }
@@ -766,6 +853,9 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 
 	// 同步清理 Images 表，避免图床历史残留失效图片（README §13.5/§17.12）。
 	s.cleanupImageRecords(src.ID, relPath, isDir)
+	if err := s.deleteFileRecords(src.ID, relPath, isDir); err != nil {
+		return fmt.Errorf("清理文件台账失败: %w", err)
+	}
 	if err := releasePersistent(relPath); err != nil {
 		return err
 	}
@@ -785,6 +875,11 @@ func (s *Service) cleanupImageRecords(storageSourceID int64, relPath string, isD
 
 // Rename 重命名文件或目录，目标已存在时返回 ErrAlreadyExists。
 func (s *Service) Rename(src *models.StorageSource, relInput, newName string) (string, error) {
+	return s.RenameAs(src, relInput, newName, nil)
+}
+
+// RenameAs 重命名文件或目录并记录执行用户。
+func (s *Service) RenameAs(src *models.StorageSource, relInput, newName string, actorUserID *int64) (string, error) {
 	if err := security.ValidateFileName(newName); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
@@ -801,7 +896,7 @@ func (s *Service) Rename(src *models.StorageSource, relInput, newName string) (s
 	if parent != "" {
 		newRel = parent + "/" + newName
 	}
-	return s.move(src, relPath, newRel, nil, nil)
+	return s.move(src, relPath, newRel, nil, actorUserID)
 }
 
 // Move 将文件或目录移动到同存储源内的新路径 toRel（完整目标路径，含文件名）。
@@ -875,6 +970,9 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 
 	// 同步更新图床记录路径，保持公开 URL 有效。
 	s.syncImageRecordsMove(src.ID, fromRel, toRel, info.IsDir())
+	if err := s.moveFileRecords(src.ID, fromRel, toRel, info.IsDir(), lockOwnerUserID); err != nil {
+		return "", fmt.Errorf("更新文件台账失败: %w", err)
+	}
 	// RFC 4918：MOVE 不携带源资源上的锁。外部祖先锁保留，并按新路径重新判断覆盖关系。
 	if err := releasePersistent(fromRel); err != nil {
 		return "", err

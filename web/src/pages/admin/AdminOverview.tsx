@@ -18,16 +18,19 @@ import {
   adminListSources,
   adminListUsers,
   adminPreflightSource,
+  adminReconcileSource,
   adminSetAnonymousSettings,
   adminSetExcludePatterns,
   adminSetSourceDisabled,
   adminSetUserDisabled,
+  adminSetUserQuota,
   adminUpdateSource,
   adminUpdatePolicy,
   changePassword,
   fetchAdminOverview,
   updateProfile,
   type AdminSource,
+  type AdminUser,
   type AccessPermission,
   type AccessPolicy,
   type AccessPolicyInput,
@@ -1520,6 +1523,14 @@ function EditSourceDialog({
     onSuccess: () => { setMsg('排除规则已保存'); refresh() },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
+  const reconcileMut = useMutation({
+    mutationFn: () => adminReconcileSource(sourceKey),
+    onSuccess: (result) => {
+      setMsg(`台账已校准：扫描 ${result.scanned_files} 个文件，新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
+      refresh()
+    },
+    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '校准失败'),
+  })
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['admin-source', sourceKey] })
     queryClient.invalidateQueries({ queryKey: ['admin-sources'] })
@@ -1612,6 +1623,19 @@ function EditSourceDialog({
             保存配额
           </Button>
         </div>
+      </Field>
+
+      <Field
+        label="文件台账"
+        hint={`当前台账用量 ${formatBytes(detail.data.ledger_usage_bytes)}。校准会扫描真实目录，新发现文件标记为未归属。`}
+      >
+        <Button
+          variant="secondary"
+          disabled={reconcileMut.isPending}
+          onClick={() => reconcileMut.mutate()}
+        >
+          {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
+        </Button>
       </Field>
 
       <Field
@@ -2088,6 +2112,7 @@ function UsersSection() {
   const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
   const [createOpen, setCreateOpen] = useState(false)
   const [deleting, setDeleting] = useState<User | null>(null)
+  const [quotaEditing, setQuotaEditing] = useState<AdminUser | null>(null)
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] })
   const disableMut = useMutation({
@@ -2121,6 +2146,7 @@ function UsersSection() {
                 <th className={css.compactTh}>显示名</th>
                 <th className={css.compactTh}>角色</th>
                 <th className={css.compactTh}>状态</th>
+                <th className={css.compactTh}>用量 / 配额</th>
                 <th className={css.compactTh}>创建时间</th>
                 <th className={css.compactTh}>操作</th>
               </tr>
@@ -2140,12 +2166,16 @@ function UsersSection() {
                       {u.is_disabled ? '已禁用' : '正常'}
                     </Badge>
                   </td>
+                  <td className={css.compactTd}>
+                    {formatBytes(u.usage_bytes)} / {u.quota_bytes > 0 ? formatBytes(u.quota_bytes) : '不限'}
+                  </td>
                   <td className={css.compactTd} style={{ color: vars.color.textSecondary }}>
                     {formatDate(u.created_at)}
                   </td>
                   <td className={css.compactTd}>
                     {u.id !== me.data?.id ? (
                       <div className={css.formRow}>
+                        <Button variant="ghost" onClick={() => setQuotaEditing(u)}>配额</Button>
                         <Button
                           variant="ghost"
                           onClick={() => disableMut.mutate({ id: u.id, disabled: !u.is_disabled })}
@@ -2157,7 +2187,10 @@ function UsersSection() {
                         </Button>
                       </div>
                     ) : (
-                      <span className={css.kvLabel}>（当前用户）</span>
+                      <div className={css.formRow}>
+                        <Button variant="ghost" onClick={() => setQuotaEditing(u)}>配额</Button>
+                        <span className={css.kvLabel}>（当前用户）</span>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -2174,6 +2207,12 @@ function UsersSection() {
 
       {/* 创建用户 弹窗 */}
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      <UserQuotaDialog
+        user={quotaEditing}
+        onClose={() => setQuotaEditing(null)}
+        onSaved={() => { setQuotaEditing(null); refresh() }}
+      />
 
       {/* 删除确认 弹窗 */}
       <DialogWrap
@@ -2199,6 +2238,64 @@ function UsersSection() {
         </p>
       </DialogWrap>
     </>
+  )
+}
+
+function UserQuotaDialog({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: AdminUser | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [quotaGiB, setQuotaGiB] = useState('0')
+  const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (user) {
+      setQuotaGiB(user.quota_bytes > 0 ? String(user.quota_bytes / (1024 ** 3)) : '0')
+      setMessage('')
+    }
+  }, [user])
+  const mutation = useMutation({
+    mutationFn: (quotaBytes: number) => adminSetUserQuota(user!.id, quotaBytes),
+    onSuccess: onSaved,
+    onError: (err) => setMessage(err instanceof ApiRequestError ? err.message : '保存失败'),
+  })
+  if (!user) return null
+  const value = Number(quotaGiB)
+  const valid = quotaGiB.trim() !== '' && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 1024 ** 3))
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={`用户配额：${user.display_name || user.username}`}
+      description={`当前拥有文件用量 ${formatBytes(user.usage_bytes)}；降低配额不会删除已有文件。`}
+      footer={(
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button
+            disabled={!valid || mutation.isPending}
+            onClick={() => mutation.mutate(Math.round(value * 1024 ** 3))}
+          >
+            {mutation.isPending ? '保存中…' : '保存配额'}
+          </Button>
+        </>
+      )}
+    >
+      <Field label="硬配额" hint="单位 GiB，填 0 表示不限制；只统计归属于该用户的文件。">
+        <Input
+          type="number"
+          min="0"
+          step="0.1"
+          value={quotaGiB}
+          onChange={(event) => setQuotaGiB(event.target.value)}
+          aria-label="用户配额 GiB"
+        />
+      </Field>
+      {message ? <p role="alert">{message}</p> : null}
+    </DialogWrap>
   )
 }
 
