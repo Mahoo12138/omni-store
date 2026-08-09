@@ -48,6 +48,9 @@ type DirectoryPreview struct {
 
 // Preflight 对已有目录执行与 Create 相同的路径安全和读写校验，并生成首层预览。
 func (s *Service) Preflight(in PreflightInput) (*DirectoryPreview, error) {
+	rootTopologyMu.RLock()
+	defer rootTopologyMu.RUnlock()
+
 	existing, err := s.allRootPaths()
 	if err != nil {
 		return nil, err

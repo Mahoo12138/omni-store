@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
@@ -21,6 +22,11 @@ var (
 	// ErrQuotaInvalid 存储源配额不能为负数。
 	ErrQuotaInvalid = errors.New("存储源配额不能为负数")
 )
+
+// rootTopologyMu serializes root-path topology reads and writes across all
+// Service instances in this process. The overlap invariant cannot be expressed
+// by a simple SQLite UNIQUE constraint because parent/child paths also conflict.
+var rootTopologyMu sync.RWMutex
 
 // DefaultExcludePatterns 是新建存储源默认建议排除规则（README §11.3）。
 var DefaultExcludePatterns = []string{
@@ -86,6 +92,8 @@ func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
 	if in.Name = strings.TrimSpace(in.Name); in.Name == "" {
 		return nil, ErrNameRequired
 	}
+	rootTopologyMu.Lock()
+	defer rootTopologyMu.Unlock()
 
 	existing, err := s.allRootPaths()
 	if err != nil {
@@ -347,6 +355,9 @@ func (s *Service) SetDisabled(key string, disabled bool) error {
 
 // Delete 删除存储源的 OmniStore 内部记录，不删除真实磁盘文件（README §10.4）。
 func (s *Service) Delete(key string) error {
+	rootTopologyMu.Lock()
+	defer rootTopologyMu.Unlock()
+
 	src, err := s.Get(key)
 	if err != nil {
 		return err

@@ -2,9 +2,11 @@ package sources
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/omni-store/omnistore/internal/db"
@@ -37,6 +39,99 @@ func TestCreateGeneratesOpaqueUniqueKeysAndRequiresName(t *testing.T) {
 	}
 	if first.Key == second.Key || first.Key == first.Name {
 		t.Fatalf("keys are not opaque and unique: first=%+v second=%+v", first, second)
+	}
+}
+
+func TestConcurrentCreateSameRootAllowsOnlyOneSource(t *testing.T) {
+	service, base := newPreflightService(t)
+	root := filepath.Join(base, "shared-root")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+
+	const attempts = 20
+	start := make(chan struct{})
+	results := make(chan error, attempts)
+	for i := range attempts {
+		go func(index int) {
+			<-start
+			_, err := service.Create(CreateInput{
+				Name:     fmt.Sprintf("concurrent-%02d", index),
+				RootPath: root,
+			})
+			results <- err
+		}(i)
+	}
+	close(start)
+
+	succeeded := 0
+	rejected := 0
+	for range attempts {
+		err := <-results
+		switch {
+		case err == nil:
+			succeeded++
+		case strings.Contains(err.Error(), "路径重叠"):
+			rejected++
+		default:
+			t.Fatalf("unexpected create error: %v", err)
+		}
+	}
+	if succeeded != 1 || rejected != attempts-1 {
+		t.Fatalf("succeeded=%d rejected=%d", succeeded, rejected)
+	}
+	sources, err := service.List()
+	if err != nil || len(sources) != 1 {
+		t.Fatalf("List() count=%d err=%v", len(sources), err)
+	}
+}
+
+func TestConcurrentCreateParentAndChildAcrossServicesAllowsOnlyOneSource(t *testing.T) {
+	service, base := newPreflightService(t)
+	secondService := NewService(service.db, service.dataDir)
+	parent := filepath.Join(base, "parent-root")
+	child := filepath.Join(parent, "child-root")
+	if err := os.MkdirAll(child, 0o755); err != nil {
+		t.Fatalf("create roots: %v", err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, candidate := range []struct {
+		service *Service
+		name    string
+		root    string
+	}{
+		{service: service, name: "parent", root: parent},
+		{service: secondService, name: "child", root: child},
+	} {
+		candidate := candidate
+		go func() {
+			<-start
+			_, err := candidate.service.Create(CreateInput{Name: candidate.name, RootPath: candidate.root})
+			results <- err
+		}()
+	}
+	close(start)
+
+	succeeded := 0
+	rejected := 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			succeeded++
+		} else if strings.Contains(err.Error(), "路径重叠") {
+			rejected++
+		} else {
+			t.Fatalf("unexpected create error: %v", err)
+		}
+	}
+	if succeeded != 1 || rejected != 1 {
+		t.Fatalf("succeeded=%d rejected=%d", succeeded, rejected)
+	}
+	sources, err := service.List()
+	if err != nil || len(sources) != 1 {
+		t.Fatalf("List() count=%d err=%v", len(sources), err)
 	}
 }
 
