@@ -2,15 +2,21 @@ package files
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
+	"github.com/omni-store/omnistore/internal/sources"
 )
+
+// ErrSourceInitialization 表示创建来源时写入初始文件台账失败。
+var ErrSourceInitialization = errors.New("初始化存储源台账失败")
 
 type scannedFile struct {
 	rel       string
@@ -28,9 +34,112 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 	if err != nil {
 		return nil, err
 	}
+	filesOnDisk, result, err := scanSourceFiles(root, matcher)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	existing := make(map[string]scannedFile)
+	rows, err := tx.Query(`SELECT relative_path, size, mtime_unix_nano FROM file_records
+  WHERE storage_source_id = ? AND record_status = ?`, src.ID, models.FileRecordActive)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var item scannedFile
+		if err := rows.Scan(&item.rel, &item.size, &item.mtimeNano); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		existing[item.rel] = item
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	for rel, item := range filesOnDisk {
+		old, found := existing[rel]
+		if !found {
+			if err := insertUnownedFileRecord(tx, src.ID, item, now); err != nil {
+				return nil, err
+			}
+			result.Added++
+			continue
+		}
+		delete(existing, rel)
+		if old.size != item.size || old.mtimeNano != item.mtimeNano {
+			if _, err := tx.Exec(`UPDATE file_records SET size = ?, mtime_unix_nano = ?, updated_at = ?
+  WHERE storage_source_id = ? AND relative_path = ?`, item.size, item.mtimeNano, now, src.ID, rel); err != nil {
+				return nil, err
+			}
+			result.Updated++
+		}
+	}
+	for rel := range existing {
+		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ?`, src.ID, rel); err != nil {
+			return nil, err
+		}
+		result.Removed++
+	}
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM file_records
+  WHERE storage_source_id = ? AND record_status = ? AND owner_type = ?`,
+		src.ID, models.FileRecordActive, models.FileOwnerUnowned).Scan(&result.Unowned); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateSource 扫描已有目录快照，并在一个 SQLite 事务中创建来源、排除规则和初始台账。
+func (s *Service) CreateSource(in sources.CreateInput) (*models.StorageSource, *models.ReconcileResult, error) {
+	preflightInput := sources.PreflightInput{RootPath: in.RootPath}
+	if in.HasPatterns {
+		preflightInput.ExcludePatterns = append([]string(nil), in.ExcludePatterns...)
+		preflightInput.HasPatterns = true
+	}
+	preview, err := s.sources.Preflight(preflightInput)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !preview.IsEmpty && !in.ImportExisting {
+		return nil, nil, sources.ErrExistingConfirmationRequired
+	}
+	filesOnDisk, result, err := scanSourceFiles(preview.RootPath, security.NewExcludeMatcher(preview.ExcludePatterns))
+	if err != nil {
+		return nil, nil, err
+	}
+	now := time.Now().UTC()
+	src, err := s.sources.CreateWithInitializer(in, func(tx *sql.Tx, pending *models.StorageSource, patterns []string) error {
+		if pending.RootPath != preview.RootPath || !slices.Equal(patterns, preview.ExcludePatterns) {
+			return fmt.Errorf("存储源预检状态已变化，请重新预检")
+		}
+		for _, item := range filesOnDisk {
+			if err := insertUnownedFileRecord(tx, pending.ID, item, now); err != nil {
+				return fmt.Errorf("%w: %v", ErrSourceInitialization, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	result.Added = result.ScannedFiles
+	result.Unowned = int64(result.ScannedFiles)
+	return src, result, nil
+}
+
+func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]scannedFile, *models.ReconcileResult, error) {
 	filesOnDisk := make(map[string]scannedFile)
 	result := &models.ReconcileResult{}
-	err = filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsNotExist(walkErr) {
 				return nil
@@ -70,69 +179,17 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("扫描存储源失败: %w", err)
+		return nil, nil, fmt.Errorf("扫描存储源失败: %w", err)
 	}
+	return filesOnDisk, result, nil
+}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	existing := make(map[string]scannedFile)
-	rows, err := tx.Query(`SELECT relative_path, size, mtime_unix_nano FROM file_records
-  WHERE storage_source_id = ? AND record_status = ?`, src.ID, models.FileRecordActive)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var item scannedFile
-		if err := rows.Scan(&item.rel, &item.size, &item.mtimeNano); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		existing[item.rel] = item
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-
-	now := time.Now().UTC()
-	for rel, item := range filesOnDisk {
-		old, found := existing[rel]
-		if !found {
-			if _, err := tx.Exec(`INSERT INTO file_records
+func insertUnownedFileRecord(tx *sql.Tx, storageSourceID int64, item scannedFile, now time.Time) error {
+	_, err := tx.Exec(`INSERT INTO file_records
   (storage_source_id, relative_path, size, owner_type, mtime_unix_nano, record_status, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, src.ID, rel, item.size, models.FileOwnerUnowned,
-				item.mtimeNano, models.FileRecordActive, now, now); err != nil {
-				return nil, err
-			}
-			result.Added++
-			continue
-		}
-		delete(existing, rel)
-		if old.size != item.size || old.mtimeNano != item.mtimeNano {
-			if _, err := tx.Exec(`UPDATE file_records SET size = ?, mtime_unix_nano = ?, updated_at = ?
-  WHERE storage_source_id = ? AND relative_path = ?`, item.size, item.mtimeNano, now, src.ID, rel); err != nil {
-				return nil, err
-			}
-			result.Updated++
-		}
-	}
-	for rel := range existing {
-		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ?`, src.ID, rel); err != nil {
-			return nil, err
-		}
-		result.Removed++
-	}
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM file_records
-  WHERE storage_source_id = ? AND record_status = ? AND owner_type = ?`,
-		src.ID, models.FileRecordActive, models.FileOwnerUnowned).Scan(&result.Unowned); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return result, nil
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, storageSourceID, item.rel, item.size, models.FileOwnerUnowned,
+		item.mtimeNano, models.FileRecordActive, now, now)
+	return err
 }
 
 // RecordFile 对最终普通文件执行 upsert；覆盖写会把所有权转移给本次写入主体。

@@ -1373,6 +1373,7 @@ function CreateSourceDialog({
         description: '',
         root_path: preview.root_path,
         exclude_patterns: preview.exclude_patterns,
+        import_existing: !preview.is_empty,
       },
       { onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '创建失败') },
     )
@@ -1394,7 +1395,7 @@ function CreateSourceDialog({
                 重新预检
               </Button>
               <Button onClick={createSource} disabled={createMutation.isPending}>
-                {createMutation.isPending ? '创建中…' : '确认创建'}
+                {createMutation.isPending ? '校准并创建中…' : preview.is_empty ? '确认创建' : '确认导入并校准'}
               </Button>
             </>
           ) : (

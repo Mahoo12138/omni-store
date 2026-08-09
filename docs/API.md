@@ -177,15 +177,38 @@ POST /api/v1/admin/sources/preflight
     "entries": [{ "name": "2026", "kind": "directory" }],
     "sample_truncated": false,
     "exclude_patterns": ["**/.git/**", "**/.env"],
-    "warnings": ["该目录已有内容；创建后会直接作为存储源显示，文件不会被移动、复制或写入索引。"]
+    "warnings": ["该目录已有内容；确认导入后不会移动或复制真实文件，普通文件会自动写入台账并标记为未归属。"]
   },
   "request_id": "req_xxx"
 }
 ```
 
-预检只读取目录首层，不建立文件索引、不移动或修改已有内容。读写能力校验会创建并立即删除一个严格命名的临时测试文件。`POST /api/v1/admin/sources` 在真正写入配置前仍会重新执行全部路径校验，不能把预检结果当作长期授权凭据。
+预检只读取目录首层，不建立文件索引、不移动或修改已有内容。读写能力校验会创建并立即删除一个严格命名的临时测试文件；该命名是系统强制排除项，并发扫描不会把其他请求的测试文件写入台账。`POST /api/v1/admin/sources` 在真正写入配置前仍会重新执行全部路径校验和非空检查，不能把预检结果当作长期授权凭据。
 
-正式创建请求必须提供 `name` 与 `root_path`，可选 `description`、`exclude_patterns`；不接受用户自定义存储源标识。服务端生成 `src-` 加 16 位小写十六进制随机 key 并随响应返回，前端仅将其作为不透明路由参数。
+正式创建请求必须提供 `name` 与 `root_path`，可选 `description`、`exclude_patterns`；确认导入非空目录时还必须显式传入 `import_existing=true`。空目录可传 `false`，服务层发现目录在预检后变为非空时仍会拒绝未确认请求：
+
+```json
+{
+  "name": "照片归档",
+  "description": "",
+  "root_path": "/mnt/photos",
+  "exclude_patterns": ["**/.git/**", "**/.env"],
+  "import_existing": true
+}
+```
+
+服务端生成 `src-` 加 16 位小写十六进制随机 key，不接受用户自定义标识。服务端先扫描未排除的普通文件，再在单个 SQLite 事务中原子写入来源、排除规则和 `unowned` 初始台账；其他请求不会看到“来源已创建但台账未就绪”的中间态。响应同时返回来源与本次校准摘要：
+
+```json
+{
+  "data": {
+    "source": { "key": "src-0123456789abcdef", "is_disabled": false },
+    "reconcile": { "scanned_files": 8, "added": 8, "updated": 0, "removed": 0, "unowned": 8, "usage_bytes": 1024 }
+  }
+}
+```
+
+扫描或台账事务失败时接口返回错误，事务整体回滚；真实目录和文件不会被删除、移动或修改。管理员仍可在来源详情页手动再次校准外部后续变更。
 
 ## 存储源硬配额
 

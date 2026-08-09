@@ -60,6 +60,8 @@ func TestExcludeMatcher(t *testing.T) {
 		{path: "public/readme.md"},
 		{path: ".omnistore-upload-123", match: true, matchPrefix: true},
 		{path: "nested/.omnistore-upload-123", match: true, matchPrefix: true},
+		{path: ".omnistore-write-test-a1b2c3", match: true, matchPrefix: true},
+		{path: "nested/.omnistore-write-test-a1b2c3", match: true, matchPrefix: true},
 		{path: "private", match: true, matchPrefix: true},
 		{path: "private/docs/readme.md", match: true, matchPrefix: true},
 		{path: "build/output.tmp", match: true, matchPrefix: true},

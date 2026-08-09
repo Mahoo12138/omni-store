@@ -9,6 +9,8 @@ import (
 var forcedExcludePatterns = []string{
 	".omnistore-upload-*",
 	"**/.omnistore-upload-*",
+	".omnistore-write-test-*",
+	"**/.omnistore-write-test-*",
 }
 
 // ExcludeMatcher 按简单 glob 语法匹配排除路径（README §11.1）。

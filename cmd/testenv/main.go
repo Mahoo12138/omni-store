@@ -227,7 +227,9 @@ func ensureSource(service *sources.Service, name, description, root string, publ
 		}
 	}
 	if source == nil {
-		source, err = service.Create(sources.CreateInput{Name: name, Description: description, RootPath: root})
+		source, err = service.Create(sources.CreateInput{
+			Name: name, Description: description, RootPath: root, ImportExisting: true,
+		})
 	}
 	if err != nil {
 		return nil, err

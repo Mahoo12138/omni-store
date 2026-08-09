@@ -74,6 +74,11 @@ export interface ReconcileResult {
   usage_bytes: number
 }
 
+export interface SourceCreationResult {
+  source: AdminSource
+  reconcile: ReconcileResult
+}
+
 export interface SourcePreflight {
   root_path: string
   is_empty: boolean
@@ -178,7 +183,8 @@ export async function adminCreateSource(input: {
   description: string
   root_path: string
   exclude_patterns?: string[]
-}): Promise<AdminSource> {
+  import_existing: boolean
+}): Promise<SourceCreationResult> {
   return apiFetch('/api/v1/admin/sources', { method: 'POST', body: JSON.stringify(input) })
 }
 

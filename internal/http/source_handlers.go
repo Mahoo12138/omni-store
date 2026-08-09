@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/omni-store/omnistore/internal/audit"
+	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
@@ -56,29 +57,36 @@ func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request)
 		Description     string    `json:"description"`
 		RootPath        string    `json:"root_path"`
 		ExcludePatterns *[]string `json:"exclude_patterns"`
+		ImportExisting  bool      `json:"import_existing"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 
 	in := sources.CreateInput{
-		Name:        req.Name,
-		Description: req.Description,
-		RootPath:    req.RootPath,
+		Name:           req.Name,
+		Description:    req.Description,
+		RootPath:       req.RootPath,
+		ImportExisting: req.ImportExisting,
 	}
 	if req.ExcludePatterns != nil {
 		in.ExcludePatterns = *req.ExcludePatterns
 		in.HasPatterns = true
 	}
 
-	src, err := s.sources.Create(in)
+	src, reconcile, err := s.files.CreateSource(in)
 	if err != nil {
+		if errors.Is(err, files.ErrSourceInitialization) {
+			s.adminAudit(r, "create_source", audit.StatusFailed, CodeInternalError)
+			WriteError(w, r, CodeInternalError, "扫描已有文件失败，未创建存储源", nil)
+			return
+		}
 		s.adminAudit(r, "create_source", audit.StatusFailed, CodeValidationError)
 		s.writeSourceError(w, r, err)
 		return
 	}
 	s.adminAudit(r, "create_source", audit.StatusSuccess, "")
-	WriteData(w, r, src)
+	WriteData(w, r, map[string]any{"source": src, "reconcile": reconcile})
 }
 
 func (s *Server) handleAdminGetSource(w http.ResponseWriter, r *http.Request) {

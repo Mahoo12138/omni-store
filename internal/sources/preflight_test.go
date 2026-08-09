@@ -42,6 +42,37 @@ func TestCreateGeneratesOpaqueUniqueKeysAndRequiresName(t *testing.T) {
 	}
 }
 
+func TestCreateRechecksNonEmptyDirectoryAndRequiresExplicitImport(t *testing.T) {
+	service, base := newPreflightService(t)
+	root := filepath.Join(base, "changed-after-preflight")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := service.Preflight(PreflightInput{RootPath: root})
+	if err != nil || !preview.IsEmpty {
+		t.Fatalf("empty preflight=%+v err=%v", preview, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "arrived.txt"), []byte("external"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Create(CreateInput{Name: "changed", RootPath: root}); !errors.Is(err, ErrExistingConfirmationRequired) {
+		t.Fatalf("unconfirmed non-empty create error=%v", err)
+	}
+	list, err := service.List()
+	if err != nil || len(list) != 0 {
+		t.Fatalf("rejected create left sources=%d err=%v", len(list), err)
+	}
+	source, err := service.Create(CreateInput{
+		Name: "changed", RootPath: root, ImportExisting: true,
+	})
+	if err != nil {
+		t.Fatalf("confirmed import: %v", err)
+	}
+	if source.IsDisabled {
+		t.Fatal("confirmed source should be enabled after atomic creation")
+	}
+}
+
 func TestConcurrentCreateSameRootAllowsOnlyOneSource(t *testing.T) {
 	service, base := newPreflightService(t)
 	root := filepath.Join(base, "shared-root")
@@ -108,7 +139,9 @@ func TestConcurrentCreateParentAndChildAcrossServicesAllowsOnlyOneSource(t *test
 		candidate := candidate
 		go func() {
 			<-start
-			_, err := candidate.service.Create(CreateInput{Name: candidate.name, RootPath: candidate.root})
+			_, err := candidate.service.Create(CreateInput{
+				Name: candidate.name, RootPath: candidate.root, ImportExisting: true,
+			})
 			results <- err
 		}()
 	}
@@ -216,7 +249,7 @@ func TestPreflightRejectsPathOverlappingExistingSource(t *testing.T) {
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatalf("create root: %v", err)
 	}
-	if _, err := service.Create(CreateInput{Name: "registered-source", RootPath: root}); err != nil {
+	if _, err := service.Create(CreateInput{Name: "registered-source", RootPath: root, ImportExisting: true}); err != nil {
 		t.Fatalf("create source: %v", err)
 	}
 

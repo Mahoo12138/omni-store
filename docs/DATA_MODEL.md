@@ -425,7 +425,7 @@ system
 unowned
 ```
 
-`(storage_source_id, relative_path)` 唯一。`record_status` 使用 `active / trash`；回收文件的 `relative_path` 改为内部 `trash_key + 子路径` 并设置 `trash_key`，因此原路径可以创建新内容。恢复时重建目标路径并清除 `trash_key`。常规写入口同步 upsert，永久删除和移动同步清理或变更路径。已有文件通过校准扫描导入并标记为 `unowned`，扫描只处理 `active` 台账并保留已知所有权。
+`(storage_source_id, relative_path)` 唯一。`record_status` 使用 `active / trash`；回收文件的 `relative_path` 改为内部 `trash_key + 子路径` 并设置 `trash_key`，因此原路径可以创建新内容。恢复时重建目标路径并清除 `trash_key`。常规写入口同步 upsert，永久删除和移动同步清理或变更路径。已有目录首次确认导入时，来源、排除规则和磁盘快照中的 `unowned` 记录在同一个事务中创建；后续校准扫描只处理 `active` 台账并保留已知所有权。
 
 ### file_search_index
 

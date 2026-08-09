@@ -35,7 +35,9 @@ func TestListMountsResolveAndBrowse(t *testing.T) {
 	if err := os.Symlink(filepath.Join(publicRoot, "hello.txt"), filepath.Join(publicRoot, "hidden-link")); err != nil {
 		t.Logf("symlink fixture unavailable: %v", err)
 	}
-	publicSource, err := sourceService.Create(sources.CreateInput{Name: "Public files", Description: "Public fixture", RootPath: publicRoot})
+	publicSource, err := sourceService.Create(sources.CreateInput{
+		Name: "Public files", Description: "Public fixture", RootPath: publicRoot, ImportExisting: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

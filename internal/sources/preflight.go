@@ -113,7 +113,7 @@ func previewDirectory(rootPath string, patterns []string) (*DirectoryPreview, er
 
 	preview.SampleTruncated = preview.Summary.VisibleEntries > len(preview.Entries)
 	if !preview.IsEmpty {
-		preview.Warnings = append(preview.Warnings, "该目录已有内容；创建后会直接作为存储源显示，文件不会被移动、复制或写入索引。")
+		preview.Warnings = append(preview.Warnings, "该目录已有内容；确认导入后不会移动或复制真实文件，普通文件会自动写入台账并标记为未归属。")
 	}
 	if preview.Summary.ExcludedEntries > 0 {
 		preview.Warnings = append(preview.Warnings, "命中排除规则的条目不会在 OmniStore 各入口中显示或访问。")

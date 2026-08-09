@@ -21,6 +21,8 @@ var (
 	ErrNameRequired = errors.New("存储源名称不能为空")
 	// ErrQuotaInvalid 存储源配额不能为负数。
 	ErrQuotaInvalid = errors.New("存储源配额不能为负数")
+	// ErrExistingConfirmationRequired 表示非空目录必须由调用方显式确认导入。
+	ErrExistingConfirmationRequired = errors.New("目录已有内容，必须显式确认导入")
 )
 
 // rootTopologyMu serializes root-path topology reads and writes across all
@@ -79,9 +81,10 @@ func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, err
 
 // CreateInput 是创建存储源的输入。
 type CreateInput struct {
-	Name        string
-	Description string
-	RootPath    string
+	Name           string
+	Description    string
+	RootPath       string
+	ImportExisting bool
 	// ExcludePatterns 为 nil 时使用默认建议规则。
 	ExcludePatterns []string
 	HasPatterns     bool
@@ -89,6 +92,15 @@ type CreateInput struct {
 
 // Create 创建存储源，执行全部路径安全校验（README §10.5）。
 func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
+	return s.CreateWithInitializer(in, nil)
+}
+
+// CreateInitializer 在新来源及排除规则所在事务内写入依赖来源 ID 的初始状态。
+// 回调失败会回滚整个来源创建；回调不得执行耗时文件系统扫描。
+type CreateInitializer func(*sql.Tx, *models.StorageSource, []string) error
+
+// CreateWithInitializer 原子创建来源及调用方准备好的初始状态。
+func (s *Service) CreateWithInitializer(in CreateInput, initialize CreateInitializer) (*models.StorageSource, error) {
 	if in.Name = strings.TrimSpace(in.Name); in.Name == "" {
 		return nil, ErrNameRequired
 	}
@@ -107,6 +119,13 @@ func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
 	patterns := in.ExcludePatterns
 	if !in.HasPatterns {
 		patterns = DefaultExcludePatterns
+	}
+	preview, err := previewDirectory(realPath, patterns)
+	if err != nil {
+		return nil, err
+	}
+	if !preview.IsEmpty && !in.ImportExisting {
+		return nil, ErrExistingConfirmationRequired
 	}
 
 	now := time.Now().UTC()
@@ -145,6 +164,15 @@ func (s *Service) Create(in CreateInput) (*models.StorageSource, error) {
 		}
 		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (storage_source_id, pattern, created_at)
   VALUES (?, ?, ?)`, storageSourceID, p, now); err != nil {
+			return nil, err
+		}
+	}
+	pending := &models.StorageSource{
+		ID: storageSourceID, Key: key, Name: in.Name, Description: in.Description,
+		RootPath: realPath, WebdavEnabled: true, CreatedAt: now, UpdatedAt: now,
+	}
+	if initialize != nil {
+		if err := initialize(tx, pending, append([]string(nil), patterns...)); err != nil {
 			return nil, err
 		}
 	}

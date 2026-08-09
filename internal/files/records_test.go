@@ -1,13 +1,72 @@
 package files
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/sources"
 )
+
+func TestCreateSourceImportsLedgerAtomicallyUnderConcurrentRequests(t *testing.T) {
+	service, _, existingRoot := newQuotaTestService(t, 0)
+	root := filepath.Join(filepath.Dir(existingRoot), "concurrent-import")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "existing.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const attempts = 20
+	type outcome struct {
+		sourceID int64
+		err      error
+	}
+	start := make(chan struct{})
+	results := make(chan outcome, attempts)
+	for i := range attempts {
+		go func(index int) {
+			<-start
+			source, result, err := service.CreateSource(sources.CreateInput{
+				Name: fmt.Sprintf("import-%02d", index), RootPath: root, ImportExisting: true,
+			})
+			if err == nil && (result.Added != 1 || result.Unowned != 1) {
+				err = fmt.Errorf("unexpected reconcile result: %+v", result)
+			}
+			var sourceID int64
+			if source != nil {
+				sourceID = source.ID
+			}
+			results <- outcome{sourceID: sourceID, err: err}
+		}(i)
+	}
+	close(start)
+	var createdSourceID int64
+	rejected := 0
+	for range attempts {
+		result := <-results
+		if result.err == nil {
+			if createdSourceID != 0 {
+				t.Fatalf("multiple imports succeeded: %d and %d", createdSourceID, result.sourceID)
+			}
+			createdSourceID = result.sourceID
+		} else if strings.Contains(result.err.Error(), "路径重叠") {
+			rejected++
+		} else {
+			t.Fatalf("unexpected import error: %v", result.err)
+		}
+	}
+	if createdSourceID == 0 || rejected != attempts-1 {
+		t.Fatalf("createdSourceID=%d rejected=%d", createdSourceID, rejected)
+	}
+	var records int
+	if err := service.db.QueryRow(`SELECT COUNT(*) FROM file_records WHERE storage_source_id = ?`, createdSourceID).Scan(&records); err != nil || records != 1 {
+		t.Fatalf("atomic imported records=%d err=%v", records, err)
+	}
+}
 
 func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	service, source, root := newQuotaTestService(t, 0)
