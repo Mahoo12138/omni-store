@@ -60,3 +60,23 @@ type TrashEntry struct {
 	DeletedByUserID      int64     `json:"-"`
 	DeletedAt            time.Time `json:"deleted_at"`
 }
+
+// FileSearchItem 是一个来自 active 文件台账的可见搜索结果。
+type FileSearchItem struct {
+	SourceKey  string    `json:"source_key"`
+	SourceName string    `json:"source_name"`
+	Path       string    `json:"path"`
+	ParentPath string    `json:"parent_path"`
+	Name       string    `json:"name"`
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+// FileSearchResult 是全局文件搜索的分页结果。
+type FileSearchResult struct {
+	Items    []*FileSearchItem `json:"items"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"page_size"`
+	Total    int64             `json:"total"`
+	HasNext  bool              `json:"has_next"`
+}

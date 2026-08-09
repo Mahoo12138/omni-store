@@ -55,9 +55,40 @@ export interface TrashEntry {
   deleted_at: string
 }
 
+export interface FileSearchItem {
+  source_key: string
+  source_name: string
+  path: string
+  parent_path: string
+  name: string
+  size: number
+  modified_at: string
+}
+
+export interface FileSearchResult {
+  items: FileSearchItem[]
+  page: number
+  page_size: number
+  total: number
+  has_next: boolean
+}
+
 export async function fetchMySources(): Promise<UserSource[]> {
   const data = await apiFetch<{ items: UserSource[]; total: number }>('/api/v1/sources')
   return data.items ?? []
+}
+
+export async function searchFiles(params: {
+  query: string
+  sourceKey?: string
+  page?: number
+  pageSize?: number
+}): Promise<FileSearchResult> {
+  const query = new URLSearchParams({ q: params.query })
+  if (params.sourceKey) query.set('source_key', params.sourceKey)
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  return apiFetch(`/api/v1/search?${query}`)
 }
 
 export async function fetchPathPermission(sourceKey: string, path: string): Promise<{ permission: 'read_only' | 'read_write' }> {

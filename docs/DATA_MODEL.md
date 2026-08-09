@@ -411,6 +411,7 @@ created_by_user_id
 updated_by_user_id
 mtime_unix_nano
 record_status
+trash_key
 created_at
 updated_at
 ```
@@ -425,6 +426,12 @@ unowned
 ```
 
 `(storage_source_id, relative_path)` 唯一。`record_status` 使用 `active / trash`；回收文件的 `relative_path` 改为内部 `trash_key + 子路径` 并设置 `trash_key`，因此原路径可以创建新内容。恢复时重建目标路径并清除 `trash_key`。常规写入口同步 upsert，永久删除和移动同步清理或变更路径。已有文件通过校准扫描导入并标记为 `unowned`，扫描只处理 `active` 台账并保留已知所有权。
+
+### file_search_index
+
+`file_search_index` 是由 `file_records` 触发器维护的 FTS5 trigram 虚拟表，只保存 `active` 文件的相对路径。新增、重命名、移动、回收、恢复和删除台账记录时同步更新索引；未发布的 `v1.0.0` 基线重放会为已有 active 台账补齐缺失索引行。
+
+三个及以上字符的搜索使用 trigram 索引以支持路径内子串匹配；两个字符的关键字使用字面包含查询，兼顾常见双字中文搜索。索引只负责候选匹配，来源授权、禁用状态和排除规则仍在返回结果前校验。真实文件系统是最终事实来源，外部直接修改需要执行台账校准后才会反映到搜索结果。
 
 `users.quota_bytes=0` 表示不限；大于 0 时，用户拥有的 `active + trash` 文件大小之和不得超过该值。回收站仍计入用户配额，永久清理后释放；复制计入执行用户，跨来源移动保留归属且全局用户用量不重复增长。
 

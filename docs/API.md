@@ -246,6 +246,23 @@ DELETE /api/v1/sources/{source_key}/trash/{trash_key}
 
 目标已存在返回 `FILE_ALREADY_EXISTS`，来源配额不足返回 `INSUFFICIENT_STORAGE`。永久清理不可恢复，并释放条目仍占用的用户配额。
 
+## 全局文件搜索
+
+登录用户可跨自己有权访问的存储源搜索 active 普通文件：
+
+```http
+GET /api/v1/search?q=report&source_key=src-xxx&page=1&page_size=20
+```
+
+参数规则：
+
+1. `q` 必填，去除首尾空格后为 2–128 个字符；匹配文件名及完整相对路径。
+2. `source_key` 可选；未提供时搜索全部可访问来源，不存在或无权访问的来源返回空结果，避免枚举来源。
+3. `page` 默认 1；`page_size` 默认 20，最大 100。
+4. 结果只包含 `active` 文件台账；回收站、禁用来源和排除路径不会返回。
+
+每个结果包含 `source_key`、`source_name`、`path`、`parent_path`、`name`、`size` 和 `modified_at`。搜索命中来自 SQLite 索引；下载或打开目录时仍由真实文件系统与实时权限检查决定最终结果。
+
 ## 图床 Token 管理
 
 登录用户可以管理自己的命名图床 Token：

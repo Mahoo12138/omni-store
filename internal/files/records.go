@@ -24,6 +24,10 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 	if err != nil {
 		return nil, err
 	}
+	matcher, err := s.sources.Matcher(src.ID)
+	if err != nil {
+		return nil, err
+	}
 	filesOnDisk := make(map[string]scannedFile)
 	result := &models.ReconcileResult{}
 	err = filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
@@ -33,7 +37,21 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 			}
 			return walkErr
 		}
-		if absPath == root || entry.IsDir() {
+		if absPath == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, absPath)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if matcher.MatchPrefix(rel) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
 			return nil
 		}
 		info, err := entry.Info()
@@ -46,11 +64,6 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || uploadTempName.MatchString(entry.Name()) {
 			return nil
 		}
-		rel, err := filepath.Rel(root, absPath)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
 		filesOnDisk[rel] = scannedFile{rel: rel, size: info.Size(), mtimeNano: info.ModTime().UnixNano()}
 		result.ScannedFiles++
 		result.UsageBytes += info.Size()

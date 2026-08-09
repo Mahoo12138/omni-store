@@ -25,7 +25,7 @@ func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first reconcile: %v", err)
 	}
-	if first.ScannedFiles != 2 || first.Added != 2 || first.Unowned != 2 || first.UsageBytes != 9 {
+	if first.ScannedFiles != 1 || first.Added != 1 || first.Unowned != 1 || first.UsageBytes != 3 {
 		t.Fatalf("unexpected first result: %+v", first)
 	}
 	if err := os.WriteFile(filepath.Join(root, "docs", "one.txt"), []byte("updated"), 0o644); err != nil {
@@ -39,7 +39,7 @@ func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second reconcile: %v", err)
 	}
-	if second.ScannedFiles != 1 || second.Updated != 1 || second.Removed != 1 || second.Unowned != 1 {
+	if second.ScannedFiles != 1 || second.Updated != 1 || second.Removed != 0 || second.Unowned != 1 {
 		t.Fatalf("unexpected second result: %+v", second)
 	}
 	usage, err := service.LedgerSourceUsage(source.ID)

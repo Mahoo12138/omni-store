@@ -181,6 +181,42 @@ CREATE INDEX IF NOT EXISTS idx_file_records_source_size
 CREATE INDEX IF NOT EXISTS idx_file_records_trash
   ON file_records(trash_key, relative_path);
 
+-- 全局文件搜索使用独立 FTS5 trigram 索引；真实文件系统仍是最终事实来源。
+-- 只索引 active 台账，回收站内部路径不会进入搜索结果。
+CREATE VIRTUAL TABLE IF NOT EXISTS file_search_index USING fts5(
+  relative_path,
+  tokenize = 'trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_insert
+AFTER INSERT ON file_records
+WHEN NEW.record_status = 'active'
+BEGIN
+  INSERT INTO file_search_index(rowid, relative_path) VALUES (NEW.id, NEW.relative_path);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_update
+AFTER UPDATE OF relative_path, record_status ON file_records
+BEGIN
+  DELETE FROM file_search_index WHERE rowid = OLD.id;
+  INSERT INTO file_search_index(rowid, relative_path)
+    SELECT NEW.id, NEW.relative_path WHERE NEW.record_status = 'active';
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_delete
+AFTER DELETE ON file_records
+BEGIN
+  DELETE FROM file_search_index WHERE rowid = OLD.id;
+END;
+
+-- 未发布的 v1.0.0 基线会安全重放；这里只补齐旧开发库缺少的索引行。
+DELETE FROM file_search_index
+WHERE rowid NOT IN (SELECT id FROM file_records WHERE record_status = 'active');
+INSERT INTO file_search_index(rowid, relative_path)
+SELECT id, relative_path FROM file_records
+WHERE record_status = 'active'
+  AND id NOT IN (SELECT rowid FROM file_search_index);
+
 CREATE TABLE IF NOT EXISTS access_policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   key TEXT NOT NULL UNIQUE,
