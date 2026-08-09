@@ -200,4 +200,4 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o omnistore ./cmd/omni
 必须备份：`config.yaml`、`$OMNISTORE_DATA_DIR/omnistore.db`、`$OMNISTORE_DATA_DIR/keys/`。
 可不备份：`cache/`、`tmp/`。其中 `cache/thumbnails/` 是可按需重建的图床缩略图缓存，服务启动时及每天清理超过 30 天未访问的文件。用户存储源文件由管理员自行备份。
 
-1.0.0 / V1 可在管理后台“配置导出”下载上述系统配置包。该文件包含敏感系统数据且不包含真实存储源文件，不能替代完整备份策略。
+1.0.0 / V1 可在管理后台“配置导出”下载系统配置包。该文件包含敏感系统数据，但不包含真实存储源文件和回收站载荷，不能替代完整备份策略。其 SQLite 副本会清除登录/分享访问 Session、WebDAV 锁、未完成 Multipart 状态和回收站元数据，再做压缩与外键检查；在线数据库不会被修改。恢复该包后需要重新登录并重新解锁密码分享，长期凭据仍然有效。

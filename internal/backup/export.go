@@ -17,6 +17,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/config"
 	"gopkg.in/yaml.v3"
+	_ "modernc.org/sqlite"
 )
 
 // Package is a completed temporary export. Call Cleanup after sending it.
@@ -40,6 +41,7 @@ type manifest struct {
 	Sensitive     bool      `json:"sensitive"`
 	Contents      []string  `json:"contents"`
 	Excluded      []string  `json:"excluded"`
+	ResetState    []string  `json:"reset_state"`
 }
 
 // CreatePackage writes a consistent SQLite snapshot plus the effective config and key files.
@@ -95,12 +97,19 @@ func CreatePackage(ctx context.Context, cfg *config.Config, db *sql.DB, appVersi
 		return nil, cause
 	}
 	manifestBytes, err := json.MarshalIndent(manifest{
-		FormatVersion: 1,
+		FormatVersion: 2,
 		AppVersion:    appVersion,
 		ExportedAt:    now,
 		Sensitive:     true,
 		Contents:      contents,
-		Excluded:      []string{"storage source files", "cache", "temporary uploads", "logs"},
+		Excluded:      []string{"storage source files", "trash payloads", "cache", "temporary uploads", "logs"},
+		ResetState: []string{
+			"web_sessions",
+			"share_access_sessions",
+			"webdav_locks",
+			"s3_multipart_uploads",
+			"trash_metadata",
+		},
 	}, "", "  ")
 	if err != nil {
 		return closeWithError(err)
@@ -152,7 +161,71 @@ func snapshotDatabase(ctx context.Context, db *sql.DB, target string) error {
 	if _, err := db.ExecContext(ctx, "VACUUM INTO "+quoted); err != nil {
 		return fmt.Errorf("创建数据库一致性快照失败: %w", err)
 	}
+	if err := sanitizeSnapshotDatabase(ctx, target); err != nil {
+		return fmt.Errorf("清理数据库快照临时状态失败: %w", err)
+	}
 	return nil
+}
+
+func sanitizeSnapshotDatabase(ctx context.Context, target string) error {
+	dsn := fmt.Sprintf(
+		"file:%s?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)",
+		filepath.ToSlash(target),
+	)
+	snapshot, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return err
+	}
+	defer snapshot.Close()
+	connection, err := snapshot.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	if _, err := connection.ExecContext(ctx, `PRAGMA secure_delete = ON`); err != nil {
+		return err
+	}
+
+	tx, err := connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, statement := range []string{
+		`DELETE FROM sessions`,
+		`DELETE FROM share_access_sessions`,
+		`DELETE FROM webdav_locks`,
+		`DELETE FROM s3_multipart_parts`,
+		`DELETE FROM s3_multipart_uploads`,
+		`DELETE FROM trash_entries`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Compact after deletion so session bearer material is not retained in free pages.
+	if _, err := connection.ExecContext(ctx, `VACUUM`); err != nil {
+		return err
+	}
+	rows, err := connection.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var table, parent string
+		var rowID sql.NullInt64
+		var foreignKeyID int
+		if err := rows.Scan(&table, &rowID, &parent, &foreignKeyID); err != nil {
+			return err
+		}
+		return fmt.Errorf("外键检查失败: table=%s rowid=%v parent=%s foreign_key=%d", table, rowID, parent, foreignKeyID)
+	}
+	return rows.Err()
 }
 
 type keyFile struct {
@@ -247,15 +320,25 @@ func addDiskFile(zw *zip.Writer, name, filePath string) error {
 const restoreGuide = `# OmniStore system configuration package
 
 This archive is sensitive. It contains the system database and may contain key material.
+It is a restore-safe system configuration snapshot, not a complete file backup.
 
 Contents:
 - config/effective-config.yaml: effective infrastructure configuration at export time
-- database/omnistore.db: consistent SQLite snapshot
+- database/omnistore.db: consistent, sanitized SQLite snapshot
 - keys/: key material present under the system data directory
 
 Not included:
 - files stored in configured storage sources
-- cache, temporary uploads and logs
+- trash payloads, cache, temporary uploads and logs
+
+State reset in the snapshot:
+- web login sessions and password-protected share access sessions
+- WebDAV locks
+- incomplete S3 multipart uploads and their part metadata
+- trash metadata, because trash payloads are not included
+
+After restoring, users must sign in again and unlock password-protected shares again.
+Long-lived WebDAV, image-bed and S3 credentials remain active and must be protected.
 
 Before restoring, stop OmniStore, back up the current installation, review paths in the
 effective configuration, and restore the database and keys with owner-only permissions.

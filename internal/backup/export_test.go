@@ -26,6 +26,7 @@ func TestCreatePackageIncludesSnapshotConfigAndKeys(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO system_settings (key, value, updated_at) VALUES ('demo', 'enabled', CURRENT_TIMESTAMP)`); err != nil {
 		t.Fatalf("seed database: %v", err)
 	}
+	seedTransientState(t, conn)
 	if err := os.MkdirAll(filepath.Join(dataDir, "keys"), 0o700); err != nil {
 		t.Fatalf("create key directory: %v", err)
 	}
@@ -74,8 +75,16 @@ func TestCreatePackageIncludesSnapshotConfigAndKeys(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &m); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if m.AppVersion != "test-version" || !m.Sensitive || m.FormatVersion != 1 {
+	if m.AppVersion != "test-version" || !m.Sensitive || m.FormatVersion != 2 {
 		t.Fatalf("unexpected manifest: %+v", m)
+	}
+	for _, state := range []string{
+		"web_sessions", "share_access_sessions", "webdav_locks",
+		"s3_multipart_uploads", "trash_metadata",
+	} {
+		if !contains(m.ResetState, state) {
+			t.Fatalf("manifest reset_state missing %q: %+v", state, m.ResetState)
+		}
 	}
 
 	snapshotPath := filepath.Join(t.TempDir(), "snapshot.db")
@@ -101,6 +110,110 @@ func TestCreatePackageIncludesSnapshotConfigAndKeys(t *testing.T) {
 	if err := snapshotDB.QueryRow(`SELECT value FROM system_settings WHERE key = 'demo'`).Scan(&value); err != nil || value != "enabled" {
 		t.Fatalf("snapshot missing seeded data: value=%q err=%v", value, err)
 	}
+	assertRowCount(t, snapshotDB, "file_shares", 1)
+	for _, table := range []string{
+		"sessions",
+		"share_access_sessions",
+		"webdav_locks",
+		"s3_multipart_parts",
+		"s3_multipart_uploads",
+		"trash_entries",
+		"file_records",
+	} {
+		assertRowCount(t, snapshotDB, table, 0)
+	}
+	rows, err := snapshotDB.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		t.Fatalf("check snapshot foreign keys: %v", err)
+	}
+	if rows.Next() {
+		_ = rows.Close()
+		t.Fatal("snapshot contains a foreign key violation")
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("close foreign key check: %v", err)
+	}
+
+	// Sanitizing the exported copy must never mutate the running database.
+	for _, table := range []string{
+		"sessions",
+		"share_access_sessions",
+		"webdav_locks",
+		"s3_multipart_parts",
+		"s3_multipart_uploads",
+		"trash_entries",
+		"file_records",
+	} {
+		assertRowCount(t, conn, table, 1)
+	}
+}
+
+func seedTransientState(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	statements := []string{
+		`INSERT INTO users (
+			id, user_public_id, username, display_name, password_hash, role,
+			is_disabled, quota_bytes, created_at, updated_at
+		) VALUES (1, 'usr_backup', 'backup-user', 'Backup User', 'hash', 'super_admin', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		`INSERT INTO storage_sources (
+			id, key, name, root_path, is_disabled, public_read_enabled,
+			webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at
+		) VALUES (1, 'src_backup', 'Backup Source', '/tmp/backup-source', 0, 0, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		`INSERT INTO sessions (
+			session_id, user_id, csrf_token_hash, expires_at, created_at, last_seen_at
+		) VALUES ('session-backup', 1, 'csrf-hash', '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		`INSERT INTO file_shares (
+			id, share_key, storage_source_id, relative_path, entry_type,
+			created_by_user_id, password_hash, created_at
+		) VALUES (1, 'share-backup', 1, 'shared.txt', 'file', 1, 'share-password-hash', CURRENT_TIMESTAMP)`,
+		`INSERT INTO share_access_sessions (
+			share_id, token_hash, expires_at, created_at
+		) VALUES (1, 'share-session-hash', '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP)`,
+		`INSERT INTO s3_multipart_uploads (
+			upload_id, owner_user_id, storage_source_id, object_key, created_at, updated_at
+		) VALUES ('upload-backup', 1, 1, 'partial.bin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		`INSERT INTO s3_multipart_parts (
+			upload_id, part_number, etag, size, created_at
+		) VALUES ('upload-backup', 1, 'etag', 10, CURRENT_TIMESTAMP)`,
+		`INSERT INTO webdav_locks (
+			token, storage_source_id, relative_path, depth, owner_user_id,
+			created_at, refreshed_at, expires_at
+		) VALUES ('lock-backup', 1, 'locked.txt', '0', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '2099-01-01T00:00:00Z')`,
+		`INSERT INTO trash_entries (
+			trash_key, storage_source_id, original_relative_path, entry_type,
+			file_count, size, deleted_by_user_id, deleted_at
+		) VALUES ('trash-backup', 1, 'deleted.txt', 'file', 1, 10, 1, CURRENT_TIMESTAMP)`,
+		`INSERT INTO file_records (
+			storage_source_id, relative_path, size, owner_user_id, owner_type,
+			created_by_user_id, updated_by_user_id, mtime_unix_nano,
+			record_status, trash_key, created_at, updated_at
+		) VALUES (1, 'deleted.txt', 10, 1, 'user', 1, 1, 1, 'trash', 'trash-backup', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+	}
+	for _, statement := range statements {
+		if _, err := conn.Exec(statement); err != nil {
+			t.Fatalf("seed transient state: %v\n%s", err, statement)
+		}
+	}
+}
+
+func assertRowCount(t *testing.T, conn *sql.DB, table string, want int) {
+	t.Helper()
+	var got int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&got); err != nil {
+		t.Fatalf("count %s: %v", table, err)
+	}
+	if got != want {
+		t.Fatalf("unexpected %s row count: got %d, want %d", table, got, want)
+	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCreatePackageSkipsSymlinkedKeys(t *testing.T) {
