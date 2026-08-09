@@ -176,6 +176,25 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
+func (s *Server) handleAdminRevokeUserCredentials(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		WriteError(w, r, CodeValidationError, "非法用户 ID", nil)
+		return
+	}
+	if id == CurrentUser(r.Context()).ID {
+		WriteError(w, r, CodeValidationError, "不能通过管理入口撤销自己的凭据", nil)
+		return
+	}
+	result, err := s.users.RevokeCredentials(id)
+	if err != nil {
+		s.writeUserError(w, r, err)
+		return
+	}
+	s.adminAudit(r, "revoke_user_credentials", audit.StatusSuccess, "")
+	WriteData(w, r, result)
+}
+
 // --- 用户自助（README §7.3） ---
 
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +390,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeForbidden, "旧密码错误", nil)
 		return
 	}
-	if err := s.users.UpdatePassword(u.ID, req.NewPassword); err != nil {
+	if err := s.users.UpdatePasswordKeepingSession(u.ID, req.NewPassword, currentSession(r.Context()).SessionID); err != nil {
 		s.writeUserError(w, r, err)
 		return
 	}

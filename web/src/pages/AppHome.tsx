@@ -349,6 +349,7 @@ const activityLabels: Record<string, string> = {
   delete_user: '删除用户',
   enable_user: '启用用户',
   disable_user: '禁用用户',
+  revoke_user_credentials: '撤销用户全部凭据',
   create_access_policy: '创建访问策略',
   update_access_policy: '更新访问策略',
   delete_access_policy: '删除访问策略',

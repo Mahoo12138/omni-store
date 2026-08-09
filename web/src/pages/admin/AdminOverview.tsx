@@ -19,6 +19,7 @@ import {
   adminListUsers,
   adminPreflightSource,
   adminReconcileSource,
+  adminRevokeUserCredentials,
   adminSetAnonymousSettings,
   adminSetExcludePatterns,
   adminSetSourceDisabled,
@@ -152,7 +153,10 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 export function AdminOverviewPage() {
   const search = useSearch({ strict: false }) as { section?: string }
   const navigate = useNavigate()
-  const section: SectionKey = (adminNav.concat(baseNav).find((n) => n.key === search.section)?.key ??
+  const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
+  const isAdmin = me.data?.role === 'super_admin'
+  const availableNav = isAdmin ? baseNav.concat(adminNav) : baseNav
+  const section: SectionKey = (availableNav.find((n) => n.key === search.section)?.key ??
     'profile') as SectionKey
 
   function setSection(k: SectionKey) {
@@ -161,7 +165,7 @@ export function AdminOverviewPage() {
 
   return (
     <AdminLayout>
-      <AdminPageHeader title="系统设置" />
+      <AdminPageHeader title={isAdmin ? '系统设置' : '账号设置'} />
 
       <div className={css.settingsLayout}>
         {/* 左侧分组的子导航 */}
@@ -181,21 +185,23 @@ export function AdminOverviewPage() {
               </span>
             ))}
           </div>
-          <div className={css.settingsGroup}>
-            <span className={css.settingsGroupTitle}>管理</span>
-            {adminNav.map((item) => (
-              <span
-                key={item.key}
-                className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
-                onClick={() => setSection(item.key)}
-                role="link"
-                aria-current={section === item.key ? 'page' : undefined}
-              >
-                {item.icon}
-                {item.label}
-              </span>
-            ))}
-          </div>
+          {isAdmin ? (
+            <div className={css.settingsGroup}>
+              <span className={css.settingsGroupTitle}>管理</span>
+              {adminNav.map((item) => (
+                <span
+                  key={item.key}
+                  className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
+                  onClick={() => setSection(item.key)}
+                  role="link"
+                  aria-current={section === item.key ? 'page' : undefined}
+                >
+                  {item.icon}
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </nav>
 
         {/* 右侧内容 */}
@@ -336,7 +342,7 @@ function ProfileSection() {
         open={pwdOpen}
         onOpenChange={(o) => { setPwdOpen(o); if (!o) { setOldPwd(''); setNewPwd(''); setPwdMsg('') } }}
         title="修改密码"
-        description="修改后需要重新登录。"
+        description="修改后当前设备保持登录，其他设备的登录会话立即失效。"
         footer={
           <>
             <Button variant="ghost" onClick={() => setPwdOpen(false)}>
@@ -2112,6 +2118,7 @@ function UsersSection() {
   const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
   const [createOpen, setCreateOpen] = useState(false)
   const [deleting, setDeleting] = useState<User | null>(null)
+  const [revokingCredentials, setRevokingCredentials] = useState<User | null>(null)
   const [quotaEditing, setQuotaEditing] = useState<AdminUser | null>(null)
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -2122,6 +2129,14 @@ function UsersSection() {
   const deleteMut = useMutation({
     mutationFn: adminDeleteUser, onSuccess: () => { setDeleting(null); refresh() },
     onError: (err) => alert(err instanceof ApiRequestError ? err.message : '删除失败'),
+  })
+  const revokeCredentialsMut = useMutation({
+    mutationFn: adminRevokeUserCredentials,
+    onSuccess: (result) => {
+      setRevokingCredentials(null)
+      alert(`已撤销 ${result.sessions} 个会话、${result.webdav_tokens + result.image_bed_tokens + result.s3_credentials} 个客户端凭据`)
+    },
+    onError: (err) => alert(err instanceof ApiRequestError ? err.message : '撤销凭据失败'),
   })
 
   return (
@@ -2182,6 +2197,9 @@ function UsersSection() {
                         >
                           {u.is_disabled ? '启用' : '禁用'}
                         </Button>
+                        <Button variant="ghost" onClick={() => setRevokingCredentials(u)}>
+                          撤销凭据
+                        </Button>
                         <Button variant="danger" onClick={() => setDeleting(u)}>
                           <IconTrash size={14} />
                         </Button>
@@ -2213,6 +2231,29 @@ function UsersSection() {
         onClose={() => setQuotaEditing(null)}
         onSaved={() => { setQuotaEditing(null); refresh() }}
       />
+
+      <DialogWrap
+        open={!!revokingCredentials}
+        onOpenChange={(open) => { if (!open) setRevokingCredentials(null) }}
+        title="撤销全部凭据"
+        description={`立即阻断「${revokingCredentials?.username ?? ''}」当前已签发的访问凭据。`}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setRevokingCredentials(null)}>取消</Button>
+            <Button
+              variant="danger"
+              onClick={() => revokingCredentials && revokeCredentialsMut.mutate(revokingCredentials.id)}
+              disabled={revokeCredentialsMut.isPending}
+            >
+              {revokeCredentialsMut.isPending ? '撤销中…' : '撤销全部凭据'}
+            </Button>
+          </>
+        )}
+      >
+        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+          所有网页登录会话、WebDAV Token、图床 Token 和 S3 Key 将立即失效。账号、文件、分享与权限不会删除，用户仍可使用密码重新登录并创建新凭据。
+        </p>
+      </DialogWrap>
 
       {/* 删除确认 弹窗 */}
       <DialogWrap

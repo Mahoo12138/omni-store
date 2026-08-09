@@ -221,6 +221,10 @@ Secure = 根据 security.cookie_secure
 1. 删除服务端 Session。
 2. 清除浏览器 Cookie。
 
+用户修改密码时，密码更新与其他 Web Session 删除在同一事务中完成，当前发起修改的 Session 保留。普通用户的账号设置入口可用于修改密码和管理个人客户端凭据，但不能进入管理员分区。
+
+账号疑似泄漏时，超级管理员可一次性撤销目标用户的全部 Web Session、WebDAV Token、图床 Token 和 S3 Key。该操作不禁用账号、不删除文件或分享；用户可用密码重新登录并创建新凭据。管理员管理入口禁止以自己为目标，避免意外使当前管理会话和全部恢复通道同时失效。
+
 ### CSRF
 
 网页登录态写操作必须做 CSRF 防护。
@@ -333,6 +337,7 @@ omnistore admin reset-password --username admin
 3. 不做邮箱找回。
 4. 不记录明文密码。
 5. 操作写入审计日志，`actor_type = system`。
+6. 密码更新成功后撤销目标用户的全部 Web Session。
 
 ---
 

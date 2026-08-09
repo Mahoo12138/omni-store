@@ -125,6 +125,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", s.requireAdmin(s.handleAdminSetUserDisabled(true)))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/enable", s.requireAdmin(s.handleAdminSetUserDisabled(false)))
 	mux.HandleFunc("PATCH /api/v1/admin/users/{id}/quota", s.requireAdmin(s.handleAdminSetUserQuota))
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/revoke-credentials", s.requireAdmin(s.handleAdminRevokeUserCredentials))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", s.requireAdmin(s.handleAdminDeleteUser))
 
 	// 管理员：概览（dashboard 聚合数据）

@@ -75,6 +75,24 @@ HTTP 状态码：
 500 INTERNAL_ERROR
 ```
 
+## 账号安全与凭据恢复
+
+登录用户修改自己的密码：
+
+```http
+POST /api/v1/me/password
+```
+
+请求体为 `{ "old_password": "...", "new_password": "..." }`。成功后当前请求使用的 Session 保留，属于该用户的其他 Web Session 在同一数据库事务中删除；旧密码立即失效。WebDAV、图床和 S3 等长期客户端凭据不会因普通改密自动删除。
+
+超级管理员可以对其他账号执行紧急凭据撤销：
+
+```http
+POST /api/v1/admin/users/{id}/revoke-credentials
+```
+
+该操作原子删除目标账号的全部 Web Session、WebDAV Token、图床 Token 和 S3 Key，响应返回四类记录的实际撤销数量。账号本身不会禁用，文件、分享和访问策略不会删除，用户仍可使用密码重新登录并签发新凭据。管理员不能通过该入口撤销自己的凭据；操作成功会记录 `revoke_user_credentials` 管理审计事件。
+
 ## 文件与目录分享
 
 登录用户管理分享：

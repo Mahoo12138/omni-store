@@ -152,6 +152,17 @@ export async function adminSetUserDisabled(id: number, disabled: boolean): Promi
   await apiFetch(`/api/v1/admin/users/${id}/${disabled ? 'disable' : 'enable'}`, { method: 'POST' })
 }
 
+export interface RevokedCredentials {
+  sessions: number
+  webdav_tokens: number
+  image_bed_tokens: number
+  s3_credentials: number
+}
+
+export async function adminRevokeUserCredentials(id: number): Promise<RevokedCredentials> {
+  return apiFetch(`/api/v1/admin/users/${id}/revoke-credentials`, { method: 'POST' })
+}
+
 export async function adminDeleteUser(id: number): Promise<void> {
   await apiFetch(`/api/v1/admin/users/${id}`, { method: 'DELETE' })
 }

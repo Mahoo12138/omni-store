@@ -35,6 +35,14 @@ type Service struct {
 	db *sql.DB
 }
 
+// RevokedCredentials 汇总一次账号凭据撤销实际删除的记录数。
+type RevokedCredentials struct {
+	Sessions       int64 `json:"sessions"`
+	WebDAVTokens   int64 `json:"webdav_tokens"`
+	ImageBedTokens int64 `json:"image_bed_tokens"`
+	S3Credentials  int64 `json:"s3_credentials"`
+}
+
 // NewService 创建用户服务。
 func NewService(db *sql.DB) *Service {
 	return &Service{db: db}
@@ -289,8 +297,22 @@ func (s *Service) UpdateDisplayName(id int64, displayName string) error {
 	return nil
 }
 
-// UpdatePassword 修改密码（调用方负责旧密码校验）。
+// UpdatePassword 修改密码并撤销该用户全部登录 Session。
+// CLI 密码重置等账号恢复入口使用此方法。
 func (s *Service) UpdatePassword(id int64, newPassword string) error {
+	return s.updatePassword(id, newPassword, "")
+}
+
+// UpdatePasswordKeepingSession 修改密码并仅保留当前登录 Session。
+// 调用方负责校验旧密码以及传入属于该用户的 Session ID。
+func (s *Service) UpdatePasswordKeepingSession(id int64, newPassword, keepSessionID string) error {
+	if keepSessionID == "" {
+		return s.UpdatePassword(id, newPassword)
+	}
+	return s.updatePassword(id, newPassword, keepSessionID)
+}
+
+func (s *Service) updatePassword(id int64, newPassword, keepSessionID string) error {
 	if len(newPassword) < 8 {
 		return ErrWeakPassword
 	}
@@ -298,7 +320,12 @@ func (s *Service) UpdatePassword(id int64, newPassword string) error {
 	if err != nil {
 		return err
 	}
-	res, err := s.db.Exec(`UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`,
 		hash, time.Now().UTC(), id)
 	if err != nil {
 		return err
@@ -306,7 +333,54 @@ func (s *Service) UpdatePassword(id int64, newPassword string) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if keepSessionID == "" {
+		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id = ?`, id)
+	} else {
+		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id = ? AND session_id <> ?`, id, keepSessionID)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RevokeCredentials atomically revokes every login and long-lived client
+// credential for a user without disabling the account or touching files.
+func (s *Service) RevokeCredentials(id int64) (*RevokedCredentials, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var exists int
+	if err := tx.QueryRow(`SELECT 1 FROM users WHERE id = ?`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	result := &RevokedCredentials{}
+	for _, item := range []struct {
+		query string
+		count *int64
+	}{
+		{`DELETE FROM sessions WHERE user_id = ?`, &result.Sessions},
+		{`DELETE FROM user_tokens WHERE user_id = ?`, &result.WebDAVTokens},
+		{`DELETE FROM image_bed_tokens WHERE user_id = ?`, &result.ImageBedTokens},
+		{`DELETE FROM s3_credentials WHERE owner_user_id = ?`, &result.S3Credentials},
+	} {
+		res, err := tx.Exec(item.query, id)
+		if err != nil {
+			return nil, err
+		}
+		if *item.count, err = res.RowsAffected(); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // CountAdmins 返回未禁用的超级管理员数量。

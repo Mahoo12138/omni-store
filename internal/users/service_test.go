@@ -167,6 +167,109 @@ func TestCreateFirstAdminConcurrentOnlyOneSucceeds(t *testing.T) {
 	}
 }
 
+func TestPasswordChangeAndCredentialRevocationLifecycle(t *testing.T) {
+	conn, err := db.Open(filepath.Join(t.TempDir(), "omnistore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	service := NewService(conn)
+	user, err := service.Create("recovery-user", "Recovery User", "initial-password", models.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := auth.NewSessions(conn, time.Hour)
+	currentSession, _, err := sessions.Create(user.ID, "current", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSession, _, err := sessions.Create(user.ID, "other", "127.0.0.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.UpdatePasswordKeepingSession(user.ID, "changed-password", currentSession); err != nil {
+		t.Fatalf("UpdatePasswordKeepingSession(): %v", err)
+	}
+	if _, _, err := sessions.Validate(currentSession); err != nil {
+		t.Fatalf("current session was revoked: %v", err)
+	}
+	if _, _, err := sessions.Validate(otherSession); !errors.Is(err, auth.ErrSessionInvalid) {
+		t.Fatalf("other session remained valid: %v", err)
+	}
+	hash, err := service.PasswordHashByID(user.ID)
+	if err != nil || !auth.VerifyPassword(hash, "changed-password") || auth.VerifyPassword(hash, "initial-password") {
+		t.Fatalf("password was not replaced: %v", err)
+	}
+
+	secondSession, _, err := sessions.Create(user.ID, "second", "127.0.0.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO user_tokens (user_id, token_type, token_hash, created_at) VALUES (?, 'webdav', 'webdav-hash', ?)`, []any{user.ID, now}},
+		{`INSERT INTO image_bed_tokens (token_id, user_id, label, token_hash, created_at) VALUES ('ibt_one', ?, 'One', 'image-hash-one', ?)`, []any{user.ID, now}},
+		{`INSERT INTO image_bed_tokens (token_id, user_id, label, token_hash, created_at) VALUES ('ibt_two', ?, 'Two', 'image-hash-two', ?)`, []any{user.ID, now}},
+		{`INSERT INTO s3_credentials (access_key_id, secret_access_key_encrypted, secret_key_nonce, owner_user_id, name, created_at) VALUES ('OSAKONE', X'01', X'02', ?, 'One', ?)`, []any{user.ID, now}},
+		{`INSERT INTO s3_credentials (access_key_id, secret_access_key_encrypted, secret_key_nonce, owner_user_id, name, created_at) VALUES ('OSAKTWO', X'03', X'04', ?, 'Two', ?)`, []any{user.ID, now}},
+	} {
+		if _, err := conn.Exec(statement.query, statement.args...); err != nil {
+			t.Fatalf("seed credential: %v", err)
+		}
+	}
+
+	revoked, err := service.RevokeCredentials(user.ID)
+	if err != nil {
+		t.Fatalf("RevokeCredentials(): %v", err)
+	}
+	if *revoked != (RevokedCredentials{Sessions: 2, WebDAVTokens: 1, ImageBedTokens: 2, S3Credentials: 2}) {
+		t.Fatalf("unexpected revoked counts: %+v", revoked)
+	}
+	for _, sessionID := range []string{currentSession, secondSession} {
+		if _, _, err := sessions.Validate(sessionID); !errors.Is(err, auth.ErrSessionInvalid) {
+			t.Fatalf("revoked session %q remained valid: %v", sessionID, err)
+		}
+	}
+	for _, table := range []string{"sessions", "user_tokens", "image_bed_tokens", "s3_credentials"} {
+		var count int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE `+credentialOwnerColumn(table)+` = ?`, user.ID).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s still has %d rows", table, count)
+		}
+	}
+	if _, err := service.GetByID(user.ID); err != nil {
+		t.Fatalf("credential revocation removed user: %v", err)
+	}
+	cliResetSession, _, err := sessions.Create(user.ID, "cli-reset", "127.0.0.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.UpdatePassword(user.ID, "cli-reset-password"); err != nil {
+		t.Fatalf("UpdatePassword(): %v", err)
+	}
+	if _, _, err := sessions.Validate(cliResetSession); !errors.Is(err, auth.ErrSessionInvalid) {
+		t.Fatalf("plain password reset kept a session valid: %v", err)
+	}
+	if _, err := service.RevokeCredentials(user.ID + 999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing user revocation error=%v", err)
+	}
+}
+
+func credentialOwnerColumn(table string) string {
+	switch table {
+	case "s3_credentials":
+		return "owner_user_id"
+	default:
+		return "user_id"
+	}
+}
+
 func TestDeletePreservesImagesAndAuditWithoutDanglingUserReferences(t *testing.T) {
 	base := t.TempDir()
 	conn, err := db.Open(filepath.Join(base, "omnistore.db"))

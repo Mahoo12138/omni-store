@@ -6,7 +6,8 @@ import { AppShell } from '../../components/layout/AppShell'
 import { Button } from '../../components/ui/Button'
 import * as css from '../../components/layout/AdminShell.css'
 
-// 管理后台布局：复用 /app 侧栏 + 顶栏。
+// 设置布局：复用 /app 侧栏 + 顶栏。个人设置对所有登录用户开放，
+// 管理分区由页面和后端共同限制为超级管理员。
 // 二级导航（概览/存储源/用户/审计日志/系统设置）已下沉到左侧边栏的
 // "管理后台"分组里，这里只渲染页面内容。
 export function AdminLayout({ children }: { children: ReactNode }) {
@@ -14,12 +15,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
 
   if (me.isPending) return null
-  if (me.isError || me.data?.role !== 'super_admin') {
-    navigate({ to: '/app' })
+  if (me.isError) {
+    navigate({ to: '/login' })
     return null
   }
 
-  return <AppShell title="管理后台">{children}</AppShell>
+  return <AppShell title={me.data?.role === 'super_admin' ? '管理后台' : '账号设置'}>{children}</AppShell>
 }
 
 // 子页面：标题 + 右上操作按钮

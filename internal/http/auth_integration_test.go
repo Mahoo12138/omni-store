@@ -18,7 +18,7 @@ import (
 )
 
 func TestAuthenticationCSRFAndAdminAuthorizationFlow(t *testing.T) {
-	server := newAuthIntegrationServer(t)
+	server, internalServer := newAuthIntegrationServer(t)
 
 	health := serveTestRequest(t, server.Handler, http.MethodGet, "/api/v1/health", "", nil, "")
 	if health.Code != http.StatusOK || !regexp.MustCompile(`^req_[0-9a-f]{16}$`).MatchString(health.Header().Get("X-Request-Id")) {
@@ -104,6 +104,55 @@ func TestAuthenticationCSRFAndAdminAuthorizationFlow(t *testing.T) {
 	if profile.Code != http.StatusOK || !strings.Contains(profile.Body.String(), `"display_name":"Updated Member"`) {
 		t.Fatalf("profile status=%d body=%s", profile.Code, profile.Body.String())
 	}
+	otherMemberLogin := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", `{"username":"member","password":"member-password"}`, nil, "")
+	otherMemberCookie, _ := parseLoginResponse(t, otherMemberLogin)
+	changePassword := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/me/password",
+		`{"old_password":"member-password","new_password":"recovered-password"}`, memberCookie, memberCSRF)
+	if changePassword.Code != http.StatusOK {
+		t.Fatalf("change password status=%d body=%s", changePassword.Code, changePassword.Body.String())
+	}
+	currentMemberMe := serveTestRequest(t, server.Handler, http.MethodGet, "/api/v1/auth/me", "", memberCookie, "")
+	if currentMemberMe.Code != http.StatusOK {
+		t.Fatalf("current session after password change status=%d body=%s", currentMemberMe.Code, currentMemberMe.Body.String())
+	}
+	otherMemberMe := serveTestRequest(t, server.Handler, http.MethodGet, "/api/v1/auth/me", "", otherMemberCookie, "")
+	assertErrorResponse(t, otherMemberMe, http.StatusUnauthorized, CodeUnauthorized)
+	oldPasswordLogin := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", `{"username":"member","password":"member-password"}`, nil, "")
+	assertErrorResponse(t, oldPasswordLogin, http.StatusUnauthorized, CodeUnauthorized)
+	recoveredLogin := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", `{"username":"member","password":"recovered-password"}`, nil, "")
+	recoveredCookie, _ := parseLoginResponse(t, recoveredLogin)
+
+	if _, err := internalServer.db.Exec(`INSERT INTO user_tokens (user_id, token_type, token_hash, created_at)
+VALUES (?, 'webdav', 'webdav-hash', CURRENT_TIMESTAMP)`, memberID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := internalServer.db.Exec(`INSERT INTO image_bed_tokens (token_id, user_id, label, token_hash, created_at)
+VALUES ('ibt_recovery', ?, 'Recovery', 'image-hash', CURRENT_TIMESTAMP)`, memberID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := internalServer.db.Exec(`INSERT INTO s3_credentials
+  (access_key_id, secret_access_key_encrypted, secret_key_nonce, owner_user_id, name, created_at)
+VALUES ('OSAKRECOVERY', X'01', X'02', ?, 'Recovery', CURRENT_TIMESTAMP)`, memberID); err != nil {
+		t.Fatal(err)
+	}
+	selfRevoke := serveTestRequest(t, server.Handler, http.MethodPost,
+		"/api/v1/admin/users/"+itoaTest(adminID)+"/revoke-credentials", "", adminCookie, adminCSRF)
+	assertErrorResponse(t, selfRevoke, http.StatusBadRequest, CodeValidationError)
+	revokeCredentials := serveTestRequest(t, server.Handler, http.MethodPost,
+		"/api/v1/admin/users/"+itoaTest(memberID)+"/revoke-credentials", "", adminCookie, adminCSRF)
+	if revokeCredentials.Code != http.StatusOK ||
+		!strings.Contains(revokeCredentials.Body.String(), `"sessions":2`) ||
+		!strings.Contains(revokeCredentials.Body.String(), `"webdav_tokens":1`) ||
+		!strings.Contains(revokeCredentials.Body.String(), `"image_bed_tokens":1`) ||
+		!strings.Contains(revokeCredentials.Body.String(), `"s3_credentials":1`) {
+		t.Fatalf("revoke credentials status=%d body=%s", revokeCredentials.Code, revokeCredentials.Body.String())
+	}
+	for _, revokedCookie := range []*http.Cookie{memberCookie, recoveredCookie} {
+		revokedMe := serveTestRequest(t, server.Handler, http.MethodGet, "/api/v1/auth/me", "", revokedCookie, "")
+		assertErrorResponse(t, revokedMe, http.StatusUnauthorized, CodeUnauthorized)
+	}
+	memberLogin = serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", `{"username":"member","password":"recovered-password"}`, nil, "")
+	memberCookie, memberCSRF = parseLoginResponse(t, memberLogin)
 
 	selfDisable := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/admin/users/"+itoaTest(adminID)+"/disable", "", adminCookie, adminCSRF)
 	assertErrorResponse(t, selfDisable, http.StatusBadRequest, CodeValidationError)
@@ -129,7 +178,7 @@ func TestAuthenticationCSRFAndAdminAuthorizationFlow(t *testing.T) {
 	assertErrorResponse(t, missingAPI, http.StatusNotFound, CodeFileNotFound)
 }
 
-func newAuthIntegrationServer(t *testing.T) *http.Server {
+func newAuthIntegrationServer(t *testing.T) (*http.Server, *Server) {
 	t.Helper()
 	dataDir := filepath.Join(t.TempDir(), "data")
 	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
@@ -143,8 +192,8 @@ func newAuthIntegrationServer(t *testing.T) *http.Server {
 	cfg.Server.PublicURL = "http://example.test"
 	cfg.Security.BootstrapToken = "integration-bootstrap-token"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server, _ := New(cfg, conn, logger)
-	return server
+	server, internalServer := New(cfg, conn, logger)
+	return server, internalServer
 }
 
 func serveTestRequest(t *testing.T, handler http.Handler, method, target, body string, cookie *http.Cookie, csrf string) *httptest.ResponseRecorder {

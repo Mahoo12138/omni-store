@@ -300,6 +300,8 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "启用用户"
 	case "disable_user":
 		return "禁用用户"
+	case "revoke_user_credentials":
+		return "撤销用户全部凭据"
 	case "create_access_policy":
 		return "创建访问策略"
 	case "update_access_policy":

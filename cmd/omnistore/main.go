@@ -207,9 +207,6 @@ func runAdmin(args []string) error {
 	if err := userSvc.UpdatePassword(u.ID, newPassword); err != nil {
 		return err
 	}
-	// 强制下线该用户所有会话。
-	sessions := auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour)
-	_ = sessions.DeleteByUser(u.ID)
 
 	// 审计：actor_type = system, entry_type = cli，不记录明文密码。
 	auditLogger := audit.New(dbConn, cfg.Audit.Enabled, cfg.Audit.MaxEntries, newLogger(cfg.Log.Level))
