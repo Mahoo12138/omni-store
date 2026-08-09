@@ -235,6 +235,8 @@ Secure = 根据 security.cookie_secure
 
 登录成功后，服务端返回 `csrf_token`。
 
+每个 Session 使用由高熵 `session_id` 通过域分离 HMAC 单向派生的稳定 Token，SQLite 仍只保存 Token 哈希。`GET /api/v1/auth/me` 只重新返回当前 Session 的同一 Token，不更新 CSRF 哈希，避免刷新页面或打开多个标签页时互相使 Token 失效。重新登录创建的新 Session 会得到不同 Token；退出、改密或管理员撤销 Session 后，对应 Token 随 Session 一同失效。
+
 前端所有网页登录态写操作请求必须带：
 
 ```text

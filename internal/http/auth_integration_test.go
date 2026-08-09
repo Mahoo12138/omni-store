@@ -73,10 +73,22 @@ func TestAuthenticationCSRFAndAdminAuthorizationFlow(t *testing.T) {
 		} `json:"data"`
 	}
 	decodeTestJSON(t, me, &meEnvelope)
-	if meEnvelope.Data.User.ID != adminID || meEnvelope.Data.CSRFToken == "" || meEnvelope.Data.CSRFToken == adminCSRF {
+	if meEnvelope.Data.User.ID != adminID || meEnvelope.Data.CSRFToken != adminCSRF {
 		t.Fatalf("unexpected me response: %+v", meEnvelope.Data)
 	}
-	adminCSRF = meEnvelope.Data.CSRFToken
+	secondMe := serveTestRequest(t, server.Handler, http.MethodGet, "/api/v1/auth/me", "", adminCookie, "")
+	if secondMe.Code != http.StatusOK {
+		t.Fatalf("second me status=%d body=%s", secondMe.Code, secondMe.Body.String())
+	}
+	var secondMeEnvelope struct {
+		Data struct {
+			CSRFToken string `json:"csrf_token"`
+		} `json:"data"`
+	}
+	decodeTestJSON(t, secondMe, &secondMeEnvelope)
+	if secondMeEnvelope.Data.CSRFToken != adminCSRF {
+		t.Fatalf("repeated me changed CSRF token: got=%q want=%q", secondMeEnvelope.Data.CSRFToken, adminCSRF)
+	}
 
 	createUserBody := `{"username":"member","display_name":"Test Member","password":"member-password","quota_bytes":4096}`
 	missingCSRF := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/admin/users", createUserBody, adminCookie, "")

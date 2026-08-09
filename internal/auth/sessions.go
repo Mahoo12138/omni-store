@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -35,7 +38,7 @@ func (s *Sessions) TTL() time.Duration {
 // CSRF Token 只保存哈希。
 func (s *Sessions) Create(userID int64, userAgent, ipAddress string) (sessionID, csrfToken string, err error) {
 	sessionID = NewRandomToken("", 32)
-	csrfToken = NewRandomToken("", 32)
+	csrfToken = csrfTokenForSession(sessionID)
 	now := time.Now().UTC()
 
 	_, err = s.db.Exec(`INSERT INTO sessions
@@ -46,6 +49,14 @@ func (s *Sessions) Create(userID int64, userAgent, ipAddress string) (sessionID,
 		return "", "", fmt.Errorf("创建 session 失败: %w", err)
 	}
 	return sessionID, csrfToken, nil
+}
+
+// csrfTokenForSession 从高熵 Session ID 单向派生稳定的 CSRF Token。
+// 域分离常量避免该值与其他 Session 派生用途混用。
+func csrfTokenForSession(sessionID string) string {
+	mac := hmac.New(sha256.New, []byte(sessionID))
+	_, _ = mac.Write([]byte("omnistore-csrf-v1"))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // Validate 校验 Session 并返回关联用户。
@@ -90,16 +101,13 @@ func (s *Sessions) VerifyCSRF(sess *models.Session, csrfToken string) bool {
 	return TokenEqual(sess.CSRFTokenHash, HashToken(csrfToken))
 }
 
-// RotateCSRF 重新生成 CSRF Token 并返回明文。
-// 用于 SPA 刷新后通过 /auth/me 重新获取 Token。
-func (s *Sessions) RotateCSRF(sessionID string) (string, error) {
-	csrfToken := NewRandomToken("", 32)
-	_, err := s.db.Exec(`UPDATE sessions SET csrf_token_hash = ? WHERE session_id = ?`,
-		HashToken(csrfToken), sessionID)
-	if err != nil {
-		return "", fmt.Errorf("更新 CSRF Token 失败: %w", err)
+// CSRFToken 返回指定 Session 的稳定 CSRF Token，不读写数据库。
+// 新建 Session 会得到不同 Token；重复恢复当前 Session 不会使其他标签页失效。
+func (s *Sessions) CSRFToken(sessionID string) string {
+	if sessionID == "" {
+		return ""
 	}
-	return csrfToken, nil
+	return csrfTokenForSession(sessionID)
 }
 
 // Delete 删除指定 Session（退出登录）。

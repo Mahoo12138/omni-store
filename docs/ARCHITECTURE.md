@@ -587,7 +587,7 @@ internal/http/
   路由注册、中间件、统一响应、错误处理
 
 internal/auth/
-  登录、Session、Cookie、密码哈希、Token 哈希、CSRF
+  登录、Session、Cookie、密码哈希、Token 哈希、Session 级稳定 CSRF
 
 internal/users/
   用户管理

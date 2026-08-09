@@ -218,17 +218,13 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
-// handleMe 返回当前用户，并轮换返回新的 CSRF Token（SPA 刷新后恢复登录态用）。
+// handleMe 返回当前用户和 Session 级稳定的 CSRF Token（SPA 刷新后恢复登录态用）。
+// GET 不修改 CSRF 状态，避免多个标签页互相使 Token 失效。
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	sess := currentSession(r.Context())
-	csrfToken, err := s.sessions.RotateCSRF(sess.SessionID)
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "会话更新失败", nil)
-		return
-	}
 	WriteData(w, r, map[string]any{
 		"user":       CurrentUser(r.Context()),
-		"csrf_token": csrfToken,
+		"csrf_token": s.sessions.CSRFToken(sess.SessionID),
 	})
 }
 

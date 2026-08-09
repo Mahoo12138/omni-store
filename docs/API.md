@@ -77,6 +77,8 @@ HTTP 状态码：
 
 `POST /api/v1/auth/login` 的不存在用户名和错误密码统一返回 `401 UNAUTHORIZED`。登录失败超过安全配置中的 IP 或用户名滑动窗口阈值后返回 `429 RATE_LIMITED`，并携带整数秒 `Retry-After` 响应头；成功登录会重置该用户名的失败窗口。
 
+`GET /api/v1/auth/me` 返回当前用户和 `csrf_token`，用于 SPA 刷新后恢复登录态。同一 Session 内该 Token 保持稳定，重复或并发请求不会轮换数据库中的 CSRF 哈希，因此多个标签页可以继续使用各自已获取的 Token；重新登录创建的新 Session 使用不同 Token。
+
 ## 账号安全与凭据恢复
 
 登录用户修改自己的密码：

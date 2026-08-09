@@ -24,6 +24,7 @@
 10. 普通用户可进入个人设置但看不到管理分区；修改密码后当前 Session 保留，其他 Session 和旧密码立即失效。
 11. 管理员可一次性撤销其他账号的全部 Web Session、WebDAV Token、图床 Token 和 S3 Key；账号、文件、分享和权限保留且可重新登录。
 12. 不存在用户名使用与真实账号相同的 bcrypt cost；登录失败按 IP 和用户名分别限流，并发请求不能穿透阈值，成功登录重置用户名窗口，超限返回 429 和 `Retry-After`。
+13. 同一 Session 重复或并发调用 `/api/v1/auth/me` 返回相同 CSRF Token；一个标签页恢复登录态不会使另一标签页已持有的 Token 失效，不同 Session 的 Token 互不相同。
 
 ### 存储源
 

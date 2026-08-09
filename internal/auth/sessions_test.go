@@ -3,6 +3,7 @@ package auth_test
 import (
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,13 +45,40 @@ func TestSessionLifecycleCSRFAndInvalidation(t *testing.T) {
 		t.Fatal("CSRF verification contract failed")
 	}
 
-	rotated, err := sessions.RotateCSRF(sessionID)
-	if err != nil || rotated == "" || rotated == csrf {
-		t.Fatalf("RotateCSRF()=%q err=%v", rotated, err)
+	var storedCSRFHash string
+	if err := conn.QueryRow(`SELECT csrf_token_hash FROM sessions WHERE session_id = ?`, sessionID).Scan(&storedCSRFHash); err != nil {
+		t.Fatal(err)
 	}
-	_, refreshedSession, err := sessions.Validate(sessionID)
-	if err != nil || !sessions.VerifyCSRF(refreshedSession, rotated) || sessions.VerifyCSRF(refreshedSession, csrf) {
-		t.Fatalf("rotated CSRF validation failed: %v", err)
+	if recovered := sessions.CSRFToken(sessionID); recovered != csrf {
+		t.Fatalf("CSRFToken()=%q, want original token %q", recovered, csrf)
+	}
+	if sessions.CSRFToken("") != "" {
+		t.Fatal("empty session ID must not produce a CSRF token")
+	}
+
+	const readers = 32
+	var wg sync.WaitGroup
+	errCh := make(chan string, readers)
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if recovered := sessions.CSRFToken(sessionID); recovered != csrf {
+				errCh <- recovered
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for recovered := range errCh {
+		t.Errorf("concurrent CSRFToken()=%q, want %q", recovered, csrf)
+	}
+	var currentCSRFHash string
+	if err := conn.QueryRow(`SELECT csrf_token_hash FROM sessions WHERE session_id = ?`, sessionID).Scan(&currentCSRFHash); err != nil {
+		t.Fatal(err)
+	}
+	if currentCSRFHash != storedCSRFHash {
+		t.Fatalf("recovering CSRF token changed stored hash: before=%q after=%q", storedCSRFHash, currentCSRFHash)
 	}
 
 	if _, _, err := sessions.Validate(""); !errors.Is(err, auth.ErrSessionInvalid) {
@@ -74,9 +102,12 @@ func TestSessionLifecycleCSRFAndInvalidation(t *testing.T) {
 		t.Fatalf("CleanupExpired()=%d, %v", count, err)
 	}
 
-	secondID, _, err := sessions.Create(userID, "second-agent", "198.51.100.9")
+	secondID, secondCSRF, err := sessions.Create(userID, "second-agent", "198.51.100.9")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if secondCSRF == csrf || sessions.CSRFToken(secondID) != secondCSRF {
+		t.Fatal("each session must have a distinct stable CSRF token")
 	}
 	if err := sessions.Delete(secondID); err != nil {
 		t.Fatal(err)

@@ -61,6 +61,8 @@ go build -o omnistore.exe ./cmd/omnistore
 
 网页登录失败限流默认开启，配置位于 `security.login_rate_limit`；环境变量分别为 `OMNISTORE_LOGIN_RATE_LIMIT_ENABLED`、`OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES`、`OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP` 和 `OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME`。限流状态仅在当前进程内存中维护，修改配置需要重启服务。
 
+CSRF Token 以 Session 为生命周期：登录创建 Session 时返回，刷新后的 `GET /api/v1/auth/me` 必须恢复相同 Token，不能在 GET 中轮换 CSRF 哈希。新增或修改认证逻辑时，应保留重复恢复、多标签页使用旧 Token 和不同 Session 隔离的回归测试。
+
 ### 前端热更新开发
 
 ```bash
