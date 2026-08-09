@@ -228,6 +228,12 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         </div>
 
         <div className={css.headerActions}>
+          <Button
+            variant="secondary"
+            onClick={() => navigate({ to: '/app/sources/$sourceKey/trash', params: { sourceKey } })}
+          >
+            <IconTrash size={14} /> 回收站
+          </Button>
           {canWrite && (
             <>
               <Button onClick={() => fileInput.current?.click()}>
@@ -543,7 +549,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onClose={() => setDeleteTarget(null)}
           onChanged={() => {
             refresh()
-            setNotice({ kind: 'success', message: `已删除 ${deleteTarget.name}。` })
+            setNotice({ kind: 'success', message: `已将 ${deleteTarget.name} 移入回收站。` })
           }}
           onError={onError}
         />
@@ -1107,21 +1113,21 @@ function DeleteDialog({
     <DialogWrap
       open
       onOpenChange={(o) => { if (!o) onClose() }}
-      title={isDir ? '删除目录' : '删除文件'}
+      title="移入回收站"
       description={fullPath}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>取消</Button>
           <Button variant="danger" onClick={() => mut.mutate()} disabled={mut.isPending}>
-            {mut.isPending ? '删除中…' : '确认删除'}
+            {mut.isPending ? '移动中…' : '移入回收站'}
           </Button>
         </>
       }
     >
       <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
         {isDir
-          ? `确定要删除目录「${target.name}」吗？目录内所有内容都会被永久删除，此操作不可恢复。`
-          : `确定要永久删除「${target.name}」吗？此操作不可恢复。`}
+          ? `目录「${target.name}」及其中内容会移入回收站，可在永久清理前恢复。`
+          : `「${target.name}」会移入回收站，可在永久清理前恢复。`}
       </p>
     </DialogWrap>
   )

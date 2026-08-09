@@ -47,6 +47,11 @@ func NewService(db *sql.DB, dataDir string) *Service {
 	return &Service{db: db, dataDir: dataDir}
 }
 
+// DataDir 返回系统数据目录，供文件服务存放回收站等内部数据；不得作为用户存储源。
+func (s *Service) DataDir() string {
+	return s.dataDir
+}
+
 const sourceColumns = `id, key, name, description, root_path, is_disabled,
   public_read_enabled, public_mount_path, webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at`
 

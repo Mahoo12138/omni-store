@@ -129,6 +129,26 @@ CREATE TABLE IF NOT EXISTS storage_source_exclude_patterns (
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 
+-- 回收站内容存放在系统 data/trash/，不在用户存储源中写内部目录或 sidecar。
+CREATE TABLE IF NOT EXISTS trash_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trash_key TEXT NOT NULL UNIQUE,
+  storage_source_id INTEGER NOT NULL,
+  original_relative_path TEXT NOT NULL,
+  entry_type TEXT NOT NULL CHECK(entry_type IN ('file', 'dir')),
+  file_count INTEGER NOT NULL DEFAULT 0 CHECK(file_count >= 0),
+  size INTEGER NOT NULL DEFAULT 0 CHECK(size >= 0),
+  deleted_by_user_id INTEGER NOT NULL,
+  deleted_at DATETIME NOT NULL,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id),
+  FOREIGN KEY(deleted_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trash_entries_source_deleted
+  ON trash_entries(storage_source_id, deleted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trash_entries_user_deleted
+  ON trash_entries(deleted_by_user_id, deleted_at DESC);
+
 -- 文件台账只保存普通文件元数据，不保存内容，也不在存储源中写 sidecar。
 CREATE TABLE IF NOT EXISTS file_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,13 +161,15 @@ CREATE TABLE IF NOT EXISTS file_records (
   updated_by_user_id INTEGER,
   mtime_unix_nano INTEGER NOT NULL,
   record_status TEXT NOT NULL DEFAULT 'active' CHECK(record_status IN ('active', 'trash')),
+  trash_key TEXT,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   UNIQUE(storage_source_id, relative_path),
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
   FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
-  FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+  FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY(trash_key) REFERENCES trash_entries(trash_key) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_file_records_source_status_path
@@ -156,6 +178,8 @@ CREATE INDEX IF NOT EXISTS idx_file_records_owner_status
   ON file_records(owner_user_id, record_status);
 CREATE INDEX IF NOT EXISTS idx_file_records_source_size
   ON file_records(storage_source_id, record_status, size);
+CREATE INDEX IF NOT EXISTS idx_file_records_trash
+  ON file_records(trash_key, relative_path);
 
 CREATE TABLE IF NOT EXISTS access_policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,9 +250,11 @@ CREATE TABLE IF NOT EXISTS images (
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
   ext TEXT NOT NULL,
+  trash_key TEXT,
   created_at DATETIME NOT NULL,
   FOREIGN KEY(owner_user_id) REFERENCES users(id),
-  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
+  FOREIGN KEY(trash_key) REFERENCES trash_entries(trash_key) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_owner ON images(owner_type, owner_user_id, created_at);

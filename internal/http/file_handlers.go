@@ -88,6 +88,8 @@ func writeFileError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, files.ErrNotFound):
 		WriteError(w, r, CodeFileNotFound, "文件不存在", nil)
+	case errors.Is(err, files.ErrTrashNotFound):
+		WriteError(w, r, CodeFileNotFound, "回收站条目不存在", nil)
 	case errors.Is(err, files.ErrAlreadyExists):
 		WriteError(w, r, CodeFileAlreadyExists, "目标已存在", nil)
 	case errors.Is(err, files.ErrPathExcluded):
@@ -286,11 +288,93 @@ func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 	if !s.authorizeSourcePath(w, r, src, relPath, true, true) {
 		return
 	}
-	if err := s.files.Delete(src, relPath); err != nil {
+	user := CurrentUser(r.Context())
+	entry, err := s.files.MoveToTrash(src, relPath, user.ID)
+	if err != nil {
+		s.fileAudit(r, "trash", src, strings.TrimPrefix(relPath, "/"), "", err)
 		writeFileError(w, r, err)
 		return
 	}
-	s.fileAudit(r, "delete", src, strings.TrimPrefix(relPath, "/"), "", nil)
+	s.fileAudit(r, "trash", src, strings.TrimPrefix(relPath, "/"), "", nil)
+	WriteData(w, r, entry)
+}
+
+func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil || !s.authorizeSourcePath(w, r, src, "", false, false) {
+		return
+	}
+	user := CurrentUser(r.Context())
+	entries, err := s.files.ListTrash(src, user.ID, user.IsAdmin())
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询回收站失败", nil)
+		return
+	}
+	WriteData(w, r, ListData{Items: entries, Total: int64(len(entries))})
+}
+
+func (s *Server) handleRestoreTrash(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	entry, err := s.files.GetTrash(src, r.PathValue("trashKey"))
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	user := CurrentUser(r.Context())
+	if !user.IsAdmin() && entry.DeletedByUserID != user.ID {
+		WriteError(w, r, CodeForbidden, "无权恢复该回收站条目", nil)
+		return
+	}
+	var req struct {
+		TargetPath string `json:"target_path"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	targetPath := req.TargetPath
+	if strings.TrimSpace(targetPath) == "" {
+		targetPath = entry.OriginalRelativePath
+	}
+	if !s.authorizeSourcePath(w, r, src, targetPath, true, true) {
+		return
+	}
+	restored, err := s.files.RestoreTrash(src, entry.Key, targetPath, user.ID)
+	if err != nil {
+		s.fileAudit(r, "restore", src, entry.OriginalRelativePath, strings.TrimPrefix(targetPath, "/"), err)
+		writeFileError(w, r, err)
+		return
+	}
+	s.fileAudit(r, "restore", src, entry.OriginalRelativePath, restored.OriginalRelativePath, nil)
+	WriteData(w, r, restored)
+}
+
+func (s *Server) handlePurgeTrash(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	entry, err := s.files.GetTrash(src, r.PathValue("trashKey"))
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	user := CurrentUser(r.Context())
+	if !user.IsAdmin() && entry.DeletedByUserID != user.ID {
+		WriteError(w, r, CodeForbidden, "无权永久清理该回收站条目", nil)
+		return
+	}
+	if !s.authorizeSourcePath(w, r, src, entry.OriginalRelativePath, false, false) {
+		return
+	}
+	if err := s.files.PurgeTrash(src, entry.Key); err != nil {
+		s.fileAudit(r, "purge", src, entry.OriginalRelativePath, "", err)
+		writeFileError(w, r, err)
+		return
+	}
+	s.fileAudit(r, "purge", src, entry.OriginalRelativePath, "", nil)
 	WriteData(w, r, map[string]any{"ok": true})
 }
 

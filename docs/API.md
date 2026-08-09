@@ -226,6 +226,26 @@ POST /api/v1/sources/{source_key}/files/move
 
 源路径必须可读；移动还要求源子树可写，目标子树始终要求可写。目标父目录必须存在，目标本身不能存在。成功响应包含 `path`、`files`、`bytes`、`source_key`、`target_source_key` 和 `was_move`。复制的新文件归执行用户所有；跨来源移动保留原台账归属。
 
+## 回收站
+
+登录用户按存储源管理自己删除的内容；超级管理员可以看到该来源的全部条目：
+
+```http
+GET    /api/v1/sources/{source_key}/trash
+POST   /api/v1/sources/{source_key}/trash/{trash_key}/restore
+DELETE /api/v1/sources/{source_key}/trash/{trash_key}
+```
+
+普通文件接口的 `DELETE /api/v1/sources/{source_key}/files?path=...` 返回创建的回收站条目。`trash_key` 是服务端随机生成的内部定位符，界面只展示名称、原路径、大小和删除时间。
+
+恢复请求可传空字符串使用原路径，或指定同一存储源内的新路径：
+
+```json
+{ "target_path": "/restored/item" }
+```
+
+目标已存在返回 `FILE_ALREADY_EXISTS`，来源配额不足返回 `INSUFFICIENT_STORAGE`。永久清理不可恢复，并释放条目仍占用的用户配额。
+
 ## 图床 Token 管理
 
 登录用户可以管理自己的命名图床 Token：

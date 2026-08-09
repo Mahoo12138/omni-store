@@ -408,7 +408,7 @@ func (s *Service) getByRowID(id int64) (*models.Image, error) {
 
 // Get 按 image_id 查询图片记录。
 func (s *Service) Get(imageID string) (*models.Image, error) {
-	img, err := scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE image_id = ?`, imageID))
+	img, err := scanImage(s.db.QueryRow(`SELECT `+imageColumns+` FROM images WHERE image_id = ? AND trash_key IS NULL`, imageID))
 	return s.decorateImage(img, err)
 }
 
@@ -458,6 +458,7 @@ func (s *Service) ListForOwner(ownerUserID *int64, page, pageSize int) ([]*model
 		where = `owner_type = 'user' AND owner_user_id = ?`
 		args = append(args, *ownerUserID)
 	}
+	where = `trash_key IS NULL AND (` + where + `)`
 
 	var total int64
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM images WHERE `+where, args...).Scan(&total); err != nil {

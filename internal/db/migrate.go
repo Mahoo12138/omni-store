@@ -139,6 +139,31 @@ func ensurePreReleaseBaselineColumns(conn *sql.DB) error {
 			return fmt.Errorf("补充开发期配额字段失败: %w", err)
 		}
 	}
+	for _, column := range []struct {
+		table      string
+		name       string
+		definition string
+	}{
+		{table: "file_records", name: "trash_key", definition: "trash_key TEXT"},
+		{table: "images", name: "trash_key", definition: "trash_key TEXT"},
+	} {
+		var exists int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, column.table).Scan(&exists); err != nil {
+			return fmt.Errorf("检查开发期 %s 表失败: %w", column.table, err)
+		}
+		if exists == 0 {
+			continue
+		}
+		hasColumn, err := tableHasColumn(conn, column.table, column.name)
+		if err != nil {
+			return fmt.Errorf("检查开发期 %s.%s 字段失败: %w", column.table, column.name, err)
+		}
+		if !hasColumn {
+			if _, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", column.table, column.definition)); err != nil {
+				return fmt.Errorf("补充开发期 %s.%s 字段失败: %w", column.table, column.name, err)
+			}
+		}
+	}
 	return nil
 }
 

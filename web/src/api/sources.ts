@@ -43,6 +43,18 @@ export interface TransferResult {
   was_move: boolean
 }
 
+export interface TrashEntry {
+  key: string
+  source_key: string
+  source_name: string
+  original_path: string
+  name: string
+  type: 'file' | 'dir'
+  file_count: number
+  size: number
+  deleted_at: string
+}
+
 export async function fetchMySources(): Promise<UserSource[]> {
   const data = await apiFetch<{ items: UserSource[]; total: number }>('/api/v1/sources')
   return data.items ?? []
@@ -136,5 +148,25 @@ export async function copyFile(
   return apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/files/copy`, {
     method: 'POST',
     body: JSON.stringify({ path, target_source_key: targetSourceKey, target_path: targetPath }),
+  })
+}
+
+export async function fetchTrash(sourceKey: string): Promise<TrashEntry[]> {
+  const data = await apiFetch<{ items: TrashEntry[]; total: number }>(
+    `/api/v1/sources/${encodeURIComponent(sourceKey)}/trash`,
+  )
+  return data.items ?? []
+}
+
+export async function restoreTrash(sourceKey: string, trashKey: string, targetPath: string): Promise<TrashEntry> {
+  return apiFetch(
+    `/api/v1/sources/${encodeURIComponent(sourceKey)}/trash/${encodeURIComponent(trashKey)}/restore`,
+    { method: 'POST', body: JSON.stringify({ target_path: targetPath }) },
+  )
+}
+
+export async function purgeTrash(sourceKey: string, trashKey: string): Promise<void> {
+  await apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/trash/${encodeURIComponent(trashKey)}`, {
+    method: 'DELETE',
   })
 }

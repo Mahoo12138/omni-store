@@ -215,11 +215,11 @@ func (s *Service) moveFileRecords(storageSourceID int64, fromRel, toRel string, 
 	return tx.Commit()
 }
 
-// UserUsage 返回用户拥有的 active 文件总字节数。
+// UserUsage 返回用户拥有的文件总字节数；回收站仍占用户配额，永久清理后才释放。
 func (s *Service) UserUsage(userID int64) (int64, error) {
 	var usage sql.NullInt64
-	err := s.db.QueryRow(`SELECT SUM(size) FROM file_records WHERE owner_user_id = ? AND owner_type = ? AND record_status = ?`,
-		userID, models.FileOwnerUser, models.FileRecordActive).Scan(&usage)
+	err := s.db.QueryRow(`SELECT SUM(size) FROM file_records WHERE owner_user_id = ? AND owner_type = ?`,
+		userID, models.FileOwnerUser).Scan(&usage)
 	return usage.Int64, err
 }
 

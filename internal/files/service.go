@@ -88,11 +88,15 @@ type Service struct {
 	sources         *sources.Service
 	locks           *locks.Manager
 	persistentLocks *locks.PersistentStore
+	trashDir        string
 }
 
 // NewService 创建文件服务。
 func NewService(db *sql.DB, srcSvc *sources.Service, lockMgr *locks.Manager) *Service {
-	return &Service{db: db, sources: srcSvc, locks: lockMgr, persistentLocks: locks.NewPersistentStore(db)}
+	return &Service{
+		db: db, sources: srcSvc, locks: lockMgr, persistentLocks: locks.NewPersistentStore(db),
+		trashDir: filepath.Join(srcSvc.DataDir(), "trash"),
+	}
 }
 
 // Locks 暴露锁管理器（WebDAV 等入口共用）。

@@ -45,3 +45,18 @@ type UserQuota struct {
 	RemainingBytes int64 `json:"remaining_bytes"`
 	Unlimited      bool  `json:"unlimited"`
 }
+
+// TrashEntry 是回收站中的一个顶层文件或目录；内部存储 key 不要求用户理解。
+type TrashEntry struct {
+	Key                  string    `json:"key"`
+	StorageSourceID      int64     `json:"-"`
+	SourceKey            string    `json:"source_key"`
+	SourceName           string    `json:"source_name"`
+	OriginalRelativePath string    `json:"original_path"`
+	Name                 string    `json:"name"`
+	EntryType            string    `json:"type"`
+	FileCount            int64     `json:"file_count"`
+	Size                 int64     `json:"size"`
+	DeletedByUserID      int64     `json:"-"`
+	DeletedAt            time.Time `json:"deleted_at"`
+}

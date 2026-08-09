@@ -323,6 +323,7 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
   keys/
   cache/
   tmp/
+  trash/
   logs/
 ```
 
@@ -332,7 +333,8 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
 2. `keys/`：后续保存 master key 或密钥材料。
 3. `cache/`：可重建缓存；1.0.0 / V1 使用 `cache/thumbnails/` 保存图床缩略图。
 4. `tmp/`：内部临时任务目录；S3 Multipart 分片位于 `tmp/multipart/{upload_id}/`。
-5. `logs/`：可选。MVP 可以只输出 stdout。
+5. `trash/`：回收站真实内容，按随机条目 key 隔离，不位于用户存储源；恢复或永久清理后删除对应目录。
+6. `logs/`：可选。1.0.0 可以只输出 stdout。
 
 ### 系统数据目录安全规则
 

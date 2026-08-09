@@ -69,6 +69,12 @@ const fileManagerRoute = createRoute({
   }),
 })
 
+const trashRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/app/sources/$sourceKey/trash',
+  component: lazyRouteComponent(() => import('./pages/Trash'), 'TrashPage'),
+})
+
 const imageBedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/image-bed',
@@ -92,6 +98,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   appRoute,
   fileManagerRoute,
+  trashRoute,
   imageBedRoute,
   adminRoute,
 ])

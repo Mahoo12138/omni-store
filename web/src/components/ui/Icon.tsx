@@ -130,6 +130,13 @@ export const IconRefresh = (p: IconProps) => (
   </Svg>
 )
 
+export const IconRestore = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 8V3m0 0h5M4 3l4 4" />
+    <path d="M5.5 16.5A8 8 0 1 0 6 7" />
+  </Svg>
+)
+
 export const IconSearch = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="11" cy="11" r="6.5" />

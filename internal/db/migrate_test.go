@@ -94,6 +94,14 @@ func TestOpenAppliesSquashedInitialMigration(t *testing.T) {
 	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'file_records'`).Scan(&tableName); err != nil {
 		t.Fatalf("replayed baseline missing file_records: %v", err)
 	}
+	if err := conn.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'trash_entries'`).Scan(&tableName); err != nil {
+		t.Fatalf("replayed baseline missing trash_entries: %v", err)
+	}
+	for _, column := range []struct{ table, name string }{{"file_records", "trash_key"}, {"images", "trash_key"}} {
+		if present, err := tableHasColumn(conn, column.table, column.name); err != nil || !present {
+			t.Fatalf("replayed baseline missing %s.%s: present=%v err=%v", column.table, column.name, present, err)
+		}
+	}
 }
 
 func TestMigrateReconcilesLegacyPreReleaseVersions(t *testing.T) {

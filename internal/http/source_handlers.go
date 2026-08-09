@@ -176,7 +176,21 @@ func (s *Server) handleAdminSetSourceDisabled(disabled bool) http.HandlerFunc {
 }
 
 func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request) {
-	if err := s.sources.Delete(r.PathValue("key")); err != nil {
+	src, err := s.sources.Get(r.PathValue("key"))
+	if err != nil {
+		s.writeSourceError(w, r, err)
+		return
+	}
+	trashCount, err := s.files.SourceTrashCount(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查存储源回收站失败", nil)
+		return
+	}
+	if trashCount > 0 {
+		WriteError(w, r, CodeConflict, "存储源回收站不为空，请先恢复或永久清理其中内容", map[string]any{"trash_count": trashCount})
+		return
+	}
+	if err := s.sources.Delete(src.Key); err != nil {
 		s.writeSourceError(w, r, err)
 		return
 	}

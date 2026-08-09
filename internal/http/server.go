@@ -136,6 +136,9 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/sources/{key}/files/rename", s.requireAuth(s.handleRenameFile))
 	mux.HandleFunc("POST /api/v1/sources/{key}/files/move", s.requireAuth(s.handleMoveFile))
 	mux.HandleFunc("POST /api/v1/sources/{key}/files/copy", s.requireAuth(s.handleCopyFile))
+	mux.HandleFunc("GET /api/v1/sources/{key}/trash", s.requireAuth(s.handleListTrash))
+	mux.HandleFunc("POST /api/v1/sources/{key}/trash/{trashKey}/restore", s.requireAuth(s.handleRestoreTrash))
+	mux.HandleFunc("DELETE /api/v1/sources/{key}/trash/{trashKey}", s.requireAuth(s.handlePurgeTrash))
 
 	// 管理员：存储源管理
 	mux.HandleFunc("GET /api/v1/admin/sources", s.requireAdmin(s.handleAdminListSources))

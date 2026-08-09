@@ -159,6 +159,15 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeValidationError, "不能删除自己的账号", nil)
 		return
 	}
+	trashCount, err := s.files.UserTrashCount(id)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查用户回收站失败", nil)
+		return
+	}
+	if trashCount > 0 {
+		WriteError(w, r, CodeConflict, "该用户的回收站不为空，请先恢复或永久清理其中内容", map[string]any{"trash_count": trashCount})
+		return
+	}
 	if err := s.users.Delete(id); err != nil {
 		s.writeUserError(w, r, err)
 		return
@@ -296,6 +305,21 @@ func humanizeActivity(action, relPath, sourceName string) string {
 			return "删除了 " + filename
 		}
 		return "删除了文件"
+	case "trash":
+		if filename != "" {
+			return "将 " + filename + " 移入了回收站"
+		}
+		return "将文件移入了回收站"
+	case "restore":
+		if filename != "" {
+			return "恢复了 " + filename
+		}
+		return "恢复了文件"
+	case "purge":
+		if filename != "" {
+			return "永久删除了 " + filename
+		}
+		return "永久清理了回收站文件"
 	case "create_folder":
 		if filename != "" {
 			return "创建了文件夹 " + filename
@@ -311,6 +335,11 @@ func humanizeActivity(action, relPath, sourceName string) string {
 			return "移动了 " + filename
 		}
 		return "移动了文件"
+	case "copy":
+		if filename != "" {
+			return "复制了 " + filename
+		}
+		return "复制了文件"
 	default:
 		// 未知动作：保留原文。
 		return action
