@@ -364,7 +364,7 @@ CREATE TABLE images (
   height INTEGER NOT NULL,
   ext TEXT NOT NULL,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(owner_user_id) REFERENCES users(id),
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE
 );
 INSERT INTO images
@@ -390,7 +390,7 @@ CREATE TABLE audit_logs (
   status TEXT NOT NULL,
   error_code TEXT,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(actor_user_id) REFERENCES users(id)
+  FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 INSERT INTO audit_logs
   (id, actor_type, actor_user_id, entry_type, action, storage_source_id,

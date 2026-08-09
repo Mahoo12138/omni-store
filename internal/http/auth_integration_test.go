@@ -30,7 +30,10 @@ func TestAuthenticationCSRFAndAdminAuthorizationFlow(t *testing.T) {
 	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"initialized":false`) {
 		t.Fatalf("initial setup status=%d body=%s", status.Code, status.Body.String())
 	}
-	setupBody := `{"username":"admin","display_name":"Release Admin","password":"admin-password"}`
+	missingBootstrap := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/setup/admin",
+		`{"username":"admin","display_name":"Release Admin","password":"admin-password","bootstrap_token":"wrong"}`, nil, "")
+	assertErrorResponse(t, missingBootstrap, http.StatusForbidden, CodeForbidden)
+	setupBody := `{"username":"admin","display_name":"Release Admin","password":"admin-password","bootstrap_token":"integration-bootstrap-token"}`
 	setup := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/setup/admin", setupBody, nil, "")
 	if setup.Code != http.StatusOK {
 		t.Fatalf("setup status=%d body=%s", setup.Code, setup.Body.String())
@@ -138,6 +141,7 @@ func newAuthIntegrationServer(t *testing.T) *http.Server {
 	cfg.Data.Dir = dataDir
 	cfg.Database.Path = filepath.Join(dataDir, "omnistore.db")
 	cfg.Server.PublicURL = "http://example.test"
+	cfg.Security.BootstrapToken = "integration-bootstrap-token"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server, _ := New(cfg, conn, logger)
 	return server

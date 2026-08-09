@@ -144,6 +144,10 @@ AWS_ACCESS_KEY_ID="$access_key_id" AWS_SECRET_ACCESS_KEY="$secret_access_key" \
 `openssl rand -base64 32` 生成。如果未提供，系统首次创建 S3 凭据时会生成
 `data.dir/keys/s3-master.key`；该文件丢失后现有 Secret 无法恢复，必须与数据库一起备份。
 
+全新空数据库还需要一次性初始化凭据。可在启动前设置 `OMNISTORE_BOOTSTRAP_TOKEN`；未设置时从
+服务首次启动日志读取自动生成的 `setup-...` 凭据，并在 `/setup` 页面提交。管理员创建成功后该
+接口永久关闭。初始化的“空用户表判断 + 插入”由单条原子 SQL 完成，并发请求只会创建一个管理员。
+
 ### 单元测试
 
 提交前先运行后端和前端单元测试；需要查看后端语句覆盖率时生成临时 profile：

@@ -30,35 +30,44 @@ import (
 
 // Server 聚合 HTTP 层依赖。
 type Server struct {
-	cfg         *config.Config
-	db          *sql.DB
-	logger      *slog.Logger
-	users       *users.Service
-	sources     *sources.Service
-	files       *files.Service
-	public      *publicdisk.Service
-	shares      *shares.Service
-	sessions    *auth.Sessions
-	tokens      *auth.Tokens
-	imagebed    *imagebed.Service
-	anonLimiter *imagebed.RateLimiter
-	audit       *audit.Logger
-	proxy       *security.ProxyResolver
-	s3Keys      *s3api.Credentials
-	s3Multipart *s3api.MultipartStore
-	s3Handler   http.Handler
+	cfg            *config.Config
+	db             *sql.DB
+	logger         *slog.Logger
+	users          *users.Service
+	sources        *sources.Service
+	files          *files.Service
+	public         *publicdisk.Service
+	shares         *shares.Service
+	sessions       *auth.Sessions
+	tokens         *auth.Tokens
+	imagebed       *imagebed.Service
+	anonLimiter    *imagebed.RateLimiter
+	audit          *audit.Logger
+	proxy          *security.ProxyResolver
+	s3Keys         *s3api.Credentials
+	s3Multipart    *s3api.MultipartStore
+	s3Handler      http.Handler
+	bootstrapToken string
 }
 
 // New 创建 HTTP Server，同时返回内部 Server 以便 main 启动后台任务。
 func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server, *Server) {
+	bootstrapToken := strings.TrimSpace(cfg.Security.BootstrapToken)
+	if bootstrapToken == "" {
+		bootstrapToken = auth.NewRandomToken("setup-", 24)
+	}
 	s := &Server{
-		cfg:      cfg,
-		db:       dbConn,
-		logger:   logger,
-		users:    users.NewService(dbConn),
-		sessions: auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
-		audit:    audit.New(dbConn, cfg.Audit.Enabled, cfg.Audit.MaxEntries, logger),
-		proxy:    security.NewProxyResolver(cfg.Server.TrustedProxies),
+		cfg:            cfg,
+		db:             dbConn,
+		logger:         logger,
+		users:          users.NewService(dbConn),
+		sessions:       auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
+		audit:          audit.New(dbConn, cfg.Audit.Enabled, cfg.Audit.MaxEntries, logger),
+		proxy:          security.NewProxyResolver(cfg.Server.TrustedProxies),
+		bootstrapToken: bootstrapToken,
+	}
+	if count, err := s.users.Count(); err == nil && count == 0 {
+		logger.Warn("首次管理员初始化需要一次性凭据", "bootstrap_token", bootstrapToken)
 	}
 	s.sources = sources.NewService(dbConn, cfg.Data.Dir)
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
@@ -225,6 +234,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	handler = WithRecover(logger, handler)
 	handler = WithAccessLog(logger, handler)
 	handler = WithRequestID(handler)
+	handler = WithSecurityHeaders(handler)
 
 	return &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

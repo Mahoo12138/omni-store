@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"errors"
-	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -129,11 +128,10 @@ func (s *Server) handlePublicShareRaw(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filename := sanitizeFilename(path.Base("/" + relPath))
-	disposition := "inline"
-	if r.URL.Query().Get("download") == "1" {
-		disposition = "attachment"
+	if err := setUserContentHeaders(w, f, filename, r.URL.Query().Get("download") == "1"); err != nil {
+		http.NotFound(w, r)
+		return
 	}
-	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": filename}))
 	w.Header().Set("Cache-Control", "private, no-store")
 	s.audit.Log(audit.Entry{ActorType: audit.ActorAnonymous, EntryType: audit.EntryWeb, Action: "share_download",
 		StorageSourceID: &src.ID, RelativePath: strings.TrimPrefix(relPath, "/"), IPAddress: s.proxy.ClientIP(r),

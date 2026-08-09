@@ -12,6 +12,12 @@ export const label = style({
   color: vars.color.textSecondary,
 })
 
+export const hint = style({
+  fontSize: vars.fontSize.xs,
+  lineHeight: 1.45,
+  color: vars.color.textSecondary,
+})
+
 export const input = style({
   width: '100%',
   height: '36px',

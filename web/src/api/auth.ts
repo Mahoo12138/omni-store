@@ -60,6 +60,7 @@ export async function createFirstAdmin(input: {
   username: string
   display_name: string
   password: string
+  bootstrap_token: string
 }): Promise<User> {
   return apiFetch('/api/v1/setup/admin', {
     method: 'POST',

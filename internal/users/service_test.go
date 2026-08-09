@@ -1,9 +1,12 @@
 package users
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/db"
@@ -116,5 +119,121 @@ func TestServiceUserLifecycleAndValidation(t *testing.T) {
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s missing user error=%v", name, err)
 		}
+	}
+}
+
+func TestCreateFirstAdminConcurrentOnlyOneSucceeds(t *testing.T) {
+	conn, err := db.Open(filepath.Join(t.TempDir(), "omnistore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	service := NewService(conn)
+
+	const attempts = 20
+	results := make(chan error, attempts)
+	for i := range attempts {
+		go func(index int) {
+			_, err := service.CreateFirstAdmin(
+				fmt.Sprintf("bootstrap-%02d", index),
+				fmt.Sprintf("Bootstrap %02d", index),
+				"bootstrap-password",
+			)
+			results <- err
+		}(i)
+	}
+
+	succeeded := 0
+	alreadyInitialized := 0
+	for range attempts {
+		err := <-results
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, ErrAlreadyInitialized):
+			alreadyInitialized++
+		default:
+			t.Fatalf("unexpected concurrent setup error: %v", err)
+		}
+	}
+	if succeeded != 1 || alreadyInitialized != attempts-1 {
+		t.Fatalf("succeeded=%d already_initialized=%d", succeeded, alreadyInitialized)
+	}
+	if count, err := service.Count(); err != nil || count != 1 {
+		t.Fatalf("Count()=%d, %v", count, err)
+	}
+	if count, err := service.CountAdmins(); err != nil || count != 1 {
+		t.Fatalf("CountAdmins()=%d, %v", count, err)
+	}
+}
+
+func TestDeletePreservesImagesAndAuditWithoutDanglingUserReferences(t *testing.T) {
+	base := t.TempDir()
+	conn, err := db.Open(filepath.Join(base, "omnistore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	service := NewService(conn)
+	user, err := service.Create("delete-linked-user", "Linked User", "valid-password", models.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	result, err := conn.Exec(`INSERT INTO storage_sources
+  (key, name, root_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"src-linked-user", "Linked source", filepath.Join(base, "source"), now, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO images
+  (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
+   public_url, size, mime_type, width, height, ext, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"img-linked-user", models.ImageOwnerUser, user.ID, sourceID, "images/photo.png", "photo.png",
+		"http://example.test/i/img-linked-user.png", 10, "image/png", 1, 1, "png", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO audit_logs
+  (actor_type, actor_user_id, entry_type, action, status, created_at)
+  VALUES ('user', ?, 'web', 'login', 'success', ?)`, user.ID, now); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Delete(user.ID); err != nil {
+		t.Fatalf("Delete() with linked image and audit: %v", err)
+	}
+
+	var imageOwnerType string
+	var imageOwnerID sql.NullInt64
+	if err := conn.QueryRow(`SELECT owner_type, owner_user_id FROM images WHERE image_id = ?`, "img-linked-user").
+		Scan(&imageOwnerType, &imageOwnerID); err != nil {
+		t.Fatalf("preserved image: %v", err)
+	}
+	if imageOwnerType != models.ImageOwnerAnonymous || imageOwnerID.Valid {
+		t.Fatalf("image owner_type=%q owner_user_id=%v", imageOwnerType, imageOwnerID)
+	}
+	var auditActorID sql.NullInt64
+	if err := conn.QueryRow(`SELECT actor_user_id FROM audit_logs WHERE action = 'login'`).Scan(&auditActorID); err != nil {
+		t.Fatalf("preserved audit log: %v", err)
+	}
+	if auditActorID.Valid {
+		t.Fatalf("audit actor_user_id=%v", auditActorID)
+	}
+	if _, err := service.GetByID(user.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted GetByID() error=%v", err)
+	}
+	rows, err := conn.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		t.Fatalf("foreign key check: %v", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		t.Fatal("foreign key integrity check returned a violation")
 	}
 }

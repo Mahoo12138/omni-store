@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"errors"
-	"mime"
 	"net/http"
 	"net/url"
 	"path"
@@ -97,11 +96,10 @@ func (s *Server) handlePublicRaw(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 
 	filename := sanitizeFilename(path.Base("/" + inner))
-	disposition := "inline"
-	if r.URL.Query().Get("download") == "1" {
-		disposition = "attachment"
+	if err := setUserContentHeaders(w, f, filename, r.URL.Query().Get("download") == "1"); err != nil {
+		http.NotFound(w, r)
+		return
 	}
-	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": filename}))
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }

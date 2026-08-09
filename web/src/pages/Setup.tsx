@@ -17,6 +17,7 @@ export function SetupPage() {
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [bootstrapToken, setBootstrapToken] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -29,7 +30,7 @@ export function SetupPage() {
     }
     setSubmitting(true)
     try {
-      await createFirstAdmin({ username, display_name: displayName, password })
+      await createFirstAdmin({ username, display_name: displayName, password, bootstrap_token: bootstrapToken })
       navigate({ to: '/login' })
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '初始化失败，请稍后重试')
@@ -65,6 +66,15 @@ export function SetupPage() {
         </div>
         <p className={css.subtitle}>创建第一个超级管理员账号</p>
         <form className={css.form} onSubmit={onSubmit}>
+          <Input
+            label="初始化凭据"
+            type="password"
+            value={bootstrapToken}
+            onChange={(e) => setBootstrapToken(e.target.value)}
+            autoComplete="off"
+            hint="从首次启动日志读取，或使用 OMNISTORE_BOOTSTRAP_TOKEN 预先配置。"
+            required
+          />
           <Input
             label="用户名（创建后不可修改）"
             value={username}

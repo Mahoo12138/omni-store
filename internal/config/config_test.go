@@ -52,6 +52,7 @@ security:
 	t.Setenv("OMNISTORE_S3_ADDR", "127.0.0.1:19001")
 	t.Setenv("OMNISTORE_S3_ENABLED", "true")
 	t.Setenv("OMNISTORE_MASTER_KEY", "01234567890123456789012345678901")
+	t.Setenv("OMNISTORE_BOOTSTRAP_TOKEN", "one-time-bootstrap-token")
 	cfg, err := Load(configPath)
 	if err != nil {
 		t.Fatal(err)
@@ -61,5 +62,8 @@ security:
 	}
 	if cfg.Security.MasterKey != "01234567890123456789012345678901" {
 		t.Fatal("master key environment override missing")
+	}
+	if cfg.Security.BootstrapToken != "one-time-bootstrap-token" {
+		t.Fatal("bootstrap token environment override missing")
 	}
 }

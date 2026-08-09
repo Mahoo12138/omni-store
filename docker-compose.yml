@@ -11,6 +11,8 @@ services:
       # 本文件默认用于本机 HTTP 快速体验；生产部署请改为真实 HTTPS 地址并设为 true。
       OMNISTORE_PUBLIC_URL: http://localhost:8080
       OMNISTORE_COOKIE_SECURE: "false"
+      # 建议在 .env 中设置强随机值；留空时请从 docker compose logs omnistore 读取自动生成值。
+      # OMNISTORE_BOOTSTRAP_TOKEN: "${OMNISTORE_BOOTSTRAP_TOKEN}"
     volumes:
       # 系统数据目录（数据库、密钥），必须备份
       - omnistore-data:/data

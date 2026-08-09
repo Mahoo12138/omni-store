@@ -24,6 +24,8 @@ var (
 	ErrWeakPassword = errors.New("密码长度至少 8 位")
 	// ErrQuotaInvalid 用户配额不能为负数。
 	ErrQuotaInvalid = errors.New("用户配额不能为负数")
+	// ErrAlreadyInitialized 首个管理员已由另一请求创建。
+	ErrAlreadyInitialized = errors.New("系统已初始化")
 )
 
 var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
@@ -47,21 +49,7 @@ func (s *Service) Count() (int64, error) {
 
 // Create 创建用户。username 创建后不可修改，密码只保存哈希。
 func (s *Service) Create(username, displayName, password, role string) (*models.User, error) {
-	username = strings.TrimSpace(username)
-	if !usernameRe.MatchString(username) {
-		return nil, ErrInvalidUsername
-	}
-	if len(password) < 8 {
-		return nil, ErrWeakPassword
-	}
-	if role != models.RoleSuperAdmin && role != models.RoleUser {
-		return nil, fmt.Errorf("非法角色: %s", role)
-	}
-	if displayName = strings.TrimSpace(displayName); displayName == "" {
-		displayName = username
-	}
-
-	hash, err := auth.HashPassword(password)
+	username, displayName, hash, err := prepareUser(username, displayName, password, role)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +76,64 @@ func (s *Service) Create(username, displayName, password, role string) (*models.
 		return s.GetByID(id)
 	}
 	return nil, fmt.Errorf("生成 user_public_id 失败")
+}
+
+// CreateFirstAdmin atomically creates the only user allowed while the users
+// table is empty. INSERT ... SELECT keeps the emptiness check and insert in one
+// SQLite statement, so concurrent setup requests cannot both win.
+func (s *Service) CreateFirstAdmin(username, displayName, password string) (*models.User, error) {
+	username, displayName, hash, err := prepareUser(username, displayName, password, models.RoleSuperAdmin)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	for range 5 {
+		publicID := auth.NewPublicID("u")
+		res, err := s.db.Exec(`INSERT INTO users
+  (user_public_id, username, display_name, password_hash, role, is_disabled, created_at, updated_at)
+  SELECT ?, ?, ?, ?, ?, 0, ?, ?
+  WHERE NOT EXISTS (SELECT 1 FROM users)`,
+			publicID, username, displayName, hash, models.RoleSuperAdmin, now, now)
+		if err != nil {
+			if strings.Contains(err.Error(), "users.user_public_id") {
+				continue
+			}
+			return nil, fmt.Errorf("创建首个管理员失败: %w", err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+		if rows == 0 {
+			return nil, ErrAlreadyInitialized
+		}
+		id, _ := res.LastInsertId()
+		return s.GetByID(id)
+	}
+	return nil, fmt.Errorf("生成 user_public_id 失败")
+}
+
+func prepareUser(username, displayName, password, role string) (string, string, string, error) {
+	username = strings.TrimSpace(username)
+	if !usernameRe.MatchString(username) {
+		return "", "", "", ErrInvalidUsername
+	}
+	if len(password) < 8 {
+		return "", "", "", ErrWeakPassword
+	}
+	if role != models.RoleSuperAdmin && role != models.RoleUser {
+		return "", "", "", fmt.Errorf("非法角色: %s", role)
+	}
+	if displayName = strings.TrimSpace(displayName); displayName == "" {
+		displayName = username
+	}
+
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return "", "", "", err
+	}
+	return username, displayName, hash, nil
 }
 
 const userColumns = `id, user_public_id, username, display_name, role, is_disabled, quota_bytes, created_at, updated_at`
@@ -176,6 +222,16 @@ func (s *Service) Delete(id int64) error {
 	defer tx.Rollback()
 	if _, err := tx.Exec(`UPDATE file_records SET owner_user_id = NULL, owner_type = ?, updated_at = ? WHERE owner_user_id = ?`,
 		models.FileOwnerUnowned, time.Now().UTC(), id); err != nil {
+		return err
+	}
+	// 删除账号不删除真实图片。原用户图片继续保留公开地址，并转为无账号
+	// 归属的图片，之后可由管理员按匿名/无主图片处理。
+	if _, err := tx.Exec(`UPDATE images SET owner_user_id = NULL, owner_type = ? WHERE owner_user_id = ?`,
+		models.ImageOwnerAnonymous, id); err != nil {
+		return err
+	}
+	// 审计历史必须保留，但不能继续引用即将删除的用户行。
+	if _, err := tx.Exec(`UPDATE audit_logs SET actor_user_id = NULL WHERE actor_user_id = ?`, id); err != nil {
 		return err
 	}
 

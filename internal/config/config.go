@@ -48,6 +48,8 @@ type SecurityConfig struct {
 	SessionTTLHours int  `yaml:"session_ttl_hours"`
 	// MasterKey 只允许从 OMNISTORE_MASTER_KEY 注入，不序列化到配置导出。
 	MasterKey string `yaml:"-"`
+	// BootstrapToken 只允许从环境变量注入；留空时首次启动会随机生成并写入日志。
+	BootstrapToken string `yaml:"-"`
 }
 
 type UploadConfig struct {
@@ -189,6 +191,7 @@ func applyEnvOverrides(cfg *Config) {
 	setBool("OMNISTORE_COOKIE_SECURE", &cfg.Security.CookieSecure)
 	setInt("OMNISTORE_SESSION_TTL_HOURS", &cfg.Security.SessionTTLHours)
 	setStr("OMNISTORE_MASTER_KEY", &cfg.Security.MasterKey)
+	setStr("OMNISTORE_BOOTSTRAP_TOKEN", &cfg.Security.BootstrapToken)
 	setInt64("OMNISTORE_UPLOAD_MAX_FILE_SIZE_MB", &cfg.Upload.MaxFileSizeMB)
 	setBool("OMNISTORE_UPLOAD_CLEANUP_STALE_FILES", &cfg.Upload.CleanupStaleFiles)
 	setInt("OMNISTORE_UPLOAD_TEMP_FILE_MAX_AGE_HOURS", &cfg.Upload.TempFileMaxAgeHours)

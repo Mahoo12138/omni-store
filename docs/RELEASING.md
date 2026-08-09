@@ -60,7 +60,8 @@ git push origin v1.0.0-rc.1
 
 必须从发布产物而不是本地源码完成以下验证：
 
-1. 在全新空数据目录启动 amd64 或 arm64 二进制，完成管理员初始化。
+1. 在全新空数据目录启动 amd64 或 arm64 二进制，使用启动日志或
+   `OMNISTORE_BOOTSTRAP_TOKEN` 提供的一次性凭据完成管理员初始化。
 2. 使用 Compose 启动镜像，确认健康检查、数据卷权限和重启后数据保留。
 3. 访问 `/api/v1/health` 并执行 `omnistore version`，确认版本、commit、build time。
 4. 覆盖登录、上传/下载、权限、分享、回收站、搜索、WebDAV、图床和显式启用的 S3 冒烟流程。

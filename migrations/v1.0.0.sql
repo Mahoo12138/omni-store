@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS images (
   ext TEXT NOT NULL,
   trash_key TEXT,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(owner_user_id) REFERENCES users(id),
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE CASCADE,
   FOREIGN KEY(trash_key) REFERENCES trash_entries(trash_key) ON DELETE CASCADE
 );
@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   status TEXT NOT NULL, -- success / failed
   error_code TEXT,
   created_at DATETIME NOT NULL,
-  FOREIGN KEY(actor_user_id) REFERENCES users(id)
+  FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);

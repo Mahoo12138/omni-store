@@ -1,13 +1,13 @@
 package httpserver
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
-	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/users"
 )
 
@@ -64,27 +64,26 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleSetupAdmin 创建第一个超级管理员。仅在没有任何用户时可用。
 func (s *Server) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
-	n, err := s.users.Count()
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询失败", nil)
-		return
-	}
-	if n > 0 {
-		WriteError(w, r, CodeForbidden, "系统已初始化", nil)
-		return
-	}
-
 	var req struct {
-		Username    string `json:"username"`
-		DisplayName string `json:"display_name"`
-		Password    string `json:"password"`
+		Username       string `json:"username"`
+		DisplayName    string `json:"display_name"`
+		Password       string `json:"password"`
+		BootstrapToken string `json:"bootstrap_token"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if subtle.ConstantTimeCompare([]byte(req.BootstrapToken), []byte(s.bootstrapToken)) != 1 {
+		WriteError(w, r, CodeForbidden, "初始化凭据无效", nil)
+		return
+	}
 
-	u, err := s.users.Create(req.Username, req.DisplayName, req.Password, models.RoleSuperAdmin)
+	u, err := s.users.CreateFirstAdmin(req.Username, req.DisplayName, req.Password)
 	if err != nil {
+		if errors.Is(err, users.ErrAlreadyInitialized) {
+			WriteError(w, r, CodeForbidden, err.Error(), nil)
+			return
+		}
 		s.writeUserError(w, r, err)
 		return
 	}
