@@ -1,5 +1,5 @@
 -- OmniStore v1.0.0 初始 schema。
--- v1.0.0 尚未发布；首个稳定版本发布前的所有结构变更均合并在此文件中。
+-- OmniStore 1.0.0 冻结基线；已应用后不得重放或修改。
 -- SQLite 只保存系统数据：用户、权限、配置、Session、Token、S3 Multipart 状态、图床流水、WebDAV 锁、审计日志。
 
 CREATE TABLE IF NOT EXISTS users (
@@ -249,7 +249,8 @@ BEGIN
   DELETE FROM file_search_index WHERE rowid = OLD.id;
 END;
 
--- 未发布的 v1.0.0 基线会安全重放；这里只补齐旧开发库缺少的索引行。
+-- Fresh v1.0.0 databases normally have no ledger rows here; keeping this
+-- synchronization in the baseline also makes fixture imports deterministic.
 DELETE FROM file_search_index
 WHERE rowid NOT IN (SELECT id FROM file_records WHERE record_status = 'active');
 INSERT INTO file_search_index(rowid, relative_path)
