@@ -162,6 +162,8 @@ cd web && pnpm test
 
 发布检查默认要求全仓 Go 语句覆盖率不低于 52%，并要求全仓竞态检测通过，防止新增功能只扩大未测试代码面。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高门槛，但正式发布不得通过降低该值规避失败。本地与 GitHub 发布流水线统一执行 `scripts/verify-release.sh`。
 
+回收站操作日志位于 `$OMNISTORE_DATA_DIR/trash/.operations/`。测试崩溃恢复时应构造“日志已写、文件系统未变”“目标复制完成、源仅删除一部分”“文件系统已变、事务未提交”“事务已提交、日志未清理”状态，并分别覆盖移入、恢复和永久清理。不要手工删除损坏日志后直接启动；先保留数据目录副本并核对 SQLite、源路径与 `trash/{trash_key}/payload`，恢复器会对无法无损判断的状态拒绝启动。
+
 ### E2E
 
 首次运行先安装 Chromium：

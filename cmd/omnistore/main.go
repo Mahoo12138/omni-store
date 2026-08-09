@@ -111,6 +111,20 @@ func runServer(args []string) error {
 	logger.Info("数据库就绪", "path", cfg.DatabasePath())
 
 	srv, app := httpserver.New(cfg, dbConn, logger)
+	trashRecovery, err := app.Files().RecoverTrashOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的回收站操作失败: %w", err)
+	}
+	if trashRecovery.CompletedMoves+trashRecovery.RolledBackMoves+
+		trashRecovery.CompletedRestores+trashRecovery.RolledBackRestores+
+		trashRecovery.CompletedPurges > 0 {
+		logger.Info("已恢复中断的回收站操作",
+			"completed_moves", trashRecovery.CompletedMoves,
+			"rolled_back_moves", trashRecovery.RolledBackMoves,
+			"completed_restores", trashRecovery.CompletedRestores,
+			"rolled_back_restores", trashRecovery.RolledBackRestores,
+			"completed_purges", trashRecovery.CompletedPurges)
+	}
 
 	stopCleanup := make(chan struct{})
 	httpserver.StartSessionCleanup(app.Sessions(), logger, stopCleanup)

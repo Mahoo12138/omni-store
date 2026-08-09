@@ -58,6 +58,19 @@ func (s *Service) MoveToTrash(src *models.StorageSource, relInput string, actorU
 	}
 	trashKey := auth.NewRandomToken("trh-", 12)
 	payloadAbs := s.trashPayloadPath(trashKey)
+	op := trashOperation{
+		Version: trashOperationVersion, Kind: trashOperationMove, TrashKey: trashKey,
+		StorageSourceID: src.ID, SourceRelativePath: relPath,
+	}
+	if err := s.writeTrashOperation(op); err != nil {
+		return nil, err
+	}
+	removeOperationOnReturn := true
+	defer func() {
+		if removeOperationOnReturn {
+			_ = s.removeTrashOperation(trashKey)
+		}
+	}()
 	if err := os.MkdirAll(filepath.Dir(payloadAbs), 0o700); err != nil {
 		return nil, fmt.Errorf("创建回收站目录失败: %w", err)
 	}
@@ -80,13 +93,26 @@ func (s *Service) MoveToTrash(src *models.StorageSource, relInput string, actorU
 	if err := s.moveRecordsToTrashTx(tx, src, trashKey, plan, actorUserID, now); err != nil {
 		return nil, err
 	}
-	if err := moveFilesystemTree(plan.sourceAbs, payloadAbs); err != nil {
-		_ = os.RemoveAll(filepath.Dir(payloadAbs))
+	destinationReady, err := moveFilesystemTreeTracked(plan.sourceAbs, payloadAbs, func() error {
+		return s.markTrashOperationDestinationReady(trashKey)
+	})
+	if err != nil {
+		if destinationReady {
+			removeOperationOnReturn = false
+		} else {
+			_ = os.RemoveAll(filepath.Dir(payloadAbs))
+		}
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		_ = moveFilesystemTree(payloadAbs, plan.sourceAbs)
-		_ = os.RemoveAll(filepath.Dir(payloadAbs))
+		if rollbackErr := moveFilesystemTree(payloadAbs, plan.sourceAbs); rollbackErr != nil {
+			removeOperationOnReturn = false
+			return nil, errors.Join(err, fmt.Errorf("回滚回收站文件失败: %w", rollbackErr))
+		}
+		if cleanupErr := os.RemoveAll(filepath.Dir(payloadAbs)); cleanupErr != nil {
+			removeOperationOnReturn = false
+			return nil, errors.Join(err, fmt.Errorf("清理回收站目录失败: %w", cleanupErr))
+		}
 		return nil, err
 	}
 	if err := releasePersistent(relPath); err != nil {
@@ -284,6 +310,19 @@ func (s *Service) RestoreTrash(src *models.StorageSource, trashKey, targetInput 
 	if err := s.validateTrashRestoreTarget(src, payloadAbs, targetRel); err != nil {
 		return nil, err
 	}
+	op := trashOperation{
+		Version: trashOperationVersion, Kind: trashOperationRestore, TrashKey: trashKey,
+		StorageSourceID: src.ID, RestoreRelativePath: targetRel,
+	}
+	if err := s.writeTrashOperation(op); err != nil {
+		return nil, err
+	}
+	removeOperationOnReturn := true
+	defer func() {
+		if removeOperationOnReturn {
+			_ = s.removeTrashOperation(trashKey)
+		}
+	}()
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -293,15 +332,27 @@ func (s *Service) RestoreTrash(src *models.StorageSource, trashKey, targetInput 
 	if err := s.restoreRecordsTx(tx, src, entry, targetRel, actorUserID); err != nil {
 		return nil, err
 	}
-	if err := moveFilesystemTree(payloadAbs, targetAbs); err != nil {
+	destinationReady, err := moveFilesystemTreeTracked(payloadAbs, targetAbs, func() error {
+		return s.markTrashOperationDestinationReady(trashKey)
+	})
+	if err != nil {
+		if destinationReady {
+			removeOperationOnReturn = false
+		}
 		return nil, err
 	}
 	if _, err := tx.Exec(`DELETE FROM trash_entries WHERE trash_key = ?`, trashKey); err != nil {
-		_ = moveFilesystemTree(targetAbs, payloadAbs)
+		if rollbackErr := moveFilesystemTree(targetAbs, payloadAbs); rollbackErr != nil {
+			removeOperationOnReturn = false
+			return nil, errors.Join(err, fmt.Errorf("回滚回收站恢复失败: %w", rollbackErr))
+		}
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		_ = moveFilesystemTree(targetAbs, payloadAbs)
+		if rollbackErr := moveFilesystemTree(targetAbs, payloadAbs); rollbackErr != nil {
+			removeOperationOnReturn = false
+			return nil, errors.Join(err, fmt.Errorf("回滚回收站恢复失败: %w", rollbackErr))
+		}
 		return nil, err
 	}
 	_ = os.RemoveAll(filepath.Dir(payloadAbs))
@@ -435,9 +486,31 @@ func (s *Service) PurgeTrash(src *models.StorageSource, trashKey string) error {
 	}
 	unlock := s.locks.Lock(locks.Key("trash", trashKey))
 	defer unlock()
+	op := trashOperation{
+		Version: trashOperationVersion, Kind: trashOperationPurge, TrashKey: trashKey,
+		StorageSourceID: src.ID,
+	}
+	if err := s.writeTrashOperation(op); err != nil {
+		return err
+	}
+	removeOperationOnReturn := true
+	defer func() {
+		if removeOperationOnReturn {
+			_ = s.removeTrashOperation(trashKey)
+		}
+	}()
 	if err := os.RemoveAll(filepath.Dir(s.trashPayloadPath(trashKey))); err != nil {
+		removeOperationOnReturn = false
 		return fmt.Errorf("永久删除回收站文件失败: %w", err)
 	}
+	if err := s.purgeTrashMetadata(src.ID, trashKey); err != nil {
+		removeOperationOnReturn = false
+		return err
+	}
+	return nil
+}
+
+func (s *Service) purgeTrashMetadata(storageSourceID int64, trashKey string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -449,7 +522,7 @@ func (s *Service) PurgeTrash(src *models.StorageSource, trashKey string) error {
 	if _, err := tx.Exec(`DELETE FROM file_records WHERE trash_key = ?`, trashKey); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM trash_entries WHERE storage_source_id = ? AND trash_key = ?`, src.ID, trashKey); err != nil {
+	if _, err := tx.Exec(`DELETE FROM trash_entries WHERE storage_source_id = ? AND trash_key = ?`, storageSourceID, trashKey); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -472,20 +545,33 @@ func (s *Service) trashPayloadPath(trashKey string) string {
 }
 
 func moveFilesystemTree(fromAbs, toAbs string) error {
+	_, err := moveFilesystemTreeTracked(fromAbs, toAbs, nil)
+	return err
+}
+
+// moveFilesystemTreeTracked 在跨文件系统复制完整落盘、删除源路径之前调用
+// destinationReady。返回的 bool 只在 error != nil 时有意义，表示目标副本
+// 已经完整、但源路径可能只删除了一部分，调用方必须保留恢复日志。
+func moveFilesystemTreeTracked(fromAbs, toAbs string, destinationReady func() error) (bool, error) {
 	if err := os.Rename(fromAbs, toAbs); err == nil {
-		return nil
+		return false, nil
 	} else if !errors.Is(err, syscall.EXDEV) {
-		return fmt.Errorf("移动文件失败: %w", err)
+		return false, fmt.Errorf("移动文件失败: %w", err)
 	}
 	if err := copyFilesystemTree(fromAbs, toAbs); err != nil {
 		_ = os.RemoveAll(toAbs)
-		return err
+		return false, err
+	}
+	if destinationReady != nil {
+		if err := destinationReady(); err != nil {
+			_ = os.RemoveAll(toAbs)
+			return false, fmt.Errorf("记录跨文件系统复制阶段失败: %w", err)
+		}
 	}
 	if err := os.RemoveAll(fromAbs); err != nil {
-		_ = os.RemoveAll(toAbs)
-		return fmt.Errorf("清理源路径失败: %w", err)
+		return true, fmt.Errorf("清理源路径失败: %w", err)
 	}
-	return nil
+	return false, nil
 }
 
 func copyFilesystemTree(fromAbs, toAbs string) error {
