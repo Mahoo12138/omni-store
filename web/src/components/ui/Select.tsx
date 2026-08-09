@@ -20,6 +20,7 @@ interface SelectProps {
   disabled?: boolean
   required?: boolean
   leadingIcon?: ReactNode
+  leadingIconVariant?: 'tile' | 'plain'
   size?: 'compact' | 'default' | 'large'
   width?: 'full' | 'content' | 'wide'
   className?: string
@@ -36,6 +37,7 @@ export function Select({
   disabled,
   required,
   leadingIcon,
+  leadingIconVariant = 'tile',
   size = 'default',
   width = 'full',
   className,
@@ -65,7 +67,11 @@ export function Select({
         className={triggerClassName}
         aria-label={ariaLabel ?? placeholder}
       >
-        {leadingIcon ? <span className={css.leadingIcon}>{leadingIcon}</span> : null}
+        {leadingIcon ? (
+          <span className={`${css.leadingIcon} ${leadingIconVariant === 'plain' ? css.leadingIconPlain : ''}`}>
+            {leadingIcon}
+          </span>
+        ) : null}
         <BaseSelect.Value className={css.value}>
           {(selectedValue) => {
             const option = options.find((item) => item.value === selectedValue)

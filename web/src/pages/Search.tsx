@@ -16,6 +16,7 @@ import {
   IconDownload,
   IconFile,
   IconFolder,
+  IconServer,
   IconSearch,
 } from '../components/ui/Icon'
 import { Select } from '../components/ui/Select'
@@ -94,7 +95,8 @@ export function SearchPage() {
             { value: '', label: '全部存储源' },
             ...(sources.data ?? []).map((source) => ({ value: source.key, label: source.name })),
           ]}
-          leadingIcon={<IconFolder size={15} />}
+          leadingIcon={<IconServer size={17} />}
+          leadingIconVariant="plain"
           disabled={sources.isPending}
         />
         <Button type="submit" disabled={Array.from(draftQuery.trim()).length < 2}>搜索</Button>

@@ -74,6 +74,14 @@ export const leadingIcon = style({
   borderRadius: vars.radius.md,
 })
 
+export const leadingIconPlain = style({
+  width: 20,
+  height: 20,
+  color: vars.color.textSecondary,
+  backgroundColor: 'transparent',
+  borderRadius: 0,
+})
+
 export const value = style({
   minWidth: 0,
   flex: 1,
