@@ -143,6 +143,15 @@ func runServer(args []string) error {
 			"completed_uploads", fileUploadRecovery.CompletedUploads,
 			"rolled_back_uploads", fileUploadRecovery.RolledBackUploads)
 	}
+	multipartRecovery, err := app.S3Multipart().RecoverMultipartCompletions()
+	if err != nil {
+		return fmt.Errorf("恢复中断的 S3 Multipart 完成操作失败: %w", err)
+	}
+	if multipartRecovery.CompletedUploads+multipartRecovery.RolledBackUploads > 0 {
+		logger.Info("已恢复中断的 S3 Multipart 完成操作",
+			"completed_uploads", multipartRecovery.CompletedUploads,
+			"rolled_back_uploads", multipartRecovery.RolledBackUploads)
+	}
 	uploadRecovery, err := app.ImageBed().RecoverUploadOperations()
 	if err != nil {
 		return fmt.Errorf("恢复中断的图床上传失败: %w", err)

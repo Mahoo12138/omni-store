@@ -110,6 +110,11 @@ func (s *Service) PersistentLocks() *locks.PersistentStore {
 	return s.persistentLocks
 }
 
+// StorageSourceByID 返回文件恢复流程使用的存储源快照。
+func (s *Service) StorageSourceByID(storageSourceID int64) (*models.StorageSource, error) {
+	return s.sources.GetByID(storageSourceID)
+}
+
 // StorageUsage 实时统计存储源内全部普通文件，不跟随 symlink；排除规则不减少物理用量。
 // OmniStore 严格命名的上传临时文件不计入最终用量。
 func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {

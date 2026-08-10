@@ -68,6 +68,7 @@ type MultipartCleanupResult struct {
 // MultipartStore 管理上传状态、临时分片与最终原子合并。
 type MultipartStore struct {
 	db        *sql.DB
+	dataDir   string
 	root      string
 	files     *files.Service
 	maxObject int64
@@ -77,7 +78,7 @@ type MultipartStore struct {
 
 func NewMultipartStore(db *sql.DB, dataDir string, fileService *files.Service, maxFileSizeMB int64) *MultipartStore {
 	return &MultipartStore{
-		db: db, root: filepath.Join(dataDir, "tmp", "multipart"), files: fileService,
+		db: db, dataDir: dataDir, root: filepath.Join(dataDir, "tmp", "multipart"), files: fileService,
 		maxObject: maxFileSizeMB * 1024 * 1024, locks: locks.NewManager(), now: time.Now,
 	}
 }
@@ -298,7 +299,36 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 	if s.maxObject > 0 && total > s.maxObject {
 		return "", 0, ErrEntityTooLarge
 	}
+	etag := `"` + hex.EncodeToString(combinedMD5.Sum(nil)) + "-" + strconv.Itoa(len(selected)) + `"`
+	contentSHA256, err := s.hashSelectedParts(uploadID, selected)
+	if err != nil {
+		return "", 0, err
+	}
+	previousExists, previousSize, previousMTimeNano, err := s.previousObjectState(src, objectKey)
+	if err != nil {
+		return "", 0, err
+	}
+	op := s.newMultipartCompletion(uploadID, userID, src.ID, objectKey, etag, total, contentSHA256,
+		previousExists, previousSize, previousMTimeNano)
+	if existing, err := s.readMultipartCompletion(uploadID); err != nil {
+		return "", 0, err
+	} else if existing != nil {
+		if !sameMultipartCompletion(*existing, op) {
+			return "", 0, fmt.Errorf("Multipart Upload 存在不一致的待恢复完成操作")
+		}
+		completed, recoveryErr := s.resolveMultipartCompletion(*existing, false)
+		if completed {
+			return etag, total, nil
+		}
+		if recoveryErr != nil {
+			return "", 0, recoveryErr
+		}
+	}
+	if err := s.writeMultipartCompletion(op); err != nil {
+		return "", 0, err
+	}
 	if err := s.files.EnsureObjectParents(src, objectKey); err != nil {
+		_ = s.removeMultipartCompletion(uploadID)
 		return "", 0, err
 	}
 	reader := &sequentialPartReader{store: s, uploadID: uploadID, parts: selected}
@@ -307,23 +337,26 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 	_, written, err := s.files.UploadWithLockTokens(src, dir, filename, reader, true, nil, &userID)
 	_ = reader.Close()
 	if err != nil {
+		completed, recoveryErr := s.resolveMultipartCompletion(op, false)
+		if completed {
+			return etag, total, nil
+		}
+		if recoveryErr != nil {
+			return "", 0, errors.Join(err, recoveryErr)
+		}
 		return "", 0, err
 	}
 	if written != total {
 		return "", 0, fmt.Errorf("Multipart 合并大小不匹配")
 	}
-	etag := `"` + hex.EncodeToString(combinedMD5.Sum(nil)) + "-" + strconv.Itoa(len(selected)) + `"`
-	entry, err := s.files.Stat(src, objectKey)
-	if err != nil {
+	completed, err := s.resolveMultipartCompletion(op, true)
+	if !completed {
+		if err == nil {
+			err = fmt.Errorf("Multipart 最终对象与已提交分片不一致")
+		}
 		return "", 0, err
 	}
-	if err := s.RememberObjectETag(src.ID, objectKey, etag, entry.Size, entry.MTime); err != nil {
-		return "", 0, err
-	}
-	if _, err := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ?`, uploadID); err != nil {
-		return "", 0, err
-	}
-	_ = os.RemoveAll(s.uploadDir(uploadID))
+	// 数据库已提交后清理失败留给启动恢复，不能诱发客户端重复完成。
 	return etag, total, nil
 }
 
@@ -373,7 +406,7 @@ func (s *MultipartStore) Abort(userID, storageSourceID int64, objectKey, uploadI
 	if _, err := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ?`, uploadID); err != nil {
 		return err
 	}
-	return os.RemoveAll(s.uploadDir(uploadID))
+	return errors.Join(os.RemoveAll(s.uploadDir(uploadID)), s.removeMultipartCompletion(uploadID))
 }
 
 func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupResult, error) {
@@ -400,6 +433,15 @@ func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupR
 	result := MultipartCleanupResult{}
 	for _, id := range ids {
 		unlock := s.locks.Lock("multipart:" + id)
+		pending, pendingErr := s.multipartCompletionExists(id)
+		if pendingErr != nil {
+			unlock()
+			return result, pendingErr
+		}
+		if pending {
+			unlock()
+			continue
+		}
 		res, deleteErr := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ? AND updated_at < ?`, id, cutoff)
 		if deleteErr == nil {
 			if n, _ := res.RowsAffected(); n > 0 {
@@ -422,6 +464,13 @@ func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupR
 	}
 	for _, entry := range entries {
 		if !uploadIDPattern.MatchString(entry.Name()) {
+			continue
+		}
+		pending, pendingErr := s.multipartCompletionExists(entry.Name())
+		if pendingErr != nil {
+			return result, pendingErr
+		}
+		if pending {
 			continue
 		}
 		var count int
