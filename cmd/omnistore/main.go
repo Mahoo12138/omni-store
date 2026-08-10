@@ -134,6 +134,15 @@ func runServer(args []string) error {
 			"rolled_back_restores", trashRecovery.RolledBackRestores,
 			"completed_purges", trashRecovery.CompletedPurges)
 	}
+	uploadRecovery, err := app.ImageBed().RecoverUploadOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的图床上传失败: %w", err)
+	}
+	if uploadRecovery.CompletedUploads+uploadRecovery.RolledBackUploads > 0 {
+		logger.Info("已恢复中断的图床上传",
+			"completed_uploads", uploadRecovery.CompletedUploads,
+			"rolled_back_uploads", uploadRecovery.RolledBackUploads)
+	}
 
 	stopCleanup := make(chan struct{})
 	httpserver.StartSessionCleanup(app.Sessions(), logger, stopCleanup)

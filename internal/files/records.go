@@ -24,6 +24,19 @@ type scannedFile struct {
 	mtimeNano int64
 }
 
+// PreparedFileRecord 是已经完成路径、排除规则和真实普通文件校验的台账写入。
+// 字段保持包内私有，其他服务只能通过 PrepareFileRecord 构造，避免绕过文件层校验。
+type PreparedFileRecord struct {
+	storageSourceID int64
+	relPath         string
+	size            int64
+	ownerUserID     *int64
+	ownerType       string
+	actorUserID     *int64
+	mtimeUnixNano   int64
+	createdAt       time.Time
+}
+
 // ReconcileSource 扫描真实普通文件并校准 active 台账；新发现文件标记为 unowned。
 func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileResult, error) {
 	root, err := security.ResolveInSource(src.RootPath, "")
@@ -194,26 +207,54 @@ func insertUnownedFileRecord(tx *sql.Tx, storageSourceID int64, item scannedFile
 
 // RecordFile 对最终普通文件执行 upsert；覆盖写会把所有权转移给本次写入主体。
 func (s *Service) RecordFile(src *models.StorageSource, relInput, ownerType string, ownerUserID, actorUserID *int64) error {
-	relPath, absPath, err := s.prepare(src, relInput)
+	prepared, err := s.PrepareFileRecord(src, relInput, ownerType, ownerUserID, actorUserID)
 	if err != nil {
 		return err
+	}
+	return upsertPreparedFileRecord(s.db, prepared)
+}
+
+// PrepareFileRecord 校验最终文件并冻结台账所需的真实大小与 mtime。
+func (s *Service) PrepareFileRecord(src *models.StorageSource, relInput, ownerType string, ownerUserID, actorUserID *int64) (*PreparedFileRecord, error) {
+	relPath, absPath, err := s.prepare(src, relInput)
+	if err != nil {
+		return nil, err
 	}
 	info, err := os.Lstat(absPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return ErrUnsupported
+		return nil, ErrUnsupported
 	}
 	if ownerType != models.FileOwnerUser && ownerType != models.FileOwnerAnonymous &&
 		ownerType != models.FileOwnerSystem && ownerType != models.FileOwnerUnowned {
-		return fmt.Errorf("非法文件所有者类型: %s", ownerType)
+		return nil, fmt.Errorf("非法文件所有者类型: %s", ownerType)
 	}
 	if ownerType != models.FileOwnerUser {
 		ownerUserID = nil
 	}
-	now := time.Now().UTC()
-	_, err = s.db.Exec(`INSERT INTO file_records
+	return &PreparedFileRecord{
+		storageSourceID: src.ID, relPath: relPath, size: info.Size(), ownerUserID: ownerUserID,
+		ownerType: ownerType, actorUserID: actorUserID, mtimeUnixNano: info.ModTime().UnixNano(),
+		createdAt: time.Now().UTC(),
+	}, nil
+}
+
+// RecordPreparedFileTx 把已经校验的最终文件写入调用方事务。
+func (s *Service) RecordPreparedFileTx(tx *sql.Tx, prepared *PreparedFileRecord) error {
+	if tx == nil || prepared == nil {
+		return fmt.Errorf("文件台账事务参数不能为空")
+	}
+	return upsertPreparedFileRecord(tx, prepared)
+}
+
+type fileRecordExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func upsertPreparedFileRecord(exec fileRecordExecer, prepared *PreparedFileRecord) error {
+	_, err := exec.Exec(`INSERT INTO file_records
   (storage_source_id, relative_path, size, owner_user_id, owner_type, created_by_user_id,
    updated_by_user_id, mtime_unix_nano, record_status, created_at, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -225,8 +266,9 @@ func (s *Service) RecordFile(src *models.StorageSource, relInput, ownerType stri
     mtime_unix_nano = excluded.mtime_unix_nano,
     record_status = excluded.record_status,
     updated_at = excluded.updated_at`,
-		src.ID, relPath, info.Size(), ownerUserID, ownerType, actorUserID, actorUserID,
-		info.ModTime().UnixNano(), models.FileRecordActive, now, now)
+		prepared.storageSourceID, prepared.relPath, prepared.size, prepared.ownerUserID,
+		prepared.ownerType, prepared.actorUserID, prepared.actorUserID,
+		prepared.mtimeUnixNano, models.FileRecordActive, prepared.createdAt, prepared.createdAt)
 	return err
 }
 

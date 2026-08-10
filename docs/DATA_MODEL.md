@@ -340,6 +340,8 @@ CREATE INDEX idx_images_source_path ON images(storage_source_id, relative_path);
 
 API 返回的 `thumbnail_url` 是根据 `image_id` 和 `server.public_url` 计算的派生字段，不写入 `images` 表。缩略图缓存同样不进入 SQLite，其有效性由原图 size + modTime 校验。
 
+图床最终文件完成 `fsync + rename + 目录同步` 后，`images` 与对应的 active `file_records` 使用同一个 SQLite 事务写入。短期上传意图保存在系统数据目录 `operations/image-uploads/`，不新增数据库迁移；恢复时以唯一 `image_id` 是否存在判断事务是否提交。图片提交后允许正常移动、回收或删除，陈旧日志不能把当前路径回退到上传时位置。
+
 ### audit_logs
 
 ```sql

@@ -12,10 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
+	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
@@ -183,6 +185,53 @@ func TestHandleAdminDeleteSourceRejectsPendingTransferRecovery(t *testing.T) {
 	assertErrorResponse(t, recorder, http.StatusConflict, CodeConflict)
 	if _, err := server.sources.Get(source.Key); err != nil {
 		t.Fatalf("source with pending transfer was deleted: %v", err)
+	}
+}
+
+func TestHandleAdminDeleteSourceRejectsPendingImageUploadRecovery(t *testing.T) {
+	server, conn, base := newSourceCreateHandlerServer(t)
+	root := filepath.Join(base, "source-delete-image-upload")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source, err := server.sources.Create(sources.CreateInput{Name: "pending-image-source", RootPath: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.imagebed, err = imagebed.NewService(conn, "/images", "http://store.test",
+		filepath.Join(base, "data", "cache", "thumbnails"), server.sources, server.files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := "iup-00112233445566778899aabb"
+	random := "00112233445566778899aabbccddeeff"
+	operationsDir := filepath.Join(base, "data", "operations", "image-uploads")
+	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
+		"temp_relative_path":  "images/.omnistore-upload-0011223344556677.tmp",
+		"final_relative_path": "images/" + random + ".png", "image_id": "img_" + random,
+		"owner_type": models.ImageOwnerAnonymous, "original_filename": "pending.png",
+		"public_url": "http://store.test/i/img_" + random + ".png",
+		"size":       1, "mime_type": "image/png", "width": 1, "height": 1, "ext": "png",
+		"created_at": time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/sources/"+source.Key, nil)
+	req.SetPathValue("key", source.Key)
+	recorder := httptest.NewRecorder()
+	server.handleAdminDeleteSource(recorder, req)
+	assertErrorResponse(t, recorder, http.StatusConflict, CodeConflict)
+	if _, err := server.sources.Get(source.Key); err != nil {
+		t.Fatalf("source with pending image upload was deleted: %v", err)
 	}
 }
 

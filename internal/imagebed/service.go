@@ -310,8 +310,11 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		reader = io.LimitReader(body, maxBytes+1)
 	}
 	size, err := io.Copy(tmp, reader)
-	if cerr := tmp.Close(); err == nil {
-		err = cerr
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
 	}
 	if err != nil {
 		os.Remove(tmpPath)
@@ -330,7 +333,8 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	}
 
 	// image_id 与文件名使用不可预测随机数（README §17.9，128-bit）。
-	// 先写数据库记录（唯一索引冲突时换随机数重试），再把临时文件改名到最终路径。
+	// 最终文件完整落盘后，images 与 file_records 在同一个 SQLite 事务中提交。
+	tempRelPath := relDir + "/" + filepath.Base(tmpPath)
 	for range 5 {
 		random := auth.NewRandomToken("", 16)
 		imageID := "img_" + random
@@ -338,46 +342,60 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		relPath := relDir + "/" + filename
 		publicURL := fmt.Sprintf("%s/i/%s.%s", s.publicURL, imageID, info.Ext)
 
-		res, err := s.db.Exec(`INSERT INTO images
-  (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
-   public_url, size, mime_type, width, height, ext, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			imageID, ownerType, ownerUserID, src.ID, relPath, originalFilename,
-			publicURL, size, info.MimeType, info.Width, info.Height, info.Ext, time.Now().UTC())
-		if err != nil {
-			if strings.Contains(err.Error(), "images.image_id") {
-				continue // image_id 撞车，换随机数重试
-			}
-			os.Remove(tmpPath)
-			return nil, fmt.Errorf("写入图片记录失败: %w", err)
-		}
-		rowID, _ := res.LastInsertId()
-
 		unlock := s.locks.Lock(locks.Key(src.Key, relPath))
 		absPath := filepath.Join(absDir, filename)
 		if _, statErr := os.Lstat(absPath); statErr == nil {
 			unlock()
-			_, _ = s.db.Exec(`DELETE FROM images WHERE id = ?`, rowID)
 			continue // 文件名撞车，重新生成
+		} else if !os.IsNotExist(statErr) {
+			unlock()
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("检查图床最终路径失败: %w", statErr)
+		}
+		op := s.newImageUploadOperation(src.ID, tempRelPath, relPath, imageID, ownerType,
+			ownerUserID, originalFilename, publicURL, size, info)
+		if err := s.writeImageUploadOperation(op); err != nil {
+			unlock()
+			_ = os.Remove(tmpPath)
+			return nil, fmt.Errorf("记录图床上传意图失败: %w", err)
 		}
 		if err := os.Rename(tmpPath, absPath); err != nil {
 			unlock()
-			_, _ = s.db.Exec(`DELETE FROM images WHERE id = ?`, rowID)
-			os.Remove(tmpPath)
-			return nil, fmt.Errorf("落盘失败: %w", err)
+			cleanupErr := s.removeImageUploadOperation(op.OperationID)
+			_ = os.Remove(tmpPath)
+			return nil, errors.Join(fmt.Errorf("落盘失败: %w", err), cleanupErr)
+		}
+		if err := syncImageDirectory(absDir); err != nil {
+			rollbackErr := s.rollbackUncommittedImageUpload(op, absPath)
+			unlock()
+			return nil, errors.Join(fmt.Errorf("同步图床目录失败: %w", err), rollbackErr)
 		}
 		fileOwnerType := models.FileOwnerAnonymous
 		if ownerType == models.ImageOwnerUser {
 			fileOwnerType = models.FileOwnerUser
 		}
-		if err := s.files.RecordFile(src, relPath, fileOwnerType, ownerUserID, ownerUserID); err != nil {
-			_ = os.Remove(absPath)
-			_, _ = s.db.Exec(`DELETE FROM images WHERE id = ?`, rowID)
+		prepared, err := s.files.PrepareFileRecord(src, relPath, fileOwnerType, ownerUserID, ownerUserID)
+		if err != nil {
+			rollbackErr := s.rollbackUncommittedImageUpload(op, absPath)
 			unlock()
-			return nil, fmt.Errorf("更新文件台账失败: %w", err)
+			return nil, errors.Join(fmt.Errorf("准备文件台账失败: %w", err), rollbackErr)
 		}
+		rowID, err := s.commitImageUpload(op, prepared)
+		if err != nil {
+			rollbackErr := s.rollbackUncommittedImageUpload(op, absPath)
+			unlock()
+			return nil, errors.Join(fmt.Errorf("提交图片与文件台账失败: %w", err), rollbackErr)
+		}
+		// 数据库已经提交即视为成功；日志清理失败时保留给启动恢复，不把已成功上传
+		// 误报为失败，避免客户端重试制造重复图片。
+		_ = s.removeImageUploadOperation(op.OperationID)
 		unlock()
-		return s.getByRowID(rowID)
+		return s.decorateImage(&models.Image{
+			ID: rowID, ImageID: op.ImageID, OwnerType: op.OwnerType, OwnerUserID: op.OwnerUserID,
+			StorageSourceID: op.StorageSourceID, RelativePath: op.FinalRelativePath,
+			OriginalFilename: op.OriginalFilename, PublicURL: op.PublicURL, Size: op.Size,
+			MimeType: op.MimeType, Width: op.Width, Height: op.Height, Ext: op.Ext, CreatedAt: op.CreatedAt,
+		}, nil)
 	}
 	os.Remove(tmpPath)
 	return nil, fmt.Errorf("生成 image_id 失败")

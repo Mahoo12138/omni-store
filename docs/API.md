@@ -370,6 +370,12 @@ DELETE /api/v1/me/tokens/image-bed/{token_id}
 
 兼容接口 `POST /api/v1/me/tokens/image-bed/reset` 仍可用，其语义为撤销当前用户的全部图床 Token，并创建一个新的“默认 Token”。
 
+## 图床上传原子性与恢复
+
+网页、PicGo 与匿名入口复用同一上传编排。内容先写入最终目录中的 `.omnistore-upload-*.tmp`，完成文件 `fsync` 和真实格式识别后写入 `0600` 短期意图，再原子重命名为随机最终文件并同步目录。`images` 与对应 `file_records` 在一个 SQLite 事务中提交，因此公开图片记录和搜索/配额台账不会只成功一半。
+
+服务在 HTTP/S3 监听前恢复 `$OMNISTORE_DATA_DIR/operations/image-uploads/`：不存在对应 `images` 记录时删除该操作独占的临时文件或随机最终文件；记录已提交时保留图片，只清理日志。提交后的图片即使随后移动、进入回收站或被删除，也以 `image_id` 的当前生命周期状态为准，不按旧路径误删。临时与最终文件同时存在、日志损坏、未提交图片却出现文件台账等歧义会阻止启动。存在未恢复上传时禁止删除关联存储源。
+
 ## S3 凭据管理
 
 登录用户管理自己的 S3 Access Key：

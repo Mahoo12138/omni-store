@@ -207,6 +207,17 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		WriteError(w, r, CodeConflict, "存储源存在尚未恢复的跨来源移动，请重启服务完成恢复", map[string]any{"transfer_count": transferCount})
 		return
 	}
+	if s.imagebed != nil {
+		uploadCount, err := s.imagebed.SourceUploadOperationCount(src.ID)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查存储源中断图床上传失败", nil)
+			return
+		}
+		if uploadCount > 0 {
+			WriteError(w, r, CodeConflict, "存储源存在尚未恢复的图床上传，请重启服务完成恢复", map[string]any{"upload_count": uploadCount})
+			return
+		}
+	}
 	if err := s.sources.Delete(src.Key); err != nil {
 		s.writeSourceError(w, r, err)
 		return
