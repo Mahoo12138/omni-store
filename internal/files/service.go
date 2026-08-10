@@ -5,6 +5,7 @@ package files
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -137,7 +138,7 @@ func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
-		if info.Mode().IsRegular() && !uploadTempName.MatchString(entry.Name()) {
+		if info.Mode().IsRegular() && !isUploadInternalName(entry.Name()) {
 			usage += info.Size()
 		}
 		return nil
@@ -729,16 +730,20 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	defer unlock()
 
 	// 冲突检查（README §13.4）。
+	replacedExisting := false
 	if info, err := os.Lstat(absPath); err == nil {
 		if info.IsDir() {
 			return "", 0, fmt.Errorf("%w: 文件不能覆盖目录", ErrInvalid)
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return "", 0, ErrUnsupported
 		}
 		if !overwrite {
 			return "", 0, ErrAlreadyExists
 		}
+		replacedExisting = true
+	} else if !os.IsNotExist(err) {
+		return "", 0, err
 	}
 
 	parentAbs := filepath.Dir(absPath)
@@ -747,9 +752,18 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	}
 
 	maxBytes, limited := quotaGuard.MaxBytes()
-	written, err := writeViaTemp(parentAbs, absPath, body, maxBytes, limited)
+	tmpPath, written, contentSHA256, err := writeUploadTemp(parentAbs, body, maxBytes, limited)
 	if err != nil {
 		return "", 0, err
+	}
+	keepTemp := true
+	defer func() {
+		if keepTemp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if err := syncDirectory(parentAbs); err != nil {
+		return "", 0, fmt.Errorf("同步上传临时目录失败: %w", err)
 	}
 	ownerType := models.FileOwnerUnowned
 	var ownerUserID *int64
@@ -757,46 +771,44 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 		ownerType = models.FileOwnerUser
 		ownerUserID = lockOwnerUserID
 	}
+	op, err := s.newUploadOperation(src, relPath, tmpPath, replacedExisting, written, contentSHA256,
+		ownerType, ownerUserID, lockOwnerUserID)
+	if err != nil {
+		return "", 0, err
+	}
+	if err := s.writeUploadOperation(op); err != nil {
+		return "", 0, err
+	}
+	keepTemp = false // 从这里开始由持久日志接管清理与恢复。
+	if err := s.installUploadedFile(op, tmpPath, absPath); err != nil {
+		if rollbackErr := s.rollbackUploadOperation(op, src); rollbackErr != nil {
+			return "", 0, fmt.Errorf("提交上传文件失败: %w；回滚上传失败: %v", err, rollbackErr)
+		}
+		return "", 0, err
+	}
 	if err := s.RecordFile(src, relPath, ownerType, ownerUserID, lockOwnerUserID); err != nil {
+		if rollbackErr := s.rollbackUploadOperation(op, src); rollbackErr != nil {
+			return "", 0, fmt.Errorf("更新文件台账失败: %w；回滚上传失败: %v", err, rollbackErr)
+		}
 		return "", 0, fmt.Errorf("更新文件台账失败: %w", err)
+	}
+	if err := s.markUploadDatabaseReady(op.OperationID); err != nil {
+		// SQLite 已提交后不能再回滚真实文件。保留日志，让启动恢复器通过
+		// 最终文件摘要校验和幂等 upsert 完成阶段标记与内部备份清理。
+		return "", 0, fmt.Errorf("标记上传数据库阶段失败: %w", err)
+	}
+	if err := s.finishUploadOperation(op, src); err != nil {
+		// 对客户端而言上传已经提交；清理失败留给启动恢复，不诱发重复写入。
+		return relPath, written, nil
 	}
 	return relPath, written, nil
 }
 
 // writeViaTemp 写同目录临时文件后原子重命名到目标（README §14.3/§14.4）。
 func writeViaTemp(dirAbs, targetAbs string, body io.Reader, maxBytes int64, limited bool) (int64, error) {
-	tmpPath := filepath.Join(dirAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
-	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	tmpPath, written, _, err := writeUploadTemp(dirAbs, body, maxBytes, limited)
 	if err != nil {
-		return 0, fmt.Errorf("创建临时文件失败: %w", err)
-	}
-
-	cleanup := func() {
-		tmp.Close()
-		os.Remove(tmpPath)
-	}
-
-	reader := body
-	const maxInt64 = int64(^uint64(0) >> 1)
-	if limited && maxBytes < maxInt64 {
-		reader = io.LimitReader(body, maxBytes+1)
-	}
-	written, err := io.Copy(tmp, reader)
-	if err != nil {
-		cleanup()
-		return 0, fmt.Errorf("写入失败: %w", err)
-	}
-	if limited && written > maxBytes {
-		cleanup()
-		return 0, ErrQuotaExceeded
-	}
-	if err := tmp.Sync(); err != nil {
-		cleanup()
-		return 0, fmt.Errorf("落盘失败: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return 0, fmt.Errorf("关闭临时文件失败: %w", err)
+		return 0, err
 	}
 
 	if err := os.Rename(tmpPath, targetAbs); err != nil {
@@ -811,6 +823,44 @@ func writeViaTemp(dirAbs, targetAbs string, body io.Reader, maxBytes int64, limi
 		}
 	}
 	return written, nil
+}
+
+func writeUploadTemp(dirAbs string, body io.Reader, maxBytes int64, limited bool) (string, int64, string, error) {
+	tmpPath := filepath.Join(dirAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
+	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", 0, "", fmt.Errorf("创建临时文件失败: %w", err)
+	}
+
+	cleanup := func() {
+		tmp.Close()
+		os.Remove(tmpPath)
+	}
+
+	reader := body
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if limited && maxBytes < maxInt64 {
+		reader = io.LimitReader(body, maxBytes+1)
+	}
+	hasher := sha256.New()
+	written, err := io.Copy(io.MultiWriter(tmp, hasher), reader)
+	if err != nil {
+		cleanup()
+		return "", 0, "", fmt.Errorf("写入失败: %w", err)
+	}
+	if limited && written > maxBytes {
+		cleanup()
+		return "", 0, "", ErrQuotaExceeded
+	}
+	if err := tmp.Sync(); err != nil {
+		cleanup()
+		return "", 0, "", fmt.Errorf("落盘失败: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return "", 0, "", fmt.Errorf("关闭临时文件失败: %w", err)
+	}
+	return tmpPath, written, fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
 // --- 删除（README §13.5 永久删除） ---

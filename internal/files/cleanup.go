@@ -10,6 +10,11 @@ import (
 )
 
 var uploadTempName = regexp.MustCompile(`^\.omnistore-upload-[0-9a-f]{16}\.tmp$`)
+var uploadBackupName = regexp.MustCompile(`^\.omnistore-upload-[0-9a-f]{24}\.backup$`)
+
+func isUploadInternalName(name string) bool {
+	return uploadTempName.MatchString(name) || uploadBackupName.MatchString(name)
+}
 
 // CleanupResult 是一次上传残留清理的结果。
 type CleanupResult struct {

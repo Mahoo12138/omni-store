@@ -98,6 +98,7 @@ func TestStorageUsageCountsExcludedAndUserReservedNamesButNotInternalTemps(t *te
 		".env":                                   "345",
 		".omnistore-upload-not-ours.tmp":         "6789",
 		".omnistore-upload-0123456789abcdef.tmp": "not-counted",
+		".omnistore-upload-0123456789abcdef01234567.backup": "not-counted-either",
 	} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)

@@ -79,6 +79,9 @@ func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, ".omnistore-upload-0123456789abcdef01234567.backup"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	first, err := service.ReconcileSource(source)
 	if err != nil {

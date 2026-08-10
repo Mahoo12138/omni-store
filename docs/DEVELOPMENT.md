@@ -172,6 +172,8 @@ cd web && pnpm test
 
 图床上传日志位于 `$OMNISTORE_DATA_DIR/operations/image-uploads/`。恢复测试必须覆盖只有临时文件、只有最终文件、图片与台账已经提交但日志未清理、图片提交后又被移动、临时与最终文件同时存在、损坏日志，以及 `BEFORE INSERT ON file_records` 触发失败后的双表/文件整体回滚。并发用例至少 20 路，结束后应断言 `images`、用户 `file_records` 与真实普通文件数量完全一致且操作目录为空；恢复状态建议重复执行 20 次并结合 race 检测。
 
+普通上传日志位于 `$OMNISTORE_DATA_DIR/operations/file-uploads/`，覆盖旧目标时另有同目录 `.omnistore-upload-{24位十六进制}.backup`。故障注入必须覆盖：新建意图仅有临时文件、临时文件已改名但台账未提交、覆盖意图尚未备份、旧目标已备份但新目标未安装、新目标与旧备份同时存在、台账已提交但阶段标记未写、`database-ready` 后目标又被合法移动或删除，以及损坏日志和临时/最终并存的歧义状态。`BEFORE INSERT ON file_records` 失败时应断言新建目标被删除、覆盖目标恢复旧内容且操作目录为空；至少 20 路 REST/WebDAV/S3 共用核心上传并发后，不得残留日志或内部备份，用户台账数量必须与真实最终文件一致。
+
 ### E2E
 
 首次运行先安装 Chromium：

@@ -235,6 +235,45 @@ func TestHandleAdminDeleteSourceRejectsPendingImageUploadRecovery(t *testing.T) 
 	}
 }
 
+func TestHandleAdminDeleteSourceRejectsPendingFileUploadRecovery(t *testing.T) {
+	server, _, base := newSourceCreateHandlerServer(t)
+	root := filepath.Join(base, "source-delete-file-upload")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source, err := server.sources.Create(sources.CreateInput{Name: "pending-file-source", RootPath: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := "upl-00112233445566778899aabb"
+	operationsDir := filepath.Join(base, "data", "operations", "file-uploads")
+	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
+		"temp_relative_path":  ".omnistore-upload-0011223344556677.tmp",
+		"final_relative_path": "pending.txt", "replaced_existing": false,
+		"size": 1, "content_sha256": strings.Repeat("0", 64), "mtime_unix_nano": time.Now().UnixNano(),
+		"owner_type": models.FileOwnerUnowned, "created_at": time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/sources/"+source.Key, nil)
+	req.SetPathValue("key", source.Key)
+	recorder := httptest.NewRecorder()
+	server.handleAdminDeleteSource(recorder, req)
+	assertErrorResponse(t, recorder, http.StatusConflict, CodeConflict)
+	if _, err := server.sources.Get(source.Key); err != nil {
+		t.Fatalf("source with pending file upload was deleted: %v", err)
+	}
+}
+
 func newSourceCreateHandlerServer(t *testing.T) (*Server, *sql.DB, string) {
 	t.Helper()
 	base := t.TempDir()

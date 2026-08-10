@@ -277,7 +277,7 @@ func (s *Service) buildTransferPlan(source, target *models.StorageSource, fromRe
 			plan.dirs = append(plan.dirs, filepath.Join(toAbs, filepath.FromSlash(suffix)))
 			return nil
 		}
-		if uploadTempName.MatchString(entry.Name()) {
+		if isUploadInternalName(entry.Name()) {
 			return nil
 		}
 		targetAbs := filepath.Join(toAbs, filepath.FromSlash(suffix))

@@ -134,6 +134,15 @@ func runServer(args []string) error {
 			"rolled_back_restores", trashRecovery.RolledBackRestores,
 			"completed_purges", trashRecovery.CompletedPurges)
 	}
+	fileUploadRecovery, err := app.Files().RecoverFileUploadOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的普通文件上传失败: %w", err)
+	}
+	if fileUploadRecovery.CompletedUploads+fileUploadRecovery.RolledBackUploads > 0 {
+		logger.Info("已恢复中断的普通文件上传",
+			"completed_uploads", fileUploadRecovery.CompletedUploads,
+			"rolled_back_uploads", fileUploadRecovery.RolledBackUploads)
+	}
 	uploadRecovery, err := app.ImageBed().RecoverUploadOperations()
 	if err != nil {
 		return fmt.Errorf("恢复中断的图床上传失败: %w", err)
