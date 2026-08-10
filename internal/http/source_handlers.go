@@ -198,6 +198,15 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		WriteError(w, r, CodeConflict, "存储源回收站不为空，请先恢复或永久清理其中内容", map[string]any{"trash_count": trashCount})
 		return
 	}
+	transferCount, err := s.files.SourceTransferOperationCount(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查存储源中断移动失败", nil)
+		return
+	}
+	if transferCount > 0 {
+		WriteError(w, r, CodeConflict, "存储源存在尚未恢复的跨来源移动，请重启服务完成恢复", map[string]any{"transfer_count": transferCount})
+		return
+	}
 	if err := s.sources.Delete(src.Key); err != nil {
 		s.writeSourceError(w, r, err)
 		return

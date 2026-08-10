@@ -141,6 +141,51 @@ func TestHandleAdminCreateSourceRemovesDisabledSourceWhenReconcileFails(t *testi
 	}
 }
 
+func TestHandleAdminDeleteSourceRejectsPendingTransferRecovery(t *testing.T) {
+	server, _, base := newSourceCreateHandlerServer(t)
+	sourceRoot := filepath.Join(base, "source-delete-pending")
+	targetRoot := filepath.Join(base, "source-delete-target")
+	for _, root := range []string{sourceRoot, targetRoot} {
+		if err := os.Mkdir(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source, err := server.sources.Create(sources.CreateInput{Name: "pending-source", RootPath: sourceRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := server.sources.Create(sources.CreateInput{Name: "pending-target", RootPath: targetRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := "trf-00112233445566778899aabb"
+	operationsDir := filepath.Join(base, "data", "operations", "transfers")
+	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"version": 1, "operation_id": operationID,
+		"source_storage_source_id": source.ID, "target_storage_source_id": target.ID,
+		"source_relative_path": "source.txt", "target_relative_path": "target.txt",
+		"is_directory": false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/sources/"+source.Key, nil)
+	req.SetPathValue("key", source.Key)
+	recorder := httptest.NewRecorder()
+	server.handleAdminDeleteSource(recorder, req)
+	assertErrorResponse(t, recorder, http.StatusConflict, CodeConflict)
+	if _, err := server.sources.Get(source.Key); err != nil {
+		t.Fatalf("source with pending transfer was deleted: %v", err)
+	}
+}
+
 func newSourceCreateHandlerServer(t *testing.T) (*Server, *sql.DB, string) {
 	t.Helper()
 	base := t.TempDir()

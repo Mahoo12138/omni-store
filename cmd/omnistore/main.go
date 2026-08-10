@@ -111,6 +111,15 @@ func runServer(args []string) error {
 	logger.Info("数据库就绪", "path", cfg.DatabasePath())
 
 	srv, app := httpserver.New(cfg, dbConn, logger)
+	transferRecovery, err := app.Files().RecoverTransferOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的跨来源移动失败: %w", err)
+	}
+	if transferRecovery.CompletedMoves+transferRecovery.RolledBackMoves > 0 {
+		logger.Info("已恢复中断的跨来源移动",
+			"completed_moves", transferRecovery.CompletedMoves,
+			"rolled_back_moves", transferRecovery.RolledBackMoves)
+	}
 	trashRecovery, err := app.Files().RecoverTrashOperations()
 	if err != nil {
 		return fmt.Errorf("恢复中断的回收站操作失败: %w", err)

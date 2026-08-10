@@ -115,6 +115,13 @@ func TestMoveAcrossSourcesPreservesOwnershipAndImageLocation(t *testing.T) {
 	if imageSourceID != target.ID || imagePath != "archive/image.jpg" {
 		t.Fatalf("image location=%d/%s", imageSourceID, imagePath)
 	}
+	entries, err := os.ReadDir(service.transferOperationsDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("successful move left recovery artifacts: %+v", entries)
+	}
 	usage, err := service.UserUsage(userID)
 	if err != nil || usage != 4 {
 		t.Fatalf("usage after move=%d err=%v", usage, err)

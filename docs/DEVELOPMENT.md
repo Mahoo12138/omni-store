@@ -166,6 +166,10 @@ cd web && pnpm test
 
 回收站操作日志位于 `$OMNISTORE_DATA_DIR/trash/.operations/`。测试崩溃恢复时应构造“日志已写、文件系统未变”“目标复制完成、源仅删除一部分”“文件系统已变、事务未提交”“事务已提交、日志未清理”状态，并分别覆盖移入、恢复和永久清理。不要手工删除损坏日志后直接启动；先保留数据目录副本并核对 SQLite、源路径与 `trash/{trash_key}/payload`，恢复器会对无法无损判断的状态拒绝启动。
 
+跨来源移动日志位于 `$OMNISTORE_DATA_DIR/operations/transfers/`。回归测试必须覆盖：意图阶段的部分目标清理、`target-ready` 后 SQLite 已提交但 `database-ready` 尚未写入的反向迁移、`database-ready` 后源目录只删除一部分的继续完成、成功路径无日志残留，以及损坏日志/提交前源缺失/提交后目标缺失阻止恢复。所有权断言不可只检查文件存在，还要验证 `file_records.owner_type`、`owner_user_id`、图床和分享定位；重复状态机测试建议至少运行 20 次。
+
+请求级路径锁测试必须先确认竞争 goroutine 已进入等待队列，再断言祖先/后代阻塞，不能用“goroutine 可能尚未调度”的短超时制造假阳性。至少覆盖父写锁阻塞子写锁、子读锁阻塞父写锁、等待中的父写锁阻止后来子读锁插队、兄弟路径并发、路径段边界和不同存储源隔离，并在 `-race -count=10` 下运行。
+
 ### E2E
 
 首次运行先安装 Chromium：

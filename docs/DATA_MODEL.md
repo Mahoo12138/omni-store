@@ -435,6 +435,8 @@ unowned
 
 `users.quota_bytes=0` 表示不限；大于 0 时，用户拥有的 `active + trash` 文件大小之和不得超过该值。回收站仍计入用户配额，永久清理后释放；复制计入执行用户，跨来源移动保留归属且全局用户用量不重复增长。
 
+跨来源移动的崩溃阶段不写入业务表，而是短期保存在系统数据目录 `operations/transfers/`。`target-ready` 只证明目标副本已完整同步；`database-ready` 证明 `file_records`、`images` 和 `file_shares` 的目标定位事务已经提交。提交前恢复会把可能已经切换的台账原样迁回来源以保留所有权，提交后恢复只完成源路径删除。
+
 ### file_shares
 
 `file_shares` 保存登录用户创建的文件或目录分享关系，不保存或复制文件内容。核心字段：

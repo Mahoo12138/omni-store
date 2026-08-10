@@ -3,9 +3,11 @@ package files
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -111,28 +113,91 @@ func (s *Service) transfer(source, target *models.StorageSource, fromInput, toIn
 	if maxBytes, limited := quotaGuard.MaxBytes(); limited && plan.total > maxBytes {
 		return nil, ErrQuotaExceeded
 	}
+	var operation *transferOperation
+	if move {
+		pending := s.newTransferOperation(source.ID, target.ID, plan.sourceRel, plan.targetRel, plan.isDir)
+		if err := s.writeTransferOperation(pending); err != nil {
+			return nil, fmt.Errorf("记录跨来源移动意图失败: %w", err)
+		}
+		operation = &pending
+	}
 	if err := s.executeTransferCopy(plan); err != nil {
-		s.rollbackTransferTarget(target, plan)
-		return nil, err
+		rollbackErr := s.rollbackTransferTarget(target, plan)
+		if operation != nil && rollbackErr == nil {
+			_ = s.removeTransferOperation(operation.OperationID)
+		}
+		return nil, errors.Join(err, rollbackErr)
+	}
+	if operation != nil {
+		if err := s.syncTransferDestination(plan); err != nil {
+			rollbackErr := s.rollbackTransferTarget(target, plan)
+			if rollbackErr == nil {
+				_ = s.removeTransferOperation(operation.OperationID)
+			}
+			return nil, errors.Join(fmt.Errorf("同步跨来源移动目标失败: %w", err), rollbackErr)
+		}
+		if err := s.markTransferTargetReady(operation.OperationID); err != nil {
+			rollbackErr := s.rollbackTransferTarget(target, plan)
+			if rollbackErr == nil {
+				_ = s.removeTransferOperation(operation.OperationID)
+			}
+			return nil, errors.Join(fmt.Errorf("记录跨来源移动目标阶段失败: %w", err), rollbackErr)
+		}
 	}
 	if err := s.syncTransferRecords(source, target, plan, move, actorUserID); err != nil {
-		s.rollbackTransferTarget(target, plan)
-		return nil, fmt.Errorf("更新文件台账失败: %w", err)
+		rollbackErr := s.rollbackTransferTarget(target, plan)
+		if operation != nil && rollbackErr == nil {
+			_ = s.removeTransferOperation(operation.OperationID)
+		}
+		return nil, errors.Join(fmt.Errorf("更新文件台账失败: %w", err), rollbackErr)
 	}
 	if move {
+		if err := s.markTransferDatabaseReady(operation.OperationID); err != nil {
+			rollbackErr := s.rollbackTransferRecords(source, target, plan)
+			targetRollbackErr := s.rollbackTransferTarget(target, plan)
+			if rollbackErr == nil && targetRollbackErr == nil {
+				_ = s.removeTransferOperation(operation.OperationID)
+			}
+			return nil, errors.Join(fmt.Errorf("记录跨来源移动数据库阶段失败: %w", err), rollbackErr, targetRollbackErr)
+		}
 		if err := os.RemoveAll(plan.sourceAbs); err != nil {
-			_ = s.rollbackTransferRecords(source, target, plan)
-			s.rollbackTransferTarget(target, plan)
-			return nil, fmt.Errorf("删除源路径失败: %w", err)
+			return nil, fmt.Errorf("删除源路径失败，操作将在重启时继续: %w", err)
+		}
+		if err := syncDirectory(filepath.Dir(plan.sourceAbs)); err != nil {
+			return nil, fmt.Errorf("同步源目录失败，操作将在重启时继续: %w", err)
 		}
 		if err := releasePersistent(map[int64][]string{source.ID: []string{plan.sourceRel}}); err != nil {
 			return nil, err
+		}
+		if err := s.removeTransferOperation(operation.OperationID); err != nil {
+			return nil, fmt.Errorf("清理跨来源移动日志失败: %w", err)
 		}
 	}
 	return &TransferResult{
 		Path: plan.targetRel, Files: int64(len(plan.files)), Bytes: plan.total,
 		SourceKey: source.Key, TargetKey: target.Key, WasMove: move,
 	}, nil
+}
+
+func (s *Service) syncTransferDestination(plan *transferPlan) error {
+	dirs := map[string]struct{}{filepath.Dir(plan.targetAbs): {}}
+	if plan.isDir {
+		dirs[plan.targetAbs] = struct{}{}
+		for _, dir := range plan.dirs {
+			dirs[dir] = struct{}{}
+		}
+	}
+	ordered := make([]string, 0, len(dirs))
+	for dir := range dirs {
+		ordered = append(ordered, dir)
+	}
+	sort.Slice(ordered, func(i, j int) bool { return len(ordered[i]) > len(ordered[j]) })
+	for _, dir := range ordered {
+		if err := syncDirectory(dir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) buildTransferPlan(source, target *models.StorageSource, fromRel, toRel string) (*transferPlan, error) {
@@ -253,9 +318,14 @@ func (s *Service) executeTransferCopy(plan *transferPlan) error {
 	return nil
 }
 
-func (s *Service) rollbackTransferTarget(target *models.StorageSource, plan *transferPlan) {
-	_ = os.RemoveAll(plan.targetAbs)
-	_ = s.deleteFileRecords(target.ID, plan.targetRel, plan.isDir)
+func (s *Service) rollbackTransferTarget(target *models.StorageSource, plan *transferPlan) error {
+	removeErr := os.RemoveAll(plan.targetAbs)
+	var syncErr error
+	if removeErr == nil {
+		syncErr = syncDirectory(filepath.Dir(plan.targetAbs))
+	}
+	recordErr := s.deleteFileRecords(target.ID, plan.targetRel, plan.isDir)
+	return errors.Join(removeErr, syncErr, recordErr)
 }
 
 type transferRecord struct {
@@ -409,18 +479,59 @@ func moveShareRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel str
 }
 
 func (s *Service) rollbackTransferRecords(source, target *models.StorageSource, plan *transferPlan) error {
-	// 物理删除源失败时恢复图床定位，再用校准恢复源台账并清掉目标台账。
+	// 物理删除源失败时，在同一事务中把目标台账、图床与分享定位反向迁回来源。
+	// 不能直接删除目标台账后 Reconcile，否则原用户所有权会退化为 unowned。
 	tx, txErr := s.db.Begin()
 	if txErr == nil {
-		_ = moveImageRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
-		_ = moveShareRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
-		_, _ = tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			target.ID, plan.targetRel, plan.targetRel+"/%")
-		txErr = tx.Commit()
+		txErr = moveFileRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
+		if txErr == nil {
+			txErr = moveImageRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
+		}
+		if txErr == nil {
+			txErr = moveShareRecordsTx(tx, target.ID, source.ID, plan.targetRel, plan.sourceRel)
+		}
+		if txErr == nil {
+			txErr = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
 	}
 	_, err := s.ReconcileSource(source)
 	if txErr != nil {
 		return txErr
 	}
 	return err
+}
+
+func moveFileRecordsTx(tx *sql.Tx, fromSourceID, toSourceID int64, fromRel, toRel string) error {
+	rows, err := tx.Query(`SELECT relative_path FROM file_records
+  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
+		fromSourceID, fromRel, fromRel+"/%")
+	if err != nil {
+		return err
+	}
+	var paths []string
+	for rows.Next() {
+		var relPath string
+		if err := rows.Scan(&relPath); err != nil {
+			rows.Close()
+			return err
+		}
+		paths = append(paths, relPath)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, relPath := range paths {
+		newRel := toRel + strings.TrimPrefix(relPath, fromRel)
+		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ?`, toSourceID, newRel); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE file_records SET storage_source_id = ?, relative_path = ?, updated_at = ?
+  WHERE storage_source_id = ? AND relative_path = ?`,
+			toSourceID, newRel, time.Now().UTC(), fromSourceID, relPath); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+func waitForManagerWaiters(t *testing.T, manager *Manager, expected int) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		manager.mu.Lock()
+		count := len(manager.waiters)
+		manager.mu.Unlock()
+		if count >= expected {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("lock waiters did not reach %d", expected)
+}
+
 func TestKeySeparatesSourceAndPath(t *testing.T) {
 	if got, want := Key("src-a", "docs/file.txt"), "src-a\x00docs/file.txt"; got != want {
 		t.Fatalf("Key()=%q want=%q", got, want)
@@ -73,6 +88,90 @@ func TestLockPairOrdersKeysAndHandlesIdenticalKey(t *testing.T) {
 	unlockSame()
 	if len(manager.entries) != 0 {
 		t.Fatalf("released lock entries leaked: %d", len(manager.entries))
+	}
+}
+
+func TestManagerSerializesAncestorAndDescendantPathsButNotSiblings(t *testing.T) {
+	manager := NewManager()
+	unlockParent := manager.Lock(Key("src-a", "docs"))
+
+	childAcquired := make(chan struct{})
+	go func() {
+		unlock := manager.Lock(Key("src-a", "docs/report.txt"))
+		close(childAcquired)
+		unlock()
+	}()
+	waitForManagerWaiters(t, manager, 1)
+	siblingAcquired := make(chan struct{})
+	go func() {
+		unlock := manager.Lock(Key("src-a", "photos/image.jpg"))
+		close(siblingAcquired)
+		unlock()
+	}()
+
+	select {
+	case <-childAcquired:
+		t.Fatal("descendant writer acquired while ancestor writer was held")
+	case <-time.After(25 * time.Millisecond):
+	}
+	select {
+	case <-siblingAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("non-overlapping sibling path was unnecessarily blocked")
+	}
+	unlockParent()
+	select {
+	case <-childAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("descendant writer did not acquire after ancestor released")
+	}
+}
+
+func TestManagerWriterWaitingOnAncestorBlocksNewDescendantReaders(t *testing.T) {
+	manager := NewManager()
+	unlockReader := manager.RLock(Key("src-a", "docs/report.txt"))
+	writerAcquired := make(chan struct{})
+	go func() {
+		unlock := manager.Lock(Key("src-a", "docs"))
+		close(writerAcquired)
+		unlock()
+	}()
+	waitForManagerWaiters(t, manager, 1)
+
+	lateReaderAcquired := make(chan struct{})
+	go func() {
+		unlock := manager.RLock(Key("src-a", "docs/other.txt"))
+		close(lateReaderAcquired)
+		unlock()
+	}()
+	waitForManagerWaiters(t, manager, 2)
+	select {
+	case <-lateReaderAcquired:
+		t.Fatal("new descendant reader bypassed an earlier ancestor writer")
+	case <-time.After(25 * time.Millisecond):
+	}
+	unlockReader()
+	select {
+	case <-writerAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("ancestor writer did not acquire after reader released")
+	}
+	select {
+	case <-lateReaderAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("late reader did not acquire after writer completed")
+	}
+}
+
+func TestManagerUsesPathSegmentBoundariesAndExactCoordinationKeys(t *testing.T) {
+	if keysConflict(Key("src-a", "doc"), Key("src-a", "docs/file.txt")) {
+		t.Fatal("path prefix without segment boundary must not conflict")
+	}
+	if keysConflict(Key("src-a", "docs"), Key("src-b", "docs/file.txt")) {
+		t.Fatal("paths in different sources must not conflict")
+	}
+	if keysConflict("quota:src-a", "quota:src-a/child") {
+		t.Fatal("coordination keys without path separator must use exact matching")
 	}
 }
 
