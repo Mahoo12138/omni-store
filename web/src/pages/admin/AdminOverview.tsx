@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, ApiRequestError } from '../../api/client'
@@ -65,6 +65,8 @@ import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
   IconArrowUp,
+  IconChevronLeft,
+  IconChevronRight,
   IconCloud,
   IconDownload,
   IconGlobe,
@@ -106,9 +108,27 @@ const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 const auditPageSize = 50
 
 const credentialViews = [
-  { key: 'webdav', label: 'WebDAV', meta: '桌面挂载', icon: <IconLink size={16} /> },
-  { key: 'image-api', label: '图床 API', meta: '上传客户端', icon: <IconImage size={16} /> },
-  { key: 's3', label: 'S3', meta: 'CLI 与 SDK', icon: <IconCloud size={16} /> },
+  {
+    key: 'webdav',
+    label: 'WebDAV',
+    meta: '桌面挂载',
+    description: '使用系统文件管理器或支持 WebDAV 的客户端挂载文件。',
+    icon: <IconLink size={18} />,
+  },
+  {
+    key: 'image-api',
+    label: '图床 API',
+    meta: '上传客户端',
+    description: '为 PicGo 或第三方客户端签发可单独撤销的 Token。',
+    icon: <IconImage size={18} />,
+  },
+  {
+    key: 's3',
+    label: 'S3',
+    meta: 'CLI 与 SDK',
+    description: '为 AWS CLI、rclone 或 SDK 创建独立访问凭据。',
+    icon: <IconCloud size={18} />,
+  },
 ] as const
 
 type CredentialView = typeof credentialViews[number]['key']
@@ -277,6 +297,7 @@ function ProfileSection() {
   const queryClient = useQueryClient()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const tokens = useQuery({ queryKey: ['token-status'], queryFn: fetchTokenStatus })
+  const s3Credentials = useQuery({ queryKey: ['s3-credentials'], queryFn: fetchS3Credentials })
 
   const [profileOpen, setProfileOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
@@ -286,7 +307,7 @@ function ProfileSection() {
   const [newPwd, setNewPwd] = useState('')
   const [pwdMsg, setPwdMsg] = useState('')
   const [newTokens, setNewTokens] = useState<Record<string, string>>({})
-  const [credentialView, setCredentialView] = useState<CredentialView>('webdav')
+  const [credentialView, setCredentialView] = useState<CredentialView | null>(null)
 
   const profileMut = useMutation({
     mutationFn: updateProfile,
@@ -327,26 +348,30 @@ function ProfileSection() {
     pwdMut.mutate({ o: oldPwd, n: newPwd })
   }
 
-  function moveCredentialFocus(event: KeyboardEvent<HTMLButtonElement>, current: CredentialView) {
-    const currentIndex = credentialViews.findIndex((view) => view.key === current)
-    let nextIndex = currentIndex
-
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      nextIndex = (currentIndex + 1) % credentialViews.length
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      nextIndex = (currentIndex - 1 + credentialViews.length) % credentialViews.length
-    } else if (event.key === 'Home') {
-      nextIndex = 0
-    } else if (event.key === 'End') {
-      nextIndex = credentialViews.length - 1
-    } else {
-      return
+  function credentialStatus(view: CredentialView) {
+    if (view === 's3') {
+      if (s3Credentials.isPending) return { label: '正在读取', active: false }
+      if (s3Credentials.isError) return { label: '状态未知', active: false, error: true }
+      const enabled = (s3Credentials.data ?? []).filter((item) => !item.is_disabled).length
+      return enabled > 0
+        ? { label: `已启用 ${enabled} 个`, active: true }
+        : { label: '未生成', active: false }
     }
 
-    event.preventDefault()
-    const nextView = credentialViews[nextIndex]
-    setCredentialView(nextView.key)
-    requestAnimationFrame(() => document.getElementById(`credential-tab-${nextView.key}`)?.focus())
+    if (tokens.isPending) return { label: '正在读取', active: false }
+    if (tokens.isError) return { label: '状态未知', active: false, error: true }
+    const status = view === 'webdav' ? tokens.data?.webdav : tokens.data?.image_bed
+    return status?.exists
+      ? { label: view === 'webdav' ? '已启用' : `已启用 ${status.count} 个`, active: true }
+      : { label: '未生成', active: false }
+  }
+
+  function returnToCredentialOverview() {
+    const previous = credentialView
+    setCredentialView(null)
+    requestAnimationFrame(() => {
+      if (previous) document.getElementById(`credential-entry-${previous}`)?.focus()
+    })
   }
 
   return (
@@ -458,43 +483,58 @@ function ProfileSection() {
             <span className={css.eyebrow}>访问凭据</span>
             <h2 className={css.credentialsTitle}>应用与客户端连接</h2>
           </div>
-          <p className={css.credentialsHint}>Token 与 Secret 仅在生成时展示一次，请妥善保存。</p>
+          <p className={css.credentialsHint}>
+            {credentialView
+              ? '当前只管理一种连接；返回后可切换到其他协议。'
+              : '选择连接类型查看状态和管理凭据。Token 与 Secret 仅展示一次。'}
+          </p>
         </header>
-        <div className={css.credentialSwitcher}>
-          <div className={css.credentialTabs} role="tablist" aria-label="连接类型">
+        {credentialView === null ? (
+          <nav className={css.credentialOverview} aria-label="连接类型">
             {credentialViews.map((view) => {
-              const selected = credentialView === view.key
+              const status = credentialStatus(view.key)
               return (
                 <button
                   key={view.key}
-                  id={`credential-tab-${view.key}`}
+                  id={`credential-entry-${view.key}`}
                   type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-controls={`credential-panel-${view.key}`}
-                  tabIndex={selected ? 0 : -1}
-                  className={`${css.credentialTab} ${selected ? css.credentialTabActive : ''}`}
+                  className={css.credentialOverviewItem}
                   onClick={() => setCredentialView(view.key)}
-                  onKeyDown={(event) => moveCredentialFocus(event, view.key)}
+                  aria-label={`管理 ${view.label}`}
                 >
-                  <span className={css.credentialTabIcon} aria-hidden="true">{view.icon}</span>
-                  <span className={css.credentialTabCopy}>
-                    <strong className={css.credentialTabLabel}>{view.label}</strong>
-                    <small className={css.credentialTabMeta}>{view.meta}</small>
+                  <span className={css.credentialOverviewIcon} aria-hidden="true">{view.icon}</span>
+                  <span className={css.credentialOverviewCopy}>
+                    <span className={css.credentialOverviewTitleLine}>
+                      <strong className={css.credentialOverviewTitle}>{view.label}</strong>
+                      <small className={css.credentialOverviewMeta}>{view.meta}</small>
+                    </span>
+                    <span className={css.credentialOverviewDescription}>{view.description}</span>
                   </span>
+                  <span
+                    className={status.error
+                      ? css.credentialStatusError
+                      : status.active ? css.statusBadge : css.statusBadgeMuted}
+                  >
+                    {status.active ? <i className={css.statusDotSmall} /> : null}
+                    {status.label}
+                  </span>
+                  <IconChevronRight size={17} />
                 </button>
               )
             })}
-          </div>
-        </div>
-        <div
-          id="credential-panel-webdav"
-          role="tabpanel"
-          aria-labelledby="credential-tab-webdav"
-          className={css.credentialWorkspace}
-          hidden={credentialView !== 'webdav'}
-        >
-          {credentialView === 'webdav' ? (
+          </nav>
+        ) : (
+          <div className={css.credentialDetail}>
+            <div className={css.credentialDetailNav}>
+              <button type="button" className={css.credentialBackButton} onClick={returnToCredentialOverview}>
+                <IconChevronLeft size={16} />
+                所有连接
+              </button>
+              <span className={css.credentialDetailContext}>
+                正在管理 {credentialViews.find((view) => view.key === credentialView)?.label}
+              </span>
+            </div>
+            {credentialView === 'webdav' ? (
             <TokenBlock
               type="webdav"
               title="WebDAV"
@@ -506,26 +546,11 @@ function ProfileSection() {
               error={tokens.isError}
               resetting={resetMut.isPending}
             />
-          ) : null}
-        </div>
-        <div
-          id="credential-panel-image-api"
-          role="tabpanel"
-          aria-labelledby="credential-tab-image-api"
-          className={css.credentialWorkspace}
-          hidden={credentialView !== 'image-api'}
-        >
-          {credentialView === 'image-api' ? <ImageBedTokenManager /> : null}
-        </div>
-        <div
-          id="credential-panel-s3"
-          role="tabpanel"
-          aria-labelledby="credential-tab-s3"
-          className={css.credentialWorkspace}
-          hidden={credentialView !== 's3'}
-        >
-          {credentialView === 's3' ? <S3CredentialManager /> : null}
-        </div>
+            ) : null}
+            {credentialView === 'image-api' ? <ImageBedTokenManager /> : null}
+            {credentialView === 's3' ? <S3CredentialManager /> : null}
+          </div>
+        )}
       </section>
 
       {/* 危险操作 */}

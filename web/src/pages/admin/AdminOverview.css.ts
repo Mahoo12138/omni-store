@@ -380,71 +380,108 @@ export const credentialsHeader = style({
 export const credentialsTitle = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.lg, letterSpacing: '-0.01em' })
 export const credentialsHint = style({ margin: 0, color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.6 })
 
-export const credentialSwitcher = style({
-  padding: `${vars.space.sm} ${vars.space.xl}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-  backgroundColor: vars.color.background,
+export const credentialOverview = style({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: `${vars.space.sm} ${vars.space.xl} ${vars.space.md}`,
   '@media': {
-    'screen and (max-width: 640px)': { padding: vars.space.sm },
+    'screen and (max-width: 640px)': { padding: `${vars.space.xs} ${vars.space.lg} ${vars.space.md}` },
+    'screen and (max-width: 480px)': { padding: `${vars.space.xs} ${vars.space.md} ${vars.space.sm}` },
   },
 })
 
-export const credentialTabs = style({
+export const credentialOverviewItem = style({
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-  gap: vars.space.sm,
-})
-
-export const credentialTab = style({
-  display: 'grid',
-  gridTemplateColumns: '32px minmax(0, 1fr)',
+  gridTemplateColumns: '40px minmax(0, 1fr) auto 20px',
   alignItems: 'center',
-  gap: vars.space.sm,
+  gap: vars.space.md,
   minWidth: 0,
-  minHeight: 56,
-  padding: `${vars.space.sm} ${vars.space.md}`,
-  border: '1px solid transparent',
-  borderRadius: vars.radius.md,
+  minHeight: 78,
+  padding: `${vars.space.md} 0`,
+  border: 0,
+  borderBottom: `1px solid ${vars.color.border}`,
   backgroundColor: 'transparent',
   color: vars.color.textSecondary,
   fontFamily: vars.font.body,
   textAlign: 'left',
   cursor: 'pointer',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}`,
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
-    '&:hover': { backgroundColor: vars.color.surfaceHover, color: vars.color.text },
-    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
+    '&:last-child': { borderBottom: 0 },
+    '&:hover': { backgroundColor: vars.color.surfaceHover, color: vars.color.primary },
+    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2, borderRadius: vars.radius.md },
   },
   '@media': {
-    'screen and (max-width: 520px)': {
-      gridTemplateColumns: '24px minmax(0, 1fr)',
-      gap: vars.space.xs,
-      minHeight: 48,
-      padding: `6px ${vars.space.sm}`,
+    'screen and (max-width: 560px)': {
+      gridTemplateColumns: '40px minmax(0, 1fr) 18px',
+      gap: vars.space.sm,
     },
   },
 })
 
-export const credentialTabActive = style({
-  borderColor: vars.color.primarySubtle,
+export const credentialOverviewIcon = style({
+  display: 'grid',
+  placeItems: 'center',
+  width: 40,
+  height: 40,
+  borderRadius: vars.radius.md,
   backgroundColor: vars.color.primarySubtle,
   color: vars.color.primary,
-  selectors: { '&:hover': { backgroundColor: vars.color.primarySubtle, color: vars.color.primary } },
 })
 
-export const credentialTabIcon = style({ display: 'grid', placeItems: 'center', width: 32, height: 32, '@media': { 'screen and (max-width: 520px)': { width: 24, height: 24 } } })
-export const credentialTabCopy = style({ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 })
-export const credentialTabLabel = style({ color: 'inherit', fontSize: vars.fontSize.sm, fontWeight: 600, whiteSpace: 'nowrap' })
-export const credentialTabMeta = style({
-  color: 'inherit',
+export const credentialOverviewCopy = style({ display: 'flex', flexDirection: 'column', gap: vars.space.xs, minWidth: 0 })
+export const credentialOverviewTitleLine = style({ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: vars.space.sm })
+export const credentialOverviewTitle = style({ color: vars.color.text, fontSize: vars.fontSize.md, fontWeight: 600 })
+export const credentialOverviewMeta = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const credentialOverviewDescription = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.sm, lineHeight: 1.5 })
+
+globalStyle(`${credentialOverviewItem} > svg`, {
+  justifySelf: 'end',
+  '@media': { 'screen and (max-width: 560px)': { gridColumn: 3, gridRow: '1 / span 2' } },
+})
+
+export const credentialDetail = style({ minWidth: 0 })
+export const credentialDetailNav = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+  minHeight: 52,
+  padding: `0 ${vars.space.xl}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  backgroundColor: vars.color.background,
+  '@media': {
+    'screen and (max-width: 640px)': { padding: `0 ${vars.space.lg}` },
+    'screen and (max-width: 480px)': { padding: `0 ${vars.space.md}` },
+  },
+})
+
+export const credentialBackButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  minHeight: 36,
+  padding: `0 ${vars.space.sm}`,
+  marginLeft: `-${vars.space.sm}`,
+  border: 0,
+  borderRadius: vars.radius.md,
+  backgroundColor: 'transparent',
+  color: vars.color.primary,
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': { backgroundColor: vars.color.primarySubtle },
+    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
+  },
+})
+
+export const credentialDetailContext = style({
+  color: vars.color.textSecondary,
   fontSize: vars.fontSize.xs,
-  fontWeight: 400,
-  opacity: 0.82,
-  whiteSpace: 'nowrap',
-  '@media': { 'screen and (max-width: 680px)': { display: 'none' } },
+  '@media': { 'screen and (max-width: 480px)': { display: 'none' } },
 })
-
-export const credentialWorkspace = style({ minWidth: 0 })
 
 export const credentialGroup = style({
   padding: `22px ${vars.space.xl}`,
@@ -519,6 +556,18 @@ export const statusBadge = style({ display: 'inline-flex', alignItems: 'center',
 export const statusDotSmall = style({ width: '6px', height: '6px', borderRadius: vars.radius.full, backgroundColor: vars.color.success })
 export const statusBadgeMuted = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, fontWeight: 600 })
 export const credentialStatusError = style({ color: vars.color.danger, fontSize: vars.fontSize.xs, fontWeight: 600 })
+
+globalStyle(`${credentialOverviewItem} > ${statusBadge}, ${credentialOverviewItem} > ${statusBadgeMuted}, ${credentialOverviewItem} > ${credentialStatusError}`, {
+  justifySelf: 'end',
+  whiteSpace: 'nowrap',
+  '@media': {
+    'screen and (max-width: 560px)': {
+      gridColumn: '2',
+      gridRow: 2,
+      justifySelf: 'start',
+    },
+  },
+})
 
 export const credentialBody = style({
   marginTop: vars.space.lg,

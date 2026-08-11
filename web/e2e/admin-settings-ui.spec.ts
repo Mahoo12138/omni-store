@@ -147,21 +147,25 @@ test('primary settings actions belong to their module headers', async ({ page })
   }
 })
 
-test('credential switcher mounts one focused lifecycle workspace at a time', async ({ page }) => {
+test('credential overview opens one isolated management workspace at a time', async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await loginAsAdmin(page)
   await page.setViewportSize({ width: 1119, height: 880 })
   await page.goto('/app/admin?section=profile')
 
-  const connectionTypes = page.getByRole('tablist', { name: '连接类型' })
-  const webdavTab = connectionTypes.getByRole('tab', { name: /WebDAV/ })
-  const imageApiTab = connectionTypes.getByRole('tab', { name: /图床 API/ })
-  const s3Tab = connectionTypes.getByRole('tab', { name: /^S3/ })
+  const connectionTypes = page.getByRole('navigation', { name: '连接类型' })
+  const webdavEntry = connectionTypes.getByRole('button', { name: '管理 WebDAV' })
+  const imageApiEntry = connectionTypes.getByRole('button', { name: '管理 图床 API' })
+  const s3Entry = connectionTypes.getByRole('button', { name: '管理 S3' })
 
-  await expect(webdavTab).toHaveAttribute('aria-selected', 'true')
+  await expect(webdavEntry).toBeVisible()
+  await expect(imageApiEntry).toBeVisible()
+  await expect(s3Entry).toBeVisible()
+  await expect(page.getByRole('region', { name: 'WebDAV', exact: true })).toHaveCount(0)
   await expect(page.getByRole('region', { name: '图床 API', exact: true })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'S3 Access Key', exact: true })).toHaveCount(0)
 
+  await webdavEntry.click()
   const webdav = page.getByRole('region', { name: 'WebDAV', exact: true })
   await expect(webdav).toContainText('挂载路径')
   await expect(webdav).toContainText('/dav')
@@ -169,17 +173,17 @@ test('credential switcher mounts one focused lifecycle workspace at a time', asy
   await expect(page.getByRole('dialog', { name: '重置 WebDAV' })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
 
-  await imageApiTab.click()
-  await expect(imageApiTab).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('button', { name: '所有连接' }).click()
+  await expect(webdavEntry).toBeFocused()
+  await imageApiEntry.click()
   await expect(webdav).toHaveCount(0)
   const imageApi = page.getByRole('region', { name: '图床 API', exact: true })
   await imageApi.getByRole('button', { name: '新建 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '新建图床 Token' })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
 
-  await imageApiTab.focus()
-  await imageApiTab.press('ArrowRight')
-  await expect(s3Tab).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('button', { name: '所有连接' }).click()
+  await s3Entry.click()
   const s3 = page.getByRole('region', { name: 'S3 Access Key', exact: true })
   await expect(s3.getByRole('list', { name: 'S3 凭据列表' })).toBeVisible()
   await expect(s3.getByRole('list', { name: 'S3 Bucket 映射' })).toBeVisible()
@@ -191,11 +195,14 @@ test('credential switcher mounts one focused lifecycle workspace at a time', asy
   await page.getByRole('button', { name: '取消', exact: true }).click()
 
   await page.setViewportSize({ width: 375, height: 812 })
-  await webdavTab.click()
+  await page.getByRole('button', { name: '所有连接' }).click()
+  await webdavEntry.click()
   await expect(page.getByRole('region', { name: 'WebDAV', exact: true })).toBeVisible()
-  await imageApiTab.click()
+  await page.getByRole('button', { name: '所有连接' }).click()
+  await imageApiEntry.click()
   await expect(page.getByRole('region', { name: '图床 API', exact: true })).toBeVisible()
-  await s3Tab.click()
+  await page.getByRole('button', { name: '所有连接' }).click()
+  await s3Entry.click()
   await expect(s3).toBeVisible()
   expect(await page.evaluate(() => (
     document.documentElement.scrollWidth > document.documentElement.clientWidth
