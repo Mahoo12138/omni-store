@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, ApiRequestError } from '../../api/client'
@@ -21,7 +21,6 @@ import {
   adminReconcileSource,
   adminRevokeUserCredentials,
   adminSetAnonymousSettings,
-  adminSetExcludePatterns,
   adminSetSourceDisabled,
   adminSetUserDisabled,
   adminSetUserQuota,
@@ -66,11 +65,12 @@ import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
   IconArrowUp,
+  IconCloud,
   IconDownload,
   IconGlobe,
   IconImage,
   IconInfo,
-  IconKey,
+  IconLink,
   IconPlus,
   IconServer,
   IconSettings,
@@ -104,6 +104,20 @@ const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 const auditPageSize = 50
+
+const credentialViews = [
+  { key: 'webdav', label: 'WebDAV', meta: '桌面挂载', icon: <IconLink size={16} /> },
+  { key: 'image-api', label: '图床 API', meta: '上传客户端', icon: <IconImage size={16} /> },
+  { key: 's3', label: 'S3', meta: 'CLI 与 SDK', icon: <IconCloud size={16} /> },
+] as const
+
+type CredentialView = typeof credentialViews[number]['key']
+
+function quotaGiBInputValue(bytes: number): string {
+  if (bytes <= 0) return '0'
+  return String(Number((bytes / (1024 ** 3)).toFixed(6)))
+}
+
 const auditActorOptions = [
   { value: 'all', label: '全部主体' },
   { value: 'user', label: '登录用户' },
@@ -156,8 +170,15 @@ export function AdminOverviewPage() {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const isAdmin = me.data?.role === 'super_admin'
   const availableNav = isAdmin ? baseNav.concat(adminNav) : baseNav
+  const settingsNavRef = useRef<HTMLElement>(null)
   const section: SectionKey = (availableNav.find((n) => n.key === search.section)?.key ??
     'profile') as SectionKey
+
+  useEffect(() => {
+    settingsNavRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [section])
 
   function setSection(k: SectionKey) {
     navigate({ to: '/app/admin', search: { section: k } })
@@ -169,36 +190,36 @@ export function AdminOverviewPage() {
 
       <div className={css.settingsLayout}>
         {/* 左侧分组的子导航 */}
-        <nav className={css.settingsSide} aria-label="设置分组">
+        <nav ref={settingsNavRef} className={css.settingsSide} aria-label="设置分组">
           <div className={css.settingsGroup}>
             <span className={css.settingsGroupTitle}>基础</span>
             {baseNav.map((item) => (
-              <span
+              <button
+                type="button"
                 key={item.key}
                 className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
                 onClick={() => setSection(item.key)}
-                role="link"
                 aria-current={section === item.key ? 'page' : undefined}
               >
                 {item.icon}
                 {item.label}
-              </span>
+              </button>
             ))}
           </div>
           {isAdmin ? (
             <div className={css.settingsGroup}>
               <span className={css.settingsGroupTitle}>管理</span>
               {adminNav.map((item) => (
-                <span
+                <button
+                  type="button"
                   key={item.key}
                   className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
                   onClick={() => setSection(item.key)}
-                  role="link"
                   aria-current={section === item.key ? 'page' : undefined}
                 >
                   {item.icon}
                   {item.label}
-                </span>
+                </button>
               ))}
             </div>
           ) : null}
@@ -223,6 +244,33 @@ export function AdminOverviewPage() {
   )
 }
 
+function HorizontalDataRegion({
+  name,
+  labelledBy,
+  busy,
+  children,
+}: {
+  name: string
+  labelledBy: string
+  busy?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className={css.dataScrollFrame}>
+      <div
+        className={css.dataScroll}
+        role="region"
+        tabIndex={0}
+        aria-labelledby={labelledBy}
+        aria-label={name}
+        aria-busy={busy}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // --- 我的（原 /app/settings：个人资料 + 修改密码 + WebDAV/图床 Token）---
 
 function ProfileSection() {
@@ -238,6 +286,7 @@ function ProfileSection() {
   const [newPwd, setNewPwd] = useState('')
   const [pwdMsg, setPwdMsg] = useState('')
   const [newTokens, setNewTokens] = useState<Record<string, string>>({})
+  const [credentialView, setCredentialView] = useState<CredentialView>('webdav')
 
   const profileMut = useMutation({
     mutationFn: updateProfile,
@@ -276,6 +325,28 @@ function ProfileSection() {
   function onChangePassword(e: FormEvent) {
     e.preventDefault()
     pwdMut.mutate({ o: oldPwd, n: newPwd })
+  }
+
+  function moveCredentialFocus(event: KeyboardEvent<HTMLButtonElement>, current: CredentialView) {
+    const currentIndex = credentialViews.findIndex((view) => view.key === current)
+    let nextIndex = currentIndex
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1) % credentialViews.length
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      nextIndex = (currentIndex - 1 + credentialViews.length) % credentialViews.length
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = credentialViews.length - 1
+    } else {
+      return
+    }
+
+    event.preventDefault()
+    const nextView = credentialViews[nextIndex]
+    setCredentialView(nextView.key)
+    requestAnimationFrame(() => document.getElementById(`credential-tab-${nextView.key}`)?.focus())
   }
 
   return (
@@ -389,17 +460,71 @@ function ProfileSection() {
           </div>
           <p className={css.credentialsHint}>Token 与 Secret 仅在生成时展示一次，请妥善保存。</p>
         </header>
-        <div className={css.tokenList}>
-          <TokenBlock
-            type="webdav"
-            title="WebDAV"
-            hint="通过 /dav 挂载文件，使用登录名与此 Token 认证。"
-            status={tokens.data?.webdav}
-            newToken={newTokens.webdav}
-            onReset={(t) => resetMut.mutate(t)}
-          />
-          <ImageBedTokenManager />
-          <S3CredentialManager />
+        <div className={css.credentialSwitcher}>
+          <div className={css.credentialTabs} role="tablist" aria-label="连接类型">
+            {credentialViews.map((view) => {
+              const selected = credentialView === view.key
+              return (
+                <button
+                  key={view.key}
+                  id={`credential-tab-${view.key}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls={`credential-panel-${view.key}`}
+                  tabIndex={selected ? 0 : -1}
+                  className={`${css.credentialTab} ${selected ? css.credentialTabActive : ''}`}
+                  onClick={() => setCredentialView(view.key)}
+                  onKeyDown={(event) => moveCredentialFocus(event, view.key)}
+                >
+                  <span className={css.credentialTabIcon} aria-hidden="true">{view.icon}</span>
+                  <span className={css.credentialTabCopy}>
+                    <strong className={css.credentialTabLabel}>{view.label}</strong>
+                    <small className={css.credentialTabMeta}>{view.meta}</small>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div
+          id="credential-panel-webdav"
+          role="tabpanel"
+          aria-labelledby="credential-tab-webdav"
+          className={css.credentialWorkspace}
+          hidden={credentialView !== 'webdav'}
+        >
+          {credentialView === 'webdav' ? (
+            <TokenBlock
+              type="webdav"
+              title="WebDAV"
+              hint="通过 /dav 挂载文件，使用登录名与此 Token 认证。"
+              status={tokens.data?.webdav}
+              newToken={newTokens.webdav}
+              onReset={(t) => resetMut.mutate(t)}
+              pending={tokens.isPending}
+              error={tokens.isError}
+              resetting={resetMut.isPending}
+            />
+          ) : null}
+        </div>
+        <div
+          id="credential-panel-image-api"
+          role="tabpanel"
+          aria-labelledby="credential-tab-image-api"
+          className={css.credentialWorkspace}
+          hidden={credentialView !== 'image-api'}
+        >
+          {credentialView === 'image-api' ? <ImageBedTokenManager /> : null}
+        </div>
+        <div
+          id="credential-panel-s3"
+          role="tabpanel"
+          aria-labelledby="credential-tab-s3"
+          className={css.credentialWorkspace}
+          hidden={credentialView !== 's3'}
+        >
+          {credentialView === 's3' ? <S3CredentialManager /> : null}
         </div>
       </section>
 
@@ -418,6 +543,36 @@ function ProfileSection() {
   )
 }
 
+function CredentialGroupHeader({
+  titleId,
+  title,
+  hint,
+  icon,
+  status,
+  action,
+}: {
+  titleId: string
+  title: string
+  hint: string
+  icon: React.ReactNode
+  status: React.ReactNode
+  action: React.ReactNode
+}) {
+  return (
+    <header className={css.credentialGroupHeader}>
+      <span className={css.credentialGroupIcon} aria-hidden="true">{icon}</span>
+      <div className={css.credentialGroupCopy}>
+        <div className={css.credentialTitleLine}>
+          <h3 id={titleId} className={css.credentialGroupTitle}>{title}</h3>
+          {status}
+        </div>
+        <p className={css.credentialGroupHint}>{hint}</p>
+      </div>
+      <div className={css.credentialGroupAction}>{action}</div>
+    </header>
+  )
+}
+
 function TokenBlock({
   type,
   title,
@@ -425,38 +580,72 @@ function TokenBlock({
   status,
   newToken,
   onReset,
+  pending,
+  error,
+  resetting,
 }: {
-  type: 'webdav' | 'image-bed'
+  type: 'webdav'
   title: string
   hint: string
   status?: { exists: boolean; created_at?: string | null; last_used_at?: string | null }
   newToken?: string
-  onReset: (t: 'webdav' | 'image-bed') => void
+  onReset: (t: 'webdav') => void
+  pending: boolean
+  error: boolean
+  resetting: boolean
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
   return (
-    <article className={css.tokenRow}>
-      <div className={css.tokenIcon} aria-hidden="true"><IconKey size={17} /></div>
-      <div className={css.tokenCopy}>
-        <h3 className={css.tokenTitle}>{title}</h3>
-        <p className={css.tokenHint}>{hint}</p>
-      </div>
-      <div className={css.tokenStatus}>
-        {status?.exists ? (
-          <>
-            <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用</span>
-            <span className={css.tokenDate}>{status.created_at ? formatDate(status.created_at) : '-'}</span>
-            <span className={css.lastUsed}>{status.last_used_at ? `最近使用 ${formatDate(status.last_used_at)}` : '从未使用'}</span>
-          </>
+    <section className={css.credentialGroup} aria-labelledby="webdav-credential-title">
+      <CredentialGroupHeader
+        titleId="webdav-credential-title"
+        title={title}
+        hint={hint}
+        icon={<IconLink size={17} />}
+        status={pending ? (
+          <span className={css.statusBadgeMuted}>正在读取</span>
+        ) : error ? (
+          <span className={css.credentialStatusError}>读取失败</span>
+        ) : status?.exists ? (
+          <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用</span>
         ) : (
           <span className={css.statusBadgeMuted}>未生成</span>
         )}
-      </div>
-      <div className={css.tokenAction}>
-        <Button variant="secondary" onClick={() => status?.exists ? setConfirmOpen(true) : onReset(type)}>
-          {status?.exists ? '重置 Token' : '生成 Token'}
-        </Button>
+        action={(
+          <Button
+            variant={status?.exists ? 'dangerGhost' : 'primary'}
+            disabled={pending || error || resetting}
+            onClick={() => status?.exists ? setConfirmOpen(true) : onReset(type)}
+          >
+            {resetting ? '处理中…' : status?.exists ? '重置 Token' : '生成 Token'}
+          </Button>
+        )}
+      />
+
+      <div className={css.credentialBody}>
+        {error ? (
+          <div className={css.credentialError}>WebDAV 凭据状态读取失败，请刷新页面后重试。</div>
+        ) : (
+          <div className={css.credentialFacts}>
+            <div className={css.credentialFact}>
+              <span className={css.credentialFactLabel}>挂载路径</span>
+              <code className={css.credentialFactValue}>/dav</code>
+            </div>
+            <div className={css.credentialFact}>
+              <span className={css.credentialFactLabel}>生成时间</span>
+              <span className={css.credentialFactValue}>
+                {pending ? '读取中…' : status?.created_at ? formatDate(status.created_at) : '尚未生成'}
+              </span>
+            </div>
+            <div className={css.credentialFact}>
+              <span className={css.credentialFactLabel}>最近使用</span>
+              <span className={css.credentialFactValue}>
+                {pending ? '读取中…' : status?.last_used_at ? formatDate(status.last_used_at) : '从未使用'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 重置 Token 确认弹窗 */}
@@ -512,7 +701,7 @@ function TokenBlock({
         {/* 当 newToken 出现时自动打开 */}
         <TokenAutoOpen token={newToken} onOpen={setShowOpen} />
       </DialogWrap>
-    </article>
+    </section>
   )
 }
 
@@ -577,56 +766,59 @@ function ImageBedTokenManager() {
   const atLimit = tokenItems.length >= 10
 
   return (
-    <article className={css.imageTokenGroup}>
-      <div className={css.imageTokenHeader}>
-        <div className={css.tokenIcon} aria-hidden="true"><IconKey size={17} /></div>
-        <div className={css.tokenCopy}>
-          <h3 className={css.tokenTitle}>图床 API</h3>
-          <p className={css.tokenHint}>为不同 PicGo 或第三方客户端创建独立 Token，可单独撤销。</p>
-        </div>
-        <div className={css.tokenStatus}>
-          {tokenItems.length > 0 ? (
-            <span className={css.statusBadge}>
-              <i className={css.statusDotSmall} />已启用 {tokenItems.length} 个
-            </span>
-          ) : (
-            <span className={css.statusBadgeMuted}>未生成</span>
-          )}
-          <span className={css.lastUsed}>最多 10 个，明文仅显示一次</span>
-        </div>
-        <div className={css.tokenAction}>
+    <section className={css.credentialGroup} aria-labelledby="image-api-credential-title">
+      <CredentialGroupHeader
+        titleId="image-api-credential-title"
+        title="图床 API"
+        hint="为每台 PicGo 或第三方客户端创建独立 Token；最多 10 个，明文仅显示一次。"
+        icon={<IconImage size={17} />}
+        status={tokens.isPending ? (
+          <span className={css.statusBadgeMuted}>正在读取</span>
+        ) : tokens.isError ? (
+          <span className={css.credentialStatusError}>读取失败</span>
+        ) : tokenItems.length > 0 ? (
+          <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用 {tokenItems.length} 个</span>
+        ) : (
+          <span className={css.statusBadgeMuted}>未生成</span>
+        )}
+        action={(
           <Button
-            variant="secondary"
-            disabled={atLimit}
+            disabled={atLimit || tokens.isPending || tokens.isError}
             title={atLimit ? '已达到 10 个 Token 上限' : undefined}
             onClick={() => setCreateOpen(true)}
           >
             <IconPlus size={14} />新建 Token
           </Button>
-        </div>
-      </div>
+        )}
+      />
 
-      <div className={css.imageTokenItems}>
-        {tokens.isPending ? <div className={css.imageTokenEmpty}>正在加载…</div> : null}
-        {tokens.isError ? <div className={css.imageTokenError}>Token 列表加载失败</div> : null}
+      <div className={css.credentialBody}>
+        {tokens.isPending ? <div className={css.credentialEmpty}>正在加载 Token…</div> : null}
+        {tokens.isError ? <div className={css.credentialError}>Token 列表加载失败，请刷新页面后重试。</div> : null}
         {tokens.isSuccess && tokenItems.length === 0 ? (
-          <div className={css.imageTokenEmpty}>暂无图床 Token。为每台客户端创建独立凭据，撤销时不会影响其他客户端。</div>
+          <div className={css.credentialEmpty}>暂无图床 Token。为每台客户端创建独立凭据，撤销时不会影响其他客户端。</div>
         ) : null}
-        {tokenItems.map((token) => (
-          <div key={token.token_id} className={css.imageTokenItem}>
-            <div className={css.imageTokenItemCopy}>
-              <strong className={css.imageTokenLabel}>{token.label}</strong>
-              <span className={css.imageTokenId}>{token.token_id}</span>
-            </div>
-            <div className={css.imageTokenDates}>
-              <span>创建于 {formatDate(token.created_at)}</span>
-              <span>{token.last_used_at ? `最近使用 ${formatDate(token.last_used_at)}` : '从未使用'}</span>
-            </div>
-            <Button variant="ghost" onClick={() => setDeleting(token)} aria-label={`撤销 ${token.label}`}>
-              <IconTrash size={15} />撤销
-            </Button>
+        {tokenItems.length > 0 ? (
+          <div className={css.credentialList} role="list" aria-label="图床 Token 列表">
+            {tokenItems.map((token) => (
+              <div key={token.token_id} className={css.credentialItem} role="listitem">
+                <div className={css.credentialItemIdentity}>
+                  <strong className={css.credentialItemName}>{token.label}</strong>
+                  <code className={css.credentialItemId}>{token.token_id}</code>
+                </div>
+                <div className={css.credentialItemMeta}>
+                  <span>创建于 {formatDate(token.created_at)}</span>
+                  <span>{token.last_used_at ? `最近使用 ${formatDate(token.last_used_at)}` : '从未使用'}</span>
+                </div>
+                <div className={css.credentialItemActions}>
+                  <Button variant="dangerGhost" onClick={() => setDeleting(token)} aria-label={`撤销 ${token.label}`}>
+                    <IconTrash size={15} />撤销
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : null}
       </div>
 
       <DialogWrap
@@ -703,7 +895,7 @@ function ImageBedTokenManager() {
           即将撤销“{deleting?.label}”。其他图床 Token 不受影响。
         </p>
       </DialogWrap>
-    </article>
+    </section>
   )
 }
 
@@ -716,6 +908,7 @@ function S3CredentialManager() {
   const [message, setMessage] = useState('')
   const [revealed, setRevealed] = useState<{ accessKeyId: string; secret: string } | null>(null)
   const [deleting, setDeleting] = useState<S3Credential | null>(null)
+  const [copiedBucket, setCopiedBucket] = useState<string | null>(null)
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['s3-credentials'] })
@@ -753,88 +946,102 @@ function S3CredentialManager() {
   const enabledCount = items.reduce((count, item) => count + (item.is_disabled ? 0 : 1), 0)
   const atLimit = items.length >= 10
 
+  function copyBucket(bucket: string) {
+    void navigator.clipboard.writeText(bucket).then(() => {
+      setCopiedBucket(bucket)
+      setTimeout(() => setCopiedBucket((current) => current === bucket ? null : current), 1400)
+    })
+  }
+
   return (
-    <article className={css.imageTokenGroup}>
-      <div className={css.imageTokenHeader}>
-        <div className={css.tokenIcon} aria-hidden="true"><IconKey size={17} /></div>
-        <div className={css.tokenCopy}>
-          <h3 className={css.tokenTitle}>S3 Access Key</h3>
-          <p className={css.tokenHint}>供 AWS CLI、rclone 等客户端通过专用 S3 端口访问已授权存储源。</p>
-        </div>
-        <div className={css.tokenStatus}>
-          {enabledCount > 0 ? (
-            <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用 {enabledCount} 个</span>
-          ) : items.length > 0 ? (
-            <span className={css.statusBadgeMuted}>{items.length} 个已禁用</span>
-          ) : (
-            <span className={css.statusBadgeMuted}>未生成</span>
-          )}
-          <span className={css.lastUsed}>最多 10 个，Secret 仅显示一次</span>
-        </div>
-        <div className={css.tokenAction}>
+    <section className={css.credentialGroup} aria-labelledby="s3-credential-title">
+      <CredentialGroupHeader
+        titleId="s3-credential-title"
+        title="S3 Access Key"
+        hint="供 AWS CLI、rclone 等客户端访问已授权存储源；最多 10 个，Secret 仅显示一次。"
+        icon={<IconCloud size={17} />}
+        status={credentials.isPending ? (
+          <span className={css.statusBadgeMuted}>正在读取</span>
+        ) : credentials.isError ? (
+          <span className={css.credentialStatusError}>读取失败</span>
+        ) : enabledCount > 0 ? (
+          <span className={css.statusBadge}><i className={css.statusDotSmall} />已启用 {enabledCount} 个</span>
+        ) : items.length > 0 ? (
+          <span className={css.statusBadgeMuted}>{items.length} 个已禁用</span>
+        ) : (
+          <span className={css.statusBadgeMuted}>未生成</span>
+        )}
+        action={(
           <Button
-            variant="secondary"
-            disabled={atLimit}
+            disabled={atLimit || credentials.isPending || credentials.isError}
             title={atLimit ? '已达到 10 个凭据上限' : undefined}
             onClick={() => setCreateOpen(true)}
           >
             <IconPlus size={14} />新建凭据
           </Button>
-        </div>
-      </div>
+        )}
+      />
 
-      <div className={css.imageTokenItems}>
-        {credentials.isPending ? <div className={css.imageTokenEmpty}>正在加载…</div> : null}
-        {credentials.isError ? <div className={css.imageTokenError}>S3 凭据列表加载失败</div> : null}
+      <div className={css.credentialBody}>
+        {credentials.isPending ? <div className={css.credentialEmpty}>正在加载 S3 凭据…</div> : null}
+        {credentials.isError ? <div className={css.credentialError}>S3 凭据列表加载失败，请刷新页面后重试。</div> : null}
         {credentials.isSuccess && items.length === 0 ? (
-          <div className={css.imageTokenEmpty}>暂无 S3 凭据。建议为每台客户端创建独立 Access Key。</div>
+          <div className={css.credentialEmpty}>暂无 S3 凭据。建议为每台客户端创建独立 Access Key。</div>
         ) : null}
-        {items.map((credential) => (
-          <div key={credential.access_key_id} className={css.imageTokenItem}>
-            <div className={css.imageTokenItemCopy}>
-              <strong className={css.imageTokenLabel}>{credential.name}</strong>
-              <span className={css.imageTokenId}>{credential.access_key_id}</span>
-            </div>
-            <div className={css.imageTokenDates}>
-              <span>{credential.is_disabled ? '已禁用' : `创建于 ${formatDate(credential.created_at)}`}</span>
-              <span>{credential.last_used_at ? `最近使用 ${formatDate(credential.last_used_at)}` : '从未使用'}</span>
-            </div>
-            <div className={css.s3CredentialActions}>
-              <Button
-                variant="ghost"
-                disabled={toggleMut.isPending}
-                onClick={() => toggleMut.mutate({
-                  accessKeyId: credential.access_key_id,
-                  disabled: !credential.is_disabled,
-                })}
-              >
-                {credential.is_disabled ? '启用' : '禁用'}
-              </Button>
-              <Button variant="ghost" onClick={() => setDeleting(credential)} aria-label={`撤销 ${credential.name}`}>
-                <IconTrash size={15} />撤销
-              </Button>
-            </div>
-          </div>
-        ))}
-        {sources.isSuccess && sources.data.length > 0 ? (
-          <>
-            <div className={css.imageTokenEmpty}>
-              S3 客户端中的 Bucket 由系统生成；请按存储源名称复制对应值。
-            </div>
-            {sources.data.map((source) => (
-              <div key={source.key} className={css.imageTokenItem}>
-                <div className={css.imageTokenItemCopy}>
-                  <strong className={css.imageTokenLabel}>{source.name}</strong>
-                  <span className={css.imageTokenId}>{source.key}</span>
+        {items.length > 0 ? (
+          <div className={css.credentialList} role="list" aria-label="S3 凭据列表">
+            {items.map((credential) => (
+              <div key={credential.access_key_id} className={css.credentialItem} role="listitem">
+                <div className={css.credentialItemIdentity}>
+                  <strong className={css.credentialItemName}>{credential.name}</strong>
+                  <code className={css.credentialItemId}>{credential.access_key_id}</code>
                 </div>
-                <div className={css.s3CredentialActions}>
-                  <Button variant="ghost" onClick={() => navigator.clipboard.writeText(source.key)}>
-                    复制 Bucket
+                <div className={css.credentialItemMeta}>
+                  <Badge color={credential.is_disabled ? 'gray' : 'green'}>
+                    {credential.is_disabled ? '已禁用' : '已启用'}
+                  </Badge>
+                  <span>创建于 {formatDate(credential.created_at)}</span>
+                  <span>{credential.last_used_at ? `最近使用 ${formatDate(credential.last_used_at)}` : '从未使用'}</span>
+                </div>
+                <div className={css.credentialItemActions}>
+                  <Button
+                    variant="ghost"
+                    disabled={toggleMut.isPending}
+                    onClick={() => toggleMut.mutate({
+                      accessKeyId: credential.access_key_id,
+                      disabled: !credential.is_disabled,
+                    })}
+                  >
+                    {credential.is_disabled ? '启用' : '禁用'}
+                  </Button>
+                  <Button variant="dangerGhost" onClick={() => setDeleting(credential)} aria-label={`撤销 ${credential.name}`}>
+                    <IconTrash size={15} />撤销
                   </Button>
                 </div>
               </div>
             ))}
-          </>
+          </div>
+        ) : null}
+        {sources.isSuccess && sources.data.length > 0 ? (
+          <div className={css.credentialSubsection}>
+            <div className={css.credentialSubsectionHeader}>
+              <h4 className={css.credentialSubsectionTitle}>Bucket 映射</h4>
+              <p className={css.credentialSubsectionHint}>按存储源名称复制系统生成的 Bucket 值。</p>
+            </div>
+            <div className={css.bucketList} role="list" aria-label="S3 Bucket 映射">
+              {sources.data.map((source) => (
+                <div key={source.key} className={css.bucketRow} role="listitem">
+                  <div className={css.credentialItemIdentity}>
+                    <strong className={css.credentialItemName}>{source.name}</strong>
+                    <code className={css.credentialItemId}>{source.key}</code>
+                  </div>
+                  <Button variant="ghost" onClick={() => copyBucket(source.key)}>
+                    {copiedBucket === source.key ? '已复制' : '复制 Bucket'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -912,7 +1119,7 @@ function S3CredentialManager() {
           即将撤销“{deleting?.name}”。其他 S3 凭据不受影响。
         </p>
       </DialogWrap>
-    </article>
+    </section>
   )
 }
 
@@ -1067,12 +1274,12 @@ function StatsSection() {
 
       <section className={css.section}>
         <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>存储源概览</h2>
+          <h2 id="source-overview-title" className={css.sectionTitle}>存储源概览</h2>
           <p className={css.sectionHint}>
             共 {o?.sources.length ?? 0} 个存储源，详细配置请见"存储源"。
           </p>
         </div>
-        <div className={css.sectionBody} style={{ padding: 0, overflowX: 'auto' }}>
+        <HorizontalDataRegion name="存储源概览" labelledBy="source-overview-title">
           <table className={css.compactTable}>
             <thead>
               <tr>
@@ -1108,7 +1315,7 @@ function StatsSection() {
               ))}
             </tbody>
           </table>
-        </div>
+        </HorizontalDataRegion>
       </section>
     </>
   )
@@ -1181,75 +1388,84 @@ function SourcesSection() {
   return (
     <>
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>存储源</h2>
-          <p className={css.sectionHint}>
-            共 {sources.data?.length ?? 0} 个 · 路径创建后不可修改。
-          </p>
-        </div>
-        <div className={css.sectionBody}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 id="storage-sources-title" className={css.sectionTitle}>存储源</h2>
+            <p className={css.sectionHint}>
+              共 {sources.data?.length ?? 0} 个 · 连接真实目录并统一管理访问能力。
+            </p>
+          </div>
+          <div className={css.sectionHeaderAction}>
             <Button onClick={() => setCreateOpen(true)}>
               <IconPlus size={14} /> 新建存储源
             </Button>
           </div>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className={css.compactTable}>
-            <thead>
-              <tr>
-                <th className={css.compactTh}>名称</th>
-                <th className={css.compactTh}>路径</th>
-                <th className={css.compactTh}>状态</th>
-                <th className={css.compactTh}>配额</th>
-                <th className={css.compactTh}>公开</th>
-                <th className={css.compactTh}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sources.data?.map((s) => (
-                <tr key={s.key} className={css.compactTr}>
-                  <td className={css.compactTd} style={{ fontWeight: 500 }}>{s.name}</td>
-                  <td className={css.compactTd} style={{ color: vars.color.textSecondary, fontFamily: vars.font.mono }}>
-                    {s.root_path}
-                  </td>
-                  <td className={css.compactTd}>
-                    <Badge color={s.is_disabled ? 'gray' : 'green'}>
-                      {s.is_disabled ? '已禁用' : '正常'}
-                    </Badge>
-                  </td>
-                  <td className={css.compactTd}>
-                    {s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}
-                  </td>
-                  <td className={css.compactTd}>
-                    {s.public_read_enabled ? <Badge color="green">公开</Badge> : '—'}
-                  </td>
-                  <td className={css.compactTd}>
-                    <div className={css.formRow}>
-                      <Button variant="ghost" onClick={() => setEditId(s.key)}>
-                        配置
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => disableMut.mutate({ id: s.key, disabled: !s.is_disabled })}
-                      >
-                        {s.is_disabled ? '启用' : '禁用'}
-                      </Button>
-                      <Button variant="danger" onClick={() => setDeleting(s)}>
-                        <IconTrash size={14} />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {sources.isSuccess && sources.data.length === 0 && (
-            <div style={{ padding: 16, textAlign: 'center', color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
-              还没有存储源
-            </div>
-          )}
-        </div>
+        </header>
+        <HorizontalDataRegion name="存储源" labelledBy="storage-sources-title" busy={sources.isPending}>
+          <div className={css.sourceList} role="list" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
+            {sources.isPending ? (
+              <div className={css.sourceState} role="status">正在加载存储源…</div>
+            ) : null}
+            {sources.isError ? (
+              <div className={css.sourceState} role="alert">
+                <p className={css.sourceStateTitle}>无法加载存储源</p>
+                <p className={css.sourceStateHint}>请检查服务状态后重试。</p>
+                <Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>
+              </div>
+            ) : null}
+            {sources.data?.map((s) => (
+              <article key={s.key} className={css.sourceItem} role="listitem" aria-label={`存储源 ${s.name}`}>
+                <div className={css.sourceIdentity}>
+                  <span className={css.sourceIcon} aria-hidden="true"><IconServer size={18} /></span>
+                  <div className={css.sourceCopy}>
+                    <h3 className={css.sourceName}>{s.name}</h3>
+                    <code className={css.sourcePath} title={s.root_path}>{s.root_path}</code>
+                  </div>
+                </div>
+                <div className={css.sourceMeta} aria-label={`${s.name} 状态信息`}>
+                  <div className={css.sourceMetaItem}>
+                    <span className={css.sourceMetaLabel}>状态</span>
+                      <Badge color={s.is_disabled ? 'gray' : 'green'}>
+                        {s.is_disabled ? '已禁用' : '正常'}
+                      </Badge>
+                  </div>
+                  <div className={css.sourceMetaItem}>
+                    <span className={css.sourceMetaLabel}>配额</span>
+                    <span className={css.sourceMetaValue}>{s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}</span>
+                  </div>
+                  <div className={css.sourceMetaItem}>
+                    <span className={css.sourceMetaLabel}>公开访问</span>
+                    {s.public_read_enabled
+                      ? <Badge color="green">已公开</Badge>
+                      : <span className={css.sourceMetaMuted}>未公开</span>}
+                  </div>
+                </div>
+                <div className={css.sourceActions} aria-label={`${s.name} 操作`}>
+                  <Button variant="ghost" onClick={() => setEditId(s.key)} aria-label={`配置存储源 ${s.name}`}>
+                    配置
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => disableMut.mutate({ id: s.key, disabled: !s.is_disabled })}
+                    disabled={disableMut.isPending}
+                    aria-label={`${s.is_disabled ? '启用' : '禁用'}存储源 ${s.name}`}
+                  >
+                    {s.is_disabled ? '启用' : '禁用'}
+                  </Button>
+                  <Button variant="dangerGhost" onClick={() => setDeleting(s)} aria-label={`删除存储源 ${s.name}`}>
+                    <IconTrash size={14} /> 删除
+                  </Button>
+                </div>
+              </article>
+            ))}
+            {sources.isSuccess && sources.data.length === 0 && (
+              <div className={css.sourceState}>
+                <p className={css.sourceStateTitle}>还没有存储源</p>
+                <p className={css.sourceStateHint}>使用右上角的“新建存储源”连接第一个真实目录。</p>
+              </div>
+            )}
+          </div>
+        </HorizontalDataRegion>
       </section>
 
       {/* 新建存储源 弹窗 */}
@@ -1514,20 +1730,16 @@ function EditSourceDialog({
       setPublicOn(detail.data.source.public_read_enabled)
       setWebdavOn(detail.data.source.webdav_enabled)
       setImageBedOn(detail.data.source.image_bed_enabled)
-      setQuotaGiB(detail.data.source.quota_bytes > 0
-        ? String(detail.data.source.quota_bytes / (1024 ** 3))
-        : '0')
+      setQuotaGiB(quotaGiBInputValue(detail.data.source.quota_bytes))
     }
   }, [detail.isSuccess, detail.data])
 
   const updateMut = useMutation({
     mutationFn: (input: Parameters<typeof adminUpdateSource>[1]) => adminUpdateSource(sourceKey, input),
-    onSuccess: () => { setMsg('已保存'); refresh() },
-    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
-  })
-  const patternsMut = useMutation({
-    mutationFn: (list: string[]) => adminSetExcludePatterns(sourceKey, list),
-    onSuccess: () => { setMsg('排除规则已保存'); refresh() },
+    onSuccess: () => {
+      refresh()
+      onClose()
+    },
     onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '保存失败'),
   })
   const reconcileMut = useMutation({
@@ -1547,7 +1759,51 @@ function EditSourceDialog({
   const src: AdminSource = detail.data.source
   const mountValue = mountPath ?? src.public_mount_path ?? ''
   const patternsValue = patterns ?? detail.data.exclude_patterns.join('\n')
-  const quotaValue = quotaGiB ?? (src.quota_bytes > 0 ? String(src.quota_bytes / (1024 ** 3)) : '0')
+  const quotaValue = quotaGiB ?? quotaGiBInputValue(src.quota_bytes)
+  const quotaNumber = Number(quotaValue)
+  const quotaBytes = Math.round(quotaNumber * 1024 ** 3)
+  const quotaValid = quotaValue.trim() !== ''
+    && Number.isFinite(quotaNumber)
+    && quotaNumber >= 0
+    && Number.isSafeInteger(quotaBytes)
+  const publicEnabled = publicOn ?? src.public_read_enabled
+  const webdavEnabled = webdavOn ?? src.webdav_enabled
+  const imageBedEnabled = imageBedOn ?? src.image_bed_enabled
+  const normalizedMountPath = mountValue.trim()
+  const excludePatterns = patternsValue
+    .split('\n')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+  const originalPatterns = detail.data.exclude_patterns.map((pattern) => pattern.trim()).filter(Boolean)
+  const patternsChanged = excludePatterns.length !== originalPatterns.length
+    || excludePatterns.some((pattern, index) => pattern !== originalPatterns[index])
+  const isDirty = publicEnabled !== src.public_read_enabled
+    || webdavEnabled !== src.webdav_enabled
+    || imageBedEnabled !== src.image_bed_enabled
+    || normalizedMountPath !== (src.public_mount_path ?? '')
+    || quotaBytes !== src.quota_bytes
+    || patternsChanged
+  const formValid = quotaValid && (!publicEnabled || normalizedMountPath !== '')
+
+  function saveSettings() {
+    setMsg('')
+    if (!quotaValid) {
+      setMsg('请输入有效的非负配额')
+      return
+    }
+    if (publicEnabled && !normalizedMountPath) {
+      setMsg('开启公开访问时必须填写公开挂载路径')
+      return
+    }
+    updateMut.mutate({
+      public_read_enabled: publicEnabled,
+      public_mount_path: normalizedMountPath,
+      webdav_enabled: webdavEnabled,
+      image_bed_enabled: imageBedEnabled,
+      quota_bytes: quotaBytes,
+      exclude_patterns: excludePatterns,
+    })
+  }
 
   return (
     <DialogWrap
@@ -1557,19 +1813,27 @@ function EditSourceDialog({
       description={`真实路径：${src.root_path}`}
       wide
       footer={
-        <Button variant="secondary" onClick={onClose}>关闭</Button>
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button
+            disabled={!isDirty || !formValid || updateMut.isPending}
+            onClick={saveSettings}
+          >
+            {updateMut.isPending ? '保存中…' : '保存设置'}
+          </Button>
+        </>
       }
     >
-      <Field label="功能开关" hint="修改后即时保存">
+      <Field label="功能开关" hint="修改后随底部按钮统一保存">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label className={fieldCss.checkboxRow}>
             <input
               type="checkbox"
               className={fieldCss.checkbox}
-              checked={webdavOn ?? src.webdav_enabled}
+              checked={webdavEnabled}
               onChange={(e) => {
                 setWebdavOn(e.target.checked)
-                updateMut.mutate({ webdav_enabled: e.target.checked })
+                setMsg('')
               }}
             />
             启用 WebDAV（该存储源可作为 WebDAV 挂载点）
@@ -1578,10 +1842,10 @@ function EditSourceDialog({
             <input
               type="checkbox"
               className={fieldCss.checkbox}
-              checked={imageBedOn ?? src.image_bed_enabled}
+              checked={imageBedEnabled}
               onChange={(e) => {
                 setImageBedOn(e.target.checked)
-                updateMut.mutate({ image_bed_enabled: e.target.checked })
+                setMsg('')
               }}
             />
             启用图床（该存储源可作为图床后端）
@@ -1590,17 +1854,10 @@ function EditSourceDialog({
             <input
               type="checkbox"
               className={fieldCss.checkbox}
-              checked={publicOn ?? src.public_read_enabled}
+              checked={publicEnabled}
               onChange={(e) => {
-                if (e.target.checked && !mountValue) {
-                  setMsg('请先填写公开挂载路径')
-                  return
-                }
                 setPublicOn(e.target.checked)
-                updateMut.mutate({
-                  public_read_enabled: e.target.checked,
-                  public_mount_path: mountValue,
-                })
+                setMsg('')
               }}
             />
             公开访问（无需登录即可按挂载路径只读浏览）
@@ -1616,29 +1873,27 @@ function EditSourceDialog({
           <Input
             type="number"
             min="0"
-            step="0.1"
+            step="0.001"
             value={quotaValue}
-            onChange={(event) => setQuotaGiB(event.target.value)}
+            onChange={(event) => {
+              setQuotaGiB(event.target.value)
+              setMsg('')
+            }}
             aria-label="存储源配额 GiB"
           />
           <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>GiB</span>
-          <Button
-            variant="secondary"
-            disabled={updateMut.isPending || Number(quotaValue) < 0 || !Number.isFinite(Number(quotaValue))}
-            onClick={() => updateMut.mutate({ quota_bytes: Math.round(Number(quotaValue) * 1024 ** 3) })}
-          >
-            保存配额
-          </Button>
         </div>
       </Field>
 
       <Field
         label="文件台账"
-        hint={`当前台账用量 ${formatBytes(detail.data.ledger_usage_bytes)}。校准会扫描真实目录，新发现文件标记为未归属。`}
+        hint={isDirty
+          ? '请先保存当前配置，再扫描并校准台账。'
+          : `当前台账用量 ${formatBytes(detail.data.ledger_usage_bytes)}。校准会扫描真实目录，新发现文件标记为未归属。`}
       >
         <Button
           variant="secondary"
-          disabled={reconcileMut.isPending}
+          disabled={isDirty || reconcileMut.isPending || updateMut.isPending}
           onClick={() => reconcileMut.mutate()}
         >
           {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
@@ -1648,26 +1903,16 @@ function EditSourceDialog({
       <Field
         label="公开挂载路径"
         hint="如 /photos，修改后旧链接会自动重定向到新路径"
-        required={publicOn ?? src.public_read_enabled}
+        required={publicEnabled}
       >
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Input
-            value={mountValue}
-            onChange={(e) => setMountPath(e.target.value)}
-            placeholder="/photos"
-          />
-          <Button
-            variant="secondary"
-            onClick={() =>
-              updateMut.mutate({
-                public_mount_path: mountValue,
-                public_read_enabled: publicOn ?? src.public_read_enabled,
-              })
-            }
-          >
-            保存路径
-          </Button>
-        </div>
+        <Input
+          value={mountValue}
+          onChange={(e) => {
+            setMountPath(e.target.value)
+            setMsg('')
+          }}
+          placeholder="/photos"
+        />
       </Field>
 
       <Field
@@ -1677,16 +1922,11 @@ function EditSourceDialog({
         <textarea
           className={fieldCss.textarea}
           value={patternsValue}
-          onChange={(e) => setPatterns(e.target.value)}
+          onChange={(e) => {
+            setPatterns(e.target.value)
+            setMsg('')
+          }}
         />
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="secondary"
-            onClick={() => patternsMut.mutate(patternsValue.split('\n'))}
-          >
-            保存排除规则
-          </Button>
-        </div>
       </Field>
 
       {msg && (
@@ -1731,24 +1971,21 @@ function PoliciesSection() {
   return (
     <>
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>访问策略</h2>
-          <p className={css.sectionHint}>
-            将多个存储源权限组合成策略，再统一绑定用户；多策略重叠时自动采用更高权限。
-          </p>
-        </div>
-        <div className={css.sectionBody}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-            <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
-              共 {policies.data?.length ?? 0} 个策略
-            </span>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 id="access-policies-title" className={css.sectionTitle}>访问策略</h2>
+            <p className={css.sectionHint}>
+              共 {policies.data?.length ?? 0} 个 · 将多个存储源权限组合成策略，再统一绑定用户。
+            </p>
+          </div>
+          <div className={css.sectionHeaderAction}>
             <Button onClick={() => setCreateOpen(true)}>
               <IconPlus size={14} /> 新建策略
             </Button>
           </div>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className={css.compactTable}>
+        </header>
+        <HorizontalDataRegion name="访问策略" labelledBy="access-policies-title">
+          <table className={`${css.compactTable} ${css.compactTableWide}`}>
             <thead>
               <tr>
                 <th className={css.compactTh}>名称</th>
@@ -1800,7 +2037,7 @@ function PoliciesSection() {
           {policies.isSuccess && policies.data.length === 0 ? (
             <p className={css.policyEditorEmpty}>还没有访问策略，普通用户暂时无法访问私有存储源。</p>
           ) : null}
-        </div>
+        </HorizontalDataRegion>
       </section>
 
       <PolicyDialog
@@ -2143,19 +2380,19 @@ function UsersSection() {
   return (
     <>
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>用户</h2>
-          <p className={css.sectionHint}>共 {users.data?.length ?? 0} 个 · 用户首次登录后可自行修改密码。</p>
-        </div>
-        <div className={css.sectionBody}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 id="users-title" className={css.sectionTitle}>用户</h2>
+            <p className={css.sectionHint}>共 {users.data?.length ?? 0} 个 · 用户首次登录后可自行修改密码。</p>
+          </div>
+          <div className={css.sectionHeaderAction}>
             <Button onClick={() => setCreateOpen(true)}>
               <IconUserPlus size={14} /> 创建用户
             </Button>
           </div>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className={css.compactTable}>
+        </header>
+        <HorizontalDataRegion name="用户" labelledBy="users-title">
+          <table className={`${css.compactTable} ${css.compactTableWide}`}>
             <thead>
               <tr>
                 <th className={css.compactTh}>用户名</th>
@@ -2221,7 +2458,7 @@ function UsersSection() {
               还没有用户
             </div>
           )}
-        </div>
+        </HorizontalDataRegion>
       </section>
 
       {/* 创建用户 弹窗 */}
@@ -2296,7 +2533,7 @@ function UserQuotaDialog({
   const [message, setMessage] = useState('')
   useEffect(() => {
     if (user) {
-      setQuotaGiB(user.quota_bytes > 0 ? String(user.quota_bytes / (1024 ** 3)) : '0')
+      setQuotaGiB(quotaGiBInputValue(user.quota_bytes))
       setMessage('')
     }
   }, [user])
@@ -2330,7 +2567,7 @@ function UserQuotaDialog({
         <Input
           type="number"
           min="0"
-          step="0.1"
+          step="0.001"
           value={quotaGiB}
           onChange={(event) => setQuotaGiB(event.target.value)}
           aria-label="用户配额 GiB"
@@ -2487,7 +2724,7 @@ function AuditSection() {
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
-        <h2 className={css.sectionTitle}>审计日志</h2>
+        <h2 id="audit-log-title" className={css.sectionTitle}>审计日志</h2>
         <p className={css.sectionHint}>按主体、入口、结果或关键字筛选实例上的关键操作。</p>
       </div>
       <form className={css.auditFilters} onSubmit={applyFilters}>
@@ -2531,8 +2768,8 @@ function AuditSection() {
           <Button type="button" variant="secondary" onClick={resetFilters}>重置</Button>
         </div>
       </form>
-      <div className={css.auditTableWrap} aria-busy={logs.isFetching}>
-        <table className={css.compactTable}>
+      <HorizontalDataRegion name="审计日志" labelledBy="audit-log-title" busy={logs.isFetching}>
+        <table className={`${css.compactTable} ${css.compactTableAudit}`}>
           <thead>
             <tr>
               <th className={css.compactTh}>时间</th>
@@ -2586,7 +2823,7 @@ function AuditSection() {
             加载失败
           </div>
         )}
-      </div>
+      </HorizontalDataRegion>
       <div className={css.auditPagination}>
         <span aria-live="polite">
           共 {total} 条，第 {Math.min(page, totalPages)} / {totalPages} 页
@@ -2643,13 +2880,20 @@ function ImageBedSection() {
   return (
     <>
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>匿名公共图床</h2>
-          <p className={css.sectionHint}>
-            默认关闭。开启后任何人无需登录即可通过 /upload 上传图片
-            （单张最大 {anonStatus.data?.max_file_size_mb ?? '-'}MB，按 IP 限流）。
-          </p>
-        </div>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 id="anonymous-image-bed-title" className={css.sectionTitle}>匿名公共图床</h2>
+            <p className={css.sectionHint}>
+              默认关闭。开启后任何人无需登录即可通过 /upload 上传图片
+              （单张最大 {anonStatus.data?.max_file_size_mb ?? '-'}MB，按 IP 限流）。
+            </p>
+          </div>
+          <div className={css.sectionHeaderAction}>
+            <Button onClick={() => setEditOpen(true)}>
+              {settings.data.enabled ? '调整' : '开启'}
+            </Button>
+          </div>
+        </header>
         <div className={css.sectionBody}>
           <div className={css.kvRow}>
             <span className={css.kvLabel}>当前状态</span>
@@ -2665,11 +2909,6 @@ function ImageBedSection() {
                 <Badge color="gray">未开启</Badge>
               )}
             </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setEditOpen(true)}>
-              {settings.data.enabled ? '调整' : '开启'}
-            </Button>
           </div>
           {msg && <span className={css.kvLabel}>{msg}</span>}
         </div>

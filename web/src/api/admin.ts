@@ -221,6 +221,7 @@ export async function adminUpdateSource(
     webdav_enabled: boolean
     image_bed_enabled: boolean
     quota_bytes: number
+    exclude_patterns: string[]
   }>,
 ): Promise<AdminSource> {
   return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}`, {

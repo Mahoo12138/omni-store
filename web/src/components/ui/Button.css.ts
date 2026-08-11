@@ -24,6 +24,10 @@ const base = style({
     '&:active:not(:disabled)': {
       transform: 'translateY(1px)',
     },
+    '&:focus-visible': {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: '2px',
+    },
   },
   '@media': {
     'screen and (max-width: 820px)': {
@@ -65,6 +69,20 @@ export const button = styleVariants({
       color: vars.color.textOnPrimary,
       selectors: {
         '&:hover:not(:disabled)': { backgroundColor: vars.color.dangerHover },
+      },
+    },
+  ],
+  dangerGhost: [
+    base,
+    {
+      backgroundColor: 'transparent',
+      color: vars.color.danger,
+      padding: `0 ${vars.space.sm}`,
+      selectors: {
+        '&:hover:not(:disabled)': {
+          backgroundColor: vars.color.dangerSubtle,
+          color: vars.color.dangerHover,
+        },
       },
     },
   ],

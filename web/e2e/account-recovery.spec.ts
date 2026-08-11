@@ -17,7 +17,7 @@ test('password change closes other sessions and administrator can revoke all cre
 
   await login(page, 'admin', adminPassword)
   await page.getByRole('link', { name: '系统设置' }).click()
-  await page.getByRole('link', { name: '用户', exact: true }).click()
+  await page.getByRole('button', { name: '用户', exact: true }).click()
   await page.getByRole('button', { name: '创建用户' }).click()
   const createDialog = page.getByRole('dialog', { name: '创建用户' })
   await createDialog.getByLabel('用户名').fill(username)
