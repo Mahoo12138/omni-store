@@ -119,7 +119,7 @@ pnpm run dev:test
 
 每次执行 `seed` 都会恢复上述显示名、密码、启用状态、权限和功能开关，并保留用户在演示存储源中新建的其他文件。“公开演示资料”设为 32 MiB 硬配额，“团队文件”设为 128 MiB 硬配额，用于界面演示与写入链路 E2E；重复 seed 不会删除已有文件，因此实时已用空间可能增长。演示用户对“团队文件”默认可读写，其中 `projects` 子目录通过最长前缀规则覆盖为只读，可用于验证当前目录权限。`.testdata/` 已加入 `.gitignore`，需要完全重置时应先停止测试服务，再手动删除该目录。
 
-测试环境会为 `demo` 用户轮换一组 S3 凭据并写入 `.testdata/s3-credentials.txt`（权限 `0600`）。可以用 AWS CLI 验证基础对象操作：
+测试环境会为 `demo` 用户轮换 WebDAV Token 和一组 S3 凭据；AWS CLI 格式写入 `.testdata/s3-credentials.txt`，Playwright 共用的协议凭据写入 `.testdata/protocol-credentials.json`，两者都会在重复 seed 时重新收紧为 `0600` 并拒绝 symlink。可以用 AWS CLI 验证基础对象操作：
 
 ```bash
 set -a
@@ -195,7 +195,7 @@ pnpm exec playwright install chromium
 pnpm run test:e2e
 ```
 
-Playwright 默认调用 `scripts/test-env.sh run` 启动并复用 `http://127.0.0.1:18080`，覆盖未登录保护与登录退出、改密/多会话失效/管理员凭据撤销、公开目录浏览与筛选、目录级权限、上传与搜索、新建/重命名/复制/移动、回收恢复与永久清理、图床上传/公开访问/删除、密码分享以及管理员配置包下载。新增会修改数据的用例必须使用唯一名称，并在成功路径末尾清理夹具。若测试服务已由外部环境管理，可设置 `OMNISTORE_E2E_BASE_URL` 跳过内置启动流程。
+Playwright 默认调用 `scripts/test-env.sh run` 启动并复用 `http://127.0.0.1:18080`，覆盖未登录保护与登录退出、改密/多会话失效/管理员凭据撤销及用户删除、公开目录浏览与筛选、目录级权限、上传与搜索、新建/重命名/复制/移动、回收恢复与永久清理、图床上传/公开访问/删除、密码分享、管理员配置包下载，以及 WebDAV/S3/网页之间的文件互操作和共同来源配额。协议用例必须交叉读取两个入口写入的内容，验证 `507` 后无物理文件并在 `finally` 恢复来源配额。新增会修改数据的用例必须使用唯一名称，并在成功路径末尾清理夹具。若测试服务已由外部环境管理，可设置 `OMNISTORE_E2E_BASE_URL` 跳过内置启动流程，并通过 `OMNISTORE_E2E_PROTOCOL_CREDENTIALS` 指定匹配该实例的私有协议凭据 JSON。
 
 ### 配置
 

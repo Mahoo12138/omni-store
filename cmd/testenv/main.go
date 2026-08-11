@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -100,6 +101,10 @@ func seed(configFile, fixtureRoot string) error {
 	if err := ensureDemoPolicy(sourceService, demo.ID, publicSource.Key, teamSource.Key); err != nil {
 		return err
 	}
+	webDAVToken, err := auth.NewTokens(conn).Reset(demo.ID, auth.TokenTypeWebDAV)
+	if err != nil {
+		return err
+	}
 
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
 	if _, err := fileService.ReconcileSource(publicSource); err != nil {
@@ -141,7 +146,24 @@ func seed(configFile, fixtureRoot string) error {
 	credentialFile := filepath.Join(filepath.Dir(cfg.Data.Dir), "s3-credentials.txt")
 	credentialText := fmt.Sprintf("endpoint=http://%s\naccess_key_id=%s\nsecret_access_key=%s\nregion=us-east-1\nteam_bucket=%s\npublic_bucket=%s\n",
 		cfg.Server.S3Addr, s3Credential.AccessKeyID, s3Secret, teamSource.Key, publicSource.Key)
-	if err := os.WriteFile(credentialFile, []byte(credentialText), 0o600); err != nil {
+	if err := writePrivateTestFile(credentialFile, []byte(credentialText)); err != nil {
+		return err
+	}
+	protocolCredentialFile := filepath.Join(filepath.Dir(cfg.Data.Dir), "protocol-credentials.json")
+	protocolCredentials, err := json.MarshalIndent(map[string]string{
+		"http_endpoint":     cfg.Server.PublicURL,
+		"s3_endpoint":       "http://" + cfg.Server.S3Addr,
+		"username":          demo.Username,
+		"webdav_token":      webDAVToken,
+		"access_key_id":     s3Credential.AccessKeyID,
+		"secret_access_key": s3Secret,
+		"region":            "us-east-1",
+		"team_bucket":       teamSource.Key,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := writePrivateTestFile(protocolCredentialFile, append(protocolCredentials, '\n')); err != nil {
 		return err
 	}
 
@@ -154,8 +176,23 @@ func seed(configFile, fixtureRoot string) error {
 	if cfg.Server.S3Enabled {
 		fmt.Printf("S3 地址: http://%s（Path-style）\n", cfg.Server.S3Addr)
 		fmt.Printf("S3 凭据: %s\n", credentialFile)
+		fmt.Printf("协议 E2E 凭据: %s\n", protocolCredentialFile)
 	}
 	return nil
+}
+
+func writePrivateTestFile(path string, data []byte) error {
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("测试凭据路径必须是普通文件且不能是符号链接: %s", path)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 func ensureDemoPolicy(service *sources.Service, userID int64, publicKey, teamKey string) error {
