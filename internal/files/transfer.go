@@ -118,70 +118,135 @@ func (s *Service) transfer(source, target *models.StorageSource, fromInput, toIn
 	if maxBytes, limited := quotaGuard.MaxBytes(); limited && plan.total > maxBytes {
 		return nil, ErrQuotaExceeded
 	}
-	var operation *transferOperation
-	if move {
-		pending := s.newTransferOperation(source.ID, target.ID, plan.sourceRel, plan.targetRel, plan.isDir)
-		if err := s.writeTransferOperation(pending); err != nil {
-			return nil, fmt.Errorf("记录跨来源移动意图失败: %w", err)
-		}
-		operation = &pending
+	if !move {
+		return s.executeCrashSafeCopy(source, target, plan, actorUserID)
+	}
+
+	operation := s.newTransferOperation(source.ID, target.ID, plan.sourceRel, plan.targetRel, plan.isDir)
+	if err := s.writeTransferOperation(operation); err != nil {
+		return nil, fmt.Errorf("记录跨来源移动意图失败: %w", err)
 	}
 	if err := s.executeTransferCopy(plan); err != nil {
 		rollbackErr := s.rollbackTransferTarget(target, plan)
-		if operation != nil && rollbackErr == nil {
+		if rollbackErr == nil {
 			_ = s.removeTransferOperation(operation.OperationID)
 		}
 		return nil, errors.Join(err, rollbackErr)
 	}
-	if operation != nil {
-		if err := s.syncTransferDestination(plan); err != nil {
-			rollbackErr := s.rollbackTransferTarget(target, plan)
-			if rollbackErr == nil {
-				_ = s.removeTransferOperation(operation.OperationID)
-			}
-			return nil, errors.Join(fmt.Errorf("同步跨来源移动目标失败: %w", err), rollbackErr)
-		}
-		if err := s.markTransferTargetReady(operation.OperationID); err != nil {
-			rollbackErr := s.rollbackTransferTarget(target, plan)
-			if rollbackErr == nil {
-				_ = s.removeTransferOperation(operation.OperationID)
-			}
-			return nil, errors.Join(fmt.Errorf("记录跨来源移动目标阶段失败: %w", err), rollbackErr)
-		}
-	}
-	if err := s.syncTransferRecords(source, target, plan, move, actorUserID); err != nil {
+	if err := s.syncTransferDestination(plan); err != nil {
 		rollbackErr := s.rollbackTransferTarget(target, plan)
-		if operation != nil && rollbackErr == nil {
+		if rollbackErr == nil {
+			_ = s.removeTransferOperation(operation.OperationID)
+		}
+		return nil, errors.Join(fmt.Errorf("同步跨来源移动目标失败: %w", err), rollbackErr)
+	}
+	if err := s.markTransferTargetReady(operation.OperationID); err != nil {
+		rollbackErr := s.rollbackTransferTarget(target, plan)
+		if rollbackErr == nil {
+			_ = s.removeTransferOperation(operation.OperationID)
+		}
+		return nil, errors.Join(fmt.Errorf("记录跨来源移动目标阶段失败: %w", err), rollbackErr)
+	}
+	if err := s.syncTransferRecords(source, target, plan, true, actorUserID); err != nil {
+		rollbackErr := s.rollbackTransferTarget(target, plan)
+		if rollbackErr == nil {
 			_ = s.removeTransferOperation(operation.OperationID)
 		}
 		return nil, errors.Join(fmt.Errorf("更新文件台账失败: %w", err), rollbackErr)
 	}
-	if move {
-		if err := s.markTransferDatabaseReady(operation.OperationID); err != nil {
-			rollbackErr := s.rollbackTransferRecords(source, target, plan)
-			targetRollbackErr := s.rollbackTransferTarget(target, plan)
-			if rollbackErr == nil && targetRollbackErr == nil {
-				_ = s.removeTransferOperation(operation.OperationID)
-			}
-			return nil, errors.Join(fmt.Errorf("记录跨来源移动数据库阶段失败: %w", err), rollbackErr, targetRollbackErr)
+	if err := s.markTransferDatabaseReady(operation.OperationID); err != nil {
+		rollbackErr := s.rollbackTransferRecords(source, target, plan)
+		targetRollbackErr := s.rollbackTransferTarget(target, plan)
+		if rollbackErr == nil && targetRollbackErr == nil {
+			_ = s.removeTransferOperation(operation.OperationID)
 		}
-		if err := os.RemoveAll(plan.sourceAbs); err != nil {
-			return nil, fmt.Errorf("删除源路径失败，操作将在重启时继续: %w", err)
-		}
-		if err := syncDirectory(filepath.Dir(plan.sourceAbs)); err != nil {
-			return nil, fmt.Errorf("同步源目录失败，操作将在重启时继续: %w", err)
-		}
-		if err := releasePersistent(map[int64][]string{source.ID: []string{plan.sourceRel}}); err != nil {
-			return nil, err
-		}
-		if err := s.removeTransferOperation(operation.OperationID); err != nil {
-			return nil, fmt.Errorf("清理跨来源移动日志失败: %w", err)
-		}
+		return nil, errors.Join(fmt.Errorf("记录跨来源移动数据库阶段失败: %w", err), rollbackErr, targetRollbackErr)
+	}
+	if err := os.RemoveAll(plan.sourceAbs); err != nil {
+		return nil, fmt.Errorf("删除源路径失败，操作将在重启时继续: %w", err)
+	}
+	if err := syncDirectory(filepath.Dir(plan.sourceAbs)); err != nil {
+		return nil, fmt.Errorf("同步源目录失败，操作将在重启时继续: %w", err)
+	}
+	if err := releasePersistent(map[int64][]string{source.ID: []string{plan.sourceRel}}); err != nil {
+		return nil, err
+	}
+	if err := s.removeTransferOperation(operation.OperationID); err != nil {
+		return nil, fmt.Errorf("清理跨来源移动日志失败: %w", err)
 	}
 	return &TransferResult{
 		Path: plan.targetRel, Files: int64(len(plan.files)), Bytes: plan.total,
-		SourceKey: source.Key, TargetKey: target.Key, WasMove: move,
+		SourceKey: source.Key, TargetKey: target.Key, WasMove: true,
 	}, nil
+}
+
+func (s *Service) executeCrashSafeCopy(source, target *models.StorageSource, plan *transferPlan, actorUserID *int64) (*TransferResult, error) {
+	op := s.newCopyOperation(source.ID, target.ID, plan.targetRel, plan.isDir)
+	if err := s.writeCopyOperation(op); err != nil {
+		return nil, fmt.Errorf("记录跨来源复制意图失败: %w", err)
+	}
+	stagingPlan, err := s.copyStagingPlan(plan, op, target)
+	if err != nil {
+		_ = s.removeCopyOperation(op.OperationID)
+		return nil, err
+	}
+	rollback := func(removeTarget bool) error {
+		rollbackErr := s.rollbackCopyOperation(op, target, removeTarget)
+		if rollbackErr == nil {
+			_ = s.removeCopyOperation(op.OperationID)
+		}
+		return rollbackErr
+	}
+	if err := s.executeTransferCopy(stagingPlan); err != nil {
+		return nil, errors.Join(err, rollback(false))
+	}
+	if err := s.syncTransferDestination(stagingPlan); err != nil {
+		return nil, errors.Join(fmt.Errorf("同步跨来源复制 staging 失败: %w", err), rollback(false))
+	}
+	if _, err := os.Lstat(plan.targetAbs); err == nil {
+		return nil, errors.Join(ErrAlreadyExists, rollback(false))
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, errors.Join(err, rollback(false))
+	}
+	if err := os.Rename(stagingPlan.targetAbs, plan.targetAbs); err != nil {
+		return nil, errors.Join(fmt.Errorf("发布跨来源复制目标失败: %w", err), rollback(false))
+	}
+	if err := syncDirectory(filepath.Dir(plan.targetAbs)); err != nil {
+		return nil, errors.Join(fmt.Errorf("同步跨来源复制目标目录失败: %w", err), rollback(true))
+	}
+	if err := s.syncTransferRecords(source, target, plan, false, actorUserID); err != nil {
+		return nil, errors.Join(fmt.Errorf("更新复制文件台账失败: %w", err), rollback(true))
+	}
+	if err := s.markCopyDatabaseReady(op.OperationID); err != nil {
+		return nil, errors.Join(fmt.Errorf("记录跨来源复制数据库阶段失败: %w", err), rollback(true))
+	}
+	// 数据与台账均已提交；日志清理失败交给启动恢复，不诱发重复复制。
+	_ = s.removeCopyOperation(op.OperationID)
+	return &TransferResult{
+		Path: plan.targetRel, Files: int64(len(plan.files)), Bytes: plan.total,
+		SourceKey: source.Key, TargetKey: target.Key, WasMove: false,
+	}, nil
+}
+
+func (s *Service) copyStagingPlan(plan *transferPlan, op copyOperation, target *models.StorageSource) (*transferPlan, error) {
+	stagingAbs, _, err := s.copyOperationPaths(op, target)
+	if err != nil {
+		return nil, err
+	}
+	staged := *plan
+	staged.targetRel = op.StagingRelativePath
+	staged.targetAbs = stagingAbs
+	staged.dirs = make([]string, len(plan.dirs))
+	for i, dir := range plan.dirs {
+		staged.dirs[i] = stagingAbs + strings.TrimPrefix(dir, plan.targetAbs)
+	}
+	staged.files = make([]transferFile, len(plan.files))
+	for i, item := range plan.files {
+		staged.files[i] = item
+		staged.files[i].targetRel = op.StagingRelativePath + strings.TrimPrefix(item.targetRel, plan.targetRel)
+		staged.files[i].targetAbs = stagingAbs + strings.TrimPrefix(item.targetAbs, plan.targetAbs)
+	}
+	return &staged, nil
 }
 
 func (s *Service) syncTransferDestination(plan *transferPlan) error {
@@ -282,7 +347,7 @@ func (s *Service) buildTransferPlan(source, target *models.StorageSource, fromRe
 			plan.dirs = append(plan.dirs, filepath.Join(toAbs, filepath.FromSlash(suffix)))
 			return nil
 		}
-		if isUploadInternalName(entry.Name()) {
+		if isInternalName(entry.Name()) {
 			return nil
 		}
 		targetAbs := filepath.Join(toAbs, filepath.FromSlash(suffix))

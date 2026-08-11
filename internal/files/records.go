@@ -173,6 +173,12 @@ func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]
 			}
 			return nil
 		}
+		if isInternalName(entry.Name()) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if entry.IsDir() {
 			return nil
 		}
@@ -183,7 +189,7 @@ func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]
 			}
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || isUploadInternalName(entry.Name()) {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return nil
 		}
 		filesOnDisk[rel] = scannedFile{rel: rel, size: info.Size(), mtimeNano: info.ModTime().UnixNano()}

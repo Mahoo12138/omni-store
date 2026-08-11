@@ -57,6 +57,13 @@ func TestCopyAcrossSourcesEnforcesQuotaAndRecordsActorOwnership(t *testing.T) {
 		t.Fatalf("copied content=%q err=%v", content, err)
 	}
 	assertFileRecord(t, service, target.ID, "copied/one.txt", "copied/one.txt", 3, models.FileOwnerUser, &userID)
+	entries, err := os.ReadDir(service.copyOperationsDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("successful copy left recovery artifacts: %+v", entries)
+	}
 	usage, err := service.UserUsage(userID)
 	if err != nil || usage != 6 {
 		t.Fatalf("usage after copy=%d err=%v", usage, err)

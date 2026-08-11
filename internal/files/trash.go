@@ -175,7 +175,7 @@ func (s *Service) inspectTrashSource(src *models.StorageSource, relPath, absPath
 		if err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 || (!info.IsDir() && !info.Mode().IsRegular()) || isUploadInternalName(entry.Name()) {
+		if info.Mode()&os.ModeSymlink != 0 || (!info.IsDir() && !info.Mode().IsRegular()) || isInternalName(entry.Name()) {
 			return ErrUnsupported
 		}
 		if info.Mode().IsRegular() {

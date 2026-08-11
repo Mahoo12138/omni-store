@@ -168,6 +168,12 @@ func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
 		if absPath == root {
 			return nil
 		}
+		if isInternalName(entry.Name()) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		info, err := entry.Info()
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -178,7 +184,7 @@ func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
-		if info.Mode().IsRegular() && !isUploadInternalName(entry.Name()) {
+		if info.Mode().IsRegular() {
 			usage += info.Size()
 		}
 		return nil
@@ -426,8 +432,8 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 	entries := make([]Entry, 0, len(dirents))
 	for _, de := range dirents {
 		name := de.Name()
-		// 隐藏上传临时文件（README §14.5）。
-		if strings.HasPrefix(name, ".omnistore-upload-") {
+		// 隐藏由上传与复制恢复流程持有的内部 staging。
+		if isInternalName(name) {
 			continue
 		}
 		childRel := name
@@ -514,7 +520,10 @@ func (s *Service) ListObjects(src *models.StorageSource) ([]ObjectEntry, error) 
 			}
 			return nil
 		}
-		if strings.HasPrefix(entry.Name(), ".omnistore-upload-") {
+		if isInternalName(entry.Name()) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		info, err := entry.Info()
