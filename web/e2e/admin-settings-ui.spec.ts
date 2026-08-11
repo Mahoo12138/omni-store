@@ -147,7 +147,7 @@ test('primary settings actions belong to their module headers', async ({ page })
   }
 })
 
-test('credential overview opens one isolated management workspace at a time', async ({ page }) => {
+test('credential overview opens one isolated management modal at a time', async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await loginAsAdmin(page)
   await page.setViewportSize({ width: 1119, height: 880 })
@@ -166,25 +166,40 @@ test('credential overview opens one isolated management workspace at a time', as
   await expect(page.getByRole('region', { name: 'S3 Access Key', exact: true })).toHaveCount(0)
 
   await webdavEntry.click()
-  const webdav = page.getByRole('region', { name: 'WebDAV', exact: true })
+  const webdavDialog = page.getByRole('dialog', { name: 'WebDAV', exact: true })
+  const webdav = webdavDialog.getByRole('region', { name: 'WebDAV', exact: true })
+  await expect(webdavDialog).toBeVisible()
   await expect(webdav).toContainText('挂载路径')
   await expect(webdav).toContainText('/dav')
   await webdav.getByRole('button', { name: '重置 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '重置 WebDAV' })).toBeVisible()
-  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await page.getByRole('dialog', { name: '重置 WebDAV' }).getByRole('button', { name: '取消', exact: true }).click()
+  await expect(webdavDialog).toBeVisible()
+  await webdavDialog.getByRole('button', { name: '完成', exact: true }).click()
 
-  await page.getByRole('button', { name: '所有连接' }).click()
   await expect(webdavEntry).toBeFocused()
   await imageApiEntry.click()
   await expect(webdav).toHaveCount(0)
-  const imageApi = page.getByRole('region', { name: '图床 API', exact: true })
+  const imageApiDialog = page.getByRole('dialog', { name: '图床 API', exact: true })
+  const imageApi = imageApiDialog.getByRole('region', { name: '图床 API', exact: true })
+  await expect(imageApiDialog).toBeVisible()
   await imageApi.getByRole('button', { name: '新建 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '新建图床 Token' })).toBeVisible()
-  await page.getByRole('button', { name: '取消', exact: true }).click()
+  const visibleBackdropCount = await page.locator('body *').evaluateAll((elements) => elements.filter((element) => {
+    const style = getComputedStyle(element)
+    return style.position === 'fixed'
+      && style.inset === '0px'
+      && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      && style.backgroundColor !== 'transparent'
+  }).length)
+  expect(visibleBackdropCount).toBe(2)
+  await page.getByRole('dialog', { name: '新建图床 Token' }).getByRole('button', { name: '取消', exact: true }).click()
+  await imageApiDialog.getByRole('button', { name: '完成', exact: true }).click()
 
-  await page.getByRole('button', { name: '所有连接' }).click()
   await s3Entry.click()
-  const s3 = page.getByRole('region', { name: 'S3 Access Key', exact: true })
+  const s3Dialog = page.getByRole('dialog', { name: 'S3', exact: true })
+  const s3 = s3Dialog.getByRole('region', { name: 'S3 Access Key', exact: true })
+  await expect(s3Dialog).toBeVisible()
   await expect(s3.getByRole('list', { name: 'S3 凭据列表' })).toBeVisible()
   await expect(s3.getByRole('list', { name: 'S3 Bucket 映射' })).toBeVisible()
   const copyBucket = s3.getByRole('button', { name: '复制 Bucket' }).first()
@@ -192,21 +207,26 @@ test('credential overview opens one isolated management workspace at a time', as
   await expect(s3.getByRole('button', { name: '已复制' })).toBeVisible()
   await s3.getByRole('button', { name: '新建凭据', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '新建 S3 凭据' })).toBeVisible()
-  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await page.getByRole('dialog', { name: '新建 S3 凭据' }).getByRole('button', { name: '取消', exact: true }).click()
+  await s3Dialog.getByRole('button', { name: '完成', exact: true }).click()
+  await expect(s3Entry).toBeFocused()
 
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.getByRole('button', { name: '所有连接' }).click()
   await webdavEntry.click()
-  await expect(page.getByRole('region', { name: 'WebDAV', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '所有连接' }).click()
+  const mobileWebdavDialog = page.getByRole('dialog', { name: 'WebDAV', exact: true })
+  await expect(mobileWebdavDialog.getByRole('region', { name: 'WebDAV', exact: true })).toBeVisible()
+  await mobileWebdavDialog.getByRole('button', { name: '完成', exact: true }).click()
   await imageApiEntry.click()
-  await expect(page.getByRole('region', { name: '图床 API', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '所有连接' }).click()
+  const mobileImageDialog = page.getByRole('dialog', { name: '图床 API', exact: true })
+  await expect(mobileImageDialog.getByRole('region', { name: '图床 API', exact: true })).toBeVisible()
+  await mobileImageDialog.getByRole('button', { name: '完成', exact: true }).click()
   await s3Entry.click()
-  await expect(s3).toBeVisible()
+  const mobileS3Dialog = page.getByRole('dialog', { name: 'S3', exact: true })
+  await expect(mobileS3Dialog.getByRole('region', { name: 'S3 Access Key', exact: true })).toBeVisible()
   expect(await page.evaluate(() => (
     document.documentElement.scrollWidth > document.documentElement.clientWidth
   ))).toBe(false)
+  await mobileS3Dialog.getByRole('button', { name: '完成', exact: true }).click()
 })
 
 test('admin data regions scroll locally without squeezing narrow layouts', async ({ page }) => {

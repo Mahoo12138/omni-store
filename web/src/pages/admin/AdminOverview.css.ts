@@ -440,77 +440,20 @@ globalStyle(`${credentialOverviewItem} > svg`, {
   '@media': { 'screen and (max-width: 560px)': { gridColumn: 3, gridRow: '1 / span 2' } },
 })
 
-export const credentialDetail = style({ minWidth: 0 })
-export const credentialDetailNav = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: vars.space.md,
-  minHeight: 52,
-  padding: `0 ${vars.space.xl}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-  backgroundColor: vars.color.background,
-  '@media': {
-    'screen and (max-width: 640px)': { padding: `0 ${vars.space.lg}` },
-    'screen and (max-width: 480px)': { padding: `0 ${vars.space.md}` },
-  },
-})
-
-export const credentialBackButton = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  minHeight: 36,
-  padding: `0 ${vars.space.sm}`,
-  marginLeft: `-${vars.space.sm}`,
-  border: 0,
-  borderRadius: vars.radius.md,
-  backgroundColor: 'transparent',
-  color: vars.color.primary,
-  fontFamily: vars.font.body,
-  fontSize: vars.fontSize.sm,
-  fontWeight: 600,
-  cursor: 'pointer',
-  selectors: {
-    '&:hover': { backgroundColor: vars.color.primarySubtle },
-    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
-  },
-})
-
-export const credentialDetailContext = style({
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.xs,
-  '@media': { 'screen and (max-width: 480px)': { display: 'none' } },
-})
+export const credentialModalContent = style({ minWidth: 0 })
 
 export const credentialGroup = style({
-  padding: `22px ${vars.space.xl}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-  selectors: { '&:last-child': { borderBottom: 'none' } },
-  '@media': {
-    'screen and (max-width: 640px)': { padding: vars.space.lg },
-    'screen and (max-width: 480px)': { padding: vars.space.md },
-  },
+  minWidth: 0,
 })
 
 export const credentialGroupHeader = style({
   display: 'grid',
-  gridTemplateColumns: '40px minmax(0, 1fr) auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
   gap: vars.space.md,
   alignItems: 'start',
   '@media': {
-    'screen and (max-width: 680px)': { gridTemplateColumns: '40px minmax(0, 1fr)' },
+    'screen and (max-width: 560px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
-})
-
-export const credentialGroupIcon = style({
-  display: 'grid',
-  placeItems: 'center',
-  width: 40,
-  height: 40,
-  borderRadius: vars.radius.md,
-  backgroundColor: vars.color.primarySubtle,
-  color: vars.color.primary,
 })
 
 export const credentialGroupCopy = style({ minWidth: 0 })
@@ -521,13 +464,6 @@ export const credentialTitleLine = style({
   flexWrap: 'wrap',
   gap: vars.space.sm,
   minHeight: 24,
-})
-
-export const credentialGroupTitle = style({
-  margin: 0,
-  color: vars.color.text,
-  fontSize: vars.fontSize.md,
-  fontWeight: 600,
 })
 
 export const credentialGroupHint = style({
@@ -543,8 +479,7 @@ export const credentialGroupAction = style({
   justifyContent: 'flex-end',
   flexShrink: 0,
   '@media': {
-    'screen and (max-width: 680px)': { gridColumn: '2', justifyContent: 'flex-start' },
-    'screen and (max-width: 480px)': { gridColumn: '1 / -1' },
+    'screen and (max-width: 560px)': { justifyContent: 'flex-start' },
   },
 })
 
@@ -571,8 +506,6 @@ globalStyle(`${credentialOverviewItem} > ${statusBadge}, ${credentialOverviewIte
 
 export const credentialBody = style({
   marginTop: vars.space.lg,
-  marginLeft: 56,
-  '@media': { 'screen and (max-width: 680px)': { marginLeft: 0 } },
 })
 
 export const credentialFacts = style({

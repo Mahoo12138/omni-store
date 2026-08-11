@@ -65,7 +65,6 @@ import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
   IconArrowUp,
-  IconChevronLeft,
   IconChevronRight,
   IconCloud,
   IconDownload,
@@ -366,7 +365,7 @@ function ProfileSection() {
       : { label: '未生成', active: false }
   }
 
-  function returnToCredentialOverview() {
+  function closeCredentialModal() {
     const previous = credentialView
     setCredentialView(null)
     requestAnimationFrame(() => {
@@ -483,74 +482,66 @@ function ProfileSection() {
             <span className={css.eyebrow}>访问凭据</span>
             <h2 className={css.credentialsTitle}>应用与客户端连接</h2>
           </div>
-          <p className={css.credentialsHint}>
-            {credentialView
-              ? '当前只管理一种连接；返回后可切换到其他协议。'
-              : '选择连接类型查看状态和管理凭据。Token 与 Secret 仅展示一次。'}
-          </p>
+          <p className={css.credentialsHint}>选择连接类型查看状态和管理凭据。Token 与 Secret 仅展示一次。</p>
         </header>
-        {credentialView === null ? (
-          <nav className={css.credentialOverview} aria-label="连接类型">
-            {credentialViews.map((view) => {
-              const status = credentialStatus(view.key)
-              return (
-                <button
-                  key={view.key}
-                  id={`credential-entry-${view.key}`}
-                  type="button"
-                  className={css.credentialOverviewItem}
-                  onClick={() => setCredentialView(view.key)}
-                  aria-label={`管理 ${view.label}`}
+        <nav className={css.credentialOverview} aria-label="连接类型">
+          {credentialViews.map((view) => {
+            const status = credentialStatus(view.key)
+            return (
+              <button
+                key={view.key}
+                id={`credential-entry-${view.key}`}
+                type="button"
+                className={css.credentialOverviewItem}
+                onClick={() => setCredentialView(view.key)}
+                aria-label={`管理 ${view.label}`}
+              >
+                <span className={css.credentialOverviewIcon} aria-hidden="true">{view.icon}</span>
+                <span className={css.credentialOverviewCopy}>
+                  <span className={css.credentialOverviewTitleLine}>
+                    <strong className={css.credentialOverviewTitle}>{view.label}</strong>
+                    <small className={css.credentialOverviewMeta}>{view.meta}</small>
+                  </span>
+                  <span className={css.credentialOverviewDescription}>{view.description}</span>
+                </span>
+                <span
+                  className={status.error
+                    ? css.credentialStatusError
+                    : status.active ? css.statusBadge : css.statusBadgeMuted}
                 >
-                  <span className={css.credentialOverviewIcon} aria-hidden="true">{view.icon}</span>
-                  <span className={css.credentialOverviewCopy}>
-                    <span className={css.credentialOverviewTitleLine}>
-                      <strong className={css.credentialOverviewTitle}>{view.label}</strong>
-                      <small className={css.credentialOverviewMeta}>{view.meta}</small>
-                    </span>
-                    <span className={css.credentialOverviewDescription}>{view.description}</span>
-                  </span>
-                  <span
-                    className={status.error
-                      ? css.credentialStatusError
-                      : status.active ? css.statusBadge : css.statusBadgeMuted}
-                  >
-                    {status.active ? <i className={css.statusDotSmall} /> : null}
-                    {status.label}
-                  </span>
-                  <IconChevronRight size={17} />
-                </button>
-              )
-            })}
-          </nav>
-        ) : (
-          <div className={css.credentialDetail}>
-            <div className={css.credentialDetailNav}>
-              <button type="button" className={css.credentialBackButton} onClick={returnToCredentialOverview}>
-                <IconChevronLeft size={16} />
-                所有连接
+                  {status.active ? <i className={css.statusDotSmall} /> : null}
+                  {status.label}
+                </span>
+                <IconChevronRight size={17} />
               </button>
-              <span className={css.credentialDetailContext}>
-                正在管理 {credentialViews.find((view) => view.key === credentialView)?.label}
-              </span>
-            </div>
+            )
+          })}
+        </nav>
+        <DialogWrap
+          open={credentialView !== null}
+          onOpenChange={(open) => { if (!open) closeCredentialModal() }}
+          title={credentialViews.find((view) => view.key === credentialView)?.label ?? '管理连接'}
+          description={credentialViews.find((view) => view.key === credentialView)?.description}
+          wide
+          footer={<Button variant="secondary" onClick={closeCredentialModal}>完成</Button>}
+        >
+          <div className={css.credentialModalContent}>
             {credentialView === 'webdav' ? (
-            <TokenBlock
-              type="webdav"
-              title="WebDAV"
-              hint="通过 /dav 挂载文件，使用登录名与此 Token 认证。"
-              status={tokens.data?.webdav}
-              newToken={newTokens.webdav}
-              onReset={(t) => resetMut.mutate(t)}
-              pending={tokens.isPending}
-              error={tokens.isError}
-              resetting={resetMut.isPending}
-            />
+              <TokenBlock
+                type="webdav"
+                hint="通过 /dav 挂载文件，使用登录名与此 Token 认证。"
+                status={tokens.data?.webdav}
+                newToken={newTokens.webdav}
+                onReset={(t) => resetMut.mutate(t)}
+                pending={tokens.isPending}
+                error={tokens.isError}
+                resetting={resetMut.isPending}
+              />
             ) : null}
             {credentialView === 'image-api' ? <ImageBedTokenManager /> : null}
             {credentialView === 's3' ? <S3CredentialManager /> : null}
           </div>
-        )}
+        </DialogWrap>
       </section>
 
       {/* 危险操作 */}
@@ -569,28 +560,18 @@ function ProfileSection() {
 }
 
 function CredentialGroupHeader({
-  titleId,
-  title,
   hint,
-  icon,
   status,
   action,
 }: {
-  titleId: string
-  title: string
   hint: string
-  icon: React.ReactNode
   status: React.ReactNode
   action: React.ReactNode
 }) {
   return (
     <header className={css.credentialGroupHeader}>
-      <span className={css.credentialGroupIcon} aria-hidden="true">{icon}</span>
       <div className={css.credentialGroupCopy}>
-        <div className={css.credentialTitleLine}>
-          <h3 id={titleId} className={css.credentialGroupTitle}>{title}</h3>
-          {status}
-        </div>
+        <div className={css.credentialTitleLine}>{status}</div>
         <p className={css.credentialGroupHint}>{hint}</p>
       </div>
       <div className={css.credentialGroupAction}>{action}</div>
@@ -600,7 +581,6 @@ function CredentialGroupHeader({
 
 function TokenBlock({
   type,
-  title,
   hint,
   status,
   newToken,
@@ -610,7 +590,6 @@ function TokenBlock({
   resetting,
 }: {
   type: 'webdav'
-  title: string
   hint: string
   status?: { exists: boolean; created_at?: string | null; last_used_at?: string | null }
   newToken?: string
@@ -622,12 +601,9 @@ function TokenBlock({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
   return (
-    <section className={css.credentialGroup} aria-labelledby="webdav-credential-title">
+    <section className={css.credentialGroup} aria-label="WebDAV">
       <CredentialGroupHeader
-        titleId="webdav-credential-title"
-        title={title}
         hint={hint}
-        icon={<IconLink size={17} />}
         status={pending ? (
           <span className={css.statusBadgeMuted}>正在读取</span>
         ) : error ? (
@@ -677,7 +653,7 @@ function TokenBlock({
       <DialogWrap
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={`重置 ${title}`}
+        title="重置 WebDAV"
         description="重置后旧 Token 立即失效，相关客户端需要更新配置。"
         footer={
           <>
@@ -791,12 +767,9 @@ function ImageBedTokenManager() {
   const atLimit = tokenItems.length >= 10
 
   return (
-    <section className={css.credentialGroup} aria-labelledby="image-api-credential-title">
+    <section className={css.credentialGroup} aria-label="图床 API">
       <CredentialGroupHeader
-        titleId="image-api-credential-title"
-        title="图床 API"
         hint="为每台 PicGo 或第三方客户端创建独立 Token；最多 10 个，明文仅显示一次。"
-        icon={<IconImage size={17} />}
         status={tokens.isPending ? (
           <span className={css.statusBadgeMuted}>正在读取</span>
         ) : tokens.isError ? (
@@ -979,12 +952,9 @@ function S3CredentialManager() {
   }
 
   return (
-    <section className={css.credentialGroup} aria-labelledby="s3-credential-title">
+    <section className={css.credentialGroup} aria-label="S3 Access Key">
       <CredentialGroupHeader
-        titleId="s3-credential-title"
-        title="S3 Access Key"
         hint="供 AWS CLI、rclone 等客户端访问已授权存储源；最多 10 个，Secret 仅显示一次。"
-        icon={<IconCloud size={17} />}
         status={credentials.isPending ? (
           <span className={css.statusBadgeMuted}>正在读取</span>
         ) : credentials.isError ? (

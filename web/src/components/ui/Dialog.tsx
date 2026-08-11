@@ -28,7 +28,8 @@ export function DialogWrap({
   return (
     <Dialog.Root open={open} onOpenChange={(o) => onOpenChange(o)}>
       <Dialog.Portal>
-        <Dialog.Backdrop className={css.backdrop} />
+        {/* Base UI 默认省略嵌套 Dialog 的 Backdrop；强制渲染以明确区分二级操作层。 */}
+        <Dialog.Backdrop className={css.backdrop} forceRender />
         <Dialog.Viewport className={css.viewport}>
           <Dialog.Popup className={wide ? css.popupWide : css.popup}>
             <div className={css.header}>
