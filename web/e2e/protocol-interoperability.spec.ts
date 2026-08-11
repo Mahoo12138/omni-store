@@ -32,6 +32,12 @@ function hmac(key: Buffer | string, value: string): Buffer {
   return createHmac('sha256', key).update(value).digest()
 }
 
+function awsEncode(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, character => (
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  ))
+}
+
 function amzTimestamp(now = new Date()): { date: string; timestamp: string } {
   const timestamp = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
   return { date: timestamp.slice(0, 8), timestamp }
@@ -40,11 +46,22 @@ function amzTimestamp(now = new Date()): { date: string; timestamp: string } {
 async function signedS3Request(
   request: APIRequestContext,
   credentials: ProtocolCredentials,
-  method: 'GET' | 'PUT' | 'DELETE',
+  method: 'GET' | 'PUT' | 'POST' | 'DELETE',
   key: string,
   body = Buffer.alloc(0),
+  query: Array<[string, string]> = [],
+  headers: Record<string, string> = {},
 ) {
   const url = new URL(`${credentials.s3_endpoint}/${credentials.team_bucket}/${key}`)
+  const canonicalQuery = query
+    .map(([name, value]) => [awsEncode(name), awsEncode(value)] as const)
+    .sort(([leftName, leftValue], [rightName, rightValue]) => (
+      leftName < rightName ? -1 : leftName > rightName ? 1
+        : leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0
+    ))
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&')
+  url.search = canonicalQuery
   const payloadHash = sha256(body)
   const { date, timestamp } = amzTimestamp()
   const signedHeaders = 'host;x-amz-date'
@@ -52,7 +69,7 @@ async function signedS3Request(
   const canonicalRequest = [
     method,
     url.pathname,
-    '',
+    canonicalQuery,
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -72,13 +89,27 @@ async function signedS3Request(
 
   return request.fetch(url.toString(), {
     method,
-    data: method === 'PUT' ? body : undefined,
+    data: method === 'PUT' || method === 'POST' ? body : undefined,
     headers: {
       Authorization: `AWS4-HMAC-SHA256 Credential=${credentials.access_key_id}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
       'X-Amz-Content-Sha256': payloadHash,
       'X-Amz-Date': timestamp,
+      ...headers,
     },
   })
+}
+
+function xmlValue(xml: string, name: string): string {
+  const match = xml.match(new RegExp(`<${name}>([^<]+)</${name}>`))
+  if (!match) throw new Error(`S3 XML 缺少 ${name}: ${xml}`)
+  return match[1]
+    .replace(/&#x([0-9a-f]+);/gi, (_, value: string) => String.fromCodePoint(Number.parseInt(value, 16)))
+    .replace(/&#([0-9]+);/g, (_, value: string) => String.fromCodePoint(Number.parseInt(value, 10)))
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
 }
 
 async function login(page: Page, username: string, password: string) {
@@ -186,5 +217,170 @@ test('WebDAV and S3 share files, permissions and storage quota', async ({ page, 
     await request.delete(davURL(quotaS3File), { headers: { Authorization: basicAuth } }).catch(() => undefined)
     await admin.dispose()
     if (restoreFailure) throw new Error(restoreFailure)
+  }
+})
+
+test('WebDAV locks block S3 writes and multipart completion until unlock', async ({ page, request }) => {
+  const credentials = loadProtocolCredentials()
+  test.skip(!credentials, '需要默认测试环境或 OMNISTORE_E2E_PROTOCOL_CREDENTIALS')
+  if (!credentials) return
+
+  const suffix = `${Date.now()}`
+  const lockedFile = `e2e-locked-${suffix}.txt`
+  const abortedFile = `e2e-aborted-${suffix}.txt`
+  const basicAuth = `Basic ${Buffer.from(`${credentials.username}:${credentials.webdav_token}`).toString('base64')}`
+  const davURL = (name: string) => `${credentials.http_endpoint}/dav/${credentials.team_bucket}/${name}`
+  const lockBody = `<?xml version="1.0" encoding="utf-8" ?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner><D:href>OmniStore Playwright</D:href></D:owner>
+</D:lockinfo>`
+  const multipartBody = Buffer.from('completed through S3 multipart\n')
+  let lockToken = ''
+  let uploadID = ''
+  let abortUploadID = ''
+
+  try {
+    const seedFile = await request.put(davURL(lockedFile), {
+      data: Buffer.from('before lock\n'), headers: { Authorization: basicAuth },
+    })
+    expect(seedFile.status()).toBe(201)
+
+    const lock = await request.fetch(davURL(lockedFile), {
+      method: 'LOCK',
+      data: lockBody,
+      headers: {
+        Authorization: basicAuth,
+        'Content-Type': 'application/xml',
+        Depth: '0',
+        Timeout: 'Second-120',
+      },
+    })
+    expect(lock.status()).toBe(200)
+    lockToken = (lock.headers()['lock-token'] ?? '').replace(/^<|>$/g, '')
+    expect(lockToken).toMatch(/^urn:uuid:/)
+    expect(await lock.text()).toContain('lockdiscovery')
+
+    const blockedPut = await signedS3Request(
+      request, credentials, 'PUT', lockedFile, Buffer.from('blocked S3 overwrite\n'),
+    )
+    expect(blockedPut.status()).toBe(423)
+    expect(await blockedPut.text()).toContain('<Code>OperationAborted</Code>')
+
+    const initiated = await signedS3Request(
+      request, credentials, 'POST', lockedFile, Buffer.alloc(0), [['uploads', '']],
+    )
+    expect(initiated.status()).toBe(200)
+    uploadID = xmlValue(await initiated.text(), 'UploadId')
+    expect(uploadID).toMatch(/^mpu_[0-9a-f]{48}$/)
+
+    const uploadedPart = await signedS3Request(
+      request, credentials, 'PUT', lockedFile, multipartBody,
+      [['partNumber', '1'], ['uploadId', uploadID]],
+    )
+    expect(uploadedPart.status()).toBe(200)
+    const partETag = uploadedPart.headers().etag
+    expect(partETag).toMatch(/^"[0-9a-f]{32}"$/)
+
+    const listedBeforeComplete = await signedS3Request(
+      request, credentials, 'GET', lockedFile, Buffer.alloc(0), [['uploadId', uploadID]],
+    )
+    expect(listedBeforeComplete.status()).toBe(200)
+    expect(xmlValue(await listedBeforeComplete.text(), 'ETag')).toBe(partETag)
+
+    const completeBody = Buffer.from(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>${partETag}</ETag></Part></CompleteMultipartUpload>`)
+    const blockedComplete = await signedS3Request(
+      request, credentials, 'POST', lockedFile, completeBody, [['uploadId', uploadID]],
+      { 'Content-Type': 'application/xml' },
+    )
+    expect(blockedComplete.status()).toBe(423)
+    expect(await blockedComplete.text()).toContain('<Code>OperationAborted</Code>')
+
+    const stillRetryable = await signedS3Request(
+      request, credentials, 'GET', lockedFile, Buffer.alloc(0), [['uploadId', uploadID]],
+    )
+    expect(stillRetryable.status()).toBe(200)
+    expect(await stillRetryable.text()).toContain('<PartNumber>1</PartNumber>')
+
+    const refresh = await request.fetch(davURL(lockedFile), {
+      method: 'LOCK',
+      headers: {
+        Authorization: basicAuth,
+        If: `(<${lockToken}>)`,
+        Timeout: 'Second-240',
+      },
+    })
+    expect(refresh.status()).toBe(200)
+    expect(refresh.headers()['lock-token']).toBeUndefined()
+
+    const discovered = await request.fetch(davURL(lockedFile), {
+      method: 'PROPFIND', headers: { Authorization: basicAuth, Depth: '0' },
+    })
+    expect(discovered.status()).toBe(207)
+    expect(await discovered.text()).toContain(lockToken)
+
+    const davWithToken = await request.put(davURL(lockedFile), {
+      data: Buffer.from('written with lock token\n'),
+      headers: { Authorization: basicAuth, If: `(<${lockToken}>)` },
+    })
+    expect(davWithToken.status()).toBe(201)
+
+    const unlock = await request.fetch(davURL(lockedFile), {
+      method: 'UNLOCK', headers: { Authorization: basicAuth, 'Lock-Token': `<${lockToken}>` },
+    })
+    expect(unlock.status()).toBe(204)
+    lockToken = ''
+
+    const completed = await signedS3Request(
+      request, credentials, 'POST', lockedFile, completeBody, [['uploadId', uploadID]],
+      { 'Content-Type': 'application/xml' },
+    )
+    expect(completed.status()).toBe(200)
+    expect(xmlValue(await completed.text(), 'ETag')).toMatch(/^"[0-9a-f]{32}-1"$/)
+
+    const missingUpload = await signedS3Request(
+      request, credentials, 'GET', lockedFile, Buffer.alloc(0), [['uploadId', uploadID]],
+    )
+    expect(missingUpload.status()).toBe(404)
+    expect(await missingUpload.text()).toContain('<Code>NoSuchUpload</Code>')
+    uploadID = ''
+
+    const davRead = await request.get(davURL(lockedFile), { headers: { Authorization: basicAuth } })
+    expect(davRead.status()).toBe(200)
+    expect(await davRead.body()).toEqual(multipartBody)
+
+    await login(page, credentials.username, 'OmniStore-Test-Demo!')
+    await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
+    await expect(page.getByRole('row', { name: new RegExp(lockedFile) })).toBeVisible()
+
+    const abortInitiated = await signedS3Request(
+      request, credentials, 'POST', abortedFile, Buffer.alloc(0), [['uploads', '']],
+    )
+    expect(abortInitiated.status()).toBe(200)
+    abortUploadID = xmlValue(await abortInitiated.text(), 'UploadId')
+    const aborted = await signedS3Request(
+      request, credentials, 'DELETE', abortedFile, Buffer.alloc(0), [['uploadId', abortUploadID]],
+    )
+    expect(aborted.status()).toBe(204)
+    abortUploadID = ''
+  } finally {
+    if (lockToken) {
+      await request.fetch(davURL(lockedFile), {
+        method: 'UNLOCK', headers: { Authorization: basicAuth, 'Lock-Token': `<${lockToken}>` },
+      }).catch(() => undefined)
+    }
+    if (uploadID) {
+      await signedS3Request(
+        request, credentials, 'DELETE', lockedFile, Buffer.alloc(0), [['uploadId', uploadID]],
+      ).catch(() => undefined)
+    }
+    if (abortUploadID) {
+      await signedS3Request(
+        request, credentials, 'DELETE', abortedFile, Buffer.alloc(0), [['uploadId', abortUploadID]],
+      ).catch(() => undefined)
+    }
+    await signedS3Request(request, credentials, 'DELETE', lockedFile).catch(() => undefined)
+    await signedS3Request(request, credentials, 'DELETE', abortedFile).catch(() => undefined)
   }
 })
