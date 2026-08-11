@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -125,6 +126,8 @@ func splitPath(urlPath string) (string, string) {
 
 func (h *Handler) serveBucket(w http.ResponseWriter, r *http.Request, user *models.User, src *models.StorageSource) {
 	switch {
+	case r.Method == http.MethodHead && hasUnsupportedOperationQuery(r.URL.Query()):
+		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", src.Key)
 	case r.Method == http.MethodHead:
 		if !h.authorize(w, r, user, src, "", false, false) {
 			return
@@ -166,6 +169,8 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request, authentica
 		h.abortMultipartUpload(w, r, authenticated.User, src, key)
 	case query.Has("uploadId") || query.Has("partNumber"):
 		h.writeError(w, r, http.StatusBadRequest, "InvalidRequest", "Multipart 请求参数不完整", key)
+	case hasUnsupportedOperationQuery(query):
+		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", key)
 	case r.Method == http.MethodGet || r.Method == http.MethodHead:
 		h.getObject(w, r, src, key)
 	case r.Method == http.MethodPut:
@@ -175,6 +180,17 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request, authentica
 	default:
 		h.writeError(w, r, http.StatusNotImplemented, "NotImplemented", "该 S3 操作尚未实现", key)
 	}
+}
+
+func hasUnsupportedOperationQuery(query url.Values) bool {
+	for key := range query {
+		lower := strings.ToLower(key)
+		if strings.HasPrefix(lower, "x-amz-") || lower == "x-id" {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func validObjectKey(key string) bool {

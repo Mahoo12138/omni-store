@@ -43,17 +43,10 @@ function amzTimestamp(now = new Date()): { date: string; timestamp: string } {
   return { date: timestamp.slice(0, 8), timestamp }
 }
 
-async function signedS3Request(
-  request: APIRequestContext,
-  credentials: ProtocolCredentials,
-  method: 'GET' | 'PUT' | 'POST' | 'DELETE',
-  key: string,
-  body = Buffer.alloc(0),
-  query: Array<[string, string]> = [],
-  headers: Record<string, string> = {},
-) {
-  const url = new URL(`${credentials.s3_endpoint}/${credentials.team_bucket}/${key}`)
-  const canonicalQuery = query
+type S3Method = 'GET' | 'HEAD' | 'PUT' | 'POST' | 'DELETE'
+
+function canonicalQueryString(query: Array<[string, string]>): string {
+  return query
     .map(([name, value]) => [awsEncode(name), awsEncode(value)] as const)
     .sort(([leftName, leftValue], [rightName, rightValue]) => (
       leftName < rightName ? -1 : leftName > rightName ? 1
@@ -61,6 +54,19 @@ async function signedS3Request(
     ))
     .map(([name, value]) => `${name}=${value}`)
     .join('&')
+}
+
+async function signedS3PathRequest(
+  request: APIRequestContext,
+  credentials: ProtocolCredentials,
+  method: S3Method,
+  resourcePath: string,
+  body = Buffer.alloc(0),
+  query: Array<[string, string]> = [],
+  headers: Record<string, string> = {},
+) {
+  const url = new URL(resourcePath, credentials.s3_endpoint)
+  const canonicalQuery = canonicalQueryString(query)
   url.search = canonicalQuery
   const payloadHash = sha256(body)
   const { date, timestamp } = amzTimestamp()
@@ -97,6 +103,51 @@ async function signedS3Request(
       ...headers,
     },
   })
+}
+
+function signedS3Request(
+  request: APIRequestContext,
+  credentials: ProtocolCredentials,
+  method: S3Method,
+  key: string,
+  body = Buffer.alloc(0),
+  query: Array<[string, string]> = [],
+  headers: Record<string, string> = {},
+) {
+  const encodedKey = key.split('/').map(awsEncode).join('/')
+  return signedS3PathRequest(
+    request, credentials, method, `/${awsEncode(credentials.team_bucket)}/${encodedKey}`,
+    body, query, headers,
+  )
+}
+
+function presignedS3GetURL(credentials: ProtocolCredentials, key: string): string {
+  const encodedKey = key.split('/').map(awsEncode).join('/')
+  const url = new URL(`/${awsEncode(credentials.team_bucket)}/${encodedKey}`, credentials.s3_endpoint)
+  const { date, timestamp } = amzTimestamp()
+  const scope = `${date}/${credentials.region}/s3/aws4_request`
+  const query: Array<[string, string]> = [
+    ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
+    ['X-Amz-Credential', `${credentials.access_key_id}/${scope}`],
+    ['X-Amz-Date', timestamp],
+    ['X-Amz-Expires', '300'],
+    ['X-Amz-SignedHeaders', 'host'],
+    ['x-id', 'GetObject'],
+  ]
+  const canonicalQuery = canonicalQueryString(query)
+  const canonicalRequest = [
+    'GET', url.pathname, canonicalQuery, `host:${url.host}\n`, 'host', 'UNSIGNED-PAYLOAD',
+  ].join('\n')
+  const stringToSign = [
+    'AWS4-HMAC-SHA256', timestamp, scope, sha256(canonicalRequest),
+  ].join('\n')
+  const dateKey = hmac(`AWS4${credentials.secret_access_key}`, date)
+  const regionKey = hmac(dateKey, credentials.region)
+  const serviceKey = hmac(regionKey, 's3')
+  const signingKey = hmac(serviceKey, 'aws4_request')
+  const signature = hmac(signingKey, stringToSign).toString('hex')
+  url.search = `${canonicalQuery}&X-Amz-Signature=${signature}`
+  return url.toString()
 }
 
 function xmlValue(xml: string, name: string): string {
@@ -382,5 +433,128 @@ test('WebDAV locks block S3 writes and multipart completion until unlock', async
     }
     await signedS3Request(request, credentials, 'DELETE', lockedFile).catch(() => undefined)
     await signedS3Request(request, credentials, 'DELETE', abortedFile).catch(() => undefined)
+  }
+})
+
+test('WebDAV and S3 expose the complete supported protocol surface', async ({ page, request }) => {
+  const credentials = loadProtocolCredentials()
+  test.skip(!credentials, '需要默认测试环境或 OMNISTORE_E2E_PROTOCOL_CREDENTIALS')
+  if (!credentials) return
+
+  const directory = `e2e-methods-${Date.now()}`
+  const sourceFile = `${directory}/source.txt`
+  const movedFile = `${directory}/moved.txt`
+  const copiedFile = `${directory}/copied.txt`
+  const contents = Buffer.from('0123456789')
+  const basicAuth = `Basic ${Buffer.from(`${credentials.username}:${credentials.webdav_token}`).toString('base64')}`
+  const davURL = (name: string) => `${credentials.http_endpoint}/dav/${credentials.team_bucket}/${name}`
+  const bucketPath = `/${awsEncode(credentials.team_bucket)}`
+  let directoryExists = false
+
+  try {
+    const mkcol = await request.fetch(davURL(directory), {
+      method: 'MKCOL', headers: { Authorization: basicAuth },
+    })
+    expect(mkcol.status()).toBe(201)
+    directoryExists = true
+
+    const put = await request.put(davURL(sourceFile), {
+      data: contents, headers: { Authorization: basicAuth },
+    })
+    expect(put.status()).toBe(201)
+
+    const head = await request.head(davURL(sourceFile), { headers: { Authorization: basicAuth } })
+    expect(head.status()).toBe(200)
+    expect(head.headers()['content-length']).toBe(`${contents.length}`)
+
+    const copy = await request.fetch(davURL(sourceFile), {
+      method: 'COPY',
+      headers: { Authorization: basicAuth, Destination: davURL(copiedFile) },
+    })
+    expect(copy.status()).toBe(501)
+    const missingCopy = await request.get(davURL(copiedFile), { headers: { Authorization: basicAuth } })
+    expect(missingCopy.status()).toBe(404)
+
+    const move = await request.fetch(davURL(sourceFile), {
+      method: 'MOVE',
+      headers: { Authorization: basicAuth, Destination: davURL(movedFile), Overwrite: 'F' },
+    })
+    expect(move.status()).toBe(201)
+    const missingSource = await request.get(davURL(sourceFile), { headers: { Authorization: basicAuth } })
+    expect(missingSource.status()).toBe(404)
+
+    const buckets = await signedS3PathRequest(request, credentials, 'GET', '/')
+    expect(buckets.status()).toBe(200)
+    expect(await buckets.text()).toContain(`<Name>${credentials.team_bucket}</Name>`)
+
+    const bucketHead = await signedS3PathRequest(request, credentials, 'HEAD', bucketPath)
+    expect(bucketHead.status()).toBe(200)
+
+    const objectHead = await signedS3Request(request, credentials, 'HEAD', movedFile)
+    expect(objectHead.status()).toBe(200)
+    expect(objectHead.headers()['content-length']).toBe(`${contents.length}`)
+    expect(objectHead.headers()['accept-ranges']).toBe('bytes')
+
+    const range = await signedS3Request(
+      request, credentials, 'GET', movedFile, Buffer.alloc(0), [], { Range: 'bytes=2-5' },
+    )
+    expect(range.status()).toBe(206)
+    expect(range.headers()['content-range']).toBe(`bytes 2-5/${contents.length}`)
+    expect(await range.text()).toBe('2345')
+
+    const listed = await signedS3PathRequest(
+      request, credentials, 'GET', bucketPath, Buffer.alloc(0),
+      [['list-type', '2'], ['prefix', `${directory}/`]],
+    )
+    expect(listed.status()).toBe(200)
+    expect(await listed.text()).toContain(`<Key>${movedFile}</Key>`)
+
+    const presignedURL = presignedS3GetURL(credentials, movedFile)
+    const presigned = await request.get(presignedURL)
+    expect(presigned.status()).toBe(200)
+    expect(await presigned.body()).toEqual(contents)
+    const tamperedURL = new URL(presignedURL)
+    tamperedURL.searchParams.set('X-Amz-Signature', '0'.repeat(64))
+    const tampered = await request.get(tamperedURL.toString())
+    expect(tampered.status()).toBe(403)
+    expect(await tampered.text()).toContain('<Code>SignatureDoesNotMatch</Code>')
+
+    const objectACL = await signedS3Request(
+      request, credentials, 'GET', movedFile, Buffer.alloc(0), [['acl', '']],
+    )
+    expect(objectACL.status()).toBe(501)
+    expect(await objectACL.text()).toContain('<Code>NotImplemented</Code>')
+    const bucketACL = await signedS3PathRequest(
+      request, credentials, 'HEAD', bucketPath, Buffer.alloc(0), [['acl', '']],
+    )
+    expect(bucketACL.status()).toBe(501)
+
+    await login(page, credentials.username, 'OmniStore-Test-Demo!')
+    await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
+    await expect(page.getByRole('row', { name: new RegExp(directory) })).toBeVisible()
+
+    const deleteBody = Buffer.from(`<Delete><Object><Key>${movedFile}</Key></Object></Delete>`)
+    const deleted = await signedS3PathRequest(
+      request, credentials, 'POST', bucketPath, deleteBody, [['delete', '']],
+      { 'Content-Type': 'application/xml' },
+    )
+    expect(deleted.status()).toBe(200)
+    expect(await deleted.text()).toContain(`<Key>${movedFile}</Key>`)
+    const missingObject = await signedS3Request(request, credentials, 'GET', movedFile)
+    expect(missingObject.status()).toBe(404)
+    expect(await missingObject.text()).toContain('<Code>NoSuchKey</Code>')
+
+    const deleteDirectory = await request.delete(davURL(directory), { headers: { Authorization: basicAuth } })
+    expect(deleteDirectory.status()).toBe(204)
+    directoryExists = false
+    await page.reload()
+    await expect(page.getByRole('row', { name: new RegExp(directory) })).toHaveCount(0)
+  } finally {
+    await signedS3Request(request, credentials, 'DELETE', sourceFile).catch(() => undefined)
+    await signedS3Request(request, credentials, 'DELETE', movedFile).catch(() => undefined)
+    await signedS3Request(request, credentials, 'DELETE', copiedFile).catch(() => undefined)
+    if (directoryExists) {
+      await request.delete(davURL(directory), { headers: { Authorization: basicAuth } }).catch(() => undefined)
+    }
   }
 })

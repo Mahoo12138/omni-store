@@ -219,6 +219,32 @@ func TestS3PresignedGetAndTamperedSignature(t *testing.T) {
 	}
 }
 
+func TestS3UnsupportedSubresourcesReturnNotImplemented(t *testing.T) {
+	f := newS3Fixture(t)
+	if err := os.WriteFile(filepath.Join(f.root, "demo.txt"), []byte("demo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, item := range []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "http://s3.test/" + f.bucket + "/demo.txt?acl="},
+		{http.MethodHead, "http://s3.test/" + f.bucket + "?acl="},
+	} {
+		response := perform(f.handler, f.signedRequest(t, item.method, item.target, nil))
+		if response.Code != http.StatusNotImplemented || (item.method != http.MethodHead && !strings.Contains(response.Body.String(), "NotImplemented")) {
+			t.Fatalf("unsupported subresource %s %s status=%d body=%s", item.method, item.target, response.Code, response.Body.String())
+		}
+	}
+
+	response := perform(f.handler, f.signedRequest(t, http.MethodGet,
+		"http://s3.test/"+f.bucket+"/demo.txt?x-id=GetObject", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "demo" {
+		t.Fatalf("SDK x-id query status=%d body=%q", response.Code, response.Body.String())
+	}
+}
+
 func TestS3UnsignedAWSChunkedUploadWithTrailer(t *testing.T) {
 	f := newS3Fixture(t)
 	payload := []byte("hello aws chunked")
