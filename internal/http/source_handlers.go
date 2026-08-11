@@ -221,6 +221,15 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		WriteError(w, r, CodeConflict, "存储源存在尚未恢复的跨来源复制，请重启服务完成恢复", map[string]any{"copy_count": copyCount})
 		return
 	}
+	pathOperationCount, err := s.files.SourcePathOperationCount(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查存储源中断路径操作失败", nil)
+		return
+	}
+	if pathOperationCount > 0 {
+		WriteError(w, r, CodeConflict, "存储源存在尚未恢复的移动或永久删除，请重启服务完成恢复", map[string]any{"path_operation_count": pathOperationCount})
+		return
+	}
 	fileUploadCount, err := s.files.SourceFileUploadOperationCount(src.ID)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "检查存储源中断普通上传失败", nil)

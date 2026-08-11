@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/omni-store/omnistore/internal/models"
@@ -281,56 +280,13 @@ func upsertPreparedFileRecord(exec fileRecordExecer, prepared *PreparedFileRecor
 func (s *Service) deleteFileRecords(storageSourceID int64, relPath string, isDir bool) error {
 	if isDir {
 		_, err := s.db.Exec(`DELETE FROM file_records
-  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, relPath, relPath+"/%")
-		return err
-	}
-	_, err := s.db.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
-	return err
-}
-
-func (s *Service) moveFileRecords(storageSourceID int64, fromRel, toRel string, isDir bool, actorUserID *int64) error {
-	rows, err := s.db.Query(`SELECT id, relative_path FROM file_records
   WHERE storage_source_id = ? AND record_status = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-		storageSourceID, models.FileRecordActive, fromRel, fromRel+"/%")
-	if err != nil {
+			storageSourceID, models.FileRecordActive, relPath, relPath+"/%")
 		return err
 	}
-	type recordPath struct {
-		id  int64
-		rel string
-	}
-	var records []recordPath
-	for rows.Next() {
-		var record recordPath
-		if err := rows.Scan(&record.id, &record.rel); err != nil {
-			rows.Close()
-			return err
-		}
-		records = append(records, record)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if !isDir && len(records) == 0 {
-		return nil
-	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, record := range records {
-		newRel := toRel
-		if isDir {
-			newRel += strings.TrimPrefix(record.rel, fromRel)
-		}
-		if _, err := tx.Exec(`UPDATE file_records SET relative_path = ?, updated_by_user_id = ?, updated_at = ? WHERE id = ?`,
-			newRel, actorUserID, time.Now().UTC(), record.id); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	_, err := s.db.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ? AND record_status = ?`,
+		storageSourceID, relPath, models.FileRecordActive)
+	return err
 }
 
 // UserUsage 返回用户拥有的文件总字节数；回收站仍占用户配额，永久清理后才释放。

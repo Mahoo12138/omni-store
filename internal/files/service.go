@@ -965,38 +965,31 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 	}
 
 	isDir := info.IsDir()
-	if err := os.RemoveAll(absPath); err != nil {
-		return fmt.Errorf("删除失败: %w", err)
+	op := s.newPathOperation(pathOperationDelete, src, relPath, "", isDir, lockOwnerUserID)
+	if err := s.writePathOperation(op); err != nil {
+		return fmt.Errorf("记录永久删除意图失败: %w", err)
 	}
-
-	// 同步清理 Images 表，避免图床历史残留失效图片（README §13.5/§17.12）。
-	s.cleanupImageRecords(src.ID, relPath, isDir)
-	s.cleanupShareRecords(src.ID, relPath, isDir)
-	if err := s.deleteFileRecords(src.ID, relPath, isDir); err != nil {
-		return fmt.Errorf("清理文件台账失败: %w", err)
+	if err := os.RemoveAll(absPath); err != nil {
+		return fmt.Errorf("删除失败，操作将在重启时继续: %w", err)
+	}
+	if err := syncPathParents(absPath); err != nil {
+		return fmt.Errorf("同步永久删除目录失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.markPathFilesystemReady(op.OperationID); err != nil {
+		return fmt.Errorf("记录永久删除文件阶段失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.deletePathMetadata(src.ID, relPath, isDir); err != nil {
+		return fmt.Errorf("清理路径元数据失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.markPathDatabaseReady(op.OperationID); err != nil {
+		return fmt.Errorf("记录永久删除数据库阶段失败，操作将在重启时继续: %w", err)
 	}
 	if err := releasePersistent(relPath); err != nil {
 		return err
 	}
+	// 删除已提交；日志清理失败由启动恢复幂等收敛。
+	_ = s.removePathOperation(op.OperationID)
 	return nil
-}
-
-func (s *Service) cleanupImageRecords(storageSourceID int64, relPath string, isDir bool) {
-	if isDir {
-		_, _ = s.db.Exec(`DELETE FROM images WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, relPath, relPath+"/%")
-		return
-	}
-	_, _ = s.db.Exec(`DELETE FROM images WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
-}
-
-func (s *Service) cleanupShareRecords(storageSourceID int64, relPath string, isDir bool) {
-	if isDir {
-		_, _ = s.db.Exec(`DELETE FROM file_shares WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, relPath, relPath+"/%")
-		return
-	}
-	_, _ = s.db.Exec(`DELETE FROM file_shares WHERE storage_source_id = ? AND relative_path = ?`, storageSourceID, relPath)
 }
 
 // --- 重命名 / 移动（README §13.6 只支持同存储源） ---
@@ -1097,82 +1090,47 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 		return "", fmt.Errorf("%w: 目标目录不存在", ErrInvalid)
 	}
 
+	op := s.newPathOperation(pathOperationMove, src, fromRel, toRel, info.IsDir(), lockOwnerUserID)
+	if err := s.writePathOperation(op); err != nil {
+		return "", fmt.Errorf("记录路径移动意图失败: %w", err)
+	}
 	if err := os.Rename(fromAbs, toAbs); err != nil {
+		_ = s.removePathOperation(op.OperationID)
 		return "", fmt.Errorf("移动失败: %w", err)
 	}
-
-	// 同步更新图床记录路径，保持公开 URL 有效。
-	s.syncImageRecordsMove(src.ID, fromRel, toRel, info.IsDir())
-	s.syncShareRecordsMove(src.ID, fromRel, toRel, info.IsDir())
-	if err := s.moveFileRecords(src.ID, fromRel, toRel, info.IsDir(), lockOwnerUserID); err != nil {
-		return "", fmt.Errorf("更新文件台账失败: %w", err)
+	rollback := func(metadataCommitted bool) error {
+		var rollbackErr error
+		if metadataCommitted {
+			rollbackErr = s.movePathMetadata(src.ID, toRel, fromRel, info.IsDir(), lockOwnerUserID)
+		}
+		if rollbackErr == nil {
+			rollbackErr = os.Rename(toAbs, fromAbs)
+		}
+		if rollbackErr == nil {
+			rollbackErr = syncPathParents(fromAbs, toAbs)
+		}
+		if rollbackErr == nil {
+			rollbackErr = s.removePathOperation(op.OperationID)
+		}
+		return rollbackErr
+	}
+	if err := syncPathParents(fromAbs, toAbs); err != nil {
+		return "", errors.Join(fmt.Errorf("同步路径移动目录失败: %w", err), rollback(false))
+	}
+	if err := s.markPathFilesystemReady(op.OperationID); err != nil {
+		return "", errors.Join(fmt.Errorf("记录路径移动文件阶段失败: %w", err), rollback(false))
+	}
+	if err := s.movePathMetadata(src.ID, fromRel, toRel, info.IsDir(), lockOwnerUserID); err != nil {
+		return "", errors.Join(fmt.Errorf("更新路径元数据失败: %w", err), rollback(false))
+	}
+	if err := s.markPathDatabaseReady(op.OperationID); err != nil {
+		return "", errors.Join(fmt.Errorf("记录路径移动数据库阶段失败: %w", err), rollback(true))
 	}
 	// RFC 4918：MOVE 不携带源资源上的锁。外部祖先锁保留，并按新路径重新判断覆盖关系。
 	if err := releasePersistent(fromRel); err != nil {
 		return "", err
 	}
+	// 文件系统和元数据均已提交；日志清理失败由启动恢复收敛。
+	_ = s.removePathOperation(op.OperationID)
 	return toRel, nil
-}
-
-func (s *Service) syncImageRecordsMove(storageSourceID int64, fromRel, toRel string, isDir bool) {
-	if isDir {
-		rows, err := s.db.Query(`SELECT id, relative_path FROM images
-  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, fromRel, fromRel+"/%")
-		if err != nil {
-			return
-		}
-		type rec struct {
-			id  int64
-			rel string
-		}
-		var recs []rec
-		for rows.Next() {
-			var r rec
-			if err := rows.Scan(&r.id, &r.rel); err != nil {
-				rows.Close()
-				return
-			}
-			recs = append(recs, r)
-		}
-		rows.Close()
-		for _, r := range recs {
-			newRel := toRel + strings.TrimPrefix(r.rel, fromRel)
-			_, _ = s.db.Exec(`UPDATE images SET relative_path = ? WHERE id = ?`, newRel, r.id)
-		}
-		return
-	}
-	_, _ = s.db.Exec(`UPDATE images SET relative_path = ? WHERE storage_source_id = ? AND relative_path = ?`,
-		toRel, storageSourceID, fromRel)
-}
-
-func (s *Service) syncShareRecordsMove(storageSourceID int64, fromRel, toRel string, isDir bool) {
-	if isDir {
-		rows, err := s.db.Query(`SELECT id, relative_path FROM file_shares
-  WHERE storage_source_id = ? AND trash_key IS NULL AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, fromRel, fromRel+"/%")
-		if err != nil {
-			return
-		}
-		type sharePath struct {
-			id  int64
-			rel string
-		}
-		var paths []sharePath
-		for rows.Next() {
-			var item sharePath
-			if err := rows.Scan(&item.id, &item.rel); err != nil {
-				rows.Close()
-				return
-			}
-			paths = append(paths, item)
-		}
-		rows.Close()
-		for _, item := range paths {
-			_, _ = s.db.Exec(`UPDATE file_shares SET relative_path = ? WHERE id = ?`, toRel+strings.TrimPrefix(item.rel, fromRel), item.id)
-		}
-		return
-	}
-	_, _ = s.db.Exec(`UPDATE file_shares SET relative_path = ? WHERE storage_source_id = ? AND relative_path = ? AND trash_key IS NULL`,
-		toRel, storageSourceID, fromRel)
 }

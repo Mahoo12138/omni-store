@@ -108,6 +108,16 @@ func runServer(args []string) error {
 	logger.Info("数据库就绪", "path", cfg.DatabasePath())
 
 	srv, app := httpserver.New(cfg, dbConn, logger)
+	pathRecovery, err := app.Files().RecoverPathOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的移动或永久删除失败: %w", err)
+	}
+	if pathRecovery.CompletedMoves+pathRecovery.RolledBackMoves+pathRecovery.CompletedDeletes > 0 {
+		logger.Info("已恢复中断的移动或永久删除",
+			"completed_moves", pathRecovery.CompletedMoves,
+			"rolled_back_moves", pathRecovery.RolledBackMoves,
+			"completed_deletes", pathRecovery.CompletedDeletes)
+	}
 	copyRecovery, err := app.Files().RecoverCopyOperations()
 	if err != nil {
 		return fmt.Errorf("恢复中断的跨来源复制失败: %w", err)

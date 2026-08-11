@@ -180,6 +180,15 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeConflict, "该用户存在尚未恢复的普通文件上传，请重启服务完成恢复", map[string]any{"upload_count": fileUploadCount})
 		return
 	}
+	pathOperationCount, err := s.files.UserPathOperationCount(id)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查用户中断路径操作失败", nil)
+		return
+	}
+	if pathOperationCount > 0 {
+		WriteError(w, r, CodeConflict, "该用户存在尚未恢复的移动或永久删除，请重启服务完成恢复", map[string]any{"path_operation_count": pathOperationCount})
+		return
+	}
 	if s.imagebed != nil {
 		imageUploadCount, err := s.imagebed.UserUploadOperationCount(id)
 		if err != nil {
