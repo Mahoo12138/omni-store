@@ -132,7 +132,15 @@ func (s *MultipartStore) UploadPart(userID, storageSourceID int64, objectKey, up
 	}
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
-	if _, err := s.Get(userID, storageSourceID, objectKey, uploadID); err != nil {
+	upload, err := s.Get(userID, storageSourceID, objectKey, uploadID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.resolveMultipartPartOperationsForUpload(uploadID); err != nil {
+		return nil, err
+	}
+	upload, err = s.Get(userID, storageSourceID, objectKey, uploadID)
+	if err != nil {
 		return nil, err
 	}
 	dir := s.uploadDir(uploadID)
@@ -170,6 +178,10 @@ func (s *MultipartStore) UploadPart(userID, storageSourceID int64, objectKey, up
 		_ = os.Remove(tmpPath)
 		return nil, err
 	}
+	if err := syncMultipartDirectory(dir); err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, err
+	}
 
 	var otherSize int64
 	if err := s.db.QueryRow(`SELECT COALESCE(SUM(size), 0) FROM s3_multipart_parts
@@ -183,54 +195,85 @@ func (s *MultipartStore) UploadPart(userID, storageSourceID int64, objectKey, up
 	}
 
 	etag := `"` + hex.EncodeToString(md5Hash.Sum(nil)) + `"`
+	previous, err := s.currentMultipartPart(uploadID, partNumber)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, err
+	}
 	finalPath := s.partPath(uploadID, partNumber)
 	backupPath := finalPath + ".previous"
-	_ = os.Remove(backupPath)
-	hadPrevious := false
-	if err := os.Rename(finalPath, backupPath); err == nil {
-		hadPrevious = true
-	} else if !os.IsNotExist(err) {
+	finalExists, finalInfo, err := checkedMultipartPartFile(finalPath)
+	if err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, err
+	}
+	backupExists, _, err := checkedMultipartPartFile(backupPath)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, err
+	}
+	if previous != nil {
+		matches := false
+		if finalExists {
+			matches, err = multipartPartFileMatches(finalPath, finalInfo, previous.ETag, previous.Size)
+		}
+		if err != nil || !matches {
+			_ = os.Remove(tmpPath)
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("Multipart 旧分片文件缺失或摘要不一致")
+		}
+	} else if finalExists {
+		if err := os.Remove(finalPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return nil, err
+		}
+	}
+	if backupExists {
+		if err := os.Remove(backupPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return nil, err
+		}
+	}
+	if (previous == nil && finalExists) || backupExists {
+		if err := syncMultipartDirectory(dir); err != nil {
+			_ = os.Remove(tmpPath)
+			return nil, err
+		}
+	}
+
+	now := s.now().UTC()
+	op := s.newMultipartPartOperation(*upload, partNumber, filepath.Base(tmpPath), etag, written, now, previous)
+	if err := s.writeMultipartPartOperation(op); err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, err
+	}
+	rollback := func(operationErr error) error {
+		if rollbackErr := s.rollbackMultipartPartOperation(op); rollbackErr != nil {
+			return errors.Join(operationErr, fmt.Errorf("回滚 Multipart 分片失败: %w", rollbackErr))
+		}
+		return operationErr
+	}
+	if previous != nil {
+		if err := os.Rename(finalPath, backupPath); err != nil {
+			return nil, rollback(err)
+		}
+		if err := syncMultipartDirectory(dir); err != nil {
+			return nil, rollback(err)
+		}
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
-		_ = os.Remove(tmpPath)
-		if hadPrevious {
-			_ = os.Rename(backupPath, finalPath)
-		}
-		return nil, err
+		return nil, rollback(err)
 	}
-	rollbackFile := func() {
-		_ = os.Remove(finalPath)
-		if hadPrevious {
-			_ = os.Rename(backupPath, finalPath)
-		}
+	if err := syncMultipartDirectory(dir); err != nil {
+		return nil, rollback(err)
 	}
-	now := s.now().UTC()
-	tx, err := s.db.Begin()
-	if err != nil {
-		rollbackFile()
-		return nil, err
+	if err := s.commitMultipartPartOperation(op); err != nil {
+		return nil, rollback(err)
 	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`INSERT INTO s3_multipart_parts (upload_id, part_number, etag, size, created_at)
-  VALUES (?, ?, ?, ?, ?)
-  ON CONFLICT(upload_id, part_number) DO UPDATE SET etag = excluded.etag, size = excluded.size, created_at = excluded.created_at`,
-		uploadID, partNumber, etag, written, now); err != nil {
-		rollbackFile()
-		return nil, err
-	}
-	if _, err := tx.Exec(`UPDATE s3_multipart_uploads SET updated_at = ? WHERE upload_id = ?`, now, uploadID); err != nil {
-		rollbackFile()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		rollbackFile()
-		return nil, err
-	}
-	if hadPrevious {
-		_ = os.Remove(backupPath)
-	}
+	// 数据库已经提交后，清理失败交给启动恢复，不能把成功的分片报告为失败。
+	_ = s.cleanupCommittedMultipartPart(op)
 	return &MultipartPart{PartNumber: partNumber, ETag: etag, Size: written, CreatedAt: now}, nil
 }
 
@@ -258,6 +301,12 @@ func (s *MultipartStore) ListParts(userID, storageSourceID int64, objectKey, upl
 func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objectKey, uploadID string, requested []CompletedPart) (string, int64, error) {
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
+	if _, err := s.Get(userID, src.ID, objectKey, uploadID); err != nil {
+		return "", 0, err
+	}
+	if err := s.resolveMultipartPartOperationsForUpload(uploadID); err != nil {
+		return "", 0, err
+	}
 	if _, err := s.Get(userID, src.ID, objectKey, uploadID); err != nil {
 		return "", 0, err
 	}
@@ -406,7 +455,8 @@ func (s *MultipartStore) Abort(userID, storageSourceID int64, objectKey, uploadI
 	if _, err := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ?`, uploadID); err != nil {
 		return err
 	}
-	return errors.Join(os.RemoveAll(s.uploadDir(uploadID)), s.removeMultipartCompletion(uploadID))
+	return errors.Join(os.RemoveAll(s.uploadDir(uploadID)), s.removeMultipartCompletion(uploadID),
+		s.removeMultipartPartOperationsForUpload(uploadID))
 }
 
 func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupResult, error) {
@@ -442,6 +492,15 @@ func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupR
 			unlock()
 			continue
 		}
+		partOperationCount, pendingErr := s.multipartPartOperationCountForUpload(id)
+		if pendingErr != nil {
+			unlock()
+			return result, pendingErr
+		}
+		if partOperationCount > 0 {
+			unlock()
+			continue
+		}
 		res, deleteErr := s.db.Exec(`DELETE FROM s3_multipart_uploads WHERE upload_id = ? AND updated_at < ?`, id, cutoff)
 		if deleteErr == nil {
 			if n, _ := res.RowsAffected(); n > 0 {
@@ -471,6 +530,13 @@ func (s *MultipartStore) CleanupExpired(maxAge time.Duration) (MultipartCleanupR
 			return result, pendingErr
 		}
 		if pending {
+			continue
+		}
+		partOperationCount, pendingErr := s.multipartPartOperationCountForUpload(entry.Name())
+		if pendingErr != nil {
+			return result, pendingErr
+		}
+		if partOperationCount > 0 {
 			continue
 		}
 		var count int

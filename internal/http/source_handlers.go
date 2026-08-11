@@ -217,6 +217,15 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if s.s3Multipart != nil {
+		partOperationCount, err := s.s3Multipart.SourcePartOperationCount(src.ID)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查存储源中断 Multipart 分片上传失败", nil)
+			return
+		}
+		if partOperationCount > 0 {
+			WriteError(w, r, CodeConflict, "存储源存在尚未恢复的 S3 Multipart 分片上传，请重启服务完成恢复", map[string]any{"multipart_part_count": partOperationCount})
+			return
+		}
 		completionCount, err := s.s3Multipart.SourceCompletionOperationCount(src.ID)
 		if err != nil {
 			WriteError(w, r, CodeInternalError, "检查存储源中断 Multipart 完成操作失败", nil)

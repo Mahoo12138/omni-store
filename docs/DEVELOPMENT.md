@@ -176,6 +176,8 @@ cd web && pnpm test
 
 Multipart 完成日志位于 `$OMNISTORE_DATA_DIR/operations/s3-multipart-completions/`。测试必须覆盖：仅有意图且对象缺失时保留 Upload/Part 供重试；已有相同内容旧对象时不能误判为已安装；最终对象已经落盘但 ETag 事务未提交时自动完成；ETag 与 Upload 删除同事务回滚；事务已提交但分片和日志未清理；提交后对象又被删除时不得复活；损坏日志阻止启动；24 小时清理跳过待恢复 upload ID；存储源删除保护。最终对象测试除大小外必须核对 SHA-256、Multipart ETag 与用户文件台账。至少 20 路不同 upload ID 并发完成并结合 race 检测，结束后 `s3_multipart_uploads`、分片目录和完成日志必须为空，`s3_object_etags` 数量应与成功对象一致。
 
+UploadPart 替换日志位于 `$OMNISTORE_DATA_DIR/operations/s3-multipart-parts/`，旧分片备份位于 `tmp/multipart/{upload_id}/{part_number}.part.previous`。故障注入必须覆盖：只有已同步临时文件和意图、旧分片已经改名但新分片未安装、新分片已经安装但 Part 事务未提交、事务已提交但备份与日志未清理、SQLite 写入失败恢复旧分片、Upload 身份或 Part 行与日志不一致，以及临时/最终同时存在但旧备份缺失的歧义状态。恢复断言必须同时核对真实文件 MD5/大小、Part ETag/时间、Upload 活动时间和操作目录；24 小时清理及存储源删除要保留待恢复操作。至少 20 路不同 upload ID 并发上传并结合 race 检测，成功后不能残留 `.previous` 或操作日志。
+
 ### E2E
 
 首次运行先安装 Chromium：

@@ -154,6 +154,7 @@ CREATE TABLE s3_object_etags (
 
 Upload 记录绑定创建者、存储源与对象 Key；Part 表只保存编号、ETag、大小和时间，真实分片位于
 `{data.dir}/tmp/multipart/{upload_id}/`。`updated_at` 用于识别超过 24 小时未活动的上传。
+`UploadPart` 在文件替换前把新分片摘要与旧 Part 行快照写入 `operations/s3-multipart-parts/`；覆盖旧 Part 时使用 upload 临时目录内的 `.previous` 备份。Part upsert 与 Upload `updated_at` 刷新位于同一事务，启动恢复以 Part 行是否匹配日志快照决定完成、清理或回滚，不新增业务表。
 `s3_object_etags` 保存完成后的 Multipart ETag，并用文件 size + mtime 检测 S3 之外的修改；
 Multipart 完成时该表的 upsert 与 `s3_multipart_uploads` 删除位于同一事务，磁盘完成日志负责衔接最终对象与该事务；
 普通 PUT、DELETE 或检测到物理文件变化时会删除对应记录。

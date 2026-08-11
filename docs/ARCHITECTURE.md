@@ -335,6 +335,7 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
   operations/
     file-uploads/
     image-uploads/
+    s3-multipart-parts/
     s3-multipart-completions/
     transfers/
   trash/
@@ -351,9 +352,10 @@ OmniStore 必须有一个系统数据目录，和用户存储源严格分开。
 5. `trash/`：回收站真实内容，按随机条目 key 隔离，不位于用户存储源；`.operations/` 保存权限为 `0600` 的短期操作日志和跨盘复制阶段标记，恢复或永久清理后删除对应条目目录。
 6. `operations/file-uploads/`：REST、WebDAV 与 S3 共用普通上传的短期 `0600` 意图与 `database-ready` 标记；覆盖写的旧文件备份位于目标同目录，完成或回滚后清理。
 7. `operations/image-uploads/`：图床上传的短期 `0600` 意图；`images` 提交前用于删除临时或随机最终文件，提交后只清理日志。
-8. `operations/s3-multipart-completions/`：Multipart 合并前写入的短期 `0600` 完成意图；记录 upload ID、对象、ETag、大小和 SHA-256，最终 ETag 与临时状态原子提交后清理。
-9. `operations/transfers/`：跨来源移动的短期 `0600` 意图与阶段标记；数据库提交前用于回滚目标，提交后用于继续删除源路径，完成后清理。
-10. `logs/`：可选。1.0.0 可以只输出 stdout。
+8. `operations/s3-multipart-parts/`：`UploadPart` 文件替换前写入的短期 `0600` 意图；记录新分片摘要与旧 Part SQLite 快照，覆盖写的旧分片备份位于对应 upload 临时目录，提交或回滚后清理。
+9. `operations/s3-multipart-completions/`：Multipart 合并前写入的短期 `0600` 完成意图；记录 upload ID、对象、ETag、大小和 SHA-256，最终 ETag 与临时状态原子提交后清理。
+10. `operations/transfers/`：跨来源移动的短期 `0600` 意图与阶段标记；数据库提交前用于回滚目标，提交后用于继续删除源路径，完成后清理。
+11. `logs/`：可选。1.0.0 可以只输出 stdout。
 
 ### 系统数据目录安全规则
 
@@ -456,6 +458,8 @@ storage_source_id + normalized_relative_path
 图床上传使用独立的短期操作日志。图片临时文件先 `fsync`，真实格式校验后记录包含随机 `image_id`、临时/最终路径和不可变图片元数据的意图；原子重命名和父目录同步完成后，`images` 与 `file_records` 在同一 SQLite 事务提交。启动恢复以 `images.image_id` 是否存在为提交边界：未提交状态删除内部临时文件或随机最终文件，已提交状态保留当前图片生命周期位置并只删除日志。上传日志恢复安排在跨来源移动与回收站恢复之后，避免把后来合法移动或回收的图片按旧上传路径处理。
 
 普通文件上传在写入时同步计算 SHA-256，临时文件和父目录同步后写入独立意图。新建文件随后原子重命名；覆盖写先把旧目标原子重命名为严格内部备份，再安装新目标。`file_records` 提交后写 `database-ready`，此后只清理临时文件、旧备份和日志，不再根据最初路径改动最终文件，因此提交后发生的合法移动或删除不会被恢复器逆转。标记前的恢复通过临时、最终和备份三者状态，并核对大小、`mtime` 与内容摘要，选择完成新台账或恢复旧目标；日志损坏或不能证明唯一版本时拒绝启动并保留现场。
+
+`UploadPart` 在分片临时文件与目录完成同步后，写入包含 upload 身份、新 MD5/大小/时间和旧 Part SQLite 快照的独立意图。重复 PartNumber 上传先核对旧最终分片摘要，再把旧文件改名为 `.previous`，安装新分片并同步目录，最后原子 upsert Part 和 Upload 活动时间。启动恢复以 Part 行为提交边界：新文件已经唯一安装时补交事务，数据库已经提交时只清理备份和日志，文件替换尚未完成时恢复旧分片或删除新建意图；任何未知文件、摘要不符或缺失唯一旧版本的组合都拒绝启动并保留现场。分片恢复先于 Multipart Complete 恢复执行。
 
 Multipart Complete 在调用普通文件上传前，按客户端选择的 Part 顺序复核每片大小与 MD5，同时计算最终内容 SHA-256，并把旧对象是否存在及其大小、`mtime` 一并写入独立完成意图。普通上传把对象安全落盘后，完成器持有最终对象读锁完成 SHA-256 校验、文件台账幂等写入、`s3_object_etags` upsert 与 `s3_multipart_uploads` 删除；后两者位于同一 SQLite 事务，Part 行通过外键级联删除。启动恢复先运行普通上传恢复，再处理 Multipart 完成意图：Upload 行仍存在且最终摘要匹配、同时能与旧对象状态区分时补交事务；对象不匹配或与同内容旧对象无法区分时只撤销完成意图并保留分片供客户端重试。Upload 行已不存在即视为永久提交，只清理分片目录与日志，不按历史路径读取或复活对象。运行期过期任务跳过带完成意图的 upload ID。
 
@@ -570,7 +574,7 @@ HTTP/S3 监听前先同步恢复 `trash/.operations/` 中的中断操作。SQLit
 2. 启动时及每小时清理超过配置时限的上传临时文件。
 3. 启动时及每小时清理过期 WebDAV 持久锁。
 4. 启动时及每天清理超过 30 天未访问的缩略图缓存。
-5. 启动时及每小时清理超过 24 小时未活动的 S3 Multipart 状态与孤儿分片目录；带持久完成意图的 upload ID 必须跳过，交由启动恢复器处理。
+5. 启动时及每小时清理超过 24 小时未活动的 S3 Multipart 状态与孤儿分片目录；带持久分片或完成意图的 upload ID 必须跳过，交由启动恢复器处理。
 
 Session 删除条件：
 

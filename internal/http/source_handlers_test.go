@@ -313,6 +313,45 @@ func TestHandleAdminDeleteSourceRejectsPendingMultipartCompletion(t *testing.T) 
 	}
 }
 
+func TestHandleAdminDeleteSourceRejectsPendingMultipartPart(t *testing.T) {
+	server, conn, base := newSourceCreateHandlerServer(t)
+	root := filepath.Join(base, "source-delete-multipart-part")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source, err := server.sources.Create(sources.CreateInput{Name: "pending-multipart-part", RootPath: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.s3Multipart = s3api.NewMultipartStore(conn, filepath.Join(base, "data"), server.files, 10)
+	uploadID := "mpu_" + strings.Repeat("2", 48)
+	operationsDir := filepath.Join(base, "data", "operations", "s3-multipart-parts")
+	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"version": 1, "upload_id": uploadID, "owner_user_id": 1, "storage_source_id": source.ID,
+		"object_key": "pending.bin", "part_number": 1, "temp_name": ".part-123.tmp",
+		"etag": `"` + strings.Repeat("0", 32) + `"`, "size": 1, "created_at": time.Now().UTC(),
+		"previous_exists": false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, uploadID+"-00001.json"), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/sources/"+source.Key, nil)
+	req.SetPathValue("key", source.Key)
+	recorder := httptest.NewRecorder()
+	server.handleAdminDeleteSource(recorder, req)
+	assertErrorResponse(t, recorder, http.StatusConflict, CodeConflict)
+	if _, err := server.sources.Get(source.Key); err != nil {
+		t.Fatalf("source with pending Multipart part was deleted: %v", err)
+	}
+}
+
 func newSourceCreateHandlerServer(t *testing.T) (*Server, *sql.DB, string) {
 	t.Helper()
 	base := t.TempDir()

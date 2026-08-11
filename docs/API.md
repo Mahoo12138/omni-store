@@ -317,6 +317,10 @@ REST 上传、WebDAV `PUT`、S3 `PUT Object` 与 Multipart 最终合并共用核
 
 ## S3 Multipart 完成原子性与恢复
 
+`UploadPart` 把请求体写入 upload 临时目录、同步文件和目录后，先在 `$OMNISTORE_DATA_DIR/operations/s3-multipart-parts/` 持久化替换意图。意图包含 upload 身份、新分片的 MD5、大小与时间；重复上传同一 PartNumber 时还包含旧 Part 的完整 SQLite 快照。服务核对旧物理分片后将其保留为 `.previous`，安装新文件并同步目录，最后在一个 SQLite 事务中 upsert Part 并刷新 Upload 活动时间。
+
+服务监听前先恢复分片替换，再恢复 Multipart 完成操作。新分片已经唯一安装时补交 Part 事务；事务已经提交时只清理临时文件、旧备份和日志；替换尚未完成时恢复旧分片或撤销新建意图。摘要不符、日志损坏或不能证明唯一新旧版本时会阻止启动并保留现场。`CompleteMultipartUpload` 和后续 `UploadPart` 在运行期也会先收敛同一 upload ID 的残留分片意图；24 小时清理与存储源删除不会破坏待恢复操作。
+
 `CompleteMultipartUpload` 在合并前复核所选 Part 的真实大小与 MD5，并把 upload ID、用户、存储源、对象 Key、最终 Multipart ETag、大小、按 Part 顺序计算的 SHA-256，以及旧对象的大小与 `mtime` 写入 `$OMNISTORE_DATA_DIR/operations/s3-multipart-completions/`。旧对象状态用于避免把“上传尚未执行但已有相同内容”误判为完成。对象通过普通上传恢复链路落盘后，最终摘要校验所持有的对象读锁会持续到 SQLite 提交，避免普通 `PUT Object` 在校验与提交之间插入覆盖。
 
 `s3_object_etags` 的 upsert 与 `s3_multipart_uploads` 删除在同一事务完成，Part 状态随 Upload 级联删除。启动时先恢复普通上传，再恢复 Multipart 完成：Upload 仍存在且最终对象摘要匹配时补齐文件台账、ETag 和状态删除；对象缺失或不匹配时删除完成意图，但保留 Upload 与分片供客户端重试。Upload 已不存在表示数据库永久提交，此后只清理临时分片和日志；即使对象后来被覆盖、移动或删除也不会被旧完成操作复活。待恢复完成操作不会被 24 小时过期任务清理，也会阻止关联存储源配置删除。
