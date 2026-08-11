@@ -11,6 +11,7 @@ import (
 
 func boolPtr(v bool) *bool       { return &v }
 func stringPtr(v string) *string { return &v }
+func int64Ptr(v int64) *int64    { return &v }
 
 func newSourceService(t *testing.T) (*Service, string) {
 	t.Helper()
@@ -120,5 +121,72 @@ func TestDeleteSourceRemovesPublicMountRedirects(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("redirects were not removed: %d", count)
+	}
+}
+
+func TestUpdateSourceAndExcludePatternsTogether(t *testing.T) {
+	service, base := newSourceService(t)
+	source := createTestSource(t, service, base, "source-with-settings")
+	patterns := []string{"  **/*.tmp  ", "", "**/.cache/**"}
+
+	updated, err := service.Update(source.Key, UpdateInput{
+		WebdavEnabled:   boolPtr(false),
+		ImageBedEnabled: boolPtr(true),
+		QuotaBytes:      int64Ptr(256 * 1024 * 1024),
+		ExcludePatterns: &patterns,
+	})
+	if err != nil {
+		t.Fatalf("update source settings: %v", err)
+	}
+	if updated.WebdavEnabled || !updated.ImageBedEnabled || updated.QuotaBytes != 256*1024*1024 {
+		t.Fatalf("source settings were not updated together: %+v", updated)
+	}
+
+	storedPatterns, err := service.ExcludePatterns(source.ID)
+	if err != nil {
+		t.Fatalf("read exclude patterns: %v", err)
+	}
+	if len(storedPatterns) != 2 || storedPatterns[0] != "**/*.tmp" || storedPatterns[1] != "**/.cache/**" {
+		t.Fatalf("unexpected normalized patterns: %#v", storedPatterns)
+	}
+}
+
+func TestUpdateSourceRollsBackWhenExcludePatternsFail(t *testing.T) {
+	service, base := newSourceService(t)
+	source := createTestSource(t, service, base, "source-atomic-settings")
+	if err := service.SetExcludePatterns(source.ID, []string{"**/*.keep"}); err != nil {
+		t.Fatalf("seed exclude patterns: %v", err)
+	}
+	if _, err := service.db.Exec(`CREATE TRIGGER reject_source_pattern
+BEFORE INSERT ON storage_source_exclude_patterns
+WHEN NEW.pattern = '**/*.reject'
+BEGIN
+  SELECT RAISE(ABORT, 'rejected test pattern');
+END`); err != nil {
+		t.Fatalf("create rejection trigger: %v", err)
+	}
+
+	changedName := "must-roll-back"
+	patterns := []string{"**/*.reject"}
+	if _, err := service.Update(source.Key, UpdateInput{
+		Name:            &changedName,
+		ExcludePatterns: &patterns,
+	}); err == nil {
+		t.Fatal("expected combined update to fail")
+	}
+
+	storedSource, err := service.Get(source.Key)
+	if err != nil {
+		t.Fatalf("read source after rollback: %v", err)
+	}
+	if storedSource.Name != source.Name {
+		t.Fatalf("source update was not rolled back: got %q want %q", storedSource.Name, source.Name)
+	}
+	storedPatterns, err := service.ExcludePatterns(source.ID)
+	if err != nil {
+		t.Fatalf("read patterns after rollback: %v", err)
+	}
+	if len(storedPatterns) != 1 || storedPatterns[0] != "**/*.keep" {
+		t.Fatalf("exclude patterns were not rolled back: %#v", storedPatterns)
 	}
 }

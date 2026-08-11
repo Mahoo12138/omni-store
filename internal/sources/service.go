@@ -236,6 +236,7 @@ type UpdateInput struct {
 	WebdavEnabled     *bool
 	ImageBedEnabled   *bool
 	QuotaBytes        *int64
+	ExcludePatterns   *[]string
 }
 
 // Update 修改存储源配置。开启公开访问时校验挂载路径格式和冲突（README §12.3/§12.4）。
@@ -336,6 +337,11 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 	if err != nil {
 		return nil, fmt.Errorf("更新存储源失败: %w", err)
 	}
+	if in.ExcludePatterns != nil {
+		if err := replaceExcludePatterns(tx, src.ID, *in.ExcludePatterns); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -344,6 +350,10 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 
 type queryer interface {
 	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+type statementExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
 }
 
 // reservedMountPaths 返回其他当前挂载和全部旧路径。当前存储源准备恢复的同名旧路径除外。
@@ -457,20 +467,28 @@ func (s *Service) SetExcludePatterns(id int64, patterns []string) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`, id); err != nil {
+	if err := replaceExcludePatterns(tx, id, patterns); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func replaceExcludePatterns(execer statementExecer, id int64, patterns []string) error {
+	if _, err := execer.Exec(`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`, id); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	for _, p := range patterns {
-		if p = strings.TrimSpace(p); p == "" {
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
 			continue
 		}
-		if _, err := tx.Exec(`INSERT INTO storage_source_exclude_patterns (storage_source_id, pattern, created_at)
-  VALUES (?, ?, ?)`, id, p, now); err != nil {
+		if _, err := execer.Exec(`INSERT INTO storage_source_exclude_patterns (storage_source_id, pattern, created_at)
+  VALUES (?, ?, ?)`, id, pattern, now); err != nil {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // Matcher 返回该存储源的排除规则匹配器（含系统强制规则）。

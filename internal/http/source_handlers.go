@@ -135,13 +135,14 @@ func (s *Server) handleAdminReconcileSource(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name              *string `json:"name"`
-		Description       *string `json:"description"`
-		PublicReadEnabled *bool   `json:"public_read_enabled"`
-		PublicMountPath   *string `json:"public_mount_path"`
-		WebdavEnabled     *bool   `json:"webdav_enabled"`
-		ImageBedEnabled   *bool   `json:"image_bed_enabled"`
-		QuotaBytes        *int64  `json:"quota_bytes"`
+		Name              *string   `json:"name"`
+		Description       *string   `json:"description"`
+		PublicReadEnabled *bool     `json:"public_read_enabled"`
+		PublicMountPath   *string   `json:"public_mount_path"`
+		WebdavEnabled     *bool     `json:"webdav_enabled"`
+		ImageBedEnabled   *bool     `json:"image_bed_enabled"`
+		QuotaBytes        *int64    `json:"quota_bytes"`
+		ExcludePatterns   *[]string `json:"exclude_patterns"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -159,6 +160,7 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 		WebdavEnabled:     req.WebdavEnabled,
 		ImageBedEnabled:   req.ImageBedEnabled,
 		QuotaBytes:        req.QuotaBytes,
+		ExcludePatterns:   req.ExcludePatterns,
 	})
 	if err != nil {
 		s.writeSourceError(w, r, err)
