@@ -59,6 +59,8 @@ go build -o omnistore.exe ./cmd/omnistore
 
 默认监听 `0.0.0.0:8080`，数据目录 `./data`（可用 `OMNISTORE_DATA_DIR` 覆盖）。
 
+系统数据目录必须是 OmniStore 专用普通目录，不能直接配置为文件系统根目录、当前工作目录、用户主目录或 symlink。服务和 CLI 会把数据根目录及 `keys/cache/tmp/operations/trash` 主动收紧为 `0700`，把 SQLite 主文件收紧为 `0600`；这可能修正旧部署的宽权限。若 `database.path` 指向数据目录之外，程序只收紧数据库文件，不修改既有父目录，部署者应确保该父目录不可被其他系统用户遍历。
+
 网页登录失败限流默认开启，配置位于 `security.login_rate_limit`；环境变量分别为 `OMNISTORE_LOGIN_RATE_LIMIT_ENABLED`、`OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES`、`OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP` 和 `OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME`。限流状态仅在当前进程内存中维护，修改配置需要重启服务。
 
 CSRF Token 以 Session 为生命周期：登录创建 Session 时返回，刷新后的 `GET /api/v1/auth/me` 必须恢复相同 Token，不能在 GET 中轮换 CSRF 哈希。新增或修改认证逻辑时，应保留重复恢复、多标签页使用旧 Token 和不同 Session 隔离的回归测试。
@@ -160,7 +162,7 @@ go test -race -count=1 ./...
 cd web && pnpm test
 ```
 
-发布检查默认要求全仓 Go 语句覆盖率不低于 52%，并要求全仓竞态检测通过，防止新增功能只扩大未测试代码面。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高门槛，但正式发布不得通过降低该值规避失败。本地与 GitHub 发布流水线统一执行 `scripts/verify-release.sh`。
+发布检查默认要求全仓 Go 语句覆盖率不低于 52%，并要求全仓竞态检测通过，防止新增功能只扩大未测试代码面。认证、备份、数据库、文件、HTTP、图床、S3、安全、分享、来源和用户包还分别设有写在 `scripts/verify-release.sh` 中的独立下限，从同一份 profile 按语句数计算，不能由其他包的高覆盖率稀释。维护者可以通过 `OMNISTORE_MIN_GO_COVERAGE` 提高全仓门槛，但正式发布不得通过降低全仓或关键包门槛规避失败。本地与 GitHub 发布流水线统一执行 `scripts/verify-release.sh`。
 
 已有目录创建测试必须同时覆盖服务层和 HTTP 编排：预检后新增文件仍应触发非空确认，`import_existing=false` 不得留下来源；确认导入必须返回校准摘要并立即生成 `unowned` 台账；可用 SQLite `BEFORE INSERT ON file_records` 失败触发器验证来源、排除规则和初始台账会整体回滚且不改动真实文件。并发用例至少 20 路同时导入同一目录，最终只能成功一个，且 `.omnistore-write-test-*` 不得进入台账。
 

@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/buildinfo"
 	"github.com/omni-store/omnistore/internal/config"
+	"github.com/omni-store/omnistore/internal/datadir"
 	"github.com/omni-store/omnistore/internal/db"
 	httpserver "github.com/omni-store/omnistore/internal/http"
 	"github.com/omni-store/omnistore/internal/users"
@@ -96,11 +96,8 @@ func runServer(args []string) error {
 
 	logger := newLogger(cfg.Log.Level)
 
-	// 初始化系统数据目录结构（README §5.1）。
-	for _, sub := range []string{"", "keys", "cache", "tmp"} {
-		if err := os.MkdirAll(filepath.Join(cfg.Data.Dir, sub), 0o755); err != nil {
-			return fmt.Errorf("创建数据目录失败: %w", err)
-		}
+	if err := datadir.Prepare(cfg.Data.Dir); err != nil {
+		return err
 	}
 
 	dbConn, err := db.Open(cfg.DatabasePath())
@@ -243,6 +240,9 @@ func runAdmin(args []string) error {
 
 	cfg, err := config.Load(*configFile)
 	if err != nil {
+		return err
+	}
+	if err := datadir.Prepare(cfg.Data.Dir); err != nil {
 		return err
 	}
 	dbConn, err := db.Open(cfg.DatabasePath())

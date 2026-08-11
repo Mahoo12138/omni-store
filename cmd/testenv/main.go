@@ -13,6 +13,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/config"
+	"github.com/omni-store/omnistore/internal/datadir"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
@@ -55,16 +56,11 @@ func seed(configFile, fixtureRoot string) error {
 	if err != nil {
 		return fmt.Errorf("解析测试存储目录失败: %w", err)
 	}
-	for _, dir := range []string{
-		cfg.Data.Dir,
-		filepath.Join(cfg.Data.Dir, "keys"),
-		filepath.Join(cfg.Data.Dir, "cache"),
-		filepath.Join(cfg.Data.Dir, "tmp"),
-		fixtureRoot,
-	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
+	if err := datadir.Prepare(cfg.Data.Dir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(fixtureRoot, 0o755); err != nil {
+		return err
 	}
 
 	publicRoot := filepath.Join(fixtureRoot, "public-demo")

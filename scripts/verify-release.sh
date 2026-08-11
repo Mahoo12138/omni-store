@@ -66,6 +66,39 @@ if [ -z "$GO_COVERAGE" ] || ! awk -v actual="$GO_COVERAGE" -v minimum="$MIN_GO_C
 fi
 echo "Go statement coverage: $GO_COVERAGE% (minimum $MIN_GO_COVERAGE%)"
 
+package_coverage() {
+  awk -v marker="/$1/" '
+    NR > 1 && index($1, marker) {
+      total += $2
+      if ($3 > 0) covered += $2
+    }
+    END {
+      if (total > 0) printf "%.1f\n", covered * 100 / total
+    }
+  ' "$GO_COVERAGE_PROFILE"
+}
+
+while read -r PACKAGE MINIMUM; do
+  ACTUAL=$(package_coverage "$PACKAGE")
+  if [ -z "$ACTUAL" ] || ! awk -v actual="$ACTUAL" -v minimum="$MINIMUM" 'BEGIN { exit !(actual >= minimum) }'; then
+    echo "关键包 $PACKAGE 语句覆盖率 ${ACTUAL:-unknown}% 低于发布门槛 $MINIMUM%" >&2
+    exit 1
+  fi
+  echo "Critical package $PACKAGE coverage: $ACTUAL% (minimum $MINIMUM%)"
+done <<'EOF'
+internal/auth 65.0
+internal/backup 60.0
+internal/db 65.0
+internal/files 55.0
+internal/http 40.0
+internal/imagebed 65.0
+internal/s3api 60.0
+internal/security 90.0
+internal/shares 60.0
+internal/sources 60.0
+internal/users 70.0
+EOF
+
 echo "[4/10] Go race detector"
 go test -race -count=1 ./...
 

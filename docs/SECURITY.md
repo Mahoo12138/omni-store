@@ -412,6 +412,14 @@ X-Forwarded-Host
 
 ---
 
+## 系统数据与 SQLite
+
+1. `data.dir` 必须指向专用普通目录，不能使用文件系统根目录、进程工作目录、用户主目录或 symlink。
+2. 每次服务启动、CLI 管理操作和测试环境 seed 都会把数据根目录及 `keys/cache/tmp/operations/trash` 收紧为 `0700`，因此安全性不依赖 shell、systemd 或容器的 `umask`。
+3. SQLite 主文件在交给驱动前使用 `O_CREATE | O_EXCL` 和 `0600` 创建；已有文件在打开前修正为 `0600`，并拒绝目录、设备或 symlink。
+4. SQLite WAL、SHM 和回滚日志不得授予 group/other 权限。默认数据库位于私有数据目录内；自定义外部数据库路径的既有父目录不会被程序改权，部署者必须自行保证其不可被非服务用户遍历。
+5. 无法创建、检查或收紧这些权限时必须停止启动，不能只记录 warning 后继续运行。
+
 ## 存储源模型
 
 ### 存储源字段
