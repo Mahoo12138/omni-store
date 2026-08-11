@@ -47,7 +47,16 @@ if [ -n "$INVALID_MIGRATIONS" ]; then
 fi
 echo "version: $VERSION"
 
-echo "[2/10] Go formatting"
+echo "[2/10] Frontend tests and production build"
+cd "$PROJECT_DIR/web"
+if [ "${OMNISTORE_SKIP_PNPM_INSTALL:-0}" != "1" ]; then
+  pnpm install --frozen-lockfile
+fi
+pnpm test
+pnpm run build
+
+echo "[3/10] Go formatting"
+cd "$PROJECT_DIR"
 UNFORMATTED=$(gofmt -l cmd internal migrations)
 if [ -n "$UNFORMATTED" ]; then
   echo "以下 Go 文件尚未格式化:" >&2
@@ -55,7 +64,7 @@ if [ -n "$UNFORMATTED" ]; then
   exit 1
 fi
 
-echo "[3/10] Go vet, tests, and coverage"
+echo "[4/10] Go vet, tests, and coverage"
 go vet ./...
 GO_COVERAGE_PROFILE="$CHECK_DIR/go-cover.out"
 go test -count=1 -coverprofile="$GO_COVERAGE_PROFILE" ./...
@@ -99,18 +108,11 @@ internal/sources 60.0
 internal/users 70.0
 EOF
 
-echo "[4/10] Go race detector"
+echo "[5/10] Go race detector"
 go test -race -count=1 ./...
 
-echo "[5/10] Frontend tests and production build"
-cd "$PROJECT_DIR/web"
-if [ "${OMNISTORE_SKIP_PNPM_INSTALL:-0}" != "1" ]; then
-  pnpm install --frozen-lockfile
-fi
-pnpm test
-pnpm run build
-
 echo "[6/10] Browser E2E"
+cd "$PROJECT_DIR/web"
 pnpm exec playwright test
 
 echo "[7/10] Release binary and embedded frontend"
