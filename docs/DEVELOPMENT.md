@@ -61,7 +61,7 @@ go build -o omnistore.exe ./cmd/omnistore
 
 系统数据目录必须是 OmniStore 专用普通目录，不能直接配置为文件系统根目录、当前工作目录、用户主目录或 symlink。服务和 CLI 会把数据根目录及 `keys/cache/tmp/operations/trash` 主动收紧为 `0700`，把 SQLite 主文件收紧为 `0600`；这可能修正旧部署的宽权限。若 `database.path` 指向数据目录之外，程序只收紧数据库文件，不修改既有父目录，部署者应确保该父目录不可被其他系统用户遍历。
 
-网页登录失败限流默认开启，配置位于 `security.login_rate_limit`；环境变量分别为 `OMNISTORE_LOGIN_RATE_LIMIT_ENABLED`、`OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES`、`OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP` 和 `OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME`。限流状态仅在当前进程内存中维护，修改配置需要重启服务。
+网页登录失败限流默认开启，配置位于 `security.login_rate_limit`；环境变量分别为 `OMNISTORE_LOGIN_RATE_LIMIT_ENABLED`、`OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES`、`OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP` 和 `OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME`。IP 阈值是密码验证前的硬限制；用户名阈值只限制已经验证失败的请求，正确密码不得因同用户名的历史失败而被拒绝。限流状态仅在当前进程内存中维护，会主动清理过期窗口并限制跟踪键数量；修改配置需要重启服务。
 
 CSRF Token 以 Session 为生命周期：登录创建 Session 时返回，刷新后的 `GET /api/v1/auth/me` 必须恢复相同 Token，不能在 GET 中轮换 CSRF 哈希。新增或修改认证逻辑时，应保留重复恢复、多标签页使用旧 Token 和不同 Session 隔离的回归测试。
 

@@ -158,12 +158,26 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	fail := func(userID *int64) {
 		attemptFinished = true
+		retryAfter, allowed := s.loginLimiter.Failure(attempt)
+		errorCode := CodeUnauthorized
+		if !allowed {
+			errorCode = CodeRateLimited
+		}
 		s.audit.Log(audit.Entry{
 			ActorType: audit.ActorAnonymous, ActorUserID: userID,
 			EntryType: audit.EntryWeb, Action: "login_failed",
 			IPAddress: ip, UserAgent: ua,
-			Status: audit.StatusFailed, ErrorCode: CodeUnauthorized,
+			Status: audit.StatusFailed, ErrorCode: errorCode,
 		})
+		if !allowed {
+			seconds := int((retryAfter + time.Second - 1) / time.Second)
+			if seconds < 1 {
+				seconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+			WriteError(w, r, CodeRateLimited, "登录尝试过于频繁，请稍后再试", nil)
+			return
+		}
 		WriteError(w, r, CodeUnauthorized, "用户名或密码错误", nil)
 	}
 

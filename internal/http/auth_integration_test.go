@@ -217,12 +217,17 @@ func TestLoginRateLimitAndSuccessfulReset(t *testing.T) {
 		failure := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", wrongMember, nil, "")
 		assertErrorResponse(t, failure, http.StatusUnauthorized, CodeUnauthorized)
 	}
-	limited := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
-		`{"username":"rate-member","password":"member-password"}`, nil, "")
+	limited := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", wrongMember, nil, "")
 	assertErrorResponse(t, limited, http.StatusTooManyRequests, CodeRateLimited)
 	if limited.Header().Get("Retry-After") == "" {
 		t.Fatal("rate-limited login response missing Retry-After")
 	}
+	// Username throttling applies only after a failed password check. An attacker cannot lock out the correct password.
+	correctAfterLimit := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login",
+		`{"username":"rate-member","password":"member-password"}`, nil, "")
+	parseLoginResponse(t, correctAfterLimit)
+	afterReset := serveTestRequest(t, server.Handler, http.MethodPost, "/api/v1/auth/login", wrongMember, nil, "")
+	assertErrorResponse(t, afterReset, http.StatusUnauthorized, CodeUnauthorized)
 
 	// Unknown usernames follow the same failure and rate-limit path.
 	for attempt := 0; attempt < 2; attempt++ {
