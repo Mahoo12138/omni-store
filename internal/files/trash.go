@@ -36,6 +36,11 @@ type trashPlan struct {
 
 // MoveToTrash 把文件或目录移动到系统数据目录，并保留台账归属和图床记录。
 func (s *Service) MoveToTrash(src *models.StorageSource, relInput string, actorUserID int64) (*models.TrashEntry, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, &actorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLifecycle()
 	relPath, absPath, err := s.prepare(src, relInput)
 	if err != nil {
 		return nil, err
@@ -265,6 +270,11 @@ func (s *Service) GetTrash(src *models.StorageSource, trashKey string) (*models.
 
 // RestoreTrash 恢复到原路径或显式目标路径；目标已存在时拒绝。
 func (s *Service) RestoreTrash(src *models.StorageSource, trashKey, targetInput string, actorUserID int64) (*models.TrashEntry, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, &actorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLifecycle()
 	entry, err := s.GetTrash(src, trashKey)
 	if err != nil {
 		return nil, err
@@ -481,6 +491,11 @@ func (s *Service) restoreRecordsTx(tx *sql.Tx, src *models.StorageSource, entry 
 
 // PurgeTrash 永久删除一个回收站条目并释放用户配额。
 func (s *Service) PurgeTrash(src *models.StorageSource, trashKey string) error {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, nil)
+	if err != nil {
+		return err
+	}
+	defer releaseLifecycle()
 	if _, err := s.GetTrash(src, trashKey); err != nil {
 		return err
 	}

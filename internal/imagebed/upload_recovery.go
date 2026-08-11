@@ -291,6 +291,19 @@ func checkedImageUploadPath(root, relPath string) (string, bool, error) {
 
 // SourceUploadOperationCount 返回仍依赖该存储源根路径的中断图床上传数量。
 func (s *Service) SourceUploadOperationCount(storageSourceID int64) (int, error) {
+	return s.imageUploadOperationCount(func(op imageUploadOperation) bool {
+		return op.StorageSourceID == storageSourceID
+	})
+}
+
+// UserUploadOperationCount 返回仍引用该用户的中断图床上传数量。
+func (s *Service) UserUploadOperationCount(userID int64) (int, error) {
+	return s.imageUploadOperationCount(func(op imageUploadOperation) bool {
+		return op.OwnerUserID != nil && *op.OwnerUserID == userID
+	})
+}
+
+func (s *Service) imageUploadOperationCount(matches func(imageUploadOperation) bool) (int, error) {
 	entries, err := os.ReadDir(s.uploadOperationsDir())
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -321,7 +334,7 @@ func (s *Service) SourceUploadOperationCount(storageSourceID int64) (int, error)
 		if err := validateImageUploadOperation(op); err != nil || entry.Name() != op.OperationID+".json" {
 			return 0, fmt.Errorf("图床上传操作日志 %s 非法", entry.Name())
 		}
-		if op.StorageSourceID == storageSourceID {
+		if matches(op) {
 			count++
 		}
 	}

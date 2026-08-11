@@ -7,6 +7,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/models"
 )
 
@@ -159,6 +160,8 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeValidationError, "不能删除自己的账号", nil)
 		return
 	}
+	releaseLifecycle := lifecycle.Write(lifecycle.User(id))
+	defer releaseLifecycle()
 	trashCount, err := s.files.UserTrashCount(id)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "检查用户回收站失败", nil)
@@ -167,6 +170,46 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	if trashCount > 0 {
 		WriteError(w, r, CodeConflict, "该用户的回收站不为空，请先恢复或永久清理其中内容", map[string]any{"trash_count": trashCount})
 		return
+	}
+	fileUploadCount, err := s.files.UserFileUploadOperationCount(id)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查用户中断普通上传失败", nil)
+		return
+	}
+	if fileUploadCount > 0 {
+		WriteError(w, r, CodeConflict, "该用户存在尚未恢复的普通文件上传，请重启服务完成恢复", map[string]any{"upload_count": fileUploadCount})
+		return
+	}
+	if s.imagebed != nil {
+		imageUploadCount, err := s.imagebed.UserUploadOperationCount(id)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查用户中断图床上传失败", nil)
+			return
+		}
+		if imageUploadCount > 0 {
+			WriteError(w, r, CodeConflict, "该用户存在尚未恢复的图床上传，请重启服务完成恢复", map[string]any{"image_upload_count": imageUploadCount})
+			return
+		}
+	}
+	if s.s3Multipart != nil {
+		partOperationCount, err := s.s3Multipart.UserPartOperationCount(id)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查用户中断 Multipart 分片上传失败", nil)
+			return
+		}
+		if partOperationCount > 0 {
+			WriteError(w, r, CodeConflict, "该用户存在尚未恢复的 S3 Multipart 分片上传，请重启服务完成恢复", map[string]any{"multipart_part_count": partOperationCount})
+			return
+		}
+		completionCount, err := s.s3Multipart.UserCompletionOperationCount(id)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查用户中断 Multipart 完成操作失败", nil)
+			return
+		}
+		if completionCount > 0 {
+			WriteError(w, r, CodeConflict, "该用户存在尚未恢复的 S3 Multipart 完成操作，请重启服务完成恢复", map[string]any{"multipart_completion_count": completionCount})
+			return
+		}
 	}
 	if err := s.users.Delete(id); err != nil {
 		s.writeUserError(w, r, err)

@@ -29,6 +29,9 @@ func TestRecoverUploadRollsBackTemporaryAndFinalFilesBeforeDatabaseCommit(t *tes
 			if err := service.writeImageUploadOperation(op); err != nil {
 				t.Fatal(err)
 			}
+			if count, err := service.UserUploadOperationCount(user.ID); err != nil || count != 1 {
+				t.Fatalf("user image upload operation count=%d err=%v", count, err)
+			}
 
 			result, err := service.RecoverUploadOperations()
 			if err != nil {

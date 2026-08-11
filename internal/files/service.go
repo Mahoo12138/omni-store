@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
@@ -90,6 +91,40 @@ type Service struct {
 	locks           *locks.Manager
 	persistentLocks *locks.PersistentStore
 	trashDir        string
+}
+
+func (s *Service) guardLifecycle(storageSources []*models.StorageSource, userID *int64) (func(), error) {
+	keys := make([]lifecycle.Key, 0, len(storageSources)+1)
+	for _, src := range storageSources {
+		if src != nil {
+			keys = append(keys, lifecycle.Source(src.ID))
+		}
+	}
+	if userID != nil {
+		keys = append(keys, lifecycle.User(*userID))
+	}
+	release := lifecycle.Read(keys...)
+	for _, expected := range storageSources {
+		if expected == nil {
+			continue
+		}
+		current, err := s.sources.GetByID(expected.ID)
+		if err != nil || current.Key != expected.Key {
+			release()
+			return nil, ErrNotFound
+		}
+	}
+	if userID != nil {
+		var found int
+		if err := s.db.QueryRow(`SELECT 1 FROM users WHERE id = ?`, *userID).Scan(&found); err != nil {
+			release()
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
+	}
+	return release, nil
 }
 
 // NewService 创建文件服务。
@@ -654,6 +689,11 @@ func (s *Service) Mkdir(src *models.StorageSource, parentRel, name string) (stri
 
 // MkdirWithLockTokens 创建目录，并允许 WebDAV 提交匹配的持久锁 Token。
 func (s *Service) MkdirWithLockTokens(src *models.StorageSource, parentRel, name string, lockTokens []string, lockOwnerUserID *int64) (string, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, lockOwnerUserID)
+	if err != nil {
+		return "", err
+	}
+	defer releaseLifecycle()
 	if err := security.ValidateFileName(name); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
@@ -703,6 +743,11 @@ func (s *Service) Upload(src *models.StorageSource, dirRel, filename string, bod
 
 // UploadWithLockTokens 上传文件，并允许 WebDAV 提交匹配的持久锁 Token。
 func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filename string, body io.Reader, overwrite bool, lockTokens []string, lockOwnerUserID *int64) (string, int64, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, lockOwnerUserID)
+	if err != nil {
+		return "", 0, err
+	}
+	defer releaseLifecycle()
 	if err := security.ValidateFileName(filename); err != nil {
 		return "", 0, fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
@@ -877,6 +922,11 @@ func (s *Service) Delete(src *models.StorageSource, relInput string) error {
 
 // DeleteWithLockTokens 删除路径，并允许 WebDAV 提交覆盖整个删除范围的锁 Token。
 func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput string, lockTokens []string, lockOwnerUserID *int64) error {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, lockOwnerUserID)
+	if err != nil {
+		return err
+	}
+	defer releaseLifecycle()
 	relPath, absPath, err := s.prepare(src, relInput)
 	if err != nil {
 		return err
@@ -987,6 +1037,11 @@ func (s *Service) MoveWithLockTokens(src *models.StorageSource, fromInput, toInp
 }
 
 func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTokens []string, lockOwnerUserID *int64) (string, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, lockOwnerUserID)
+	if err != nil {
+		return "", err
+	}
+	defer releaseLifecycle()
 	if fromRel == toRel {
 		return "", ErrAlreadyExists
 	}

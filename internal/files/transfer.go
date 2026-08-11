@@ -64,6 +64,11 @@ func (s *Service) MoveAcrossSources(source, target *models.StorageSource, fromIn
 }
 
 func (s *Service) transfer(source, target *models.StorageSource, fromInput, toInput string, move bool, actorUserID *int64) (*TransferResult, error) {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{source, target}, actorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLifecycle()
 	fromRel, err := security.NormalizeRelPath(fromInput)
 	if err != nil || fromRel == "" {
 		return nil, fmt.Errorf("%w: 非法源路径", ErrInvalid)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/files"
+	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
@@ -191,6 +192,8 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		s.writeSourceError(w, r, err)
 		return
 	}
+	releaseLifecycle := lifecycle.Write(lifecycle.Source(src.ID))
+	defer releaseLifecycle()
 	trashCount, err := s.files.SourceTrashCount(src.ID)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "检查存储源回收站失败", nil)

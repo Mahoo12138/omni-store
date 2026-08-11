@@ -18,6 +18,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/files"
+	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 )
@@ -83,7 +84,26 @@ func NewMultipartStore(db *sql.DB, dataDir string, fileService *files.Service, m
 	}
 }
 
+func (s *MultipartStore) guardLifecycle(userID, storageSourceID int64) (func(), error) {
+	release := lifecycle.Read(lifecycle.Source(storageSourceID), lifecycle.User(userID))
+	var found int
+	if err := s.db.QueryRow(`SELECT 1 FROM users u, storage_sources source
+  WHERE u.id = ? AND source.id = ?`, userID, storageSourceID).Scan(&found); err != nil {
+		release()
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoSuchUpload
+		}
+		return nil, err
+	}
+	return release, nil
+}
+
 func (s *MultipartStore) Create(userID, storageSourceID int64, objectKey string) (*MultipartUpload, error) {
+	releaseLifecycle, err := s.guardLifecycle(userID, storageSourceID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLifecycle()
 	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return nil, fmt.Errorf("创建 Multipart 临时目录失败: %w", err)
 	}
@@ -127,6 +147,11 @@ func (s *MultipartStore) Get(userID, storageSourceID int64, objectKey, uploadID 
 }
 
 func (s *MultipartStore) UploadPart(userID, storageSourceID int64, objectKey, uploadID string, partNumber int, body io.Reader) (*MultipartPart, error) {
+	releaseLifecycle, err := s.guardLifecycle(userID, storageSourceID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLifecycle()
 	if partNumber < 1 || partNumber > MaxMultipartParts {
 		return nil, fmt.Errorf("partNumber 必须为 1-10000")
 	}
@@ -299,6 +324,16 @@ func (s *MultipartStore) ListParts(userID, storageSourceID int64, objectKey, upl
 }
 
 func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objectKey, uploadID string, requested []CompletedPart) (string, int64, error) {
+	releaseLifecycle, err := s.guardLifecycle(userID, src.ID)
+	if err != nil {
+		return "", 0, err
+	}
+	lifecycleHeld := true
+	defer func() {
+		if lifecycleHeld {
+			releaseLifecycle()
+		}
+	}()
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
 	if _, err := s.Get(userID, src.ID, objectKey, uploadID); err != nil {
@@ -376,6 +411,11 @@ func (s *MultipartStore) Complete(userID int64, src *models.StorageSource, objec
 	if err := s.writeMultipartCompletion(op); err != nil {
 		return "", 0, err
 	}
+	// 普通上传会取得同一来源和用户的共享生命周期锁。完成日志已经
+	// 落盘，释放当前锁后删除流程会通过日志计数拒绝删除，避免嵌套
+	// RWMutex 在等待写锁时自锁。
+	releaseLifecycle()
+	lifecycleHeld = false
 	if err := s.files.EnsureObjectParents(src, objectKey); err != nil {
 		_ = s.removeMultipartCompletion(uploadID)
 		return "", 0, err
@@ -447,6 +487,11 @@ func (s *MultipartStore) ForgetObjectETag(storageSourceID int64, objectKey strin
 }
 
 func (s *MultipartStore) Abort(userID, storageSourceID int64, objectKey, uploadID string) error {
+	releaseLifecycle, err := s.guardLifecycle(userID, storageSourceID)
+	if err != nil {
+		return err
+	}
+	defer releaseLifecycle()
 	unlock := s.locks.Lock("multipart:" + uploadID)
 	defer unlock()
 	if _, err := s.Get(userID, storageSourceID, objectKey, uploadID); err != nil {

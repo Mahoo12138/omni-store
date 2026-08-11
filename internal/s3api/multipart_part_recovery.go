@@ -514,6 +514,19 @@ func (s *MultipartStore) multipartPartOperationCountForUpload(uploadID string) (
 
 // SourcePartOperationCount 返回仍依赖该存储源的中断分片操作数量。
 func (s *MultipartStore) SourcePartOperationCount(storageSourceID int64) (int, error) {
+	return s.partOperationCount(func(op multipartPartOperation) bool {
+		return op.StorageSourceID == storageSourceID
+	})
+}
+
+// UserPartOperationCount 返回仍引用该用户的中断分片操作数量。
+func (s *MultipartStore) UserPartOperationCount(userID int64) (int, error) {
+	return s.partOperationCount(func(op multipartPartOperation) bool {
+		return op.OwnerUserID == userID
+	})
+}
+
+func (s *MultipartStore) partOperationCount(matches func(multipartPartOperation) bool) (int, error) {
 	entries, err := os.ReadDir(s.partOperationsDir())
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -530,7 +543,7 @@ func (s *MultipartStore) SourcePartOperationCount(storageSourceID int64) (int, e
 		if err != nil {
 			return 0, err
 		}
-		if op.StorageSourceID == storageSourceID {
+		if matches(op) {
 			count++
 		}
 	}

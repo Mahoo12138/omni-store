@@ -13,6 +13,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/files"
+	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
@@ -266,7 +267,26 @@ func (s *Service) UploadAnonymous(originalFilename string, body io.Reader) (*mod
 // upload 是公共上传流程（README §17.7）：
 // 临时文件 -> 真实格式校验 -> 以服务端识别结果决定扩展名 -> 原子重命名 -> 写 Images 表。
 func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ownerType string, ownerUserID *int64, body io.Reader) (*models.Image, error) {
-	relDir, err := security.NormalizeRelPath(relDir)
+	keys := []lifecycle.Key{lifecycle.Source(src.ID)}
+	if ownerUserID != nil {
+		keys = append(keys, lifecycle.User(*ownerUserID))
+	}
+	releaseLifecycle := lifecycle.Read(keys...)
+	defer releaseLifecycle()
+	current, err := s.sources.GetByID(src.ID)
+	if err != nil || current.Key != src.Key {
+		return nil, ErrTargetInvalid
+	}
+	if ownerUserID != nil {
+		var found int
+		if err := s.db.QueryRow(`SELECT 1 FROM users WHERE id = ?`, *ownerUserID).Scan(&found); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrTargetInvalid
+			}
+			return nil, err
+		}
+	}
+	relDir, err = security.NormalizeRelPath(relDir)
 	if err != nil {
 		return nil, err
 	}

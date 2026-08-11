@@ -60,6 +60,9 @@ func assertNoFileUploadOperation(t *testing.T, service *Service, op uploadOperat
 func TestRecoverFileUploadRollsBackNewFileIntent(t *testing.T) {
 	service, source, _, userID := newFileUploadRecoveryFixture(t)
 	op, tempAbs, targetAbs := stageFileUploadOperation(t, service, source, "new.txt", "new", false, userID)
+	if count, err := service.UserFileUploadOperationCount(userID); err != nil || count != 1 {
+		t.Fatalf("user upload operation count=%d err=%v", count, err)
+	}
 
 	result, err := service.RecoverFileUploadOperations()
 	if err != nil {

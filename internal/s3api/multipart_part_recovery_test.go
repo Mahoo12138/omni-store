@@ -238,6 +238,9 @@ func TestMultipartCleanupSkipsPendingPartOperation(t *testing.T) {
 	key := "part-cleanup.bin"
 	uploadID := initiateMultipart(t, f, key)
 	op, _ := stagedMultipartPartOperation(t, f, key, uploadID, 1, "pending")
+	if count, err := f.multipart.UserPartOperationCount(op.OwnerUserID); err != nil || count != 1 {
+		t.Fatalf("user part operation count=%d err=%v", count, err)
+	}
 	old := time.Now().UTC().Add(-2 * MultipartMaxAge)
 	if _, err := f.multipart.db.Exec(`UPDATE s3_multipart_uploads SET updated_at = ? WHERE upload_id = ?`, old, uploadID); err != nil {
 		t.Fatal(err)

@@ -372,6 +372,19 @@ func (s *MultipartStore) resolveMultipartCompletion(op multipartCompletion, obje
 
 // SourceCompletionOperationCount 返回仍依赖该存储源的 Multipart 完成日志数量。
 func (s *MultipartStore) SourceCompletionOperationCount(storageSourceID int64) (int, error) {
+	return s.completionOperationCount(func(op multipartCompletion) bool {
+		return op.StorageSourceID == storageSourceID
+	})
+}
+
+// UserCompletionOperationCount 返回仍引用该用户的 Multipart 完成日志数量。
+func (s *MultipartStore) UserCompletionOperationCount(userID int64) (int, error) {
+	return s.completionOperationCount(func(op multipartCompletion) bool {
+		return op.OwnerUserID == userID
+	})
+}
+
+func (s *MultipartStore) completionOperationCount(matches func(multipartCompletion) bool) (int, error) {
 	entries, err := os.ReadDir(s.completionOperationsDir())
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -389,7 +402,7 @@ func (s *MultipartStore) SourceCompletionOperationCount(storageSourceID int64) (
 		if err != nil {
 			return 0, err
 		}
-		if op.StorageSourceID == storageSourceID {
+		if matches(*op) {
 			count++
 		}
 	}

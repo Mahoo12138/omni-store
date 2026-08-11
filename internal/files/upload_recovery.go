@@ -434,6 +434,20 @@ func decodeUploadOperation(handle io.Reader) (uploadOperation, error) {
 
 // SourceFileUploadOperationCount 返回仍依赖该存储源的普通上传数量。
 func (s *Service) SourceFileUploadOperationCount(storageSourceID int64) (int, error) {
+	return s.fileUploadOperationCount(func(op uploadOperation) bool {
+		return op.StorageSourceID == storageSourceID
+	})
+}
+
+// UserFileUploadOperationCount 返回仍引用该用户的普通上传数量。
+func (s *Service) UserFileUploadOperationCount(userID int64) (int, error) {
+	return s.fileUploadOperationCount(func(op uploadOperation) bool {
+		return (op.OwnerUserID != nil && *op.OwnerUserID == userID) ||
+			(op.ActorUserID != nil && *op.ActorUserID == userID)
+	})
+}
+
+func (s *Service) fileUploadOperationCount(matches func(uploadOperation) bool) (int, error) {
 	entries, err := os.ReadDir(s.uploadOperationsDir())
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -464,7 +478,7 @@ func (s *Service) SourceFileUploadOperationCount(storageSourceID int64) (int, er
 		if err := validateUploadOperation(op); err != nil || entry.Name() != op.OperationID+".json" {
 			return 0, fmt.Errorf("普通上传操作日志 %s 非法", entry.Name())
 		}
-		if op.StorageSourceID == storageSourceID {
+		if matches(op) {
 			count++
 		}
 	}

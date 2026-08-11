@@ -44,6 +44,9 @@ func stagedMultipartCompletion(t *testing.T, f *s3Fixture, key, content string) 
 	if err := f.multipart.writeMultipartCompletion(op); err != nil {
 		t.Fatal(err)
 	}
+	if count, err := f.multipart.UserCompletionOperationCount(op.OwnerUserID); err != nil || count != 1 {
+		t.Fatalf("user completion operation count=%d err=%v", count, err)
+	}
 	return op, partETag
 }
 
