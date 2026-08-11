@@ -70,6 +70,37 @@ func TestCopyAcrossSourcesEnforcesQuotaAndRecordsActorOwnership(t *testing.T) {
 	}
 }
 
+func TestCopyWithinSourceUsesCrashSafeStaging(t *testing.T) {
+	service, source, sourceRoot := newQuotaTestService(t, 0)
+	userID := insertTransferUser(t, service, 20)
+	if _, err := service.Mkdir(source, "", "docs"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := service.UploadWithLockTokens(source, "docs", "one.txt", strings.NewReader("one"), false, nil, &userID); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.Copy(source, source, "docs", "copied", &userID)
+	if err != nil {
+		t.Fatalf("same-source copy: %v", err)
+	}
+	if result.Files != 1 || result.Bytes != 3 || result.Path != "copied" || result.WasMove {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	content, err := os.ReadFile(filepath.Join(sourceRoot, "copied", "one.txt"))
+	if err != nil || string(content) != "one" {
+		t.Fatalf("copied content=%q err=%v", content, err)
+	}
+	assertFileRecord(t, service, source.ID, "copied/one.txt", "copied/one.txt", 3, models.FileOwnerUser, &userID)
+	entries, err := os.ReadDir(service.copyOperationsDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("successful same-source copy left recovery artifacts: %+v", entries)
+	}
+}
+
 func TestMoveAcrossSourcesPreservesOwnershipAndImageLocation(t *testing.T) {
 	service, source, sourceRoot := newQuotaTestService(t, 0)
 	targetRoot := filepath.Join(filepath.Dir(sourceRoot), "move-target")

@@ -461,7 +461,7 @@ storage_source_id + normalized_relative_path
 
 跨来源移动还维护磁盘阶段日志：`intent → target-ready → database-ready`。目标数据在写 `target-ready` 前完成文件与目录同步；台账、图床和分享定位提交后才写 `database-ready`，源路径只允许在该阶段之后删除。启动恢复对尚未提交的状态执行反向事务并删除目标，对已提交状态继续 `RemoveAll` 源路径；源删除失败不再尝试用可能残缺的源目录回滚。反向事务直接迁回文件台账，不能通过重新扫描把原所有权降级为 `unowned`。
 
-跨来源复制不直接写最终目标。服务先在目标同级创建严格命名的 `.omnistore-copy-<随机值>.staging`，完整复制并逐级同步目录后，使用同文件系统原子 `rename` 发布。轻量 `cpy-*` 日志记录来源、目标与 staging；`database-ready` 前启动恢复会删除 staging、已发布目标及可能已提交的目标台账，之后只保留最终目标并清理日志。staging 在文件列表、S3 列举、搜索校准、配额和其他递归操作中均作为内部路径跳过，关联日志未恢复时禁止删除任一来源。
+同来源与跨来源复制都不直接写最终目标。服务先在目标同级创建严格命名的 `.omnistore-copy-<随机值>.staging`，完整复制并逐级同步目录后，使用同文件系统原子 `rename` 发布。轻量 `cpy-*` 日志记录来源、目标与 staging；`database-ready` 前启动恢复会删除 staging、已发布目标及可能已提交的目标台账，之后只保留最终目标并清理日志。staging 在文件列表、S3 列举、搜索校准、配额和其他递归操作中均作为内部路径跳过，关联日志未恢复时禁止删除任一来源。
 
 同来源重命名/移动和永久删除使用 `pth-*` 路径意图。移动在原子 `rename` 与目录同步后，将 `images`、有效 `file_shares` 和 `file_records` 的路径变更放进一个 SQLite 事务；`database-ready` 前恢复一律把真实路径和全部元数据反向迁回，之后确认目标存在并只清理日志。永久删除不可逆，恢复器会继续 `RemoveAll` 并在单个事务内清理三类元数据。REST、WebDAV DELETE/MOVE 与 S3 DeleteObject 共用该文件服务路径，数据库错误不再被吞掉。
 

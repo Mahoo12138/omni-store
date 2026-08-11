@@ -183,7 +183,7 @@ func (s *Service) transfer(source, target *models.StorageSource, fromInput, toIn
 func (s *Service) executeCrashSafeCopy(source, target *models.StorageSource, plan *transferPlan, actorUserID *int64) (*TransferResult, error) {
 	op := s.newCopyOperation(source.ID, target.ID, plan.targetRel, plan.isDir)
 	if err := s.writeCopyOperation(op); err != nil {
-		return nil, fmt.Errorf("记录跨来源复制意图失败: %w", err)
+		return nil, fmt.Errorf("记录复制意图失败: %w", err)
 	}
 	stagingPlan, err := s.copyStagingPlan(plan, op, target)
 	if err != nil {
@@ -201,7 +201,7 @@ func (s *Service) executeCrashSafeCopy(source, target *models.StorageSource, pla
 		return nil, errors.Join(err, rollback(false))
 	}
 	if err := s.syncTransferDestination(stagingPlan); err != nil {
-		return nil, errors.Join(fmt.Errorf("同步跨来源复制 staging 失败: %w", err), rollback(false))
+		return nil, errors.Join(fmt.Errorf("同步复制 staging 失败: %w", err), rollback(false))
 	}
 	if _, err := os.Lstat(plan.targetAbs); err == nil {
 		return nil, errors.Join(ErrAlreadyExists, rollback(false))
@@ -209,16 +209,16 @@ func (s *Service) executeCrashSafeCopy(source, target *models.StorageSource, pla
 		return nil, errors.Join(err, rollback(false))
 	}
 	if err := os.Rename(stagingPlan.targetAbs, plan.targetAbs); err != nil {
-		return nil, errors.Join(fmt.Errorf("发布跨来源复制目标失败: %w", err), rollback(false))
+		return nil, errors.Join(fmt.Errorf("发布复制目标失败: %w", err), rollback(false))
 	}
 	if err := syncDirectory(filepath.Dir(plan.targetAbs)); err != nil {
-		return nil, errors.Join(fmt.Errorf("同步跨来源复制目标目录失败: %w", err), rollback(true))
+		return nil, errors.Join(fmt.Errorf("同步复制目标目录失败: %w", err), rollback(true))
 	}
 	if err := s.syncTransferRecords(source, target, plan, false, actorUserID); err != nil {
 		return nil, errors.Join(fmt.Errorf("更新复制文件台账失败: %w", err), rollback(true))
 	}
 	if err := s.markCopyDatabaseReady(op.OperationID); err != nil {
-		return nil, errors.Join(fmt.Errorf("记录跨来源复制数据库阶段失败: %w", err), rollback(true))
+		return nil, errors.Join(fmt.Errorf("记录复制数据库阶段失败: %w", err), rollback(true))
 	}
 	// 数据与台账均已提交；日志清理失败交给启动恢复，不诱发重复复制。
 	_ = s.removeCopyOperation(op.OperationID)

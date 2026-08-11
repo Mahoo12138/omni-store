@@ -30,7 +30,7 @@ type copyOperation struct {
 	IsDirectory           bool   `json:"is_directory"`
 }
 
-// CopyRecoveryResult 描述启动时清理的中断跨来源复制。
+// CopyRecoveryResult 描述启动时清理的中断复制。
 type CopyRecoveryResult struct {
 	CompletedCopies  int `json:"completed_copies"`
 	RolledBackCopies int `json:"rolled_back_copies"`
@@ -58,20 +58,19 @@ func validCopyOperationID(value string) bool {
 
 func validateCopyOperation(op copyOperation) error {
 	if op.Version != copyOperationVersion || !validCopyOperationID(op.OperationID) ||
-		op.SourceStorageSourceID <= 0 || op.TargetStorageSourceID <= 0 ||
-		op.SourceStorageSourceID == op.TargetStorageSourceID {
-		return fmt.Errorf("非法跨来源复制操作日志")
+		op.SourceStorageSourceID <= 0 || op.TargetStorageSourceID <= 0 {
+		return fmt.Errorf("非法复制操作日志")
 	}
 	for _, value := range []string{op.TargetRelativePath, op.StagingRelativePath} {
 		normalized, err := security.NormalizeRelPath(value)
 		if err != nil || normalized == "" || normalized != value {
-			return fmt.Errorf("非法跨来源复制路径")
+			return fmt.Errorf("非法复制路径")
 		}
 	}
 	token := strings.TrimPrefix(op.OperationID, "cpy-")
 	if path.Base(op.StagingRelativePath) != ".omnistore-copy-"+token+".staging" ||
 		path.Dir(op.StagingRelativePath) != path.Dir(op.TargetRelativePath) {
-		return fmt.Errorf("跨来源复制 staging 必须与目标同级")
+		return fmt.Errorf("复制 staging 必须与目标同级")
 	}
 	return nil
 }
@@ -96,10 +95,10 @@ func (s *Service) writeCopyOperation(op copyOperation) error {
 	}
 	dir := s.copyOperationsDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("创建跨来源复制日志目录失败: %w", err)
+		return fmt.Errorf("创建复制日志目录失败: %w", err)
 	}
 	if _, err := os.Lstat(s.copyOperationPath(op.OperationID)); err == nil {
-		return fmt.Errorf("跨来源复制 %s 尚未恢复", op.OperationID)
+		return fmt.Errorf("复制 %s 尚未恢复", op.OperationID)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -193,7 +192,7 @@ func (s *Service) copyOperationPaths(op copyOperation, target *models.StorageSou
 		return "", "", err
 	}
 	if filepath.Dir(stagingAbs) != filepath.Dir(targetAbs) {
-		return "", "", fmt.Errorf("跨来源复制 staging 不在目标同级目录")
+		return "", "", fmt.Errorf("复制 staging 不在目标同级目录")
 	}
 	return stagingAbs, targetAbs, nil
 }
@@ -221,7 +220,7 @@ func (s *Service) rollbackCopyOperation(op copyOperation, target *models.Storage
 	return errors.Join(errs...)
 }
 
-// SourceCopyOperationCount 返回仍依赖该来源的跨来源复制日志数量。
+// SourceCopyOperationCount 返回仍依赖该来源的复制日志数量。
 func (s *Service) SourceCopyOperationCount(storageSourceID int64) (int, error) {
 	entries, err := os.ReadDir(s.copyOperationsDir())
 	if errors.Is(err, fs.ErrNotExist) {
@@ -236,11 +235,11 @@ func (s *Service) SourceCopyOperationCount(storageSourceID int64) (int, error) {
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			return 0, fmt.Errorf("跨来源复制日志 %s 不能是符号链接", entry.Name())
+			return 0, fmt.Errorf("复制日志 %s 不能是符号链接", entry.Name())
 		}
 		op, err := s.readCopyOperation(filepath.Join(s.copyOperationsDir(), entry.Name()))
 		if err != nil || entry.Name() != op.OperationID+".json" {
-			return 0, fmt.Errorf("读取跨来源复制日志 %s 失败: %w", entry.Name(), err)
+			return 0, fmt.Errorf("读取复制日志 %s 失败: %w", entry.Name(), err)
 		}
 		if op.SourceStorageSourceID == storageSourceID || op.TargetStorageSourceID == storageSourceID {
 			count++
@@ -278,18 +277,18 @@ func (s *Service) RecoverCopyOperations() (CopyRecoveryResult, error) {
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			return result, fmt.Errorf("跨来源复制日志 %s 不能是符号链接", entry.Name())
+			return result, fmt.Errorf("复制日志 %s 不能是符号链接", entry.Name())
 		}
 		op, err := s.readCopyOperation(filepath.Join(dir, entry.Name()))
 		if err != nil || entry.Name() != op.OperationID+".json" {
-			return result, fmt.Errorf("读取跨来源复制日志 %s 失败: %w", entry.Name(), err)
+			return result, fmt.Errorf("读取复制日志 %s 失败: %w", entry.Name(), err)
 		}
 		if _, err := s.sources.GetByID(op.SourceStorageSourceID); err != nil {
-			return result, fmt.Errorf("跨来源复制 %s 的源存储源不存在: %w", op.OperationID, err)
+			return result, fmt.Errorf("复制 %s 的源存储源不存在: %w", op.OperationID, err)
 		}
 		target, err := s.sources.GetByID(op.TargetStorageSourceID)
 		if err != nil {
-			return result, fmt.Errorf("跨来源复制 %s 的目标存储源不存在: %w", op.OperationID, err)
+			return result, fmt.Errorf("复制 %s 的目标存储源不存在: %w", op.OperationID, err)
 		}
 		databaseReady, err := uploadMarkerExists(s.copyDatabaseReadyPath(op.OperationID))
 		if err != nil {
@@ -302,7 +301,7 @@ func (s *Service) RecoverCopyOperations() (CopyRecoveryResult, error) {
 			}
 			info, err := os.Lstat(targetAbs)
 			if err != nil || info.Mode()&os.ModeSymlink != 0 || info.IsDir() != op.IsDirectory {
-				return result, fmt.Errorf("已提交跨来源复制 %s 的目标不存在或类型不符", op.OperationID)
+				return result, fmt.Errorf("已提交复制 %s 的目标不存在或类型不符", op.OperationID)
 			}
 			if err := s.rollbackCopyOperation(op, target, false); err != nil {
 				return result, err
