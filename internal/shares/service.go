@@ -18,7 +18,14 @@ import (
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
-const accessCookiePrefix = "omnistore_share_access_"
+const (
+	accessCookiePrefix   = "omnistore_share_access_"
+	unlockWindow         = 15 * time.Minute
+	unlockMaxPerShare    = 10
+	unlockMaxPerIP       = 50
+	unlockMaxTrackedKeys = 4096
+	unlockSweepInterval  = time.Minute
+)
 
 // AccessCookieName 为每个分享使用独立 Cookie，避免解锁另一个分享时覆盖现有会话。
 func AccessCookieName(shareKey string) string { return accessCookiePrefix + shareKey }
@@ -73,9 +80,26 @@ type CreateInput struct {
 	MaxDownloads int64
 }
 
+type unlockLimitKey struct {
+	ip      string
+	shareID int64
+}
+
+type unlockLimitEntry struct {
+	attempts []time.Time
+	lastSeen time.Time
+}
+
 type unlockLimiter struct {
-	mu       sync.Mutex
-	attempts map[string][]time.Time
+	mu          sync.Mutex
+	window      time.Duration
+	maxPerShare int
+	maxPerIP    int
+	maxKeys     int
+	byShare     map[unlockLimitKey]unlockLimitEntry
+	byIP        map[string]unlockLimitEntry
+	lastSweep   time.Time
+	now         func() time.Time
 }
 
 type Service struct {
@@ -87,7 +111,10 @@ type Service struct {
 }
 
 func NewService(db *sql.DB, srcSvc *sources.Service, fileSvc *files.Service, publicURL string) *Service {
-	return &Service{db: db, sources: srcSvc, files: fileSvc, publicURL: strings.TrimRight(publicURL, "/"), limiter: unlockLimiter{attempts: make(map[string][]time.Time)}}
+	return &Service{
+		db: db, sources: srcSvc, files: fileSvc, publicURL: strings.TrimRight(publicURL, "/"),
+		limiter: newUnlockLimiter(unlockWindow, unlockMaxPerShare, unlockMaxPerIP, unlockMaxTrackedKeys),
+	}
 }
 
 func (s *Service) Create(user *models.User, input CreateInput) (*Share, error) {
@@ -207,12 +234,12 @@ func (s *Service) PublicInfo(key, sessionToken string) (*PublicInfo, error) {
 }
 
 func (s *Service) Unlock(key, password, limiterKey string) (string, time.Time, error) {
-	if !s.allowUnlock(limiterKey + ":" + key) {
-		return "", time.Time{}, ErrPassword
-	}
 	share, passwordHash, err := s.getActiveWithPassword(key)
 	if err != nil {
 		return "", time.Time{}, err
+	}
+	if !s.limiter.allow(limiterKey, share.ID) {
+		return "", time.Time{}, ErrPassword
 	}
 	if !share.Protected || !auth.VerifyPassword(passwordHash, password) {
 		return "", time.Time{}, ErrPassword
@@ -355,21 +382,113 @@ func (s *Service) validSession(shareID int64, token string) (bool, error) {
 	return err == nil, err
 }
 
-func (s *Service) allowUnlock(key string) bool {
-	s.limiter.mu.Lock()
-	defer s.limiter.mu.Unlock()
-	now := time.Now()
-	cutoff := now.Add(-15 * time.Minute)
-	kept := s.limiter.attempts[key][:0]
-	for _, attempt := range s.limiter.attempts[key] {
+func newUnlockLimiter(window time.Duration, maxPerShare, maxPerIP, maxKeys int) unlockLimiter {
+	return unlockLimiter{
+		window: window, maxPerShare: maxPerShare, maxPerIP: maxPerIP, maxKeys: maxKeys,
+		byShare: make(map[unlockLimitKey]unlockLimitEntry), byIP: make(map[string]unlockLimitEntry),
+		now: time.Now,
+	}
+}
+
+func (l *unlockLimiter) allow(ip string, shareID int64) bool {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		ip = "unknown"
+	}
+	now := l.now()
+	cutoff := now.Add(-l.window)
+	key := unlockLimitKey{ip: ip, shareID: shareID}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.lastSweep.IsZero() || !now.Before(l.lastSweep.Add(unlockSweepInterval)) {
+		l.sweep(cutoff)
+		l.lastSweep = now
+	}
+
+	ipEntry := pruneUnlockEntry(l.byIP[ip], cutoff)
+	if len(ipEntry.attempts) >= l.maxPerIP {
+		l.storeIP(ip, ipEntry)
+		return false
+	}
+	shareEntry := pruneUnlockEntry(l.byShare[key], cutoff)
+	if len(shareEntry.attempts) >= l.maxPerShare {
+		l.storeShare(key, shareEntry)
+		return false
+	}
+
+	if _, exists := l.byIP[ip]; !exists && len(l.byIP) >= l.maxKeys {
+		l.evictOldestIP()
+	}
+	if _, exists := l.byShare[key]; !exists && len(l.byShare) >= l.maxKeys {
+		l.evictOldestShare()
+	}
+	ipEntry.attempts = append(ipEntry.attempts, now)
+	ipEntry.lastSeen = now
+	shareEntry.attempts = append(shareEntry.attempts, now)
+	shareEntry.lastSeen = now
+	l.byIP[ip] = ipEntry
+	l.byShare[key] = shareEntry
+	return true
+}
+
+func pruneUnlockEntry(entry unlockLimitEntry, cutoff time.Time) unlockLimitEntry {
+	kept := entry.attempts[:0]
+	for _, attempt := range entry.attempts {
 		if attempt.After(cutoff) {
 			kept = append(kept, attempt)
 		}
 	}
-	if len(kept) >= 10 {
-		s.limiter.attempts[key] = kept
-		return false
+	entry.attempts = kept
+	return entry
+}
+
+func (l *unlockLimiter) storeIP(ip string, entry unlockLimitEntry) {
+	if len(entry.attempts) == 0 {
+		delete(l.byIP, ip)
+		return
 	}
-	s.limiter.attempts[key] = append(kept, now)
-	return true
+	l.byIP[ip] = entry
+}
+
+func (l *unlockLimiter) storeShare(key unlockLimitKey, entry unlockLimitEntry) {
+	if len(entry.attempts) == 0 {
+		delete(l.byShare, key)
+		return
+	}
+	l.byShare[key] = entry
+}
+
+func (l *unlockLimiter) sweep(cutoff time.Time) {
+	for ip, entry := range l.byIP {
+		l.storeIP(ip, pruneUnlockEntry(entry, cutoff))
+	}
+	for key, entry := range l.byShare {
+		l.storeShare(key, pruneUnlockEntry(entry, cutoff))
+	}
+}
+
+func (l *unlockLimiter) evictOldestIP() {
+	var oldestKey string
+	var oldest time.Time
+	for key, entry := range l.byIP {
+		if oldestKey == "" || entry.lastSeen.Before(oldest) {
+			oldestKey, oldest = key, entry.lastSeen
+		}
+	}
+	delete(l.byIP, oldestKey)
+}
+
+func (l *unlockLimiter) evictOldestShare() {
+	var oldestKey unlockLimitKey
+	var oldest time.Time
+	first := true
+	for key, entry := range l.byShare {
+		if first || entry.lastSeen.Before(oldest) {
+			oldestKey, oldest, first = key, entry.lastSeen, false
+		}
+	}
+	if !first {
+		delete(l.byShare, oldestKey)
+	}
 }

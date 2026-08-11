@@ -4,8 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
@@ -64,6 +66,55 @@ func TestPasswordShareDownloadLimitAndDirectoryBrowse(t *testing.T) {
 	listing, err := service.Browse(directory.Key, "", "", files.ListOptions{Page: 1, PageSize: 20})
 	if err != nil || listing.Total != 1 || listing.Items[0].Name != "guide.txt" {
 		t.Fatalf("directory listing=%+v err=%v", listing, err)
+	}
+}
+
+func TestUnlockRejectsUnknownSharesWithoutAllocatingLimiterState(t *testing.T) {
+	service, _, _, _, _ := newShareTestService(t)
+	for i := 0; i < 100; i++ {
+		if _, _, err := service.Unlock("shr-random-"+strconv.Itoa(i), "wrong", "198.51.100.10"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("unknown share unlock error=%v", err)
+		}
+	}
+	if got := len(service.limiter.byShare); got != 0 {
+		t.Fatalf("unknown shares allocated %d share limiter keys", got)
+	}
+	if got := len(service.limiter.byIP); got != 0 {
+		t.Fatalf("unknown shares allocated %d IP limiter keys", got)
+	}
+}
+
+func TestUnlockLimiterBoundsShareAndIPWindowsAndSweepsState(t *testing.T) {
+	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	limiter := newUnlockLimiter(time.Minute, 2, 3, 2)
+	limiter.now = func() time.Time { return now }
+
+	if !limiter.allow("198.51.100.1", 1) || !limiter.allow("198.51.100.1", 1) {
+		t.Fatal("share attempts below threshold were rejected")
+	}
+	if limiter.allow("198.51.100.1", 1) {
+		t.Fatal("share threshold was not enforced")
+	}
+	if !limiter.allow("198.51.100.1", 2) {
+		t.Fatal("second share attempt was rejected before IP threshold")
+	}
+	if limiter.allow("198.51.100.1", 2) {
+		t.Fatal("IP total threshold was not enforced across shares")
+	}
+
+	if !limiter.allow("198.51.100.2", 2) || !limiter.allow("198.51.100.3", 3) {
+		t.Fatal("independent IP attempts were rejected")
+	}
+	if len(limiter.byIP) > 2 || len(limiter.byShare) > 2 {
+		t.Fatalf("limiter exceeded key cap: IP=%d share=%d", len(limiter.byIP), len(limiter.byShare))
+	}
+
+	now = now.Add(2 * time.Minute)
+	if !limiter.allow("198.51.100.4", 4) {
+		t.Fatal("expired limiter window was not released")
+	}
+	if len(limiter.byIP) != 1 || len(limiter.byShare) != 1 {
+		t.Fatalf("TTL sweep retained expired state: IP=%d share=%d", len(limiter.byIP), len(limiter.byShare))
 	}
 }
 
