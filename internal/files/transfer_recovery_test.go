@@ -54,6 +54,10 @@ func TestRecoverTransferRollsBackDatabaseCommittedBeforeStageMarker(t *testing.T
 	if err := service.syncTransferRecords(source, target, plan, true, &userID); err != nil {
 		t.Fatal(err)
 	}
+	reservedPath := filepath.Join(sourceRoot, ".omnistore-upload-0123456789abcdef.tmp")
+	if err := os.WriteFile(reservedPath, []byte("external data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := service.RecoverTransferOperations()
 	if err != nil {
@@ -67,6 +71,9 @@ func TestRecoverTransferRollsBackDatabaseCommittedBeforeStageMarker(t *testing.T
 	}
 	if _, err := os.Stat(filepath.Join(targetRoot, "archive", "image.jpg")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("rolled back target still exists: %v", err)
+	}
+	if content, err := os.ReadFile(reservedPath); err != nil || string(content) != "external data" {
+		t.Fatalf("unrelated reserved file content=%q err=%v", content, err)
 	}
 	assertFileRecord(t, service, source.ID, "image.jpg", "image.jpg", 4, models.FileOwnerUser, &userID)
 	assertNoFileRecord(t, service, target.ID, "archive/image.jpg")

@@ -567,7 +567,7 @@ func (s *Service) rollbackTransferRecords(source, target *models.StorageSource, 
 			_ = tx.Rollback()
 		}
 	}
-	_, err := s.ReconcileSource(source)
+	_, err := s.reconcileSourceForRecovery(source)
 	if txErr != nil {
 		return txErr
 	}

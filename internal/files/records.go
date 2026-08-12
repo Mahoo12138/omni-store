@@ -38,6 +38,16 @@ type PreparedFileRecord struct {
 
 // ReconcileSource 扫描真实普通文件并校准 active 台账；新发现文件标记为 unowned。
 func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileResult, error) {
+	return s.reconcileSource(src, true)
+}
+
+// reconcileSourceForRecovery 只供 journal 恢复使用。保留名与当前恢复无关时跳过，
+// 避免宿主机同名文件阻断启动；公开校准仍通过 ReconcileSource 明确报错。
+func (s *Service) reconcileSourceForRecovery(src *models.StorageSource) (*models.ReconcileResult, error) {
+	return s.reconcileSource(src, false)
+}
+
+func (s *Service) reconcileSource(src *models.StorageSource, rejectReserved bool) (*models.ReconcileResult, error) {
 	root, err := security.ResolveInSource(src.RootPath, "")
 	if err != nil {
 		return nil, err
@@ -46,7 +56,7 @@ func (s *Service) ReconcileSource(src *models.StorageSource) (*models.ReconcileR
 	if err != nil {
 		return nil, err
 	}
-	filesOnDisk, result, err := scanSourceFiles(root, matcher)
+	filesOnDisk, result, err := scanSourceFiles(root, matcher, rejectReserved)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +134,7 @@ func (s *Service) CreateSource(in sources.CreateInput) (*models.StorageSource, *
 	if !preview.IsEmpty && !in.ImportExisting {
 		return nil, nil, sources.ErrExistingConfirmationRequired
 	}
-	filesOnDisk, result, err := scanSourceFiles(preview.RootPath, security.NewExcludeMatcher(preview.ExcludePatterns))
+	filesOnDisk, result, err := scanSourceFiles(preview.RootPath, security.NewExcludeMatcher(preview.ExcludePatterns), true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +158,7 @@ func (s *Service) CreateSource(in sources.CreateInput) (*models.StorageSource, *
 	return src, result, nil
 }
 
-func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]scannedFile, *models.ReconcileResult, error) {
+func scanSourceFiles(root string, matcher *security.ExcludeMatcher, rejectReserved bool) (map[string]scannedFile, *models.ReconcileResult, error) {
 	filesOnDisk := make(map[string]scannedFile)
 	result := &models.ReconcileResult{}
 	err := filepath.WalkDir(root, func(absPath string, entry os.DirEntry, walkErr error) error {
@@ -167,7 +177,13 @@ func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]
 		}
 		rel = filepath.ToSlash(rel)
 		if security.IsReservedName(entry.Name()) {
-			return fmt.Errorf("%w: %s", security.ErrReservedName, rel)
+			if rejectReserved {
+				return fmt.Errorf("%w: %s", security.ErrReservedName, rel)
+			}
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if matcher.MatchPrefix(rel) {
 			if entry.IsDir() {
