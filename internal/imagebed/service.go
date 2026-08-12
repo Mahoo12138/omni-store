@@ -290,6 +290,9 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	if err != nil {
 		return nil, err
 	}
+	if err := security.ValidateUserRelPath(relDir); err != nil {
+		return nil, fmt.Errorf("%w: %s", files.ErrInvalid, err)
+	}
 	quotaOwnerUserID := ownerUserID
 	if ownerType != models.ImageOwnerUser {
 		quotaOwnerUserID = nil

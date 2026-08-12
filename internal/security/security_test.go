@@ -50,6 +50,27 @@ func TestValidateFileName(t *testing.T) {
 	}
 }
 
+func TestReservedNamesAreRejectedInEveryPathSegment(t *testing.T) {
+	reserved := []string{
+		".omnistore-upload-0123456789abcdef.tmp",
+		".omnistore-copy-0123456789abcdef01234567.staging",
+		".omnistore-upload-not-created-by-us.tmp",
+	}
+	for _, name := range reserved {
+		if err := ValidateFileName(name); !errors.Is(err, ErrReservedName) {
+			t.Errorf("ValidateFileName(%q) error=%v, want ErrReservedName", name, err)
+		}
+		if err := ValidateUserRelPath("parent/" + name + "/child"); !errors.Is(err, ErrReservedName) {
+			t.Errorf("ValidateUserRelPath(%q) error=%v, want ErrReservedName", name, err)
+		}
+	}
+	for _, relPath := range []string{"photos/2026", ".env", ".omnistore-write-test-user-file"} {
+		if err := ValidateUserRelPath(relPath); err != nil {
+			t.Errorf("ValidateUserRelPath(%q): %v", relPath, err)
+		}
+	}
+}
+
 func TestExcludeMatcher(t *testing.T) {
 	matcher := NewExcludeMatcher([]string{"private/**", "**/*.tmp", `cache\*`, " "})
 	tests := []struct {

@@ -166,13 +166,10 @@ func scanSourceFiles(root string, matcher *security.ExcludeMatcher) (map[string]
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		if matcher.MatchPrefix(rel) {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+		if security.IsReservedName(entry.Name()) {
+			return fmt.Errorf("%w: %s", security.ErrReservedName, rel)
 		}
-		if isInternalName(entry.Name()) {
+		if matcher.MatchPrefix(rel) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}

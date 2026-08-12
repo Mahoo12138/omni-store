@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -68,6 +69,10 @@ func (s *Service) Preflight(in PreflightInput) (*DirectoryPreview, error) {
 }
 
 func previewDirectory(rootPath string, patterns []string) (*DirectoryPreview, error) {
+	// 预览仍只展示首层；安全校验会递归检查名称，但不会读取文件内容。
+	if err := rejectReservedNames(rootPath); err != nil {
+		return nil, err
+	}
 	items, err := os.ReadDir(rootPath)
 	if err != nil {
 		return nil, err
@@ -128,4 +133,23 @@ func previewDirectory(rootPath string, patterns []string) (*DirectoryPreview, er
 		preview.Warnings = append(preview.Warnings, "预览仅展示按名称排序后的前 20 个可见首层条目。")
 	}
 	return preview, nil
+}
+
+func rejectReservedNames(rootPath string) error {
+	return filepath.WalkDir(rootPath, func(absPath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if absPath == rootPath {
+			return nil
+		}
+		if security.IsReservedName(entry.Name()) {
+			rel, err := filepath.Rel(rootPath, absPath)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("%w: %s", security.ErrReservedName, filepath.ToSlash(rel))
+		}
+		return nil
+	})
 }

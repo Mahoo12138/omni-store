@@ -1,9 +1,30 @@
 package security
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrReservedName 表示路径使用了 OmniStore 恢复流程保留的内部名称。
+var ErrReservedName = errors.New("路径包含 OmniStore 保留名称，请先重命名")
+
+// IsReservedName 判断单个名称是否属于 OmniStore 内部操作命名空间。
+// 外部已存在的同名文件仍是用户数据，但不能经 API 新建、写入或作为移动目标。
+func IsReservedName(name string) bool {
+	return strings.HasPrefix(name, ".omnistore-upload-") ||
+		strings.HasPrefix(name, ".omnistore-copy-")
+}
+
+// ValidateUserRelPath 拒绝用户路径任意一段使用内部保留名称。
+func ValidateUserRelPath(relPath string) error {
+	for _, segment := range strings.Split(relPath, "/") {
+		if IsReservedName(segment) {
+			return fmt.Errorf("%w: %s", ErrReservedName, segment)
+		}
+	}
+	return nil
+}
 
 // NormalizeRelPath 规范化存储源内部相对路径（README §10.8 / §28）。
 // 输入形如 "/2026/travel" 或 "2026/travel"，输出统一为不带前导斜杠、
@@ -49,6 +70,9 @@ func ValidateFileName(name string) error {
 	}
 	if strings.ContainsAny(name, "/\\") {
 		return fmt.Errorf("文件名不能包含斜杠")
+	}
+	if IsReservedName(name) {
+		return fmt.Errorf("%w: %s", ErrReservedName, name)
 	}
 	for _, r := range name {
 		if r < 32 {

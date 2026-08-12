@@ -221,6 +221,21 @@ func TestPreflightExistingDirectoryUsesDefaultExcludes(t *testing.T) {
 	}
 }
 
+func TestPreflightRejectsExistingReservedNames(t *testing.T) {
+	service, base := newPreflightService(t)
+	root := filepath.Join(base, "reserved-existing")
+	reservedDir := filepath.Join(root, ".omnistore-upload-0123456789abcdef.tmp")
+	if err := os.MkdirAll(reservedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(reservedDir, "hidden.bin"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Preflight(PreflightInput{RootPath: root}); err == nil || !strings.Contains(err.Error(), "保留名称") {
+		t.Fatalf("reserved preflight error=%v", err)
+	}
+}
+
 func TestPreflightHonorsExplicitEmptyExcludePatterns(t *testing.T) {
 	service, base := newPreflightService(t)
 	root := filepath.Join(base, "custom-patterns")

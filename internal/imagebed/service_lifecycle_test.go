@@ -121,6 +121,21 @@ func TestUserAndAnonymousImageLifecycle(t *testing.T) {
 	}
 }
 
+func TestImageUploadRejectsReservedTargetPath(t *testing.T) {
+	service, _, source, user, _, _ := newImageLifecycleFixture(t)
+	_, err := service.upload(
+		source,
+		"images/.omnistore-upload-0123456789abcdef.tmp/nested",
+		"image.png",
+		models.ImageOwnerUser,
+		&user.ID,
+		bytes.NewReader(testPNGBytes(t)),
+	)
+	if !errors.Is(err, files.ErrInvalid) {
+		t.Fatalf("reserved image target error=%v, want ErrInvalid", err)
+	}
+}
+
 func newImageLifecycleFixture(t *testing.T) (*Service, *sources.Service, *models.StorageSource, *models.User, *models.User, string) {
 	t.Helper()
 	base := t.TempDir()

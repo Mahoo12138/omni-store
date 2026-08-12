@@ -91,26 +91,40 @@ func TestStorageQuotaSerializesConcurrentUploads(t *testing.T) {
 	}
 }
 
-func TestStorageUsageCountsExcludedAndUserReservedNamesButNotInternalTemps(t *testing.T) {
+func TestStorageUsageCountsEveryPhysicalRegularFile(t *testing.T) {
 	service, source, root := newQuotaTestService(t, 0)
 	for name, content := range map[string]string{
 		"visible.txt":                            "12",
 		".env":                                   "345",
 		".omnistore-upload-not-ours.tmp":         "6789",
-		".omnistore-upload-0123456789abcdef.tmp": "not-counted",
-		".omnistore-upload-0123456789abcdef01234567.backup": "not-counted-either",
+		".omnistore-upload-0123456789abcdef.tmp": "counted",
+		".omnistore-upload-0123456789abcdef01234567.backup": "also-counted",
 	} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
 	usage, err := service.StorageUsage(source)
-	if err != nil || usage != 9 {
+	if err != nil || usage != 28 {
 		t.Fatalf("usage=%d err=%v", usage, err)
 	}
 	quota, err := service.StorageQuota(source)
-	if err != nil || !quota.Unlimited || quota.QuotaBytes != 0 || quota.UsageBytes != 9 {
+	if err != nil || !quota.Unlimited || quota.QuotaBytes != 0 || quota.UsageBytes != 28 {
 		t.Fatalf("unlimited quota=%+v err=%v", quota, err)
+	}
+}
+
+func TestReservedInternalPathsCannotBypassSourceQuota(t *testing.T) {
+	service, source, _ := newQuotaTestService(t, 1024*1024)
+	reserved := ".omnistore-upload-0123456789abcdef.tmp"
+	if _, err := service.Mkdir(source, "", reserved); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved directory error=%v", err)
+	}
+	if _, _, err := service.Upload(source, "", reserved, strings.NewReader("data"), false); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved file error=%v", err)
+	}
+	if _, _, err := service.Upload(source, reserved, "nested.bin", strings.NewReader("data"), false); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved parent error=%v", err)
 	}
 }
 

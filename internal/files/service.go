@@ -150,8 +150,8 @@ func (s *Service) StorageSourceByID(storageSourceID int64) (*models.StorageSourc
 	return s.sources.GetByID(storageSourceID)
 }
 
-// StorageUsage 实时统计存储源内全部普通文件，不跟随 symlink；排除规则不减少物理用量。
-// OmniStore 严格命名的上传临时文件不计入最终用量。
+// StorageUsage 实时统计存储源内全部普通文件，不跟随 symlink；排除规则和保留名称
+// 都不减少物理用量。文件名不是内部所有权证明，宿主机写入的同名文件必须计量。
 func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
 	root, err := security.ResolveInSource(src.RootPath, "")
 	if err != nil {
@@ -166,12 +166,6 @@ func (s *Service) StorageUsage(src *models.StorageSource) (int64, error) {
 			return walkErr
 		}
 		if absPath == root {
-			return nil
-		}
-		if isInternalName(entry.Name()) {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		info, err := entry.Info()
@@ -357,6 +351,9 @@ func (s *Service) applyUserQuotaGuard(guard *QuotaWriteGuard, userID, storageSou
 func (s *Service) prepare(src *models.StorageSource, relInput string) (relPath, absPath string, err error) {
 	relPath, err = security.NormalizeRelPath(relInput)
 	if err != nil {
+		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
+	}
+	if err := security.ValidateUserRelPath(relPath); err != nil {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	matcher, err := s.sources.Matcher(src.ID)

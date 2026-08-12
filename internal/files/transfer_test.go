@@ -101,6 +101,25 @@ func TestCopyWithinSourceUsesCrashSafeStaging(t *testing.T) {
 	}
 }
 
+func TestMoveCopyAndRenameRejectReservedTargets(t *testing.T) {
+	service, source, root := newQuotaTestService(t, 0)
+	if err := os.WriteFile(filepath.Join(root, "source.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Rename(source, "source.txt", ".omnistore-upload-0123456789abcdef.tmp"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved rename error=%v", err)
+	}
+	if _, err := service.Move(source, "source.txt", "folder/.omnistore-copy-0123456789abcdef01234567.staging"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved move error=%v", err)
+	}
+	if _, err := service.Copy(source, source, "source.txt", ".omnistore-upload-0123456789abcdef.tmp/copied.txt", nil); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("reserved copy parent error=%v", err)
+	}
+	if content, err := os.ReadFile(filepath.Join(root, "source.txt")); err != nil || string(content) != "data" {
+		t.Fatalf("rejected targets changed source content=%q err=%v", content, err)
+	}
+}
+
 func TestMoveAcrossSourcesPreservesOwnershipAndImageLocation(t *testing.T) {
 	service, source, sourceRoot := newQuotaTestService(t, 0)
 	targetRoot := filepath.Join(filepath.Dir(sourceRoot), "move-target")

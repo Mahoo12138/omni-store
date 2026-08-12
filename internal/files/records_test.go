@@ -79,10 +79,6 @@ func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".omnistore-upload-0123456789abcdef01234567.backup"), []byte("old"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
 	first, err := service.ReconcileSource(source)
 	if err != nil {
 		t.Fatalf("first reconcile: %v", err)
@@ -107,6 +103,17 @@ func TestReconcileSourceImportsUpdatesAndRemovesFiles(t *testing.T) {
 	usage, err := service.LedgerSourceUsage(source.ID)
 	if err != nil || usage != 7 {
 		t.Fatalf("ledger usage=%d err=%v", usage, err)
+	}
+}
+
+func TestReconcileSourceRejectsReservedNames(t *testing.T) {
+	service, source, root := newQuotaTestService(t, 0)
+	reserved := filepath.Join(root, ".omnistore-copy-0123456789abcdef01234567.staging")
+	if err := os.WriteFile(reserved, []byte("external data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReconcileSource(source); err == nil || !strings.Contains(err.Error(), "保留名称") {
+		t.Fatalf("reserved reconcile error=%v", err)
 	}
 }
 
