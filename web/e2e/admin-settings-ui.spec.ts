@@ -171,7 +171,7 @@ test('credential overview opens one isolated management modal at a time', async 
   await expect(webdavDialog).toBeVisible()
   await expect(webdav).toContainText('挂载路径')
   await expect(webdav).toContainText('/dav')
-  await webdav.getByRole('button', { name: '重置 Token', exact: true }).click()
+  await webdavDialog.getByRole('button', { name: '重置 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '重置 WebDAV' })).toBeVisible()
   await page.getByRole('dialog', { name: '重置 WebDAV' }).getByRole('button', { name: '取消', exact: true }).click()
   await expect(webdavDialog).toBeVisible()
