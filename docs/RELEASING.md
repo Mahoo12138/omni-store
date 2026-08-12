@@ -71,6 +71,9 @@ git push origin v1.0.0-rc.1
 4. 覆盖登录、上传/下载、权限、分享、回收站、搜索、WebDAV、图床和显式启用的 S3 冒烟流程。
 5. 复制一份由冻结基线创建的数据库并重复启动，确认 `schema_migrations.applied_at` 不变且 `v1.0.0` 不会重放。冻结前开发数据库不作为稳定版升级输入。
 6. 下载发布压缩包并按 `checksums.txt` 验证 SHA-256。
+7. 在隔离数据目录执行真实 `SIGKILL` 验收，至少覆盖 overwrite upload、目录复制、跨来源移动、同来源移动、移入回收站、恢复、永久删除、Multipart Complete 和图床上传。每类操作使用多个随机 kill 延迟重复运行；每次重启后同时核对 SQLite、来源目录、trash payload 和 operation journal，不能只检查 HTTP 恢复可用。
+
+Crash 验收必须使用隔离夹具或 RC 实机数据副本，禁止指向生产数据目录。单元故障注入通过但进程级验收失败时，应修复已有状态机或提交边界；除非符合[开发文档](DEVELOPMENT.md)定义的 journal 三条件，否则不要通过增加新的操作日志规避失败。
 
 验收发现问题时修复到新提交并创建下一个 `rc.N`，不要移动已有 RC 标签。
 
