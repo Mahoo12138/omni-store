@@ -171,7 +171,18 @@ test('credential overview opens one isolated management modal at a time', async 
   await expect(webdavDialog).toBeVisible()
   await expect(webdav).toContainText('挂载路径')
   await expect(webdav).toContainText('/dav')
-  await webdavDialog.getByRole('button', { name: '重置 Token', exact: true }).click()
+  const generateWebdavToken = webdavDialog.getByRole('button', { name: '生成 Token', exact: true })
+  if (await generateWebdavToken.isVisible()) {
+    await generateWebdavToken.click()
+    const revealedWebdavToken = page.getByRole('dialog', { name: '新的 Token', exact: true })
+    await expect(revealedWebdavToken).toBeVisible()
+    await expect(revealedWebdavToken.getByLabel('Token')).not.toHaveValue('')
+    await revealedWebdavToken.getByRole('button', { name: '关闭', exact: true }).click()
+    await expect(revealedWebdavToken).toBeHidden()
+  }
+  const resetWebdavToken = webdavDialog.getByRole('button', { name: '重置 Token', exact: true })
+  await expect(resetWebdavToken).toBeVisible()
+  await resetWebdavToken.click()
   await expect(page.getByRole('dialog', { name: '重置 WebDAV' })).toBeVisible()
   const webdavDialogLayers = await page.locator('[data-dialog-backdrop]').evaluateAll((elements) => elements.map((element) => ({
     depth: Number(element.getAttribute('data-dialog-depth')),
@@ -222,6 +233,7 @@ test('credential overview opens one isolated management modal at a time', async 
   await webdavEntry.click()
   const mobileWebdavDialog = page.getByRole('dialog', { name: 'WebDAV', exact: true })
   await expect(mobileWebdavDialog.getByRole('region', { name: 'WebDAV', exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: '新的 Token', exact: true })).toHaveCount(0)
   await mobileWebdavDialog.getByRole('button', { name: '完成', exact: true }).click()
   await imageApiEntry.click()
   const mobileImageDialog = page.getByRole('dialog', { name: '图床 API', exact: true })

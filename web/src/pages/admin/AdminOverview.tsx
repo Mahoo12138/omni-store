@@ -338,6 +338,10 @@ function ProfileSection() {
     onError: () => alert('重置失败'),
   })
 
+  function dismissNewToken(type: 'webdav') {
+    setNewTokens((prev) => ({ ...prev, [type]: '' }))
+  }
+
   function onSaveProfile(e: FormEvent) {
     e.preventDefault()
     if (displayName.trim()) profileMut.mutate(displayName.trim())
@@ -533,6 +537,7 @@ function ProfileSection() {
                 status={tokens.data?.webdav}
                 newToken={newTokens.webdav}
                 onReset={(t) => resetMut.mutate(t)}
+                onDismiss={dismissNewToken}
                 pending={tokens.isPending}
                 error={tokens.isError}
                 resetting={resetMut.isPending}
@@ -585,6 +590,7 @@ function TokenBlock({
   status,
   newToken,
   onReset,
+  onDismiss,
   pending,
   error,
   resetting,
@@ -594,12 +600,20 @@ function TokenBlock({
   status?: { exists: boolean; created_at?: string | null; last_used_at?: string | null }
   newToken?: string
   onReset: (t: 'webdav') => void
+  onDismiss: (t: 'webdav') => void
   pending: boolean
   error: boolean
   resetting: boolean
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
+  useEffect(() => {
+    if (newToken) setShowOpen(true)
+  }, [newToken])
+  const closeTokenReveal = () => {
+    setShowOpen(false)
+    onDismiss(type)
+  }
   return (
     <section className={css.credentialGroup} aria-label="WebDAV">
       <CredentialGroupHeader
@@ -677,11 +691,14 @@ function TokenBlock({
       {/* 新生成的 Token 展示弹窗 */}
       <DialogWrap
         open={showOpen}
-        onOpenChange={setShowOpen}
+        onOpenChange={(open) => {
+          if (open) setShowOpen(true)
+          else closeTokenReveal()
+        }}
         title="新的 Token"
         description="请立即复制保存，关闭后不再显示。"
         footer={
-          <Button variant="secondary" onClick={() => setShowOpen(false)}>
+          <Button variant="secondary" onClick={closeTokenReveal}>
             关闭
           </Button>
         }
@@ -699,25 +716,9 @@ function TokenBlock({
             </div>
           </Field>
         ) : null}
-        {/* 当 newToken 出现时自动打开 */}
-        <TokenAutoOpen token={newToken} onOpen={setShowOpen} />
       </DialogWrap>
     </section>
   )
-}
-
-// 监视 token 变化，首次出现时自动打开
-function TokenAutoOpen({
-  token,
-  onOpen,
-}: {
-  token?: string
-  onOpen: (v: boolean) => void
-}) {
-  useEffect(() => {
-    if (token) onOpen(true)
-  }, [token, onOpen])
-  return null
 }
 
 function ImageBedTokenManager() {
