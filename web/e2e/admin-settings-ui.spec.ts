@@ -173,6 +173,13 @@ test('credential overview opens one isolated management modal at a time', async 
   await expect(webdav).toContainText('/dav')
   await webdavDialog.getByRole('button', { name: '重置 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '重置 WebDAV' })).toBeVisible()
+  const webdavDialogLayers = await page.locator('[data-dialog-backdrop]').evaluateAll((elements) => elements.map((element) => ({
+    depth: Number(element.getAttribute('data-dialog-depth')),
+    zIndex: Number(getComputedStyle(element).zIndex),
+  })))
+  expect(webdavDialogLayers).toHaveLength(2)
+  expect(webdavDialogLayers[1].depth).toBeGreaterThan(webdavDialogLayers[0].depth)
+  expect(webdavDialogLayers[1].zIndex).toBeGreaterThan(webdavDialogLayers[0].zIndex)
   await page.getByRole('dialog', { name: '重置 WebDAV' }).getByRole('button', { name: '取消', exact: true }).click()
   await expect(webdavDialog).toBeVisible()
   await webdavDialog.getByRole('button', { name: '完成', exact: true }).click()

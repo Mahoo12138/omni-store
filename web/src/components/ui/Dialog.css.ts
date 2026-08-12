@@ -2,13 +2,14 @@ import { globalStyle, style } from '@vanilla-extract/css'
 import { vars } from '../../styles/theme.css'
 
 // Dialog（base-ui）容器、面板、背景层
+export const dialogBaseZIndex = vars.zIndex.modal
+
 export const viewport = style({
   position: 'fixed',
   inset: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: vars.zIndex.modal,
 })
 
 export const backdrop = style({
@@ -16,12 +17,11 @@ export const backdrop = style({
   inset: 0,
   backgroundColor: 'oklch(0.2 0.02 262 / 0.45)',
   backdropFilter: 'blur(2px)',
-  zIndex: vars.zIndex.modal,
 })
 
 export const popup = style({
   position: 'relative',
-  zIndex: vars.zIndex.modal,
+  zIndex: 0,
   width: 'min(480px, calc(100vw - 32px))',
   maxHeight: 'calc(100vh - 64px)',
   display: 'flex',
