@@ -331,34 +331,6 @@ func StartS3MultipartCleanup(store *s3api.MultipartStore, logger *slog.Logger, s
 	}()
 }
 
-// StartUploadCleanup 在启动时及之后每小时清理一次过期上传临时文件。
-func StartUploadCleanup(fileService *files.Service, maxAge time.Duration, logger *slog.Logger, stop <-chan struct{}) {
-	go func() {
-		cleanup := func() {
-			result, err := fileService.CleanupStaleUploads(maxAge)
-			if err != nil {
-				logger.Warn("清理上传临时文件未完全成功", "err", err, "removed", result.RemovedFiles)
-				return
-			}
-			if result.RemovedFiles > 0 {
-				logger.Info("清理上传临时文件", "count", result.RemovedFiles, "sources", result.ScannedSources)
-			}
-		}
-
-		cleanup()
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				cleanup()
-			case <-stop:
-				return
-			}
-		}
-	}()
-}
-
 // StartWebDAVLockCleanup 在启动时及之后每小时清理过期的持久锁。
 func StartWebDAVLockCleanup(fileService *files.Service, logger *slog.Logger, stop <-chan struct{}) {
 	go func() {

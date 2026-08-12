@@ -290,8 +290,6 @@ MVP 有三个独立大小限制：
 ```yaml
 upload:
   max_file_size_mb: 1024
-  cleanup_stale_files: true
-  temp_file_max_age_hours: 24
 
 image_bed:
   user_max_file_size_mb: 20
@@ -387,14 +385,13 @@ MVP 只做普通流式上传。
 3. WebDAV `PROPFIND`。
 4. 图床访问。
 
-服务启动时先恢复有操作日志的普通上传；之后每小时扫描存储源，默认清理超过 24 小时且没有恢复日志接管的上传临时文件。恢复期间的严格内部备份同样从所有列表、配额和台账扫描中隐藏，但只能由恢复状态机删除，后台超时清理不会碰它。
+普通文件与图床上传都采用 journal-first：先生成 operation ID 与临时路径并持久化 planned journal，随后才创建临时文件；临时文件完整写入并 fsync 后，再持久化 prepared journal，最后进入 rename 与 SQLite 提交阶段。启动恢复只处理 journal 明确引用的临时文件和备份。
 
 安全边界：
 
-1. 只删除严格匹配 `.omnistore-upload-{16位小写十六进制}.tmp` 的普通文件。
-2. 不跟随或删除符号链接。
-3. 不删除目录、近 24 小时内的文件或仅仅具有相似前缀的用户文件。
-4. 单个存储源扫描失败不会阻止其他存储源继续清理，失败信息只写应用日志。
-5. 可以通过 `upload.cleanup_stale_files: false` 完全关闭后台清理。
+1. 文件名不能证明内部所有权；没有 journal 的同名文件一律不删除。
+2. planned journal 中断时，只回滚它明确引用的临时路径，不触碰最终路径。
+3. prepared journal 持久化后，恢复器才允许根据摘要、备份与 SQLite 阶段标记完成或回滚上传。
+4. `.omnistore-upload-*` 与 `.omnistore-copy-*` 是 API 新建路径的系统保留名，但外部已存在的同名文件仍按用户数据对待。
 
 ---

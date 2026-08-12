@@ -30,14 +30,7 @@ func stageFileUploadOperation(t *testing.T, service *Service, source *models.Sto
 	name, content string, replaced bool, userID int64) (uploadOperation, string, string) {
 	t.Helper()
 	targetAbs := filepath.Join(source.RootPath, name)
-	tempAbs, size, contentSHA256, err := writeUploadTemp(filepath.Dir(targetAbs), strings.NewReader(content), 0, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := syncDirectory(filepath.Dir(targetAbs)); err != nil {
-		t.Fatal(err)
-	}
-	op, err := service.newUploadOperation(source, filepath.ToSlash(name), tempAbs, replaced, size, contentSHA256,
+	op, err := service.newUploadOperationPlan(source, filepath.ToSlash(name), replaced,
 		models.FileOwnerUser, &userID, &userID)
 	if err != nil {
 		t.Fatal(err)
@@ -45,16 +38,85 @@ func stageFileUploadOperation(t *testing.T, service *Service, source *models.Sto
 	if err := service.writeUploadOperation(op); err != nil {
 		t.Fatal(err)
 	}
+	tempAbs, _, _, err := service.uploadPaths(op, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, contentSHA256, mtimeUnixNano, err := writeUploadTempAt(tempAbs, strings.NewReader(content), 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncDirectory(filepath.Dir(targetAbs)); err != nil {
+		t.Fatal(err)
+	}
+	op.Size, op.ContentSHA256, op.MTimeUnixNano = size, contentSHA256, mtimeUnixNano
+	if err := service.writePreparedUploadOperation(op); err != nil {
+		t.Fatal(err)
+	}
 	return op, tempAbs, targetAbs
 }
 
 func assertNoFileUploadOperation(t *testing.T, service *Service, op uploadOperation) {
 	t.Helper()
-	for _, item := range []string{service.uploadOperationPath(op.OperationID), service.uploadDatabaseReadyPath(op.OperationID)} {
+	for _, item := range []string{service.uploadOperationPath(op.OperationID), service.uploadPreparedPath(op.OperationID), service.uploadDatabaseReadyPath(op.OperationID)} {
 		if _, err := os.Lstat(item); !errors.Is(err, fs.ErrNotExist) {
 			t.Fatalf("upload recovery artifact remains at %s: %v", item, err)
 		}
 	}
+}
+
+func TestRecoverFileUploadRollsBackPlannedTempWithoutTouchingUnjournaledNames(t *testing.T) {
+	service, source, root, userID := newFileUploadRecoveryFixture(t)
+	op, err := service.newUploadOperationPlan(source, "planned.txt", false, models.FileOwnerUser, &userID, &userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.writeUploadOperation(op); err != nil {
+		t.Fatal(err)
+	}
+	tempAbs, _, _, err := service.uploadPaths(op, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tempAbs, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unowned := filepath.Join(root, ".omnistore-upload-0123456789abcdef.tmp")
+	if err := os.WriteFile(unowned, []byte("user data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.RecoverFileUploadOperations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RolledBackUploads != 1 {
+		t.Fatalf("unexpected recovery result: %+v", result)
+	}
+	if _, err := os.Stat(tempAbs); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("planned temp remains: %v", err)
+	}
+	if content, err := os.ReadFile(unowned); err != nil || string(content) != "user data" {
+		t.Fatalf("unjournaled file content=%q err=%v", content, err)
+	}
+}
+
+func TestRecoverFileUploadRollsBackPlanBeforeTempCreation(t *testing.T) {
+	service, source, _, userID := newFileUploadRecoveryFixture(t)
+	op, err := service.newUploadOperationPlan(source, "not-created.txt", false, models.FileOwnerUser, &userID, &userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.writeUploadOperation(op); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.RecoverFileUploadOperations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RolledBackUploads != 1 {
+		t.Fatalf("unexpected recovery result: %+v", result)
+	}
+	assertNoFileUploadOperation(t, service, op)
 }
 
 func TestRecoverFileUploadRollsBackNewFileIntent(t *testing.T) {

@@ -180,9 +180,9 @@ cd web && pnpm test
 
 请求级路径锁测试必须先确认竞争 goroutine 已进入等待队列，再断言祖先/后代阻塞，不能用“goroutine 可能尚未调度”的短超时制造假阳性。至少覆盖父写锁阻塞子写锁、子读锁阻塞父写锁、等待中的父写锁阻止后来子读锁插队、兄弟路径并发、路径段边界和不同存储源隔离，并在 `-race -count=10` 下运行。
 
-图床上传日志位于 `$OMNISTORE_DATA_DIR/operations/image-uploads/`。恢复测试必须覆盖只有临时文件、只有最终文件、图片与台账已经提交但日志未清理、图片提交后又被移动、临时与最终文件同时存在、损坏日志，以及 `BEFORE INSERT ON file_records` 触发失败后的双表/文件整体回滚。并发用例至少 20 路，结束后应断言 `images`、用户 `file_records` 与真实普通文件数量完全一致且操作目录为空；恢复状态建议重复执行 20 次并结合 race 检测。
+图床上传日志位于 `$OMNISTORE_DATA_DIR/operations/image-uploads/`。恢复测试必须覆盖 planned journal 尚未创建临时文件、planned journal 对应半写临时文件、prepared journal 下只有临时文件或只有最终文件、图片与台账已经提交但日志未清理、图片提交后又被移动、临时与最终文件同时存在、损坏日志，以及 `BEFORE INSERT ON file_records` 触发失败后的双表/文件整体回滚。没有 journal 的 `.omnistore-upload-*` 同名文件必须原样保留。并发用例至少 20 路，结束后应断言 `images`、用户 `file_records` 与真实普通文件数量完全一致且操作目录为空；恢复状态建议重复执行 20 次并结合 race 检测。
 
-普通上传日志位于 `$OMNISTORE_DATA_DIR/operations/file-uploads/`，覆盖旧目标时另有同目录 `.omnistore-upload-{24位十六进制}.backup`。故障注入必须覆盖：新建意图仅有临时文件、临时文件已改名但台账未提交、覆盖意图尚未备份、旧目标已备份但新目标未安装、新目标与旧备份同时存在、台账已提交但阶段标记未写、`database-ready` 后目标又被合法移动或删除，以及损坏日志和临时/最终并存的歧义状态。`BEFORE INSERT ON file_records` 失败时应断言新建目标被删除、覆盖目标恢复旧内容且操作目录为空；至少 20 路 REST/WebDAV/S3 共用核心上传并发后，不得残留日志或内部备份，用户台账数量必须与真实最终文件一致。
+普通上传日志位于 `$OMNISTORE_DATA_DIR/operations/file-uploads/`，覆盖旧目标时另有同目录 `.omnistore-upload-{24位十六进制}.backup`。故障注入必须覆盖：planned journal 尚未创建临时文件、planned journal 对应半写临时文件、prepared journal 仅有临时文件、临时文件已改名但台账未提交、覆盖意图尚未备份、旧目标已备份但新目标未安装、新目标与旧备份同时存在、台账已提交但阶段标记未写、`database-ready` 后目标又被合法移动或删除，以及损坏日志和临时/最终并存的歧义状态。没有 journal 的 `.omnistore-upload-*` 同名文件必须原样保留。`BEFORE INSERT ON file_records` 失败时应断言新建目标被删除、覆盖目标恢复旧内容且操作目录为空；至少 20 路 REST/WebDAV/S3 共用核心上传并发后，不得残留日志或内部备份，用户台账数量必须与真实最终文件一致。
 
 Multipart 完成日志位于 `$OMNISTORE_DATA_DIR/operations/s3-multipart-completions/`。测试必须覆盖：仅有意图且对象缺失时保留 Upload/Part 供重试；已有相同内容旧对象时不能误判为已安装；最终对象已经落盘但 ETag 事务未提交时自动完成；ETag 与 Upload 删除同事务回滚；事务已提交但分片和日志未清理；提交后对象又被删除时不得复活；损坏日志阻止启动；24 小时清理跳过待恢复 upload ID；存储源删除保护。最终对象测试除大小外必须核对 SHA-256、Multipart ETag 与用户文件台账。至少 20 路不同 upload ID 并发完成并结合 race 检测，结束后 `s3_multipart_uploads`、分片目录和完成日志必须为空，`s3_object_etags` 数量应与成功对象一致。
 

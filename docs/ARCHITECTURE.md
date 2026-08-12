@@ -256,8 +256,6 @@ security:
 
 upload:
   max_file_size_mb: 1024
-  cleanup_stale_files: true
-  temp_file_max_age_hours: 24
 
 image_bed:
   root_path: "/images"
@@ -295,8 +293,6 @@ OMNISTORE_LOGIN_RATE_LIMIT_WINDOW_MINUTES=15
 OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP=50
 OMNISTORE_LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USERNAME=10
 OMNISTORE_UPLOAD_MAX_FILE_SIZE_MB=1024
-OMNISTORE_UPLOAD_CLEANUP_STALE_FILES=true
-OMNISTORE_UPLOAD_TEMP_FILE_MAX_AGE_HOURS=24
 OMNISTORE_IMAGE_BED_ROOT_PATH=/images
 OMNISTORE_IMAGE_BED_USER_MAX_FILE_SIZE_MB=20
 OMNISTORE_IMAGE_BED_ANONYMOUS_MAX_FILE_SIZE_MB=10
@@ -465,9 +461,9 @@ storage_source_id + normalized_relative_path
 
 同来源重命名/移动和永久删除使用 `pth-*` 路径意图。移动在原子 `rename` 与目录同步后，将 `images`、有效 `file_shares` 和 `file_records` 的路径变更放进一个 SQLite 事务；`database-ready` 前恢复一律把真实路径和全部元数据反向迁回，之后确认目标存在并只清理日志。永久删除不可逆，恢复器会继续 `RemoveAll` 并在单个事务内清理三类元数据。REST、WebDAV DELETE/MOVE 与 S3 DeleteObject 共用该文件服务路径，数据库错误不再被吞掉。
 
-图床上传使用独立的短期操作日志。图片临时文件先 `fsync`，真实格式校验后记录包含随机 `image_id`、临时/最终路径和不可变图片元数据的意图；原子重命名和父目录同步完成后，`images` 与 `file_records` 在同一 SQLite 事务提交。启动恢复以 `images.image_id` 是否存在为提交边界：未提交状态删除内部临时文件或随机最终文件，已提交状态保留当前图片生命周期位置并只删除日志。上传日志恢复安排在跨来源移动与回收站恢复之后，避免把后来合法移动或回收的图片按旧上传路径处理。
+图床上传使用独立的两阶段短期操作日志。服务先持久化包含 operation ID、临时路径与所有者的 planned journal，再创建图片临时文件；临时文件 `fsync` 并完成真实格式校验后，持久化包含随机 `image_id`、最终路径和不可变图片元数据的 prepared journal。只有 prepared journal 落盘后才允许原子重命名和提交 `images` / `file_records` 单一 SQLite 事务。启动恢复中，只有 planned journal 时只删除其明确引用的临时文件；prepared 阶段以 `images.image_id` 是否存在为提交边界。已提交状态保留当前图片生命周期位置并只删除日志。上传日志恢复安排在跨来源移动与回收站恢复之后，避免把后来合法移动或回收的图片按旧上传路径处理。
 
-普通文件上传在写入时同步计算 SHA-256，临时文件和父目录同步后写入独立意图。新建文件随后原子重命名；覆盖写先把旧目标原子重命名为严格内部备份，再安装新目标。`file_records` 提交后写 `database-ready`，此后只清理临时文件、旧备份和日志，不再根据最初路径改动最终文件，因此提交后发生的合法移动或删除不会被恢复器逆转。标记前的恢复通过临时、最终和备份三者状态，并核对大小、`mtime` 与内容摘要，选择完成新台账或恢复旧目标；日志损坏或不能证明唯一版本时拒绝启动并保留现场。
+普通文件上传先持久化包含 operation ID、临时/最终路径、覆盖模式与所有者的 planned journal，再创建临时文件并在写入时同步计算 SHA-256。临时文件和父目录同步后，服务持久化包含大小、`mtime` 与摘要的 prepared journal；只有 prepared journal 落盘后才允许修改最终路径。新建文件随后原子重命名；覆盖写先把旧目标原子重命名为严格内部备份，再安装新目标。`file_records` 提交后写 `database-ready`，此后只清理临时文件、旧备份和日志，不再根据最初路径改动最终文件，因此提交后发生的合法移动或删除不会被恢复器逆转。planned 阶段恢复只回收 journal 明确引用的临时文件；prepared 阶段通过临时、最终和备份三者状态，并核对大小、`mtime` 与内容摘要，选择完成新台账或恢复旧目标。没有 journal 的相似文件名不构成内部所有权证明，日志损坏或不能证明唯一版本时拒绝启动并保留现场。
 
 来源和用户还有一层独立于路径锁的生命周期读写锁。所有会创建、移动或删除真实数据及恢复日志的在线操作持有相关来源和执行用户的共享锁，并在取得锁后重新确认数据库实体仍存在；管理员删除持有独占锁，从等待在途操作结束开始，连续完成回收站/恢复日志复检和数据库删除。锁按“来源、用户、数字 ID”的稳定顺序获取，避免跨来源操作与并发删除形成死锁。Multipart Complete 在写入完成意图后切换到普通上传的共享锁；删除流程会把该意图视为硬冲突，因此锁交接窗口不会留下无来源或无用户的恢复日志。
 

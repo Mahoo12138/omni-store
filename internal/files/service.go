@@ -811,7 +811,30 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	}
 
 	maxBytes, limited := quotaGuard.MaxBytes()
-	tmpPath, written, contentSHA256, err := writeUploadTemp(parentAbs, body, maxBytes, limited)
+	ownerType := models.FileOwnerUnowned
+	var ownerUserID *int64
+	if lockOwnerUserID != nil {
+		ownerType = models.FileOwnerUser
+		ownerUserID = lockOwnerUserID
+	}
+	op, err := s.newUploadOperationPlan(src, relPath, replacedExisting, ownerType, ownerUserID, lockOwnerUserID)
+	if err != nil {
+		return "", 0, err
+	}
+	if err := s.writeUploadOperation(op); err != nil {
+		return "", 0, err
+	}
+	keepJournal := true
+	defer func() {
+		if keepJournal {
+			_ = s.removeUploadJournal(op.OperationID)
+		}
+	}()
+	tmpPath, _, _, err := s.uploadPaths(op, src)
+	if err != nil {
+		return "", 0, err
+	}
+	written, contentSHA256, mtimeUnixNano, err := writeUploadTempAt(tmpPath, body, maxBytes, limited)
 	if err != nil {
 		return "", 0, err
 	}
@@ -824,21 +847,12 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	if err := syncDirectory(parentAbs); err != nil {
 		return "", 0, fmt.Errorf("同步上传临时目录失败: %w", err)
 	}
-	ownerType := models.FileOwnerUnowned
-	var ownerUserID *int64
-	if lockOwnerUserID != nil {
-		ownerType = models.FileOwnerUser
-		ownerUserID = lockOwnerUserID
-	}
-	op, err := s.newUploadOperation(src, relPath, tmpPath, replacedExisting, written, contentSHA256,
-		ownerType, ownerUserID, lockOwnerUserID)
-	if err != nil {
+	op.Size, op.ContentSHA256, op.MTimeUnixNano = written, contentSHA256, mtimeUnixNano
+	if err := s.writePreparedUploadOperation(op); err != nil {
 		return "", 0, err
 	}
-	if err := s.writeUploadOperation(op); err != nil {
-		return "", 0, err
-	}
-	keepTemp = false // 从这里开始由持久日志接管清理与恢复。
+	keepJournal = false
+	keepTemp = false // prepared journal 已持久接管清理与恢复。
 	if err := s.installUploadedFile(op, tmpPath, absPath); err != nil {
 		if rollbackErr := s.rollbackUploadOperation(op, src); rollbackErr != nil {
 			return "", 0, fmt.Errorf("提交上传文件失败: %w；回滚上传失败: %v", err, rollbackErr)
@@ -886,9 +900,14 @@ func writeViaTemp(dirAbs, targetAbs string, body io.Reader, maxBytes int64, limi
 
 func writeUploadTemp(dirAbs string, body io.Reader, maxBytes int64, limited bool) (string, int64, string, error) {
 	tmpPath := filepath.Join(dirAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
+	written, digest, _, err := writeUploadTempAt(tmpPath, body, maxBytes, limited)
+	return tmpPath, written, digest, err
+}
+
+func writeUploadTempAt(tmpPath string, body io.Reader, maxBytes int64, limited bool) (int64, string, int64, error) {
 	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("创建临时文件失败: %w", err)
+		return 0, "", 0, fmt.Errorf("创建临时文件失败: %w", err)
 	}
 
 	cleanup := func() {
@@ -905,21 +924,26 @@ func writeUploadTemp(dirAbs string, body io.Reader, maxBytes int64, limited bool
 	written, err := io.Copy(io.MultiWriter(tmp, hasher), reader)
 	if err != nil {
 		cleanup()
-		return "", 0, "", fmt.Errorf("写入失败: %w", err)
+		return 0, "", 0, fmt.Errorf("写入失败: %w", err)
 	}
 	if limited && written > maxBytes {
 		cleanup()
-		return "", 0, "", ErrQuotaExceeded
+		return 0, "", 0, ErrQuotaExceeded
 	}
 	if err := tmp.Sync(); err != nil {
 		cleanup()
-		return "", 0, "", fmt.Errorf("落盘失败: %w", err)
+		return 0, "", 0, fmt.Errorf("落盘失败: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpPath)
-		return "", 0, "", fmt.Errorf("关闭临时文件失败: %w", err)
+		return 0, "", 0, fmt.Errorf("关闭临时文件失败: %w", err)
 	}
-	return tmpPath, written, fmt.Sprintf("%x", hasher.Sum(nil)), nil
+	info, err := os.Lstat(tmpPath)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != written {
+		_ = os.Remove(tmpPath)
+		return 0, "", 0, errors.Join(ErrUnsupported, err)
+	}
+	return written, fmt.Sprintf("%x", hasher.Sum(nil)), info.ModTime().UnixNano(), nil
 }
 
 // --- 删除（README §13.5 永久删除） ---

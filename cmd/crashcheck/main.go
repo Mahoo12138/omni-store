@@ -33,13 +33,16 @@ import (
 )
 
 const (
-	adminUsername = "admin"
-	adminPassword = "OmniStore-Test-Admin!"
+	adminUsername        = "admin"
+	adminPassword        = "OmniStore-Test-Admin!"
+	reservedSentinel     = ".omnistore-upload-0123456789abcdef.tmp"
+	reservedSentinelData = "user-owned reserved-name sentinel"
 )
 
 type scenario struct {
 	name       string
 	journalDir string
+	ready      func(*fixture) bool
 	prepare    func(*fixture) error
 	request    func(*fixture) (*http.Request, error)
 	verify     func(*fixture) error
@@ -168,7 +171,11 @@ func runScenario(item scenario, round int, serverBin, seedBin string) error {
 	deadline := time.Now().Add(3 * time.Second)
 	requestFinished := false
 	for time.Now().Before(deadline) {
-		if directoryHasEntries(journalPath) {
+		operationReady := directoryHasEntries(journalPath)
+		if item.ready != nil {
+			operationReady = item.ready(f)
+		}
+		if operationReady {
 			break
 		}
 		select {
@@ -246,7 +253,6 @@ security:
     enabled: false
 upload:
   max_file_size_mb: 64
-  cleanup_stale_files: false
 image_bed:
   root_path: "/images"
   user_max_file_size_mb: 32
@@ -284,7 +290,10 @@ log:
 	if err := f.login(); err != nil {
 		return err
 	}
-	return f.loadSources()
+	if err := f.loadSources(); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(f.teamRoot, reservedSentinel), []byte(reservedSentinelData), 0o600)
 }
 
 func seedScenarioFiles(f *fixture, name string) error {
@@ -436,7 +445,7 @@ func (f *fixture) apiRequest(method, path string, body io.Reader, contentType st
 
 func crashScenarios() []scenario {
 	return []scenario{
-		{name: "overwrite upload", journalDir: "operations/file-uploads", request: requestOverwrite, verify: verifyOverwrite},
+		{name: "overwrite upload", journalDir: "operations/file-uploads", ready: uploadTempVisible, request: requestOverwrite, verify: verifyOverwrite},
 		{name: "directory copy", journalDir: "operations/copies", request: requestCopy, verify: verifyCopy},
 		{name: "cross-source move", journalDir: "operations/transfers", request: requestCrossMove, verify: verifyCrossMove},
 		{name: "same-source move", journalDir: "operations/paths", request: requestSameMove, verify: verifySameMove},
@@ -444,8 +453,28 @@ func crashScenarios() []scenario {
 		{name: "restore", journalDir: "trash/.operations", prepare: prepareTrash, request: requestRestore, verify: verifyRestore},
 		{name: "permanent delete", journalDir: "trash/.operations", prepare: prepareTrash, request: requestPurge, verify: verifyPurge},
 		{name: "multipart complete", journalDir: "operations/s3-multipart-completions", prepare: prepareMultipart, request: requestMultipartComplete, verify: verifyMultipart},
-		{name: "image upload", journalDir: "operations/image-uploads", request: requestImageUpload, verify: verifyImageUpload},
+		{name: "image upload", journalDir: "operations/image-uploads", ready: uploadTempVisible, request: requestImageUpload, verify: verifyImageUpload},
 	}
+}
+
+func uploadTempVisible(f *fixture) bool {
+	for _, root := range []string{f.publicRoot, f.teamRoot} {
+		found := false
+		_ = filepath.WalkDir(root, func(_ string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || entry.Name() == reservedSentinel {
+				return nil
+			}
+			if strings.HasPrefix(entry.Name(), ".omnistore-upload-") && strings.HasSuffix(entry.Name(), ".tmp") {
+				found = true
+				return filepath.SkipAll
+			}
+			return nil
+		})
+		if found {
+			return true
+		}
+	}
+	return false
 }
 
 func requestOverwrite(f *fixture) (*http.Request, error) {
@@ -692,6 +721,14 @@ func verifyTreeEndpoint(sourceRoot, sourceRel, targetRoot, targetRel string, mov
 }
 
 func auditFixture(f *fixture) error {
+	sentinelPath := filepath.Join(f.teamRoot, reservedSentinel)
+	sentinel, err := os.ReadFile(sentinelPath)
+	if err != nil {
+		return fmt.Errorf("reserved-name user file was not preserved: %w", err)
+	}
+	if string(sentinel) != reservedSentinelData {
+		return errors.New("reserved-name user file content changed")
+	}
 	db, err := sql.Open("sqlite", filepath.Join(f.dataDir, "omnistore.db"))
 	if err != nil {
 		return err
@@ -708,7 +745,11 @@ func auditFixture(f *fixture) error {
 			rows.Close()
 			return err
 		}
-		if err := auditSource(db, sourceID, root); err != nil {
+		ignoredPath := ""
+		if root == f.teamRoot {
+			ignoredPath = sentinelPath
+		}
+		if err := auditSource(db, sourceID, root, ignoredPath); err != nil {
 			rows.Close()
 			return err
 		}
@@ -727,13 +768,16 @@ func auditFixture(f *fixture) error {
 	return auditTrash(db, f.dataDir)
 }
 
-func auditSource(db *sql.DB, sourceID int64, root string) error {
+func auditSource(db *sql.DB, sourceID int64, root, ignoredPath string) error {
 	disk := make(map[string]int64)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.IsDir() {
+			return nil
+		}
+		if path == ignoredPath {
 			return nil
 		}
 		if strings.HasPrefix(entry.Name(), ".omnistore-") {

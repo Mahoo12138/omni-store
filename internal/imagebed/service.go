@@ -319,6 +319,17 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 
 	// 写临时文件（README §14.3 同目录临时文件）。
 	tmpPath := filepath.Join(absDir, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
+	tempRelPath := relDir + "/" + filepath.Base(tmpPath)
+	plan := s.newImageUploadPlan(src.ID, tempRelPath, ownerType, ownerUserID, originalFilename)
+	if err := s.writeImageUploadPlan(plan); err != nil {
+		return nil, fmt.Errorf("记录图床上传计划失败: %w", err)
+	}
+	keepJournal := true
+	defer func() {
+		if keepJournal {
+			_ = s.removeImageUploadOperation(plan.OperationID)
+		}
+	}()
 	tmp, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("创建临时文件失败: %w", err)
@@ -344,6 +355,10 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		os.Remove(tmpPath)
 		return nil, files.ErrQuotaExceeded
 	}
+	if err := syncImageDirectory(absDir); err != nil {
+		os.Remove(tmpPath)
+		return nil, fmt.Errorf("同步图床临时目录失败: %w", err)
+	}
 
 	// 真实格式校验。
 	info, err := ValidateImageFile(tmpPath)
@@ -354,7 +369,6 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 
 	// image_id 与文件名使用不可预测随机数（README §17.9，128-bit）。
 	// 最终文件完整落盘后，images 与 file_records 在同一个 SQLite 事务中提交。
-	tempRelPath := relDir + "/" + filepath.Base(tmpPath)
 	for range 5 {
 		random := auth.NewRandomToken("", 16)
 		imageID := "img_" + random
@@ -372,13 +386,15 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 			_ = os.Remove(tmpPath)
 			return nil, fmt.Errorf("检查图床最终路径失败: %w", statErr)
 		}
-		op := s.newImageUploadOperation(src.ID, tempRelPath, relPath, imageID, ownerType,
-			ownerUserID, originalFilename, publicURL, size, info)
-		if err := s.writeImageUploadOperation(op); err != nil {
+		op := plan
+		op.FinalRelativePath, op.ImageID, op.PublicURL, op.Size = relPath, imageID, publicURL, size
+		op.MimeType, op.Width, op.Height, op.Ext = info.MimeType, info.Width, info.Height, info.Ext
+		if err := s.writePreparedImageUploadOperation(op); err != nil {
 			unlock()
 			_ = os.Remove(tmpPath)
-			return nil, fmt.Errorf("记录图床上传意图失败: %w", err)
+			return nil, fmt.Errorf("记录图床上传准备状态失败: %w", err)
 		}
+		keepJournal = false
 		if err := os.Rename(tmpPath, absPath); err != nil {
 			unlock()
 			cleanupErr := s.removeImageUploadOperation(op.OperationID)

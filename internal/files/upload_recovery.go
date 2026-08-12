@@ -52,6 +52,10 @@ func (s *Service) uploadOperationPath(operationID string) string {
 	return filepath.Join(s.uploadOperationsDir(), operationID+".json")
 }
 
+func (s *Service) uploadPreparedPath(operationID string) string {
+	return filepath.Join(s.uploadOperationsDir(), operationID+".prepared")
+}
+
 func (s *Service) uploadDatabaseReadyPath(operationID string) string {
 	return filepath.Join(s.uploadOperationsDir(), operationID+".database-ready")
 }
@@ -78,14 +82,10 @@ func validUploadBackupName(value string) bool {
 	return err == nil
 }
 
-func validateUploadOperation(op uploadOperation) error {
+func validateUploadOperationPlan(op uploadOperation) error {
 	if op.Version != uploadOperationVersion || !validUploadOperationID(op.OperationID) ||
-		op.StorageSourceID <= 0 || op.Size < 0 || op.MTimeUnixNano <= 0 || op.CreatedAt.IsZero() ||
-		len(op.ContentSHA256) != sha256.Size*2 {
+		op.StorageSourceID <= 0 || op.CreatedAt.IsZero() {
 		return fmt.Errorf("非法普通上传操作日志")
-	}
-	if _, err := hex.DecodeString(op.ContentSHA256); err != nil {
-		return fmt.Errorf("非法普通上传内容摘要")
 	}
 	if op.OwnerType == models.FileOwnerUser {
 		if op.OwnerUserID == nil || *op.OwnerUserID <= 0 {
@@ -123,57 +123,114 @@ func validateUploadOperation(op uploadOperation) error {
 	return nil
 }
 
-func (s *Service) newUploadOperation(src *models.StorageSource, finalRel, tempAbs string,
-	replaced bool, size int64, contentSHA256, ownerType string, ownerUserID, actorUserID *int64) (uploadOperation, error) {
-	tempRel, err := filepath.Rel(src.RootPath, tempAbs)
-	if err != nil {
-		return uploadOperation{}, err
+func validatePreparedUploadOperation(op uploadOperation) error {
+	if err := validateUploadOperationPlan(op); err != nil {
+		return err
 	}
-	tempRel = filepath.ToSlash(tempRel)
-	info, err := os.Lstat(tempAbs)
-	if err != nil {
-		return uploadOperation{}, err
+	if op.Size < 0 || op.MTimeUnixNano <= 0 || len(op.ContentSHA256) != sha256.Size*2 {
+		return fmt.Errorf("普通上传准备信息不完整")
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != size {
-		return uploadOperation{}, ErrUnsupported
+	if _, err := hex.DecodeString(op.ContentSHA256); err != nil {
+		return fmt.Errorf("非法普通上传内容摘要")
+	}
+	return nil
+}
+
+func validateStoredUploadPlan(op uploadOperation) error {
+	if err := validateUploadOperationPlan(op); err != nil {
+		return err
+	}
+	if op.Size != 0 || op.ContentSHA256 != "" || op.MTimeUnixNano != 0 {
+		return fmt.Errorf("planned 普通上传包含准备信息")
+	}
+	return nil
+}
+
+func sameUploadOperationPlan(plan, prepared uploadOperation) bool {
+	equalID := func(left, right *int64) bool {
+		return (left == nil && right == nil) ||
+			(left != nil && right != nil && *left == *right)
+	}
+	return plan.Version == prepared.Version && plan.OperationID == prepared.OperationID &&
+		plan.StorageSourceID == prepared.StorageSourceID && plan.TempRelativePath == prepared.TempRelativePath &&
+		plan.FinalRelativePath == prepared.FinalRelativePath && plan.BackupRelativePath == prepared.BackupRelativePath &&
+		plan.ReplacedExisting == prepared.ReplacedExisting && plan.OwnerType == prepared.OwnerType &&
+		equalID(plan.OwnerUserID, prepared.OwnerUserID) && equalID(plan.ActorUserID, prepared.ActorUserID) &&
+		plan.CreatedAt.Equal(prepared.CreatedAt)
+}
+
+func (s *Service) newUploadOperationPlan(src *models.StorageSource, finalRel string,
+	replaced bool, ownerType string, ownerUserID, actorUserID *int64) (uploadOperation, error) {
+	dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(finalRel)))
+	tempName := ".omnistore-upload-" + auth.NewRandomToken("", 8) + ".tmp"
+	tempRel := tempName
+	if dir != "." {
+		tempRel = dir + "/" + tempName
 	}
 	op := uploadOperation{
 		Version: uploadOperationVersion, OperationID: auth.NewRandomToken("upl-", 12),
 		StorageSourceID: src.ID, TempRelativePath: tempRel, FinalRelativePath: finalRel,
-		ReplacedExisting: replaced, Size: size, ContentSHA256: contentSHA256,
-		MTimeUnixNano: info.ModTime().UnixNano(),
-		OwnerType:     ownerType, OwnerUserID: ownerUserID, ActorUserID: actorUserID,
+		ReplacedExisting: replaced,
+		OwnerType:        ownerType, OwnerUserID: ownerUserID, ActorUserID: actorUserID,
 		CreatedAt: time.Now().UTC(),
 	}
 	if replaced {
 		backupName := ".omnistore-upload-" + strings.TrimPrefix(op.OperationID, "upl-") + ".backup"
-		dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(finalRel)))
 		if dir == "." {
 			op.BackupRelativePath = backupName
 		} else {
 			op.BackupRelativePath = dir + "/" + backupName
 		}
 	}
-	if err := validateUploadOperation(op); err != nil {
+	if err := validateUploadOperationPlan(op); err != nil {
 		return uploadOperation{}, err
 	}
 	return op, nil
 }
 
 func (s *Service) writeUploadOperation(op uploadOperation) error {
-	if err := validateUploadOperation(op); err != nil {
+	if err := validateStoredUploadPlan(op); err != nil {
 		return err
 	}
+	if err := s.writeUploadOperationFile(s.uploadOperationPath(op.OperationID), op); err != nil {
+		return err
+	}
+	if err := os.Remove(s.uploadPreparedPath(op.OperationID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := os.Remove(s.uploadDatabaseReadyPath(op.OperationID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return syncDirectory(s.uploadOperationsDir())
+}
+
+func (s *Service) writePreparedUploadOperation(op uploadOperation) error {
+	if err := validatePreparedUploadOperation(op); err != nil {
+		return err
+	}
+	planHandle, err := os.Open(s.uploadOperationPath(op.OperationID))
+	if err != nil {
+		return err
+	}
+	plan, decodeErr := decodeUploadOperation(planHandle)
+	closeErr := planHandle.Close()
+	if decodeErr != nil || closeErr != nil {
+		return errors.Join(decodeErr, closeErr)
+	}
+	if err := validateStoredUploadPlan(plan); err != nil || !sameUploadOperationPlan(plan, op) {
+		return fmt.Errorf("普通上传准备信息与 planned journal 不一致")
+	}
+	return s.writeUploadOperationFile(s.uploadPreparedPath(op.OperationID), op)
+}
+
+func (s *Service) writeUploadOperationFile(target string, op uploadOperation) error {
 	dir := s.uploadOperationsDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("创建普通上传日志目录失败: %w", err)
 	}
-	if _, err := os.Lstat(s.uploadOperationPath(op.OperationID)); err == nil {
+	if _, err := os.Lstat(target); err == nil {
 		return fmt.Errorf("普通上传 %s 尚未恢复", op.OperationID)
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	if err := os.Remove(s.uploadDatabaseReadyPath(op.OperationID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	temp, err := os.CreateTemp(dir, ".operation-*.tmp")
@@ -200,7 +257,7 @@ func (s *Service) writeUploadOperation(op uploadOperation) error {
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	if err := os.Link(tempPath, s.uploadOperationPath(op.OperationID)); err != nil {
+	if err := os.Link(tempPath, target); err != nil {
 		return fmt.Errorf("提交普通上传日志失败: %w", err)
 	}
 	if err := os.Remove(tempPath); err != nil {
@@ -321,12 +378,46 @@ func (s *Service) installUploadedFile(op uploadOperation, tempAbs, finalAbs stri
 }
 
 func (s *Service) removeUploadJournal(operationID string) error {
-	for _, item := range []string{s.uploadOperationPath(operationID), s.uploadDatabaseReadyPath(operationID)} {
+	for _, item := range []string{s.uploadOperationPath(operationID), s.uploadPreparedPath(operationID), s.uploadDatabaseReadyPath(operationID)} {
 		if err := os.Remove(item); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 	}
 	return syncDirectory(s.uploadOperationsDir())
+}
+
+func (s *Service) rollbackPlannedUpload(op uploadOperation, src *models.StorageSource) error {
+	tempAbs, finalAbs, backupAbs, err := s.uploadPaths(op, src)
+	if err != nil {
+		return err
+	}
+	tempExists, _, err := checkedUploadFile(tempAbs, op.TempRelativePath)
+	if err != nil {
+		return err
+	}
+	finalExists, _, err := checkedUploadFile(finalAbs, op.FinalRelativePath)
+	if err != nil {
+		return err
+	}
+	backupExists := false
+	if backupAbs != "" {
+		backupExists, _, err = checkedUploadFile(backupAbs, op.BackupRelativePath)
+		if err != nil {
+			return err
+		}
+	}
+	if (!op.ReplacedExisting && finalExists) || (op.ReplacedExisting && (!finalExists || backupExists)) {
+		return fmt.Errorf("planned 普通上传 %s 的最终路径状态异常，已保留现场", op.OperationID)
+	}
+	if tempExists {
+		if err := os.Remove(tempAbs); err != nil {
+			return err
+		}
+		if err := syncDirectory(filepath.Dir(tempAbs)); err != nil {
+			return err
+		}
+	}
+	return s.removeUploadJournal(op.OperationID)
 }
 
 func (s *Service) finishUploadOperation(op uploadOperation, src *models.StorageSource) error {
@@ -457,7 +548,7 @@ func (s *Service) fileUploadOperationCount(matches func(uploadOperation) bool) (
 	}
 	count := 0
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || strings.HasSuffix(entry.Name(), ".prepared") {
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
@@ -475,7 +566,7 @@ func (s *Service) fileUploadOperationCount(matches func(uploadOperation) bool) (
 		if closeErr != nil {
 			return 0, closeErr
 		}
-		if err := validateUploadOperation(op); err != nil || entry.Name() != op.OperationID+".json" {
+		if err := validateStoredUploadPlan(op); err != nil || entry.Name() != op.OperationID+".json" {
 			return 0, fmt.Errorf("普通上传操作日志 %s 非法", entry.Name())
 		}
 		if matches(op) {
@@ -508,6 +599,16 @@ func (s *Service) cleanupUploadRecoveryArtifacts(entries []os.DirEntry) error {
 				return err
 			}
 		}
+		if strings.HasSuffix(name, ".prepared") {
+			operationID := strings.TrimSuffix(name, ".prepared")
+			if _, err := os.Stat(s.uploadOperationPath(operationID)); errors.Is(err, fs.ErrNotExist) {
+				if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -532,7 +633,7 @@ func (s *Service) RecoverFileUploadOperations() (FileUploadRecoveryResult, error
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || strings.HasSuffix(entry.Name(), ".prepared") {
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
@@ -550,7 +651,7 @@ func (s *Service) RecoverFileUploadOperations() (FileUploadRecoveryResult, error
 		if closeErr != nil {
 			return result, closeErr
 		}
-		if err := validateUploadOperation(op); err != nil {
+		if err := validateStoredUploadPlan(op); err != nil {
 			return result, fmt.Errorf("普通上传操作日志 %s 非法: %w", entry.Name(), err)
 		}
 		if entry.Name() != op.OperationID+".json" {
@@ -560,6 +661,26 @@ func (s *Service) RecoverFileUploadOperations() (FileUploadRecoveryResult, error
 		if err != nil {
 			return result, fmt.Errorf("普通上传 %s 的存储源不存在: %w", op.OperationID, err)
 		}
+		preparedHandle, err := os.Open(s.uploadPreparedPath(op.OperationID))
+		if errors.Is(err, fs.ErrNotExist) {
+			if err := s.rollbackPlannedUpload(op, src); err != nil {
+				return result, err
+			}
+			result.RolledBackUploads++
+			continue
+		}
+		if err != nil {
+			return result, err
+		}
+		prepared, decodeErr := decodeUploadOperation(preparedHandle)
+		closeErr = preparedHandle.Close()
+		if decodeErr != nil || closeErr != nil {
+			return result, fmt.Errorf("读取普通上传 prepared journal 失败: %w", errors.Join(decodeErr, closeErr))
+		}
+		if err := validatePreparedUploadOperation(prepared); err != nil || !sameUploadOperationPlan(op, prepared) {
+			return result, fmt.Errorf("普通上传 %s 的 prepared journal 非法", op.OperationID)
+		}
+		op = prepared
 		databaseReady, err := uploadMarkerExists(s.uploadDatabaseReadyPath(op.OperationID))
 		if err != nil {
 			return result, err

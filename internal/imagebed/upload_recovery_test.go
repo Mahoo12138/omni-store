@@ -50,6 +50,58 @@ func TestRecoverUploadRollsBackTemporaryAndFinalFilesBeforeDatabaseCommit(t *tes
 	}
 }
 
+func TestRecoverUploadRollsBackPlannedTempWithoutTouchingUnjournaledNames(t *testing.T) {
+	service, _, source, user, _, root := newImageLifecycleFixture(t)
+	relDir := "images/planned"
+	absDir := filepath.Join(root, filepath.FromSlash(relDir))
+	if err := os.MkdirAll(absDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tempName := ".omnistore-upload-0011223344556677.tmp"
+	plan := service.newImageUploadPlan(source.ID, relDir+"/"+tempName, models.ImageOwnerUser, &user.ID, "planned.png")
+	if err := service.writeImageUploadPlan(plan); err != nil {
+		t.Fatal(err)
+	}
+	tempAbs := filepath.Join(absDir, tempName)
+	if err := os.WriteFile(tempAbs, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unowned := filepath.Join(root, ".omnistore-upload-0123456789abcdef.tmp")
+	if err := os.WriteFile(unowned, []byte("user data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.RecoverUploadOperations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RolledBackUploads != 1 {
+		t.Fatalf("unexpected recovery result: %+v", result)
+	}
+	if _, err := os.Stat(tempAbs); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("planned image temp remains: %v", err)
+	}
+	if content, err := os.ReadFile(unowned); err != nil || string(content) != "user data" {
+		t.Fatalf("unjournaled file content=%q err=%v", content, err)
+	}
+}
+
+func TestRecoverUploadRollsBackPlanBeforeTempCreation(t *testing.T) {
+	service, _, source, user, _, _ := newImageLifecycleFixture(t)
+	plan := service.newImageUploadPlan(source.ID, "images/.omnistore-upload-0011223344556677.tmp",
+		models.ImageOwnerUser, &user.ID, "not-created.png")
+	if err := service.writeImageUploadPlan(plan); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.RecoverUploadOperations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RolledBackUploads != 1 {
+		t.Fatalf("unexpected recovery result: %+v", result)
+	}
+	assertNoImageUploadOperation(t, service, plan.OperationID)
+}
+
 func TestRecoverUploadKeepsCommittedImageAfterJournalCleanupWasInterrupted(t *testing.T) {
 	service, _, source, user, _, root := newImageLifecycleFixture(t)
 	op, tempAbs, finalAbs := newUploadRecoveryOperation(t, service, source, user, root)
@@ -316,8 +368,10 @@ func assertActiveImageFileRecord(t *testing.T, service *Service, sourceID int64,
 
 func assertNoImageUploadOperation(t *testing.T, service *Service, operationID string) {
 	t.Helper()
-	if _, err := os.Stat(service.uploadOperationPath(operationID)); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("image upload operation still exists: %v", err)
+	for _, item := range []string{service.uploadOperationPath(operationID), service.uploadPreparedPath(operationID)} {
+		if _, err := os.Stat(item); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("image upload operation still exists at %s: %v", item, err)
+		}
 	}
 }
 

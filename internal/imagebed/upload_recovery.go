@@ -55,6 +55,10 @@ func (s *Service) uploadOperationPath(operationID string) string {
 	return filepath.Join(s.uploadOperationsDir(), operationID+".json")
 }
 
+func (s *Service) uploadPreparedPath(operationID string) string {
+	return filepath.Join(s.uploadOperationsDir(), operationID+".prepared")
+}
+
 func validHexToken(value, prefix string, bytes int) bool {
 	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+bytes*2 {
 		return false
@@ -77,10 +81,9 @@ func validImageUploadTempName(name string) bool {
 	return err == nil
 }
 
-func validateImageUploadOperation(op imageUploadOperation) error {
+func validateImageUploadPlan(op imageUploadOperation) error {
 	if op.Version != imageUploadOperationVersion || !validHexToken(op.OperationID, "iup-", 12) ||
-		op.StorageSourceID <= 0 || !validHexToken(op.ImageID, "img_", 16) ||
-		op.Size <= 0 || op.Width <= 0 || op.Height <= 0 || op.Ext == "" || op.MimeType == "" || op.CreatedAt.IsZero() {
+		op.StorageSourceID <= 0 || op.CreatedAt.IsZero() {
 		return fmt.Errorf("非法图床上传操作日志")
 	}
 	if op.OwnerType == models.ImageOwnerUser {
@@ -90,7 +93,23 @@ func validateImageUploadOperation(op imageUploadOperation) error {
 	} else if op.OwnerType != models.ImageOwnerAnonymous || op.OwnerUserID != nil {
 		return fmt.Errorf("非法图床上传所有者")
 	}
-	for label, value := range map[string]string{"临时": op.TempRelativePath, "最终": op.FinalRelativePath} {
+	normalized, err := security.NormalizeRelPath(op.TempRelativePath)
+	if err != nil || normalized == "" || normalized != op.TempRelativePath ||
+		!validImageUploadTempName(filepath.Base(filepath.FromSlash(op.TempRelativePath))) {
+		return fmt.Errorf("非法图床上传临时路径")
+	}
+	return nil
+}
+
+func validateImageUploadOperation(op imageUploadOperation) error {
+	if err := validateImageUploadPlan(op); err != nil {
+		return err
+	}
+	if !validHexToken(op.ImageID, "img_", 16) || op.Size <= 0 || op.Width <= 0 || op.Height <= 0 ||
+		op.Ext == "" || op.MimeType == "" || op.FinalRelativePath == "" || op.PublicURL == "" {
+		return fmt.Errorf("图床上传准备信息不完整")
+	}
+	for label, value := range map[string]string{"最终": op.FinalRelativePath} {
 		normalized, err := security.NormalizeRelPath(value)
 		if err != nil || normalized == "" || normalized != value {
 			return fmt.Errorf("非法图床上传%s路径", label)
@@ -109,27 +128,94 @@ func validateImageUploadOperation(op imageUploadOperation) error {
 	return nil
 }
 
-func (s *Service) newImageUploadOperation(srcID int64, tempRel, finalRel, imageID, ownerType string,
-	ownerUserID *int64, originalFilename, publicURL string, size int64, info *ImageInfo) imageUploadOperation {
+func validateStoredImageUploadPlan(op imageUploadOperation) error {
+	if err := validateImageUploadPlan(op); err != nil {
+		return err
+	}
+	if op.FinalRelativePath != "" || op.ImageID != "" || op.PublicURL != "" || op.Size != 0 ||
+		op.MimeType != "" || op.Width != 0 || op.Height != 0 || op.Ext != "" {
+		return fmt.Errorf("planned 图床上传包含准备信息")
+	}
+	return nil
+}
+
+func sameImageUploadPlan(plan, prepared imageUploadOperation) bool {
+	equalOwner := (plan.OwnerUserID == nil && prepared.OwnerUserID == nil) ||
+		(plan.OwnerUserID != nil && prepared.OwnerUserID != nil && *plan.OwnerUserID == *prepared.OwnerUserID)
+	return plan.Version == prepared.Version && plan.OperationID == prepared.OperationID &&
+		plan.StorageSourceID == prepared.StorageSourceID && plan.TempRelativePath == prepared.TempRelativePath &&
+		plan.OwnerType == prepared.OwnerType && equalOwner && plan.OriginalFilename == prepared.OriginalFilename &&
+		plan.CreatedAt.Equal(prepared.CreatedAt)
+}
+
+func (s *Service) newImageUploadPlan(srcID int64, tempRel, ownerType string,
+	ownerUserID *int64, originalFilename string) imageUploadOperation {
 	return imageUploadOperation{
 		Version: imageUploadOperationVersion, OperationID: auth.NewRandomToken("iup-", 12),
-		StorageSourceID: srcID, TempRelativePath: tempRel, FinalRelativePath: finalRel,
-		ImageID: imageID, OwnerType: ownerType, OwnerUserID: ownerUserID,
-		OriginalFilename: originalFilename, PublicURL: publicURL, Size: size,
-		MimeType: info.MimeType, Width: info.Width, Height: info.Height, Ext: info.Ext,
-		CreatedAt: time.Now().UTC(),
+		StorageSourceID: srcID, TempRelativePath: tempRel, OwnerType: ownerType,
+		OwnerUserID: ownerUserID, OriginalFilename: originalFilename, CreatedAt: time.Now().UTC(),
 	}
+}
+
+func (s *Service) newImageUploadOperation(srcID int64, tempRel, finalRel, imageID, ownerType string,
+	ownerUserID *int64, originalFilename, publicURL string, size int64, info *ImageInfo) imageUploadOperation {
+	op := s.newImageUploadPlan(srcID, tempRel, ownerType, ownerUserID, originalFilename)
+	op.FinalRelativePath, op.ImageID, op.PublicURL, op.Size = finalRel, imageID, publicURL, size
+	op.MimeType, op.Width, op.Height, op.Ext = info.MimeType, info.Width, info.Height, info.Ext
+	return op
 }
 
 func (s *Service) writeImageUploadOperation(op imageUploadOperation) error {
 	if err := validateImageUploadOperation(op); err != nil {
 		return err
 	}
+	plan := op
+	plan.FinalRelativePath, plan.ImageID, plan.PublicURL, plan.Size = "", "", "", 0
+	plan.MimeType, plan.Width, plan.Height, plan.Ext = "", 0, 0, ""
+	if err := s.writeImageUploadPlan(plan); err != nil {
+		return err
+	}
+	return s.writePreparedImageUploadOperation(op)
+}
+
+func (s *Service) writeImageUploadPlan(op imageUploadOperation) error {
+	if err := validateStoredImageUploadPlan(op); err != nil {
+		return err
+	}
+	if err := s.writeImageUploadOperationFile(s.uploadOperationPath(op.OperationID), op); err != nil {
+		return err
+	}
+	if err := os.Remove(s.uploadPreparedPath(op.OperationID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return syncImageDirectory(s.uploadOperationsDir())
+}
+
+func (s *Service) writePreparedImageUploadOperation(op imageUploadOperation) error {
+	if err := validateImageUploadOperation(op); err != nil {
+		return err
+	}
+	handle, err := os.Open(s.uploadOperationPath(op.OperationID))
+	if err != nil {
+		return err
+	}
+	plan, decodeErr := decodeImageUploadOperation(handle)
+	closeErr := handle.Close()
+	if decodeErr != nil || closeErr != nil {
+		return errors.Join(decodeErr, closeErr)
+	}
+	if err := validateStoredImageUploadPlan(plan); err != nil || !sameImageUploadPlan(plan, op) {
+		return fmt.Errorf("图床上传准备信息与 planned journal 不一致")
+	}
+	return s.writeImageUploadOperationFile(s.uploadPreparedPath(op.OperationID), op)
+}
+
+func (s *Service) writeImageUploadOperationFile(target string, op imageUploadOperation) error {
 	dir := s.uploadOperationsDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("创建图床上传日志目录失败: %w", err)
 	}
-	if _, err := os.Lstat(s.uploadOperationPath(op.OperationID)); err == nil {
+	if _, err := os.Lstat(target); err == nil {
 		return fmt.Errorf("图床上传 %s 尚未恢复", op.OperationID)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -158,7 +244,7 @@ func (s *Service) writeImageUploadOperation(op imageUploadOperation) error {
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("关闭图床上传日志失败: %w", err)
 	}
-	if err := os.Link(tempPath, s.uploadOperationPath(op.OperationID)); err != nil {
+	if err := os.Link(tempPath, target); err != nil {
 		return fmt.Errorf("提交图床上传日志失败: %w", err)
 	}
 	if err := os.Remove(tempPath); err != nil {
@@ -169,8 +255,10 @@ func (s *Service) writeImageUploadOperation(op imageUploadOperation) error {
 }
 
 func (s *Service) removeImageUploadOperation(operationID string) error {
-	if err := os.Remove(s.uploadOperationPath(operationID)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	for _, item := range []string{s.uploadOperationPath(operationID), s.uploadPreparedPath(operationID)} {
+		if err := os.Remove(item); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
 	}
 	return syncImageDirectory(s.uploadOperationsDir())
 }
@@ -331,7 +419,7 @@ func (s *Service) imageUploadOperationCount(matches func(imageUploadOperation) b
 		if closeErr != nil {
 			return 0, closeErr
 		}
-		if err := validateImageUploadOperation(op); err != nil || entry.Name() != op.OperationID+".json" {
+		if err := validateStoredImageUploadPlan(op); err != nil || entry.Name() != op.OperationID+".json" {
 			return 0, fmt.Errorf("图床上传操作日志 %s 非法", entry.Name())
 		}
 		if matches(op) {
@@ -360,6 +448,16 @@ func (s *Service) RecoverUploadOperations() (UploadRecoveryResult, error) {
 				return result, fmt.Errorf("清理未提交的图床上传临时日志 %s 失败: %w", entry.Name(), err)
 			}
 		}
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".prepared") {
+			operationID := strings.TrimSuffix(entry.Name(), ".prepared")
+			if _, err := os.Stat(s.uploadOperationPath(operationID)); errors.Is(err, fs.ErrNotExist) {
+				if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return result, err
+				}
+			} else if err != nil {
+				return result, err
+			}
+		}
 	}
 	entries, err = os.ReadDir(dir)
 	if err != nil {
@@ -385,12 +483,48 @@ func (s *Service) RecoverUploadOperations() (UploadRecoveryResult, error) {
 		if closeErr != nil {
 			return result, closeErr
 		}
-		if err := validateImageUploadOperation(op); err != nil {
+		if err := validateStoredImageUploadPlan(op); err != nil {
 			return result, fmt.Errorf("图床上传操作日志 %s 非法: %w", entry.Name(), err)
 		}
 		if entry.Name() != op.OperationID+".json" {
 			return result, fmt.Errorf("图床上传操作日志文件名 %s 与 operation_id 不一致", entry.Name())
 		}
+		src, err := s.sources.GetByID(op.StorageSourceID)
+		if err != nil {
+			return result, fmt.Errorf("图床上传 %s 的存储源不存在: %w", op.OperationID, err)
+		}
+		preparedHandle, err := os.Open(s.uploadPreparedPath(op.OperationID))
+		if errors.Is(err, fs.ErrNotExist) {
+			tempAbs, tempExists, pathErr := checkedImageUploadPath(src.RootPath, op.TempRelativePath)
+			if pathErr != nil {
+				return result, pathErr
+			}
+			if tempExists {
+				if err := os.Remove(tempAbs); err != nil {
+					return result, err
+				}
+				if err := syncImageDirectory(filepath.Dir(tempAbs)); err != nil {
+					return result, err
+				}
+			}
+			if err := s.removeImageUploadOperation(op.OperationID); err != nil {
+				return result, err
+			}
+			result.RolledBackUploads++
+			continue
+		}
+		if err != nil {
+			return result, err
+		}
+		prepared, decodeErr := decodeImageUploadOperation(preparedHandle)
+		closeErr = preparedHandle.Close()
+		if decodeErr != nil || closeErr != nil {
+			return result, fmt.Errorf("读取图床上传 prepared journal 失败: %w", errors.Join(decodeErr, closeErr))
+		}
+		if err := validateImageUploadOperation(prepared); err != nil || !sameImageUploadPlan(op, prepared) {
+			return result, fmt.Errorf("图床上传 %s 的 prepared journal 非法", op.OperationID)
+		}
+		op = prepared
 		committed, err := s.committedImageUpload(op)
 		if err != nil {
 			return result, err
@@ -403,10 +537,6 @@ func (s *Service) RecoverUploadOperations() (UploadRecoveryResult, error) {
 			continue
 		}
 
-		src, err := s.sources.GetByID(op.StorageSourceID)
-		if err != nil {
-			return result, fmt.Errorf("图床上传 %s 的存储源不存在: %w", op.OperationID, err)
-		}
 		tempAbs, tempExists, err := checkedImageUploadPath(src.RootPath, op.TempRelativePath)
 		if err != nil {
 			return result, err

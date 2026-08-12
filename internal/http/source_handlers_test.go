@@ -210,19 +210,32 @@ func TestHandleAdminDeleteSourceRejectsPendingImageUploadRecovery(t *testing.T) 
 	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(map[string]any{
+	createdAt := time.Now().UTC()
+	plan, err := json.Marshal(map[string]any{
+		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
+		"temp_relative_path": "images/.omnistore-upload-0011223344556677.tmp",
+		"owner_type":         models.ImageOwnerAnonymous, "original_filename": "pending.png",
+		"created_at": createdAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := json.Marshal(map[string]any{
 		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
 		"temp_relative_path":  "images/.omnistore-upload-0011223344556677.tmp",
 		"final_relative_path": "images/" + random + ".png", "image_id": "img_" + random,
 		"owner_type": models.ImageOwnerAnonymous, "original_filename": "pending.png",
 		"public_url": "http://store.test/i/img_" + random + ".png",
 		"size":       1, "mime_type": "image/png", "width": 1, "height": 1, "ext": "png",
-		"created_at": time.Now().UTC(),
+		"created_at": createdAt,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), payload, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), plan, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".prepared"), prepared, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -251,17 +264,30 @@ func TestHandleAdminDeleteSourceRejectsPendingFileUploadRecovery(t *testing.T) {
 	if err := os.MkdirAll(operationsDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(map[string]any{
+	createdAt := time.Now().UTC()
+	plan, err := json.Marshal(map[string]any{
 		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
 		"temp_relative_path":  ".omnistore-upload-0011223344556677.tmp",
 		"final_relative_path": "pending.txt", "replaced_existing": false,
-		"size": 1, "content_sha256": strings.Repeat("0", 64), "mtime_unix_nano": time.Now().UnixNano(),
-		"owner_type": models.FileOwnerUnowned, "created_at": time.Now().UTC(),
+		"owner_type": models.FileOwnerUnowned, "created_at": createdAt,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), payload, 0o600); err != nil {
+	prepared, err := json.Marshal(map[string]any{
+		"version": 1, "operation_id": operationID, "storage_source_id": source.ID,
+		"temp_relative_path":  ".omnistore-upload-0011223344556677.tmp",
+		"final_relative_path": "pending.txt", "replaced_existing": false,
+		"size": 1, "content_sha256": strings.Repeat("0", 64), "mtime_unix_nano": time.Now().UnixNano(),
+		"owner_type": models.FileOwnerUnowned, "created_at": createdAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".json"), plan, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(operationsDir, operationID+".prepared"), prepared, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

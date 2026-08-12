@@ -9,6 +9,8 @@ import (
 var forcedExcludePatterns = []string{
 	".omnistore-upload-*",
 	"**/.omnistore-upload-*",
+	".omnistore-copy-*",
+	"**/.omnistore-copy-*",
 	".omnistore-write-test-*",
 	"**/.omnistore-write-test-*",
 }

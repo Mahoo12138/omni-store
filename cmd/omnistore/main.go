@@ -186,24 +186,10 @@ func runServer(args []string) error {
 			"completed_uploads", uploadRecovery.CompletedUploads,
 			"rolled_back_uploads", uploadRecovery.RolledBackUploads)
 	}
-	orphanedUploads, err := app.Files().CleanupOrphanedUploadTemps()
-	if err != nil {
-		return fmt.Errorf("清理未写入恢复日志的上传临时文件失败: %w", err)
-	}
-	if orphanedUploads.RemovedFiles > 0 {
-		logger.Info("已清理未写入恢复日志的上传临时文件",
-			"scanned_sources", orphanedUploads.ScannedSources,
-			"removed_files", orphanedUploads.RemovedFiles)
-	}
-
 	stopCleanup := make(chan struct{})
 	httpserver.StartSessionCleanup(app.Sessions(), logger, stopCleanup)
 	if cfg.Server.S3Enabled {
 		httpserver.StartS3MultipartCleanup(app.S3Multipart(), logger, stopCleanup)
-	}
-	if cfg.Upload.CleanupStaleFiles {
-		httpserver.StartUploadCleanup(app.Files(),
-			time.Duration(cfg.Upload.TempFileMaxAgeHours)*time.Hour, logger, stopCleanup)
 	}
 	httpserver.StartWebDAVLockCleanup(app.Files(), logger, stopCleanup)
 	httpserver.StartThumbnailCacheCleanup(app.ImageBed(), logger, stopCleanup)
