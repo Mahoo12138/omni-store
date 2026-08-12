@@ -205,8 +205,8 @@ func (s *Service) movePathMetadata(storageSourceID int64, fromRel, toRel string,
 		return err
 	}
 	rows, err := tx.Query(`SELECT id, relative_path FROM file_records
-  WHERE storage_source_id = ? AND record_status = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-		storageSourceID, models.FileRecordActive, fromRel, fromRel+"/%")
+  WHERE storage_source_id = ? AND record_status = ? AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{storageSourceID, models.FileRecordActive}, fromRel)...)
 	if err != nil {
 		return err
 	}
@@ -247,19 +247,17 @@ func (s *Service) deletePathMetadata(storageSourceID int64, relPath string, isDi
 	}
 	defer tx.Rollback()
 	if isDir {
-		if _, err := tx.Exec(`DELETE FROM images
-  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, relPath, relPath+"/%"); err != nil {
+		if _, err := tx.Exec(`DELETE FROM images WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+			appendRelativePathSubtreeArgs([]any{storageSourceID}, relPath)...); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`DELETE FROM file_shares
-  WHERE storage_source_id = ? AND trash_key IS NULL AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, relPath, relPath+"/%"); err != nil {
+		if _, err := tx.Exec(`DELETE FROM file_shares WHERE storage_source_id = ? AND trash_key IS NULL AND `+
+			relativePathSubtreeSQL, appendRelativePathSubtreeArgs([]any{storageSourceID}, relPath)...); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`DELETE FROM file_records
-  WHERE storage_source_id = ? AND record_status = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, models.FileRecordActive, relPath, relPath+"/%"); err != nil {
+		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND record_status = ? AND `+
+			relativePathSubtreeSQL,
+			appendRelativePathSubtreeArgs([]any{storageSourceID, models.FileRecordActive}, relPath)...); err != nil {
 			return err
 		}
 	} else {

@@ -158,7 +158,7 @@ func seedLinkedPath(t *testing.T, service *Service, source *models.StorageSource
 func assertLinkedPath(t *testing.T, service *Service, sourceID int64, relPath string) {
 	t.Helper()
 	for table, condition := range map[string]string{
-		"images":       "storage_source_id = ? AND relative_path = ?",
+		"images":       "storage_source_id = ? AND relative_path = ? AND trash_key IS NULL",
 		"file_shares":  "storage_source_id = ? AND relative_path = ? AND trash_key IS NULL",
 		"file_records": "storage_source_id = ? AND relative_path = ? AND record_status = 'active'",
 	} {

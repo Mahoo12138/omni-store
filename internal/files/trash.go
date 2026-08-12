@@ -209,12 +209,12 @@ func (s *Service) moveRecordsToTrashTx(tx *sql.Tx, src *models.StorageSource, tr
 			}
 		}
 	}
-	if _, err := tx.Exec(`UPDATE images SET trash_key = ? WHERE storage_source_id = ? AND
-	  (relative_path = ? OR relative_path LIKE ?)`, trashKey, src.ID, plan.sourceRel, plan.sourceRel+"/%"); err != nil {
+	if _, err := tx.Exec(`UPDATE images SET trash_key = ? WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{trashKey, src.ID}, plan.sourceRel)...); err != nil {
 		return err
 	}
-	_, err := tx.Exec(`UPDATE file_shares SET trash_key = ? WHERE storage_source_id = ? AND trash_key IS NULL AND
-  (relative_path = ? OR relative_path LIKE ?)`, trashKey, src.ID, plan.sourceRel, plan.sourceRel+"/%")
+	_, err := tx.Exec(`UPDATE file_shares SET trash_key = ? WHERE storage_source_id = ? AND trash_key IS NULL AND `+
+		relativePathSubtreeSQL, appendRelativePathSubtreeArgs([]any{trashKey, src.ID}, plan.sourceRel)...)
 	return err
 }
 

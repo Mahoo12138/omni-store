@@ -409,8 +409,8 @@ func (s *Service) syncTransferRecords(source, target *models.StorageSource, plan
 	records := make(map[string]transferRecord)
 	if move {
 		rows, err := s.db.Query(`SELECT relative_path, owner_user_id, owner_type, created_by_user_id, created_at
-  FROM file_records WHERE storage_source_id = ? AND record_status = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			source.ID, models.FileRecordActive, plan.sourceRel, plan.sourceRel+"/%")
+  FROM file_records WHERE storage_source_id = ? AND record_status = ? AND `+relativePathSubtreeSQL,
+			appendRelativePathSubtreeArgs([]any{source.ID, models.FileRecordActive}, plan.sourceRel)...)
 		if err != nil {
 			return err
 		}
@@ -433,8 +433,8 @@ func (s *Service) syncTransferRecords(source, target *models.StorageSource, plan
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC()
-	if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-		target.ID, plan.targetRel, plan.targetRel+"/%"); err != nil {
+	if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{target.ID}, plan.targetRel)...); err != nil {
 		return err
 	}
 	for _, item := range plan.files {
@@ -464,8 +464,8 @@ func (s *Service) syncTransferRecords(source, target *models.StorageSource, plan
 		}
 	}
 	if move {
-		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			source.ID, plan.sourceRel, plan.sourceRel+"/%"); err != nil {
+		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+			appendRelativePathSubtreeArgs([]any{source.ID}, plan.sourceRel)...); err != nil {
 			return err
 		}
 		if err := moveImageRecordsTx(tx, source.ID, target.ID, plan.sourceRel, plan.targetRel); err != nil {
@@ -487,7 +487,8 @@ func nullableInt(value sql.NullInt64) any {
 
 func moveImageRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel string) error {
 	rows, err := tx.Query(`SELECT id, relative_path FROM images
-  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`, sourceID, fromRel, fromRel+"/%")
+  WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{sourceID}, fromRel)...)
 	if err != nil {
 		return err
 	}
@@ -518,8 +519,8 @@ func moveImageRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel str
 
 func moveShareRecordsTx(tx *sql.Tx, sourceID, targetID int64, fromRel, toRel string) error {
 	rows, err := tx.Query(`SELECT id, relative_path FROM file_shares
-  WHERE storage_source_id = ? AND trash_key IS NULL AND (relative_path = ? OR relative_path LIKE ?)`,
-		sourceID, fromRel, fromRel+"/%")
+  WHERE storage_source_id = ? AND trash_key IS NULL AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{sourceID}, fromRel)...)
 	if err != nil {
 		return err
 	}
@@ -575,8 +576,8 @@ func (s *Service) rollbackTransferRecords(source, target *models.StorageSource, 
 
 func moveFileRecordsTx(tx *sql.Tx, fromSourceID, toSourceID int64, fromRel, toRel string) error {
 	rows, err := tx.Query(`SELECT relative_path FROM file_records
-  WHERE storage_source_id = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-		fromSourceID, fromRel, fromRel+"/%")
+  WHERE storage_source_id = ? AND `+relativePathSubtreeSQL,
+		appendRelativePathSubtreeArgs([]any{fromSourceID}, fromRel)...)
 	if err != nil {
 		return err
 	}

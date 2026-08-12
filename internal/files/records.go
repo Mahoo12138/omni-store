@@ -280,8 +280,8 @@ func upsertPreparedFileRecord(exec fileRecordExecer, prepared *PreparedFileRecor
 func (s *Service) deleteFileRecords(storageSourceID int64, relPath string, isDir bool) error {
 	if isDir {
 		_, err := s.db.Exec(`DELETE FROM file_records
-  WHERE storage_source_id = ? AND record_status = ? AND (relative_path = ? OR relative_path LIKE ?)`,
-			storageSourceID, models.FileRecordActive, relPath, relPath+"/%")
+  WHERE storage_source_id = ? AND record_status = ? AND `+relativePathSubtreeSQL,
+			appendRelativePathSubtreeArgs([]any{storageSourceID, models.FileRecordActive}, relPath)...)
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ? AND record_status = ?`,
