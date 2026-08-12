@@ -23,6 +23,28 @@ type CleanupResult struct {
 	RemovedFiles   int
 }
 
+// CleanupOrphanedUploadTemps 清理启动恢复完成后仍未被 journal 接管的上传临时文件。
+// 该方法只能在 HTTP/S3 开始监听前调用；此时不存在进行中的上传，所以所有严格
+// 保留名的普通文件都来自进程在写入持久日志前被中断的操作。
+func (s *Service) CleanupOrphanedUploadTemps() (CleanupResult, error) {
+	sourcesList, err := s.sources.List()
+	if err != nil {
+		return CleanupResult{}, err
+	}
+
+	result := CleanupResult{}
+	var cleanupErrors []error
+	for _, source := range sourcesList {
+		result.ScannedSources++
+		removed, err := cleanupOrphanedUploadTempsInRoot(source.RootPath)
+		result.RemovedFiles += removed
+		if err != nil {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("存储源 %s: %w", source.Name, err))
+		}
+	}
+	return result, errors.Join(cleanupErrors...)
+}
+
 // CleanupStaleUploads 清理所有存储源中超过 maxAge 的 OmniStore 上传临时文件。
 // 只匹配服务自身生成的严格文件名，不跟随符号链接，也不删除目录。
 func (s *Service) CleanupStaleUploads(maxAge time.Duration) (CleanupResult, error) {
@@ -49,6 +71,16 @@ func (s *Service) CleanupStaleUploads(maxAge time.Duration) (CleanupResult, erro
 }
 
 func cleanupStaleUploadsInRoot(root string, cutoff time.Time) (int, error) {
+	return cleanupUploadTempsInRoot(root, func(info os.FileInfo) bool {
+		return !info.ModTime().IsZero() && info.ModTime().Before(cutoff)
+	})
+}
+
+func cleanupOrphanedUploadTempsInRoot(root string) (int, error) {
+	return cleanupUploadTempsInRoot(root, func(os.FileInfo) bool { return true })
+}
+
+func cleanupUploadTempsInRoot(root string, shouldRemove func(os.FileInfo) bool) (int, error) {
 	removed := 0
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -61,7 +93,7 @@ func cleanupStaleUploadsInRoot(root string, cutoff time.Time) (int, error) {
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() || info.ModTime().IsZero() || !info.ModTime().Before(cutoff) {
+		if !info.Mode().IsRegular() || !shouldRemove(info) {
 			return nil
 		}
 		if err := os.Remove(path); err != nil {

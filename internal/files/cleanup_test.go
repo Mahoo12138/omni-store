@@ -75,6 +75,56 @@ func TestCleanupStaleUploadsInRootOnlyRemovesReservedOldFiles(t *testing.T) {
 	}
 }
 
+func TestCleanupOrphanedUploadTempsInRootRemovesFreshReservedFiles(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "nested")
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatalf("create nested directory: %v", err)
+	}
+
+	freshReserved := filepath.Join(nested, ".omnistore-upload-0123456789abcdef.tmp")
+	wrongLength := filepath.Join(root, ".omnistore-upload-0123.tmp")
+	userFile := filepath.Join(root, ".omnistore-upload-not-ours.tmp")
+	backup := filepath.Join(root, ".omnistore-upload-0123456789abcdef01234567.backup")
+	for _, path := range []string{freshReserved, wrongLength, userFile, backup} {
+		if err := os.WriteFile(path, []byte("temporary"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	reservedDir := filepath.Join(root, ".omnistore-upload-aaaaaaaaaaaaaaaa.tmp")
+	if err := os.Mkdir(reservedDir, 0o755); err != nil {
+		t.Fatalf("create reserved-looking directory: %v", err)
+	}
+	target := filepath.Join(root, "symlink-target.txt")
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	symlink := filepath.Join(root, ".omnistore-upload-bbbbbbbbbbbbbbbb.tmp")
+	symlinkCreated := os.Symlink(target, symlink) == nil
+
+	removed, err := cleanupOrphanedUploadTempsInRoot(root)
+	if err != nil {
+		t.Fatalf("cleanup orphaned uploads: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("expected one removal, got %d", removed)
+	}
+	if _, err := os.Stat(freshReserved); !os.IsNotExist(err) {
+		t.Fatalf("fresh reserved file still exists or stat failed: %v", err)
+	}
+	for _, path := range []string{wrongLength, userFile, backup, reservedDir, target} {
+		if _, err := os.Lstat(path); err != nil {
+			t.Errorf("protected path %s was changed: %v", path, err)
+		}
+	}
+	if symlinkCreated {
+		if info, err := os.Lstat(symlink); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("symlink should not be removed: info=%v err=%v", info, err)
+		}
+	}
+}
+
 func TestCleanupStaleUploadsInRootRejectsMissingRoot(t *testing.T) {
 	removed, err := cleanupStaleUploadsInRoot(filepath.Join(t.TempDir(), "missing"), time.Now())
 	if err == nil || removed != 0 {
