@@ -58,7 +58,7 @@ export function DialogWrap({
                     </Dialog.Description>
                   )}
                 </div>
-                <Dialog.Close className={css.close} aria-label="关闭">
+                <Dialog.Close className={css.close} aria-label="关闭弹窗">
                   <CloseIcon />
                 </Dialog.Close>
               </div>

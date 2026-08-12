@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -607,6 +607,7 @@ function TokenBlock({
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
+  const tokenInputId = useId()
   useEffect(() => {
     if (newToken) setShowOpen(true)
   }, [newToken])
@@ -704,9 +705,9 @@ function TokenBlock({
         }
       >
         {newToken ? (
-          <Field label="Token">
+          <Field label="Token" htmlFor={tokenInputId}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Input readOnly value={newToken} />
+              <Input id={tokenInputId} readOnly value={newToken} />
               <Button
                 variant="secondary"
                 onClick={() => navigator.clipboard.writeText(newToken)}
@@ -730,6 +731,7 @@ function ImageBedTokenManager() {
   const [revealedToken, setRevealedToken] = useState('')
   const [revealOpen, setRevealOpen] = useState(false)
   const [deleting, setDeleting] = useState<ImageBedToken | null>(null)
+  const revealedTokenInputId = useId()
 
   const refreshTokenQueries = () => {
     void Promise.all([
@@ -864,9 +866,9 @@ function ImageBedTokenManager() {
         description="请立即复制保存。关闭后无法再次查看明文。"
         footer={<Button variant="secondary" onClick={() => setRevealOpen(false)}>我已保存</Button>}
       >
-        <Field label="Token">
+        <Field label="Token" htmlFor={revealedTokenInputId}>
           <div className={css.tokenRevealRow}>
-            <Input readOnly value={revealedToken} />
+            <Input id={revealedTokenInputId} readOnly value={revealedToken} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealedToken)}>复制</Button>
           </div>
         </Field>
@@ -908,6 +910,8 @@ function S3CredentialManager() {
   const [revealed, setRevealed] = useState<{ accessKeyId: string; secret: string } | null>(null)
   const [deleting, setDeleting] = useState<S3Credential | null>(null)
   const [copiedBucket, setCopiedBucket] = useState<string | null>(null)
+  const accessKeyInputId = useId()
+  const secretKeyInputId = useId()
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['s3-credentials'] })
@@ -1079,15 +1083,15 @@ function S3CredentialManager() {
         description="请立即复制 Access Key ID 与 Secret Access Key。关闭后无法再次查看 Secret。"
         footer={<Button variant="secondary" onClick={() => setRevealed(null)}>我已保存</Button>}
       >
-        <Field label="Access Key ID">
+        <Field label="Access Key ID" htmlFor={accessKeyInputId}>
           <div className={css.tokenRevealRow}>
-            <Input readOnly value={revealed?.accessKeyId ?? ''} />
+            <Input id={accessKeyInputId} readOnly value={revealed?.accessKeyId ?? ''} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealed?.accessKeyId ?? '')}>复制</Button>
           </div>
         </Field>
-        <Field label="Secret Access Key">
+        <Field label="Secret Access Key" htmlFor={secretKeyInputId}>
           <div className={css.tokenRevealRow}>
-            <Input readOnly value={revealed?.secret ?? ''} />
+            <Input id={secretKeyInputId} readOnly value={revealed?.secret ?? ''} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealed?.secret ?? '')}>复制</Button>
           </div>
         </Field>

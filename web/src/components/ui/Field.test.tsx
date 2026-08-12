@@ -26,4 +26,17 @@ describe('Field', () => {
     expect(html).toContain('for="target-path"')
     expect(html).toContain('id="target-path"')
   })
+
+  it('associates a label with an explicitly identified control inside a compound field', () => {
+    const html = renderToStaticMarkup(
+      <Field label="Token" htmlFor="credential-token">
+        <div>
+          <Input id="credential-token" readOnly />
+          <button type="button">复制</button>
+        </div>
+      </Field>,
+    )
+    expect(html).toContain('for="credential-token"')
+    expect(html).toContain('id="credential-token"')
+  })
 })
