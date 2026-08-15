@@ -9,6 +9,7 @@
 3. Git 标签、GitHub Release、二进制 `omnistore version` 和容器 OCI 标签中的版本必须一致。
 4. RC 创建为 GitHub Prerelease，不更新容器 `latest`；只有不带预发布标识的稳定 SemVer 标签可以更新 `latest`。
 5. 已发布标签不得移动或覆盖。发布后发现问题应停止推广并发布新的 RC 或 PATCH。
+6. `main` push、Pull Request 和手动工作流只执行统一质量门禁，不上传 `web-dist`、二进制或其他发布产物，也不推送容器镜像；只有 `v*` 版本标签触发完整发布链路。
 
 ## 冻结前清单
 
@@ -39,7 +40,8 @@ OMNISTORE_RELEASE_VERSION=1.0.0-rc.1 ./scripts/verify-release.sh
 7. Docker Compose 配置和 Git diff 空白错误。
 
 GitHub 的 `Unified release gate` Job 调用同一脚本；Docker 镜像、二进制归档和 GitHub Release
-全部硬依赖该 Job。`scripts/release-check.sh` 仅保留为兼容包装器，不包含独立检查逻辑。
+全部硬依赖该 Job，且只在 `v*` 标签运行中生成或发布。普通 `main` / Pull Request / 手动运行只验证源码，
+不会生成可下载 artifact 或更新 GHCR。`scripts/release-check.sh` 仅保留为兼容包装器，不包含独立检查逻辑。
 
 开发中排查脚本本身时可临时设置 `OMNISTORE_ALLOW_DIRTY=1`；这不允许用于正式候选签发。
 
@@ -55,7 +57,7 @@ git push origin v1.0.0-rc.1
 
 标签流水线应产出：
 
-- GHCR 的 SemVer/commit 镜像标签，不更新 `latest`。
+- GHCR 的 SemVer 镜像标签，不更新 `latest`。
 - Linux amd64、arm64 压缩包。
 - `checksums.txt`。
 - 标记为 Prerelease 的 GitHub Release。
