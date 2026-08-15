@@ -429,8 +429,8 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 	entries := make([]Entry, 0, len(dirents))
 	for _, de := range dirents {
 		name := de.Name()
-		// 隐藏由上传与复制恢复流程持有的内部 staging。
-		if isInternalName(name) {
+		// 用户枚举隐藏完整的系统保留命名空间；物理用量统计不使用该过滤。
+		if security.IsReservedName(name) {
 			continue
 		}
 		childRel := name
@@ -517,7 +517,7 @@ func (s *Service) ListObjects(src *models.StorageSource) ([]ObjectEntry, error) 
 			}
 			return nil
 		}
-		if isInternalName(entry.Name()) {
+		if security.IsReservedName(entry.Name()) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
