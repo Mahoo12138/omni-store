@@ -67,10 +67,12 @@ func TestLockPairOrdersKeysAndHandlesIdenticalKey(t *testing.T) {
 	manager := NewManager()
 	unlocks := manager.LockPair("z", "a")
 	acquired := make(chan struct{})
+	released := make(chan struct{})
 	go func() {
 		unlock := manager.LockPair("a", "z")
 		close(acquired)
 		unlock()
+		close(released)
 	}()
 	select {
 	case <-acquired:
@@ -82,6 +84,11 @@ func TestLockPairOrdersKeysAndHandlesIdenticalKey(t *testing.T) {
 	case <-acquired:
 	case <-time.After(time.Second):
 		t.Fatal("reversed lock pair deadlocked")
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("reversed lock pair did not release")
 	}
 
 	unlockSame := manager.LockPair("same", "same")
