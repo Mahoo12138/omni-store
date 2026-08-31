@@ -111,6 +111,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
         emptyHint={browse.isError ? '分享可能已经失效。' : undefined}
         onOpenDir={(name) => navigate([...segments, name].join('/'))}
         fileHref={(entry) => publicShareRawUrl(shareKey, [...segments, entry.name].join('/'))}
+        fileTarget="_blank"
         renderActions={(entry) => entry.type === 'file' ? (
           <span className={ft.actions}><a className={ft.actionBtn} href={publicShareRawUrl(shareKey, [...segments, entry.name].join('/'), true)} title="下载" aria-label={`下载 ${entry.name}`}><IconDownload size={16} /></a></span>
         ) : null}

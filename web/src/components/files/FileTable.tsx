@@ -13,6 +13,7 @@ export function FileTable({
   emptyHint,
   onOpenDir,
   fileHref,
+  fileTarget,
   renderActions,
   showType = false,
 }: {
@@ -21,8 +22,10 @@ export function FileTable({
   emptyTitle?: string
   emptyHint?: string
   onOpenDir: (name: string) => void
-  // 文件名点击目标（公开侧 raw 链接）；不传则文件名不可点
+  // 文件名点击目标；不传则文件名不可点。
   fileHref?: (entry: FileEntry) => string
+  // 预览链接可显式新开标签页；下载链接保持在当前页面触发浏览器下载。
+  fileTarget?: '_blank'
   renderActions?: (entry: FileEntry) => ReactNode
   // 是否展示"类型"列（私有管理侧使用，按扩展名推断）
   showType?: boolean
@@ -55,8 +58,8 @@ export function FileTable({
                     <a
                       className={css.nameLink}
                       href={fileHref(entry)}
-                      target="_blank"
-                      rel="noreferrer"
+                      target={fileTarget}
+                      rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
                     >
                       {entry.name}
                     </a>

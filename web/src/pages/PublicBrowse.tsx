@@ -144,6 +144,7 @@ export function PublicBrowsePage() {
           emptyHint={browse.isError ? '目录可能已被取消公开。' : undefined}
           onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
           fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
+          fileTarget="_blank"
           renderActions={(entry) =>
             entry.type === 'file' ? (
               <span className={ft.actions}>

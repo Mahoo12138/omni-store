@@ -16,7 +16,28 @@ test('uploaded file is searchable, recoverable and permanently removable', async
     buffer: Buffer.from('OmniStore release lifecycle E2E\n'),
   })
   await expect(page.getByRole('status')).toContainText('已上传 1 个文件')
-  await expect(page.getByRole('row', { name: new RegExp(fileName) })).toBeVisible()
+  let row = page.getByRole('row', { name: new RegExp(fileName) })
+  await expect(row).toBeVisible()
+
+  const fileManagerURL = page.url()
+  const pageCount = page.context().pages().length
+  const fileNameLink = row.getByRole('link', { name: fileName, exact: true })
+  await expect(fileNameLink).not.toHaveAttribute('target', '_blank')
+  const fileNameDownloadPromise = page.waitForEvent('download')
+  await fileNameLink.click()
+  const fileNameDownload = await fileNameDownloadPromise
+  expect(fileNameDownload.suggestedFilename()).toBe(fileName)
+  await expect.poll(() => page.context().pages().length).toBe(pageCount)
+  await expect(page).toHaveURL(fileManagerURL)
+
+  const downloadAction = row.getByRole('link', { name: `下载 ${fileName}`, exact: true })
+  await expect(downloadAction).not.toHaveAttribute('target', '_blank')
+  const actionDownloadPromise = page.waitForEvent('download')
+  await downloadAction.click()
+  const actionDownload = await actionDownloadPromise
+  expect(actionDownload.suggestedFilename()).toBe(fileName)
+  await expect.poll(() => page.context().pages().length).toBe(pageCount)
+  await expect(page).toHaveURL(fileManagerURL)
 
   await page.getByRole('link', { name: '搜索', exact: true }).click()
   await page.getByLabel('搜索关键字').fill(fileName)
@@ -25,7 +46,7 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   await expect(result).toBeVisible()
   await result.getByRole('button', { name: '打开所在目录' }).click()
 
-  let row = page.getByRole('row', { name: new RegExp(fileName) })
+  row = page.getByRole('row', { name: new RegExp(fileName) })
   await row.getByRole('button', { name: '删除' }).click()
   await page.getByRole('dialog', { name: '移入回收站' }).getByRole('button', { name: '移入回收站' }).click()
   await expect(page.getByRole('status')).toContainText(`已将 ${fileName} 移入回收站`)

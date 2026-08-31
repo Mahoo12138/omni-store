@@ -343,8 +343,6 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                           sourceKey,
                           currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`,
                         )}
-                        target="_blank"
-                        rel="noreferrer"
                         aria-label={`下载 ${entry.name}`}
                         title="下载"
                       >

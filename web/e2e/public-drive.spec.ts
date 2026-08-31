@@ -8,7 +8,10 @@ test('anonymous visitor can browse and filter the public drive but must log in t
 
   await expect(page.getByRole('row', { name: /README\.txt/ })).toBeVisible()
   await expect(page.getByRole('row', { name: /guides/ })).toBeVisible()
-  await expect(page.getByRole('link', { name: '下载 README.txt' })).toHaveAttribute('href', '/raw/demo/README.txt?download=1')
+  await expect(page.getByRole('link', { name: 'README.txt', exact: true })).toHaveAttribute('target', '_blank')
+  const downloadLink = page.getByRole('link', { name: '下载 README.txt' })
+  await expect(downloadLink).toHaveAttribute('href', '/raw/demo/README.txt?download=1')
+  await expect(downloadLink).not.toHaveAttribute('target', '_blank')
 
   const filter = page.getByPlaceholder('搜索文件或文件夹')
   await filter.fill('README')

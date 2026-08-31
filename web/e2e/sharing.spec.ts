@@ -28,7 +28,9 @@ test('password-protected file share can be created, opened and revoked', async (
   await page.getByRole('textbox', { name: '访问密码' }).fill('e2e-share')
   await page.getByRole('button', { name: '查看分享' }).click()
   await expect(page.getByRole('heading', { name: 'README.txt' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '下载文件' })).toHaveAttribute('href', /\/share\/shr-[a-f0-9]+\/raw\?download=1$/)
+  const downloadLink = page.getByRole('link', { name: '下载文件' })
+  await expect(downloadLink).toHaveAttribute('href', /\/share\/shr-[a-f0-9]+\/raw\?download=1$/)
+  await expect(downloadLink).not.toHaveAttribute('target', '_blank')
 
   await page.goto('/app/shares')
   const newestShare = page.locator('article').first()
