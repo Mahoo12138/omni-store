@@ -15,6 +15,14 @@ test('user image can be uploaded, served from history and deleted', async ({ pag
   await page.getByRole('link', { name: '图床', exact: true }).click()
   await expect(page.getByRole('heading', { name: '图床', exact: true })).toBeVisible()
   await expect(page.getByRole('combobox', { name: '选择图床目标' })).toContainText('团队文件')
+  await expect(page.getByRole('heading', { name: '如何在 PicGo 中使用', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '图床信息', exact: true }).click()
+  const infoDialog = page.getByRole('dialog', { name: '图床信息', exact: true })
+  await expect(infoDialog).toBeVisible()
+  await expect(infoDialog).toContainText('团队文件')
+  await expect(infoDialog).toContainText('已上传图片')
+  await infoDialog.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(infoDialog).toBeHidden()
 
   await page.locator('input[type="file"]').setInputFiles({
     name: fileName,

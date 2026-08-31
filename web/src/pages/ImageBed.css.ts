@@ -49,13 +49,7 @@ export const errorNotice = style([noticeBase, {
 }])
 
 export const workspace = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 306px',
-  gap: 24,
-  alignItems: 'start',
-  '@media': {
-    'screen and (max-width: 1180px)': { gridTemplateColumns: '1fr' },
-  },
+  display: 'block',
 })
 
 export const mainColumn = style({ minWidth: 0 })
@@ -128,6 +122,31 @@ export const panelHeading = style({
   alignItems: 'center',
   gap: vars.space.sm,
   margin: '2px 2px 12px',
+})
+
+export const panelHeadingActions = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+})
+
+export const infoButton = style({
+  minHeight: 30,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '0 8px',
+  color: vars.color.primary,
+  background: 'transparent',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 550,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': { background: vars.color.primarySubtle, borderColor: vars.color.primary },
+    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
+  },
 })
 
 export const sectionTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 650 })
@@ -398,23 +417,9 @@ export const pager = style({
   fontSize: vars.fontSize.xs,
 })
 
-export const sideColumn = style({
-  display: 'grid',
-  gap: 16,
-  position: 'sticky',
-  top: 88,
-  '@media': {
-    'screen and (max-width: 1180px)': {
-      position: 'static',
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-    'screen and (max-width: 680px)': { gridTemplateColumns: '1fr' },
-  },
-})
-
-export const sidePanel = style({ ...card, padding: 14 })
-export const sidePanelIcon = style({ color: vars.color.textSecondary })
 export const sideLabel = style({ margin: '2px 0 7px', color: vars.color.textSecondary, fontSize: '10px' })
+
+export const infoModalBody = style({ display: 'grid', gap: 16 })
 
 export const targetSummary = style({
   display: 'flex',
@@ -467,29 +472,6 @@ export const settingsLink = style({
   fontSize: '11px',
   fontWeight: 550,
   selectors: { '&:hover': { color: vars.color.primary, borderColor: vars.color.primary } },
-})
-
-export const tutorialHeading = style({ marginBottom: 10 })
-
-export const steps = style({
-  margin: '0 0 12px',
-  paddingLeft: 20,
-  color: vars.color.textSecondary,
-  fontSize: '11px',
-  lineHeight: 1.72,
-})
-
-export const tutorialLink = style({
-  height: 34,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  color: vars.color.primary,
-  background: vars.color.primarySubtle,
-  borderRadius: vars.radius.md,
-  fontSize: '11px',
-  fontWeight: 600,
 })
 
 export const noTargetPage = style({
@@ -559,5 +541,3 @@ globalStyle(`${statRow} dd`, {
   fontWeight: 650,
   letterSpacing: '-0.02em',
 })
-globalStyle(`${steps} li + li`, { marginTop: 6 })
-globalStyle(`${steps} li::marker`, { color: vars.color.primary, fontWeight: 700 })

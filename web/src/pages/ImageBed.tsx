@@ -15,12 +15,12 @@ import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
+import { DialogWrap } from '../components/ui/Dialog'
 import { Select } from '../components/ui/Select'
 import {
   IconChevronRight,
   IconCloud,
   IconCopy,
-  IconExternalLink,
   IconGrid,
   IconImage,
   IconInfo,
@@ -45,7 +45,7 @@ export function ImageBedPage() {
 
   if (targets.isPending) {
     return (
-      <AppShell title="图床" wide>
+      <AppShell title="图床">
         <div className={css.loadingState} aria-busy="true">正在加载图床…</div>
       </AppShell>
     )
@@ -53,7 +53,7 @@ export function ImageBedPage() {
 
   if (targets.isSuccess && targets.data.targets.length === 0) {
     return (
-      <AppShell title="图床" wide>
+      <AppShell title="图床">
         <NoTargetView isAdmin={isAdmin} />
       </AppShell>
     )
@@ -96,6 +96,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [copied, setCopied] = useState('')
+  const [infoOpen, setInfoOpen] = useState(false)
 
   const history = useQuery({
     queryKey: ['imagebed-history', page],
@@ -166,7 +167,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   }
 
   return (
-    <AppShell title="图床" wide>
+    <AppShell title="图床">
       <div className={css.pageHeader}>
         <h1 className={css.pageTitle}>图床</h1>
         {notice ? (
@@ -212,7 +213,18 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
             <section className={css.panel} aria-labelledby="target-title">
               <div className={css.panelHeading}>
                 <h2 id="target-title" className={css.sectionTitle}>图床目标</h2>
-                <span className={css.statusBadge}>正常</span>
+                <div className={css.panelHeadingActions}>
+                  <button
+                    type="button"
+                    className={css.infoButton}
+                    aria-haspopup="dialog"
+                    aria-expanded={infoOpen}
+                    onClick={() => setInfoOpen(true)}
+                  >
+                    <IconInfo size={14} /> 图床信息
+                  </button>
+                  <span className={css.statusBadge}>正常</span>
+                </div>
               </div>
 
               <Select
@@ -364,20 +376,27 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
           </section>
         </div>
 
-        <aside className={css.sideColumn}>
-          <section className={css.sidePanel}>
-            <div className={css.panelHeading}>
-              <h2 className={css.sectionTitle}>图床信息</h2>
-              <span className={css.sidePanelIcon}><IconInfo size={16} /></span>
-            </div>
-            <p className={css.sideLabel}>当前图床目标</p>
-            <div className={css.targetSummary}>
-              <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
-              <div className={css.targetSummaryText}>
-                <strong>{currentTargetData?.name ?? currentTarget}</strong>
-                <span>{currentTargetData?.description || '当前默认存储位置'}</span>
+      </div>
+
+      {infoOpen ? (
+        <DialogWrap
+          open
+          onOpenChange={(open) => { if (!open) setInfoOpen(false) }}
+          title="图床信息"
+          description="当前选中的图床目标与上传统计"
+          footer={<Button variant="secondary" onClick={() => setInfoOpen(false)}>关闭</Button>}
+        >
+          <div className={css.infoModalBody}>
+            <div>
+              <p className={css.sideLabel}>当前图床目标</p>
+              <div className={css.targetSummary}>
+                <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
+                <div className={css.targetSummaryText}>
+                  <strong>{currentTargetData?.name ?? currentTarget}</strong>
+                  <span>{currentTargetData?.description || '当前默认存储位置'}</span>
+                </div>
+                <span className={css.statusBadge}>正常</span>
               </div>
-              <span className={css.statusBadge}>正常</span>
             </div>
             <dl className={css.statList}>
               <Stat label="已上传图片" value={`${history.data?.total ?? 0} 张`} />
@@ -385,27 +404,12 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               <Stat label="本月上传" value={`${stats.month} 张`} />
               <Stat label="当前页图片体积" value={formatBytes(stats.bytes)} />
             </dl>
-            <Link to="/app/admin" search={{ section: 'sources' }} className={css.settingsLink}>
+            <Link to="/app/admin" search={{ section: 'sources' }} className={css.settingsLink} onClick={() => setInfoOpen(false)}>
               <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
             </Link>
-          </section>
-
-          <section className={css.sidePanel}>
-            <div className={css.tutorialHeading}>
-              <h2 className={css.sectionTitle}>如何在 PicGo 中使用</h2>
-            </div>
-            <ol className={css.steps}>
-              <li>在个人设置中为当前客户端新建并复制图床 API Token。</li>
-              <li>在 PicGo 中选择“自定义 Web 图床”。</li>
-              <li>将接口地址填为上方 API 地址，并添加 Bearer Token。</li>
-              <li>保存配置后即可直接上传到当前默认目标。</li>
-            </ol>
-            <Link to="/about" className={css.tutorialLink}>
-              查看使用说明 <IconExternalLink size={14} />
-            </Link>
-          </section>
-        </aside>
-      </div>
+          </div>
+        </DialogWrap>
+      ) : null}
     </AppShell>
   )
 }

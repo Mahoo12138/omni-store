@@ -30,7 +30,7 @@ export function SharesPage() {
   }
 
   return (
-    <AppShell title="分享" wide>
+    <AppShell title="分享">
       <header className={css.header}>
         <div>
           <h1 className={css.title}>分享</h1>
