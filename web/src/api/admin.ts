@@ -128,6 +128,8 @@ export interface AuditLogQuery {
 export interface AuditLogPage {
   items: AuditLog[]
   total: number
+  page: number
+  page_size: number
 }
 
 // 用户管理
@@ -299,7 +301,12 @@ export async function adminFetchAuditLogs(query: AuditLogQuery): Promise<AuditLo
   if (query.q) params.set('q', query.q)
 
   const data = await apiFetch<AuditLogPage>(`/api/v1/admin/audit-logs?${params}`)
-  return { items: data.items ?? [], total: data.total ?? 0 }
+  return {
+    items: data.items ?? [],
+    total: data.total ?? 0,
+    page: data.page ?? query.page,
+    page_size: data.page_size ?? query.page_size,
+  }
 }
 
 // 系统配置包导出（ZIP 二进制响应，不走 JSON envelope）。

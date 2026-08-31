@@ -83,6 +83,7 @@ import {
 import { AdminLayout, AdminPageHeader } from './AdminLayout'
 import { vars } from '../../styles/theme.css'
 import { formatBytes, formatDate } from '../../utils/format'
+import { auditActionLabel, auditActorLabel, auditEntryLabel } from '../../utils/audit'
 import * as css from './AdminOverview.css'
 
 // 系统设置页（docs/settings-layout.png）：左侧分组的子导航 + 右侧多 section。
@@ -104,7 +105,7 @@ const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'preferences', label: '偏好设置', icon: <IconSettings size={15} /> },
 ]
 
-const auditPageSize = 50
+const auditPageSize = 10
 
 const credentialViews = [
   {
@@ -2786,9 +2787,12 @@ function AuditSection() {
             {logs.data?.items.map((log) => (
               <tr key={log.id} className={css.compactTr}>
                 <td className={css.compactTd} style={{ whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
-                <td className={css.compactTd}>{log.actor_type}{log.actor_user_id ? `#${log.actor_user_id}` : ''}</td>
-                <td className={css.compactTd}>{log.entry_type}</td>
-                <td className={css.compactTd}>{log.action}</td>
+                <td className={css.compactTd}>
+                  {auditActorLabel(log.actor_type) ?? log.actor_type}
+                  {log.actor_user_id ? ` #${log.actor_user_id}` : ''}
+                </td>
+                <td className={css.compactTd}>{auditEntryLabel(log.entry_type) ?? log.entry_type}</td>
+                <td className={css.compactTd}>{auditActionLabel(log.action) ?? log.action}</td>
                 <td className={css.compactTd} style={{ fontFamily: vars.font.mono, color: vars.color.textSecondary }}>
                   {log.storage_source_name ?? '—'}
                 </td>
@@ -2824,9 +2828,9 @@ function AuditSection() {
           </div>
         )}
       </HorizontalDataRegion>
-      <div className={css.auditPagination}>
+      <nav className={css.auditPagination} aria-label="审计日志分页">
         <span aria-live="polite">
-          共 {total} 条，第 {Math.min(page, totalPages)} / {totalPages} 页
+          共 {total} 条，第 {Math.min(page, totalPages)} 页 / 共 {totalPages} 页
         </span>
         <div className={css.auditPaginationActions}>
           <Button
@@ -2846,7 +2850,7 @@ function AuditSection() {
             下一页
           </Button>
         </div>
-      </div>
+      </nav>
     </section>
   )
 }

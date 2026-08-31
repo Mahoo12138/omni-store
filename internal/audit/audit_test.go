@@ -43,6 +43,16 @@ func TestQueryFiltersSearchesAndPaginates(t *testing.T) {
 		t.Fatalf("unexpected first page: total=%d items=%+v", total, items)
 	}
 
+	items, total, err = logger.Query(audit.QueryOptions{
+		Page: 2, PageSize: 1, ActorType: audit.ActorUser, Status: audit.StatusSuccess,
+	})
+	if err != nil {
+		t.Fatalf("query second audit page: %v", err)
+	}
+	if total != 2 || len(items) != 1 || items[0].Action != "upload" {
+		t.Fatalf("unexpected second page: total=%d items=%+v", total, items)
+	}
+
 	items, total, err = logger.Query(audit.QueryOptions{SearchText: "RATE_LIMITED"})
 	if err != nil {
 		t.Fatalf("search audit entries: %v", err)

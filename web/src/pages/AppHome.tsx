@@ -6,6 +6,7 @@ import { fetchMyActivity, type ActivityItem } from '../api/activity'
 import { fetchSystemStatus, type SystemStatus, type SystemStatusFlag } from '../api/system'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
+import { auditActionLabel } from '../utils/audit'
 import {
   IconActivity,
   IconCheck,
@@ -338,45 +339,6 @@ function RecentActivity({
   )
 }
 
-const activityLabels: Record<string, string> = {
-  create_source: '新建存储源',
-  update_source: '更新存储源',
-  delete_source: '删除存储源',
-  enable_source: '启用存储源',
-  disable_source: '禁用存储源',
-  update_exclude_patterns: '更新排除规则',
-  create_user: '创建用户',
-  delete_user: '删除用户',
-  enable_user: '启用用户',
-  disable_user: '禁用用户',
-  revoke_user_credentials: '撤销用户全部凭据',
-  create_access_policy: '创建访问策略',
-  update_access_policy: '更新访问策略',
-  delete_access_policy: '删除访问策略',
-  image_upload: '上传图片',
-  image_delete: '删除图片',
-  delete_anonymous_image: '删除匿名图片',
-  upload: '上传文件',
-  delete: '删除文件',
-  create_folder: '创建文件夹',
-  rename: '重命名文件',
-  move: '移动文件',
-  change_password: '修改密码',
-  login_success: '登录成功',
-  login_failed: '登录失败',
-  reset_token_webdav: '重置 WebDAV Token',
-  reset_token_image_bed: '重置图床 Token',
-  create_image_bed_token: '创建图床 Token',
-  delete_image_bed_token: '撤销图床 Token',
-  create_s3_credential: '创建 S3 凭据',
-  enable_s3_credential: '启用 S3 凭据',
-  disable_s3_credential: '禁用 S3 凭据',
-  delete_s3_credential: '撤销 S3 凭据',
-  put_object: 'S3 上传对象',
-  delete_object: 'S3 删除对象',
-  update_anonymous_image_bed: '更新匿名图床设置',
-}
-
 function timeGreeting(date: Date): string {
   const hour = date.getHours()
   if (hour < 6) return '夜深了'
@@ -396,7 +358,7 @@ function formatWelcomeDate(date: Date): string {
 
 function activityTitle(item: ActivityItem): string {
   if (item.title && item.title !== item.action) return item.title
-  return activityLabels[item.action] ?? (item.title || '完成了一项操作')
+  return auditActionLabel(item.action) ?? (item.title || '完成了一项操作')
 }
 
 function formatRelative(iso: string): string {

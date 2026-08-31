@@ -19,6 +19,17 @@ func TestParseAuditQuery(t *testing.T) {
 	}
 }
 
+func TestParseAuditQueryDefaultsToTenEntries(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/admin/audit-logs", nil)
+	opts, err := parseAuditQuery(req)
+	if err != nil {
+		t.Fatalf("parse default query: %v", err)
+	}
+	if opts.Page != 1 || opts.PageSize != 10 {
+		t.Fatalf("unexpected defaults: %+v", opts)
+	}
+}
+
 func TestParseAuditQueryRejectsInvalidValues(t *testing.T) {
 	tests := []string{
 		"?page=0",

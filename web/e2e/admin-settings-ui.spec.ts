@@ -280,6 +280,33 @@ test('admin data regions scroll locally without squeezing narrow layouts', async
   }
 })
 
+test('audit logs request an explicit page and translate action names', async ({ page }) => {
+  await loginAsAdmin(page)
+
+  const auditResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/v1/admin/audit-logs'
+  ))
+  await page.goto('/app/admin?section=audit')
+  const auditResponse = await auditResponsePromise
+  const auditURL = new URL(auditResponse.url())
+  const auditPayload = await auditResponse.json()
+
+  expect(auditURL.searchParams.get('page')).toBe('1')
+  expect(auditURL.searchParams.get('page_size')).toBe('10')
+  expect(auditPayload.data.page).toBe(1)
+  expect(auditPayload.data.page_size).toBe(10)
+  expect(auditPayload.data.items.length).toBeLessThanOrEqual(10)
+
+  const pagination = page.getByRole('navigation', { name: '审计日志分页' })
+  await expect(pagination).toBeVisible()
+  await expect(pagination).toContainText('第 1 页')
+  await expect(page.getByRole('cell', { name: /用户 #\d+/ }).first()).toBeVisible()
+  await expect(page.getByRole('cell', { name: '网页', exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'web', exact: true })).toHaveCount(0)
+  await expect(page.getByText('login_success', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('cell', { name: '登录成功', exact: true }).first()).toBeVisible()
+})
+
 test('every admin section remains readable and keeps its active navigation visible', async ({ page }) => {
   await loginAsAdmin(page)
 

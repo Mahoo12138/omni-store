@@ -132,7 +132,7 @@ func (l *Logger) Query(opts QueryOptions) ([]*LogEntry, int64, error) {
 		opts.Page = 1
 	}
 	if opts.PageSize < 1 {
-		opts.PageSize = 50
+		opts.PageSize = 10
 	}
 	if opts.PageSize > 200 {
 		opts.PageSize = 200

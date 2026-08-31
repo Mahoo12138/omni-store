@@ -9,6 +9,13 @@ import (
 	"github.com/omni-store/omnistore/internal/audit"
 )
 
+type auditLogListData struct {
+	Items    []*audit.LogEntry `json:"items"`
+	Total    int64             `json:"total"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"page_size"`
+}
+
 // handleAdminAuditLogs 返回可筛选、可分页的审计日志。
 func (s *Server) handleAdminAuditLogs(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseAuditQuery(r)
@@ -21,7 +28,9 @@ func (s *Server) handleAdminAuditLogs(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "查询审计日志失败", nil)
 		return
 	}
-	WriteData(w, r, ListData{Items: entries, Total: total})
+	WriteData(w, r, auditLogListData{
+		Items: entries, Total: total, Page: opts.Page, PageSize: opts.PageSize,
+	})
 }
 
 func parseAuditQuery(r *http.Request) (audit.QueryOptions, error) {
@@ -30,7 +39,7 @@ func parseAuditQuery(r *http.Request) (audit.QueryOptions, error) {
 	if err != nil {
 		return audit.QueryOptions{}, fmt.Errorf("page 必须是正整数")
 	}
-	pageSize, err := positiveIntQuery(query.Get("page_size"), 50, 200)
+	pageSize, err := positiveIntQuery(query.Get("page_size"), 10, 200)
 	if err != nil {
 		return audit.QueryOptions{}, fmt.Errorf("page_size 必须是 1-200 的整数")
 	}
