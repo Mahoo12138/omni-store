@@ -680,11 +680,11 @@ export const sourceList = style({
 
 export const sourceItem = style({
   display: 'grid',
-  gridTemplateColumns: 'minmax(480px, 1fr) auto auto',
+  gridTemplateColumns: 'minmax(320px, 1fr) auto auto',
   alignItems: 'center',
   gap: vars.space.md,
-  minWidth: 1040,
-  padding: `20px ${vars.space.lg}`,
+  minWidth: 900,
+  padding: `${vars.space.md} ${vars.space.lg}`,
   borderBottom: `1px solid ${vars.color.border}`,
   transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
@@ -735,7 +735,7 @@ export const sourceMeta = style({
   display: 'grid',
   gridTemplateColumns: 'repeat(3, auto)',
   alignItems: 'center',
-  gap: vars.space.lg,
+  gap: vars.space.md,
 })
 
 export const sourceMetaItem = style({
