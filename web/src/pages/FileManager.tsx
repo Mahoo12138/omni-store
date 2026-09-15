@@ -122,9 +122,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [mkdirOpen, setMkdirOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
   const [transferTarget, setTransferTarget] = useState<{ name: string; mode: 'copy' | 'move' } | null>(null)
+  const [batchTransferTarget, setBatchTransferTarget] = useState<{ names: string[]; mode: 'copy' | 'move' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
 
   const permissionQuery = useQuery({
     queryKey: ['source-permission', sourceKey, currentPath],
@@ -149,6 +151,10 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
 
   const total = filesQuery.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  useEffect(() => {
+    setSelectedNames(new Set())
+  }, [sourceKey, currentPath, page, pageSize])
 
   function refresh(changedSourceKeys: string[] = [sourceKey]) {
     for (const changedSourceKey of new Set(changedSourceKeys)) {
@@ -177,6 +183,26 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     })
   }
 
+  function toggleSelected(name: string, selected: boolean) {
+    setSelectedNames((current) => {
+      const next = new Set(current)
+      if (selected) next.add(name)
+      else next.delete(name)
+      return next
+    })
+  }
+
+  function toggleAllSelected(selected: boolean) {
+    setSelectedNames((current) => {
+      const next = new Set(current)
+      for (const entry of selectableEntries) {
+        if (selected) next.add(entry.name)
+        else next.delete(entry.name)
+      }
+      return next
+    })
+  }
+
   const entries = useMemo(
     () =>
       filesQuery.data?.items.filter((e) => {
@@ -185,6 +211,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
       }) ?? [],
     [filesQuery.data, filter],
   )
+  const selectableEntries = entries.filter((entry) => entry.type !== 'unsupported')
+  const selectedEntries = entries.filter((entry) => selectedNames.has(entry.name) && entry.type !== 'unsupported')
+  const allVisibleSelected = selectableEntries.length > 0 && selectableEntries.every((entry) => selectedNames.has(entry.name))
 
   const onError = (err: unknown) => {
     setNotice({ kind: 'error', message: err instanceof ApiRequestError ? err.message : '操作失败，请重试。' })
@@ -356,6 +385,16 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             </div>
           </div>
 
+          {selectedEntries.length > 0 && (
+            <SelectionToolbar
+              count={selectedEntries.length}
+              canMove={canWrite}
+              onCopy={() => setBatchTransferTarget({ names: selectedEntries.map((entry) => entry.name), mode: 'copy' })}
+              onMove={() => setBatchTransferTarget({ names: selectedEntries.map((entry) => entry.name), mode: 'move' })}
+              onClear={() => setSelectedNames(new Set())}
+            />
+          )}
+
           {/* 文件表格 / 网格 */}
           {view === 'list' ? (
             <FileTable
@@ -379,6 +418,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                     : undefined
               }
               onOpenDir={goTo}
+              selectable
+              selectedNames={selectedNames}
+              allSelected={allVisibleSelected}
+              onToggleSelected={toggleSelected}
+              onToggleAll={toggleAllSelected}
               fileHref={(entry) =>
                 downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)
               }
@@ -498,6 +542,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               onShare={(name, type) => setShareTarget({ name, type })}
               canWrite={canWrite}
               filter={filter}
+              selectedNames={selectedNames}
+              onToggleSelected={toggleSelected}
             />
           )}
 
@@ -605,6 +651,27 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         />
       )}
 
+      {batchTransferTarget && (
+        <BatchTransferDialog
+          sourceKey={sourceKey}
+          currentPath={currentPath}
+          names={batchTransferTarget.names}
+          mode={batchTransferTarget.mode}
+          sources={sources}
+          onClose={() => setBatchTransferTarget(null)}
+          onChanged={(targetSourceKey, mode, completed, failed) => {
+            refresh([sourceKey, targetSourceKey])
+            setSelectedNames(new Set())
+            setNotice({
+              kind: failed > 0 ? 'error' : 'success',
+              message: failed > 0
+                ? `${mode === 'copy' ? '复制' : '移动'}完成 ${completed} 项，${failed} 项失败。`
+                : `${mode === 'copy' ? '复制' : '移动'}完成，共 ${completed} 项。`,
+            })
+          }}
+        />
+      )}
+
       {/* 创建分享 */}
       {shareTarget && (
         <ShareDialog
@@ -689,6 +756,32 @@ function UploadTaskPanel({
   )
 }
 
+function SelectionToolbar({
+  count,
+  canMove,
+  onCopy,
+  onMove,
+  onClear,
+}: {
+  count: number
+  canMove: boolean
+  onCopy: () => void
+  onMove: () => void
+  onClear: () => void
+}) {
+  return (
+    <div className={css.selectionToolbar} role="toolbar" aria-label="批量文件操作">
+      <strong>已选择 {count} 项</strong>
+      <span className={css.selectionToolbarHint}>选择目标目录后批量处理</span>
+      <span className={css.selectionToolbarActions}>
+        <Button variant="secondary" onClick={onCopy}><IconCopy size={14} /> 复制</Button>
+        {canMove && <Button onClick={onMove}><IconMove size={14} /> 移动</Button>}
+        <button className={css.selectionClear} type="button" onClick={onClear}>取消选择</button>
+      </span>
+    </div>
+  )
+}
+
 // --- 面包屑 ---
 
 function Breadcrumb({
@@ -753,6 +846,8 @@ function GridView({
   onShare,
   canWrite,
   filter,
+  selectedNames,
+  onToggleSelected,
 }: {
   entries: FileEntry[]
   loading?: boolean
@@ -764,6 +859,8 @@ function GridView({
   onShare: (name: string, type: 'file' | 'dir') => void
   canWrite: boolean
   filter: string
+  selectedNames: ReadonlySet<string>
+  onToggleSelected: (name: string, selected: boolean) => void
 }) {
   if (loading) {
     return <div style={{ padding: 32, textAlign: 'center', color: vars.color.textSecondary }}>加载中…</div>
@@ -802,6 +899,18 @@ function GridView({
           }}
           onDoubleClick={() => e.type === 'dir' && onOpenDir(e.name)}
         >
+          {e.type !== 'unsupported' && (
+            <label style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <input
+                type="checkbox"
+                aria-label={`选择 ${e.name}`}
+                checked={selectedNames.has(e.name)}
+                onChange={(event) => onToggleSelected(e.name, event.target.checked)}
+                onClick={(event) => event.stopPropagation()}
+              />
+              选择
+            </label>
+          )}
           <div
             onClick={() => e.type === 'dir' && onOpenDir(e.name)}
             style={{ width: 64, height: 64, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1222,6 +1331,140 @@ function TransferDialog({
       <Field label="目标路径" required error={err} hint="例如：/photos/2026">
         <Input autoFocus value={toPath} onChange={(e) => setToPath(e.target.value)} />
       </Field>
+    </DialogWrap>
+  )
+}
+
+function BatchTransferDialog({
+  sourceKey,
+  currentPath,
+  names,
+  mode,
+  sources,
+  onClose,
+  onChanged,
+}: {
+  sourceKey: string
+  currentPath: string
+  names: string[]
+  mode: 'copy' | 'move'
+  sources: UserSource[]
+  onClose: () => void
+  onChanged: (targetSourceKey: string, mode: 'copy' | 'move', completed: number, failed: number) => void
+}) {
+  const [targetSourceKey, setTargetSourceKey] = useState(sourceKey)
+  const [targetDirectory, setTargetDirectory] = useState(currentPath)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<{ completed: number; failed: number; current: string; errors: string[] } | null>(null)
+  const verb = mode === 'copy' ? '复制' : '移动'
+
+  useEffect(() => {
+    setTargetSourceKey(sourceKey)
+    setTargetDirectory(currentPath)
+    setErr('')
+    setBusy(false)
+    setProgress(null)
+  }, [currentPath, mode, names.join('|'), sourceKey])
+
+  function destinationPath(directory: string, name: string) {
+    const normalized = directory.trim().replace(/\/+$/, '') || '/'
+    return normalized === '/' ? `/${name}` : `${normalized}/${name}`
+  }
+
+  async function submit() {
+    const directory = targetDirectory.trim().replace(/\/+$/, '') || '/'
+    setErr('')
+    if (!directory.startsWith('/')) {
+      setErr('目标目录必须是绝对路径（以 / 开头）')
+      return
+    }
+    const currentDirectory = currentPath.replace(/\/+$/, '') || '/'
+    if (targetSourceKey === sourceKey && directory === currentDirectory) {
+      setErr('目标目录不能与当前目录相同')
+      return
+    }
+
+    setBusy(true)
+    let completed = 0
+    let failed = 0
+    const errors: string[] = []
+    setProgress({ completed, failed, current: names[0] ?? '', errors })
+    for (const name of names) {
+      setProgress({ completed, failed, current: name, errors: [...errors] })
+      const fromPath = currentPath === '/' ? `/${name}` : `${currentPath}/${name}`
+      const toPath = destinationPath(directory, name)
+      try {
+        if (mode === 'copy') await copyFile(sourceKey, fromPath, targetSourceKey, toPath)
+        else await moveFile(sourceKey, fromPath, targetSourceKey, toPath)
+        completed += 1
+      } catch (error) {
+        failed += 1
+        errors.push(`${name}：${error instanceof ApiRequestError ? error.message : `${verb}失败`}`)
+      }
+      setProgress({ completed, failed, current: name, errors: [...errors] })
+    }
+    setBusy(false)
+    setProgress({ completed, failed, current: '', errors: [...errors] })
+    onChanged(targetSourceKey, mode, completed, failed)
+    if (failed === 0) onClose()
+  }
+
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open && !busy) onClose() }}
+      title={`批量${verb}`}
+      description={`${verb}所选 ${names.length} 项到目标目录；不会覆盖已有目标。`}
+      wide
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>取消</Button>
+          {progress && !busy && progress.failed > 0 ? (
+            <Button onClick={onClose}>关闭</Button>
+          ) : (
+            <Button onClick={() => void submit()} disabled={busy || names.length === 0 || !targetDirectory.trim()}>
+              {busy ? `${verb}中… ${progress?.completed ?? 0}/${names.length}` : verb}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <Field label="所选项目">
+        <div className={css.batchTransferSelection}>
+          {names.slice(0, 8).map((name) => <span key={name}>{name}</span>)}
+          {names.length > 8 && <span>还有 {names.length - 8} 项</span>}
+        </div>
+      </Field>
+      <Field label="目标存储源" required hint="每个项目会单独按目标路径再次校验权限。">
+        <Select
+          value={targetSourceKey}
+          onValueChange={setTargetSourceKey}
+          options={sources.map((item) => ({
+            value: item.key,
+            label: item.key === sourceKey ? `${item.name}（当前）` : item.name,
+          }))}
+          ariaLabel="目标存储源"
+          disabled={busy}
+        />
+      </Field>
+      <Field label="目标目录" required error={err} hint="例如：/photos/2026">
+        <Input autoFocus value={targetDirectory} onChange={(event) => setTargetDirectory(event.target.value)} disabled={busy} />
+      </Field>
+      {progress && (
+        <div className={css.batchTransferProgress} aria-live="polite">
+          <div>{busy ? `正在处理：${progress.current}` : `已完成 ${progress.completed} 项，失败 ${progress.failed} 项`}</div>
+          <div className={css.uploadProgressTrack}>
+            <div
+              className={css.uploadProgressValue}
+              style={{ width: `${Math.round(((progress.completed + progress.failed) / names.length) * 100)}%` }}
+            />
+          </div>
+          {progress.errors.length > 0 && (
+            <ul className={css.uploadErrorList}>{progress.errors.map((message) => <li key={message}>{message}</li>)}</ul>
+          )}
+        </div>
+      )}
     </DialogWrap>
   )
 }

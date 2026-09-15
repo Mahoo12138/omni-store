@@ -77,6 +77,15 @@ export const th = style({
   whiteSpace: 'nowrap',
 })
 
+export const selectionTh = style([
+  th,
+  {
+    width: '42px',
+    paddingRight: 0,
+    textAlign: 'center',
+  },
+])
+
 export const row = style({
   transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
@@ -95,6 +104,15 @@ export const td = style({
   whiteSpace: 'nowrap',
   color: vars.color.textSecondary,
 })
+
+export const selectionCell = style([
+  td,
+  {
+    width: '42px',
+    paddingRight: 0,
+    textAlign: 'center',
+  },
+])
 
 export const nameCell = style([
   td,

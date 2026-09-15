@@ -219,6 +219,65 @@ export const uploadErrorList = style({
   fontSize: vars.fontSize.sm,
 })
 
+export const selectionToolbar = style({
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  backgroundColor: vars.color.primarySubtle,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  color: vars.color.text,
+})
+
+export const selectionToolbarHint = style({
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const selectionToolbarActions = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  marginLeft: 'auto',
+})
+
+export const selectionClear = style({
+  border: 0,
+  padding: '4px 6px',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.sm,
+})
+
+export const batchTransferSelection = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: vars.space.xs,
+})
+
+globalStyle(`${batchTransferSelection} span`, {
+  maxWidth: '100%',
+  padding: '4px 8px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  backgroundColor: vars.color.surfaceHover,
+  borderRadius: vars.radius.sm,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const batchTransferProgress = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
 // --- 面包屑 ---
 
 export const crumb = style({

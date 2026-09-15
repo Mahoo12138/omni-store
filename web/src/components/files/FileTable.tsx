@@ -16,6 +16,11 @@ export function FileTable({
   fileTarget,
   renderActions,
   showType = false,
+  selectable = false,
+  selectedNames,
+  onToggleSelected,
+  allSelected = false,
+  onToggleAll,
 }: {
   entries: FileEntry[] | undefined
   loading?: boolean
@@ -29,12 +34,27 @@ export function FileTable({
   renderActions?: (entry: FileEntry) => ReactNode
   // 是否展示"类型"列（私有管理侧使用，按扩展名推断）
   showType?: boolean
+  selectable?: boolean
+  selectedNames?: ReadonlySet<string>
+  onToggleSelected?: (name: string, selected: boolean) => void
+  allSelected?: boolean
+  onToggleAll?: (selected: boolean) => void
 }) {
   return (
     <div className={css.tableWrap}>
       <table className={css.table}>
         <thead>
           <tr>
+            {selectable && (
+              <th className={css.selectionTh}>
+                <input
+                  type="checkbox"
+                  aria-label="选择当前页全部条目"
+                  checked={allSelected}
+                  onChange={(event) => onToggleAll?.(event.target.checked)}
+                />
+              </th>
+            )}
             <th className={css.th}>名称</th>
             {showType && <th className={css.th}>类型</th>}
             <th className={css.th}>大小</th>
@@ -47,6 +67,17 @@ export function FileTable({
         <tbody>
           {entries?.map((entry) => (
             <tr key={entry.name} className={css.row}>
+              {selectable && (
+                <td className={css.selectionCell}>
+                  <input
+                    type="checkbox"
+                    aria-label={`选择 ${entry.name}`}
+                    checked={selectedNames?.has(entry.name) ?? false}
+                    disabled={entry.type === 'unsupported'}
+                    onChange={(event) => onToggleSelected?.(entry.name, event.target.checked)}
+                  />
+                </td>
+              )}
               <td className={css.nameCell}>
                 <span className={css.nameInner}>
                   <EntryIcon name={entry.name} type={entry.type} />
