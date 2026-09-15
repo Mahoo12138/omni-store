@@ -28,6 +28,7 @@
 | [数据模型](DATA_MODEL.md) | SQLite 业务模型和数据生命周期；迁移文件为最终事实来源 |
 | [API 约定](API.md) | REST 统一响应、分页、错误语义与关键 API 约定 |
 | [开发指南](DEVELOPMENT.md) | 本地启动、构建、配置、测试环境与开发流程 |
+| [常见问题](FAQ.md) | Docker 挂载权限、存储源预检与常见部署问题 |
 | [发布流程](RELEASING.md) | SemVer、RC、发布门禁、Tag、Docker 与二进制产物 |
 | [Agent 开发规则](AGENT_GUIDE.md) | Agent 修改代码前后必须遵守的项目约束 |
 | [文档维护规范](DOCUMENTATION_GUIDE.md) | 文档职责、事实优先级、版本归档与更新规则 |

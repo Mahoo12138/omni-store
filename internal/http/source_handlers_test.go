@@ -70,6 +70,46 @@ func TestHandleAdminPreflightSource(t *testing.T) {
 	}
 }
 
+func TestHandleAdminPreflightSourceHidesWriteProbePath(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write a read-only directory; run this regression test as a non-root user")
+	}
+
+	base := t.TempDir()
+	dataDir := filepath.Join(base, "data")
+	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	root := filepath.Join(base, "read-only-source")
+	if err := os.Mkdir(root, 0o555); err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+
+	reqBody, err := json.Marshal(map[string]string{"root_path": root})
+	if err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/sources/preflight", strings.NewReader(string(reqBody)))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	server := &Server{sources: sources.NewService(conn, dataDir)}
+
+	server.handleAdminPreflightSource(recorder, req)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected response status %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "目录不可写") {
+		t.Fatalf("missing write permission message: %s", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), ".omnistore-write-test-") {
+		t.Fatalf("write probe path leaked in response: %s", recorder.Body.String())
+	}
+}
+
 func TestHandleAdminCreateSourceRequiresConfirmationAndAutoReconciles(t *testing.T) {
 	server, conn, base := newSourceCreateHandlerServer(t)
 	root := filepath.Join(base, "existing")

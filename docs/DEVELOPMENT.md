@@ -57,6 +57,8 @@ Docker 中应明确挂载：
 - `/data`：OmniStore 系统数据；
 - `/mnt/sources/*`：真实 Storage Source。
 
+Docker named volume 或宿主机 bind mount 的属主、读写权限和排查方式见[常见问题](FAQ.md)。
+
 ## 5. 数据库迁移
 
 规则：

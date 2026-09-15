@@ -45,6 +45,7 @@ go build -o omnistore ./cmd/omnistore
 - [身份、权限与存储安全](docs/SECURITY.md)
 - [路线图与开发阶段](docs/ROADMAP.md)
 - [开发指南](docs/DEVELOPMENT.md)
+- [常见问题](docs/FAQ.md)
 - [1.0.0 验收清单](docs/ACCEPTANCE.md)
 - [发布流程](docs/RELEASING.md)
 - [Changelog](CHANGELOG.md)

@@ -98,18 +98,19 @@ func ValidateRootPath(input, dataDir string, existingRoots []string) (string, er
 // 列目录 -> 创建隐藏测试文件 -> 写 1 字节 -> 删除。
 func writePrecheck(dir string) error {
 	if _, err := os.ReadDir(dir); err != nil {
-		return fmt.Errorf("目录不可读: %w", err)
+		return fmt.Errorf("目录不可读，请检查应用进程对该目录的读权限和挂载配置")
 	}
 	testFile := filepath.Join(dir, ".omnistore-write-test-"+auth.NewRandomToken("", 6))
 	f, err := os.OpenFile(testFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("目录不可写: %w", err)
+		// Do not wrap err: the OS error contains the absolute probe path.
+		return fmt.Errorf("目录不可写，请检查应用进程对该目录的写权限和挂载配置")
 	}
 	_, werr := f.Write([]byte{0})
 	cerr := f.Close()
 	rerr := os.Remove(testFile)
 	if werr != nil || cerr != nil || rerr != nil {
-		return fmt.Errorf("写入预检失败")
+		return fmt.Errorf("目录读写预检失败，请检查应用进程对该目录的读写权限和挂载配置")
 	}
 	return nil
 }

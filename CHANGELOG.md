@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。发布标签和 GitHub Release 是版本事实来源；本文件记录面向用户的重要变化，不替代完整 Git 历史。
 
+## [Unreleased]
+
+### Fixed
+
+- 存储源读写预检失败时不再向 API/UI 暴露隐藏探测文件的绝对路径，并补充 Docker 挂载权限 FAQ。
+
 ## [1.0.0] - 2026-08-31
 
 ### Added
