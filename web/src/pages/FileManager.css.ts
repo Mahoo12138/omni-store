@@ -154,6 +154,71 @@ export const noticeError = style([noticeBase, {
   backgroundColor: vars.color.dangerSubtle,
 }])
 
+export const uploadPanel = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  padding: vars.space.md,
+  marginBottom: vars.space.md,
+  backgroundColor: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.sm,
+})
+
+export const uploadPanelHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+})
+
+export const uploadPanelMeta = style({
+  display: 'block',
+  marginTop: '4px',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+})
+
+export const uploadPanelActions = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+})
+
+export const uploadPanelClose = style({
+  border: 0,
+  padding: '4px 6px',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.sm,
+})
+
+export const uploadProgressTrack = style({
+  height: '6px',
+  overflow: 'hidden',
+  backgroundColor: vars.color.primarySubtle,
+  borderRadius: vars.radius.full,
+})
+
+export const uploadProgressValue = style({
+  height: '100%',
+  backgroundColor: vars.color.primary,
+  borderRadius: vars.radius.full,
+  transition: `width ${vars.motion.base} ${vars.motion.ease}`,
+})
+
+export const uploadErrorList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+  margin: 0,
+  paddingLeft: '18px',
+  color: vars.color.danger,
+  fontSize: vars.fontSize.sm,
+})
+
 // --- 面包屑 ---
 
 export const crumb = style({

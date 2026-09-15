@@ -131,14 +131,25 @@ REST 文件写操作统一经过：
 
 ## 8. Upload
 
-`1.0` REST 上传是单文件 multipart 上传。
+REST 上传仍然是“一次请求一个文件”的 multipart 上传；1.1 的前端任务管理器负责多文件和文件夹任务的排队、并发、重试和取消。
 
-`1.1` 计划扩展“相对路径上传”以支持文件夹上传，设计见：
+在 `path` 指定目标根目录时，可以额外传入 multipart 字段 `relative_path`：
+
+```text
+path=/assets
+relative_path=blog-images/posts/2026/a.webp
+
+→ /assets/blog-images/posts/2026/a.webp
+```
+
+`relative_path` 必须是非绝对、无 `..` 的用户相对路径；服务端会逐级检查路径策略、排除规则、保留名称、symlink 和 quota，并幂等创建缺失的父目录。省略该字段时保持 1.0 行为，使用 multipart 文件名的 basename。
+
+冲突通过 `overwrite=true` 覆盖；省略时返回 `409 FILE_ALREADY_EXISTS`。上传任务应在客户端将 `ask`、`skip` 或 `overwrite` 固定为本次任务策略。
+
+相关设计：
 
 - [`design/upload-task-system.md`](design/upload-task-system.md)
 - [`design/folder-upload.md`](design/folder-upload.md)
-
-尚未实现前，设计文档不能作为当前 API 行为。
 
 ## 9. Range
 

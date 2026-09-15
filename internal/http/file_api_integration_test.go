@@ -65,6 +65,19 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 		t.Fatalf("stat status=%d body=%s", stat.Code, stat.Body.String())
 	}
 
+	nestedUpload := serveMultipartUploadWithRelativePath(t, fixture, primaryBase+"/upload?path=%2Fdocs", "blog-images/posts/2026/a.webp", []byte("nested upload"))
+	if nestedUpload.Code != http.StatusOK || !strings.Contains(nestedUpload.Body.String(), `"path":"/docs/blog-images/posts/2026/a.webp"`) {
+		t.Fatalf("relative-path upload status=%d body=%s", nestedUpload.Code, nestedUpload.Body.String())
+	}
+	nestedStat := serveTestRequest(t, fixture.handler, http.MethodGet, primaryBase+"/files/stat?path=%2Fdocs%2Fblog-images%2Fposts%2F2026%2Fa.webp", "", fixture.cookie, "")
+	if nestedStat.Code != http.StatusOK {
+		t.Fatalf("relative-path stat status=%d body=%s", nestedStat.Code, nestedStat.Body.String())
+	}
+	invalidRelativeUpload := serveMultipartUploadWithRelativePath(t, fixture, primaryBase+"/upload?path=%2Fdocs", "../escape.txt", []byte("must reject"))
+	assertErrorResponse(t, invalidRelativeUpload, http.StatusBadRequest, CodePathInvalid)
+	absoluteRelativeUpload := serveMultipartUploadWithRelativePath(t, fixture, primaryBase+"/upload?path=%2Fdocs", "/absolute.txt", []byte("must reject"))
+	assertErrorResponse(t, absoluteRelativeUpload, http.StatusBadRequest, CodePathInvalid)
+
 	rangeRequest := httptest.NewRequest(http.MethodGet, primaryBase+"/download?path=%2Fdocs%2Fnote.txt", nil)
 	rangeRequest.AddCookie(fixture.cookie)
 	rangeRequest.Header.Set("Range", "bytes=0-8")
@@ -191,6 +204,32 @@ func serveMultipartUpload(t *testing.T, fixture privateFileAPIFixture, target, f
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, target, &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("X-CSRF-Token", fixture.csrf)
+	request.AddCookie(fixture.cookie)
+	recorder := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func serveMultipartUploadWithRelativePath(t *testing.T, fixture privateFileAPIFixture, target, relativePath string, content []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("relative_path", relativePath); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("file", filepath.Base(relativePath))
 	if err != nil {
 		t.Fatal(err)
 	}

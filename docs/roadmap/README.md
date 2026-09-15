@@ -2,7 +2,7 @@
 
 | 版本 | 主题 | 状态 |
 | --- | --- | --- |
-| [1.1.0](1.1.0-file-experience.md) | File Experience | 规划 |
+| [1.1.0](1.1.0-file-experience.md) | File Experience | 开发中 |
 | [1.2.0](1.2.0-preview-sharing.md) | Preview & Sharing | 规划 |
 | [1.3.0](1.3.0-operation-center.md) | Operation Center | 规划 |
 | [1.4.0](1.4.0-backup-recovery.md) | Backup & Recovery | 规划 |

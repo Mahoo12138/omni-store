@@ -50,6 +50,11 @@ import {
 } from '../components/ui/Icon'
 import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
+import {
+  UploadTaskController,
+  type UploadTaskSnapshot,
+  type UploadConflictDecision,
+} from '../utils/uploadTask'
 import * as css from './FileManager.css'
 
 type ViewMode = 'list' | 'grid'
@@ -106,9 +111,12 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const page = search.page ?? 1
 
   const fileInput = useRef<HTMLInputElement>(null)
+  const folderUploadMode = useRef(false)
+  const uploadController = useRef<UploadTaskController | null>(null)
   const [filter, setFilter] = useState('')
   const [view, setView] = useState<ViewMode>('list')
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [uploadTask, setUploadTask] = useState<UploadTaskSnapshot | null>(null)
 
   // 各种操作弹窗
   const [mkdirOpen, setMkdirOpen] = useState(false)
@@ -129,6 +137,10 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     queryFn: () => fetchSourceQuota(sourceKey),
   })
   const userQuotaQuery = useQuery({ queryKey: ['my-quota'], queryFn: fetchMyQuota })
+
+  useEffect(() => {
+    return () => uploadController.current?.cancel()
+  }, [])
 
   const filesQuery = useQuery({
     queryKey: ['files', sourceKey, currentPath, page, pageSize],
@@ -178,36 +190,53 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     setNotice({ kind: 'error', message: err instanceof ApiRequestError ? err.message : '操作失败，请重试。' })
   }
 
-  async function onUpload(files: FileList | null) {
+  function startUpload(files: FileList | null, kind: 'file' | 'files' | 'directory') {
     if (!files?.length) return
-    let completed = 0
-    let failed = false
-    for (const file of Array.from(files)) {
-      try {
-        await uploadFile(sourceKey, currentPath, file)
-        completed += 1
-      } catch (err) {
-        if (err instanceof ApiRequestError && err.code === 'FILE_ALREADY_EXISTS') {
-          if (confirm(`文件 ${file.name} 已存在，是否覆盖？`)) {
-            try {
-              await uploadFile(sourceKey, currentPath, file, true)
-              completed += 1
-            } catch (e) {
-              failed = true
-              onError(e)
-            }
-          }
-        } else {
-          failed = true
-          onError(err)
-        }
+    const controller = new UploadTaskController({
+      sourceKey,
+      targetPath: currentPath,
+      files: Array.from(files),
+      kind,
+      conflictPolicy: 'ask',
+      concurrency: 4,
+      uploader: (item, options) =>
+        uploadFile(sourceKey, currentPath, item.file, {
+          relativePath: item.relativePath,
+          overwrite: options.overwrite,
+          signal: options.signal,
+        }),
+      resolveConflict: async (item): Promise<UploadConflictDecision> =>
+        window.confirm(`文件 ${item.relativePath} 已存在，是否覆盖本次任务中的同类冲突？`)
+          ? 'overwrite'
+          : 'skip',
+      onChange: setUploadTask,
+    })
+    uploadController.current = controller
+    void controller.start().then(() => {
+      const finalTask = controller.getSnapshot()
+      refresh()
+      if (finalTask.status === 'completed') {
+        setNotice({ kind: 'success', message: `已上传 ${finalTask.completedFiles} 个文件。` })
       }
-    }
-    refresh()
-    if (!failed && completed > 0) {
-      setNotice({ kind: 'success', message: `已上传 ${completed} 个文件。` })
-    }
+    }).catch(onError)
     if (fileInput.current) fileInput.current.value = ''
+    fileInput.current?.removeAttribute('webkitdirectory')
+    fileInput.current?.removeAttribute('directory')
+    folderUploadMode.current = false
+  }
+
+  function openFilePicker() {
+    folderUploadMode.current = false
+    fileInput.current?.removeAttribute('webkitdirectory')
+    fileInput.current?.removeAttribute('directory')
+    fileInput.current?.click()
+  }
+
+  function openFolderPicker() {
+    folderUploadMode.current = true
+    fileInput.current?.setAttribute('webkitdirectory', '')
+    fileInput.current?.setAttribute('directory', '')
+    fileInput.current?.click()
   }
 
   return (
@@ -238,8 +267,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           </Button>
           {canWrite && (
             <>
-              <Button onClick={() => fileInput.current?.click()}>
+              <Button onClick={openFilePicker} disabled={uploadTask?.status === 'running'}>
                 <IconUpload size={14} /> 上传文件
+              </Button>
+              <Button variant="secondary" onClick={openFolderPicker} disabled={uploadTask?.status === 'running'}>
+                <IconFolderPlus size={14} /> 上传目录
               </Button>
               <Button variant="secondary" onClick={() => setMkdirOpen(true)}>
                 <IconFolderPlus size={14} /> 创建文件夹
@@ -249,12 +281,30 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 type="file"
                 multiple
                 hidden
-                onChange={(e) => onUpload(e.target.files)}
+                disabled={uploadTask?.status === 'running'}
+                onChange={(e) => startUpload(
+                  e.target.files,
+                  folderUploadMode.current ? 'directory' : e.target.files?.length === 1 ? 'file' : 'files',
+                )}
               />
             </>
           )}
         </div>
       </div>
+
+      {uploadTask && (
+        <UploadTaskPanel
+          task={uploadTask}
+          onCancel={() => uploadController.current?.cancel()}
+          onRetry={() => void uploadController.current?.retryFailed()}
+          onClose={() => {
+            if (uploadTask.status !== 'running') {
+              uploadController.current = null
+              setUploadTask(null)
+            }
+          }}
+        />
+      )}
 
       {notice && (
         <div className={notice.kind === 'error' ? css.noticeError : css.noticeSuccess} role={notice.kind === 'error' ? 'alert' : 'status'}>
@@ -580,6 +630,62 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         />
       )}
     </AppShell>
+  )
+}
+
+function UploadTaskPanel({
+  task,
+  onCancel,
+  onRetry,
+  onClose,
+}: {
+  task: UploadTaskSnapshot
+  onCancel: () => void
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const finished = task.completedFiles + task.skippedFiles
+  const percent = task.totalBytes > 0
+    ? Math.min(100, Math.round((task.uploadedBytes / task.totalBytes) * 100))
+    : task.totalFiles > 0
+      ? Math.round((finished / task.totalFiles) * 100)
+      : 100
+  const isRunning = task.status === 'running'
+  const statusLabel = {
+    queued: '准备上传',
+    running: '正在上传',
+    completed: '上传完成',
+    completed_with_errors: '部分文件失败',
+    cancelled: '已取消',
+  }[task.status]
+
+  return (
+    <section className={css.uploadPanel} aria-live="polite" aria-label="上传任务">
+      <div className={css.uploadPanelHeader}>
+        <div>
+          <strong>{statusLabel}</strong>
+          <span className={css.uploadPanelMeta}>
+            {finished} / {task.totalFiles} 个文件 · {formatBytes(task.uploadedBytes)} / {formatBytes(task.totalBytes)}
+          </span>
+        </div>
+        <div className={css.uploadPanelActions}>
+          {isRunning && <Button variant="secondary" onClick={onCancel}>取消</Button>}
+          {task.failedFiles > 0 && !isRunning && <Button variant="secondary" onClick={onRetry}>重试失败项</Button>}
+          {!isRunning && <button className={css.uploadPanelClose} type="button" onClick={onClose}>关闭</button>}
+        </div>
+      </div>
+      <div className={css.uploadProgressTrack} aria-label={`上传进度 ${percent}%`}>
+        <div className={css.uploadProgressValue} style={{ width: `${percent}%` }} />
+      </div>
+      {task.failedFiles > 0 && (
+        <ul className={css.uploadErrorList}>
+          {task.items.filter((item) => item.status === 'failed').slice(0, 3).map((item) => (
+            <li key={item.id}>{item.relativePath}：{item.error || '上传失败'}</li>
+          ))}
+          {task.failedFiles > 3 && <li>还有 {task.failedFiles - 3} 个失败项</li>}
+        </ul>
+      )}
+    </section>
   )
 }
 

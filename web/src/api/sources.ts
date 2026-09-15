@@ -43,6 +43,12 @@ export interface TransferResult {
   was_move: boolean
 }
 
+export interface UploadFileOptions {
+  relativePath?: string
+  overwrite?: boolean
+  signal?: AbortSignal
+}
+
 export interface TrashEntry {
   key: string
   source_key: string
@@ -132,15 +138,17 @@ export async function uploadFile(
   sourceKey: string,
   path: string,
   file: File,
-  overwrite = false,
+  options: UploadFileOptions = {},
 ): Promise<void> {
   const form = new FormData()
+  if (options.relativePath) form.append('relative_path', options.relativePath)
   form.append('file', file)
   const q = new URLSearchParams({ path })
-  if (overwrite) q.set('overwrite', 'true')
+  if (options.overwrite) q.set('overwrite', 'true')
   await apiFetch(`/api/v1/sources/${encodeURIComponent(sourceKey)}/upload?${q}`, {
     method: 'POST',
     body: form,
+    signal: options.signal,
   })
 }
 

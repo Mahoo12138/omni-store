@@ -3,6 +3,7 @@ package httpserver
 import (
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"path"
@@ -247,6 +248,8 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 
 	dirRel := r.URL.Query().Get("path")
 	overwrite := r.URL.Query().Get("overwrite") == "true"
+	var relativePath string
+	hasRelativePath := false
 
 	for {
 		part, err := mr.NextPart()
@@ -254,22 +257,63 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, CodeValidationError, "缺少 file 字段", nil)
 			return
 		}
+		if part.FormName() == "relative_path" {
+			value, readErr := io.ReadAll(io.LimitReader(part, 4097))
+			if readErr != nil || len(value) > 4096 {
+				WriteError(w, r, CodeValidationError, "relative_path 无效", nil)
+				return
+			}
+			relativePath = string(value)
+			hasRelativePath = true
+			continue
+		}
 		if part.FormName() != "file" {
 			continue
 		}
+
 		filename := path.Base(part.FileName())
-		target, pathErr := joinPolicyPath(dirRel, filename)
-		if pathErr != nil {
-			writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, pathErr))
+		target := ""
+		if hasRelativePath {
+			var pathErr error
+			target, pathErr = joinUploadPath(dirRel, relativePath)
+			if pathErr != nil {
+				writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, pathErr))
+				return
+			}
+			filename = path.Base(target)
+			dirRel = path.Dir(target)
+			if dirRel == "." {
+				dirRel = ""
+			}
+		} else {
+			var pathErr error
+			target, pathErr = joinPolicyPath(dirRel, filename)
+			if pathErr != nil {
+				writeFileError(w, r, fmt.Errorf("%w: %s", files.ErrInvalid, pathErr))
+				return
+			}
+		}
+
+		if target == "" {
+			writeFileError(w, r, fmt.Errorf("%w: relative_path 不能为空", files.ErrInvalid))
 			return
 		}
-		if !s.authorizeSourcePath(w, r, src, target, true, false) {
+		if hasRelativePath {
+			if !s.authorizeUploadPath(w, r, src, target) {
+				return
+			}
+			if err := s.files.EnsureObjectParents(src, target); err != nil {
+				s.fileAudit(r, "upload", src, target, "", err)
+				writeFileError(w, r, err)
+				return
+			}
+		} else if !s.authorizeSourcePath(w, r, src, target, true, false) {
 			return
 		}
 		user := CurrentUser(r.Context())
 		relPath, size, err := s.files.UploadWithLockTokens(src, dirRel, filename, part, overwrite, nil, &user.ID)
 		if err != nil {
-			s.fileAudit(r, "upload", src, dirRel+"/"+filename, "", err)
+			s.fileAudit(r, "upload", src, target, "", err)
 			writeFileError(w, r, err)
 			return
 		}
@@ -277,6 +321,43 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		WriteData(w, r, map[string]any{"path": "/" + relPath, "size": size})
 		return
 	}
+}
+
+// authorizeUploadPath checks the final target and every parent that may be
+// created by a relative-path upload. This keeps folder uploads within the
+// same path policy as ordinary single-file writes.
+func (s *Server) authorizeUploadPath(w http.ResponseWriter, r *http.Request, src *models.StorageSource, target string) bool {
+	if !s.authorizeSourcePath(w, r, src, target, true, false) {
+		return false
+	}
+	for parent := path.Dir(target); parent != "." && parent != ""; parent = path.Dir(parent) {
+		if !s.authorizeSourcePath(w, r, src, parent, true, false) {
+			return false
+		}
+	}
+	return true
+}
+
+func joinUploadPath(root, relative string) (string, error) {
+	if strings.TrimSpace(relative) == "" || strings.HasPrefix(relative, "/") || strings.HasPrefix(relative, "\\") ||
+		(len(relative) >= 2 && relative[1] == ':') {
+		return "", fmt.Errorf("relative_path 必须是非绝对路径")
+	}
+	root, err := security.NormalizeRelPath(root)
+	if err != nil {
+		return "", err
+	}
+	relative, err = security.NormalizeRelPath(relative)
+	if err != nil {
+		return "", err
+	}
+	if relative == "" {
+		return "", fmt.Errorf("relative_path 不能为空")
+	}
+	if root == "" {
+		return relative, nil
+	}
+	return root + "/" + relative, nil
 }
 
 func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {

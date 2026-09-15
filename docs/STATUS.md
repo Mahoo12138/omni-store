@@ -26,9 +26,11 @@
 - 最近文件、收藏；
 - 文件管理器细节和移动端体验。
 
+当前实现进度：P0 第一切片已开始，已落地相对路径上传 API、文件夹上传入口和页面级 Upload Task Manager。
+
 ## 下一步
 
-1. 冻结 `1.1.0` Feature 范围。
-2. 完成 `design/upload-task-system.md` 与 `design/folder-upload.md` 的 API/状态机细化。
+1. 完成 P0 上传任务的 E2E 验收和边界补齐。
+2. 将 P1 文件浏览器能力拆成独立切片。
 3. 将 Feature 拆成 GitHub Issues / Milestone。
-4. 开始 1.1 开发，不提前实现 1.2+ 能力。
+4. 不提前实现 1.2+ 能力。
