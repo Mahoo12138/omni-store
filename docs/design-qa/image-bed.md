@@ -1,52 +1,56 @@
-# 图床页设计 QA
+# 图床页面设计 QA
 
-- Source visual truth: `C:/Users/mahoo/AppData/Local/Temp/codex-clipboard-bef67b9b-7b51-427c-ac64-a2cc70eeccb2.png`
-- Preserved source copy: `D:/Code/Go/omni-store/output/playwright/imagebed-reference-1672x941.png`
-- Implementation screenshot: `D:/Code/Go/omni-store/output/playwright/imagebed-final-1672x941.png`
-- Side-by-side comparison: `D:/Code/Go/omni-store/output/playwright/imagebed-design-comparison.png`
-- Viewport: 1672 × 941
-- State: 已登录超级管理员；一个可用但未设置默认值的图床目标；两张真实上传图片；网格视图；全部时间
+本文档保留图床页面的视觉和交互验收重点。
 
-## Full-view comparison evidence
+## 页面目标
 
-参考图与实现以相同 1672 × 941 视口并排检查。最终实现保持了参考图的核心三栏构图：左侧上传区、中部目标与接口区、右侧信息与教程区；历史图片区位于主列下方。主体顶边、卡片高度、列间距和右侧栏宽度已在第二轮调整后对齐。
+图床是高频上传工具，而不是复杂后台页面。
 
-全局应用侧栏和顶栏沿用仓库现有 AppShell，没有恢复参考图中的搜索框、用户卡片或虚构容量数据。这是既有产品约束，不是本页设计漂移。
+页面优先级：
 
-## Focused region comparison evidence
+1. 上传；
+2. 当前目标 Source；
+3. 上传结果/链接复制；
+4. 历史图片；
+5. Token/高级设置进入设置页。
 
-- 上传与目标区域：上传热区、目标选择器、状态徽章和三行接口信息的层级与参考图一致；目标选择器实际值与上传参数已联动。
-- 历史图片区：卡片使用真实图片、文件名、时间、体积和操作按钮；网格密度与参考图一致，卡片数量由真实数据决定。
-- 右侧信息区：目标摘要、上传统计、设置入口和 PicGo 教程结构与参考图一致；明文 Token 不被伪造或回显。
-- 移动端：390 × 844 检查无横向溢出，`scrollWidth` 与 `clientWidth` 均为 390。
+## 布局
 
-## Required fidelity surfaces
+- 主内容居中；
+- 不额外增加无意义右侧栏；
+- 上传区是页面视觉中心；
+- 空状态不伪造图片或统计；
+- 没有可用 Storage Source 时显示明确空状态和下一步；
+- 用户不需要看到 Source ID、真实路径、挂载路径等内部信息。
 
-- Fonts and typography: 继续使用项目既有 Aptos / Segoe UI / PingFang 字体栈；中文层级、字重、行高和截断在目标区域与卡片区域均可读。
-- Spacing and layout rhythm: 主体顶边、双面板比例、306px 右栏、24px 主栏间距和历史区垂直节奏均已对齐；响应式断点可正常折叠。
-- Colors and visual tokens: 使用项目既有冷白背景、品牌蓝、浅边框、成功绿和危险红 token；没有引入与产品冲突的装饰色。
-- Image quality and asset fidelity: 历史卡片呈现后端真实图片并保持裁切清晰；Logo 与图标沿用项目现有图标系统，没有占位图片。
-- Copy and content: 上传限制、目标、接口、Token 状态、统计与 PicGo 指引均来自真实产品能力；没有展示虚构容量或明文密钥。
+## 上传状态
 
-## Comparison history
+必须覆盖：
 
-1. 第一轮发现 P2：额外英文眉题使主体比参考图下移，且不属于参考内容。已移除页面和卡片英文眉题，并简化目标标题。
-2. 第二轮发现 P2：标题容器仍保留 14px 空高，右侧信息栏略窄。已移除预留高度，并将右栏调整为 306px、主栏间距调整为 24px。
-3. 最终并排检查没有剩余 P0、P1 或 P2。真实图片数量、全局 AppShell 顶栏/侧栏属于数据与既有产品差异，可接受。
+- idle；
+- drag-over；
+- uploading；
+- success；
+- partial failure（未来批量上传时）；
+- error。
 
-## Primary interactions and console
+## 历史墙
 
-- 在“存在目标但默认目标为空”的状态下点击上传，网络请求使用系统生成的不透明 key，例如 `POST /api/v1/image-bed/uploads?key=src-1111111111111111`，返回 200。
-- 上传完成后历史数量与右侧统计同步刷新。
-- 目标选择、设为默认、时间筛选、网格/列表切换、复制与删除控件均可操作。
-- 最终干净浏览器会话控制台：0 errors，0 warnings。
+- 缩略图统一比例；
+- 原图懒加载；
+- 删除/复制链接操作不抢占图片主体；
+- 回收站图片不展示；
+- 空状态保持简洁。
 
-## Findings
+## 移动端
 
-没有剩余可执行的 P0、P1 或 P2 设计问题。
+- 上传仍为第一入口；
+- 历史墙减少列数；
+- 操作菜单可触控；
+- 不依赖 hover 才能使用核心操作。
 
-## Follow-up polish
+## 与 1.1 / 1.2 的关系
 
-- P3：AppShell 已提供独立全局搜索入口；若未来补充用户卡片和真实容量接口，可进一步贴近参考图的全局框架，本页不重复放置搜索框。
+统一 Upload Task Manager 完成后，图床可以复用任务状态组件，但不强制把普通文件上传和图床业务语义合并。
 
-final result: passed
+统一 Preview Resolver 完成后，历史墙大图查看可以复用 Image Renderer。
