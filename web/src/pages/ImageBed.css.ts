@@ -31,23 +31,6 @@ export const pageTitle = style({
   letterSpacing: '-0.04em',
 })
 
-const noticeBase = style({
-  borderRadius: vars.radius.md,
-  padding: '8px 12px',
-  fontSize: vars.fontSize.sm,
-  fontWeight: 500,
-})
-
-export const successNotice = style([noticeBase, {
-  color: vars.color.success,
-  background: vars.color.successSubtle,
-}])
-
-export const errorNotice = style([noticeBase, {
-  color: vars.color.danger,
-  background: vars.color.dangerSubtle,
-}])
-
 export const workspace = style({
   display: 'block',
 })

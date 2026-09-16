@@ -4,7 +4,6 @@ import { vars } from '../styles/theme.css'
 export const header = style({ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: vars.space.md, marginBottom: vars.space.lg })
 export const title = style({ margin: 0, color: vars.color.text, fontSize: vars.fontSize.display, letterSpacing: '-0.04em' })
 export const description = style({ margin: '8px 0 0', color: vars.color.textSecondary, lineHeight: 1.6 })
-export const notice = style({ marginBottom: vars.space.md, padding: '11px 14px', color: 'oklch(0.42 0.12 150)', background: vars.color.successSubtle, borderRadius: vars.radius.md, fontSize: vars.fontSize.sm })
 export const list = style({ display: 'grid', gap: vars.space.sm })
 export const card = style({ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr) auto', alignItems: 'center', gap: vars.space.md, padding: '15px 17px', background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.lg, boxShadow: vars.shadow.sm, '@media': { 'screen and (max-width: 680px)': { gridTemplateColumns: '40px minmax(0, 1fr)', alignItems: 'start' } } })
 export const icon = style({ width: 42, height: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary, background: vars.color.primarySubtle, borderRadius: vars.radius.md })

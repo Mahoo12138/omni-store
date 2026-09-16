@@ -6,13 +6,13 @@ import { Badge } from '../components/ui/Badge'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
 import { IconCopy, IconExternalLink, IconFile, IconFolder, IconLink, IconTrash } from '../components/ui/Icon'
+import { toastSuccess } from '../components/ui/Toast'
 import { formatDate } from '../utils/format'
 import * as css from './Shares.css'
 
 export function SharesPage() {
   const queryClient = useQueryClient()
   const shares = useQuery({ queryKey: ['shares'], queryFn: fetchShares })
-  const [copied, setCopied] = useState('')
   const [revokeTarget, setRevokeTarget] = useState<FileShare | null>(null)
 
   const revoke = useMutation({
@@ -25,8 +25,7 @@ export function SharesPage() {
 
   async function copyLink(share: FileShare) {
     await navigator.clipboard.writeText(share.url)
-    setCopied(share.key)
-    window.setTimeout(() => setCopied(''), 1600)
+    toastSuccess('分享链接已复制。')
   }
 
   return (
@@ -38,7 +37,6 @@ export function SharesPage() {
         </div>
       </header>
 
-      {copied ? <div className={css.notice} role="status">分享链接已复制。</div> : null}
       {shares.isPending ? <div className={css.loading}>正在加载分享…</div> : null}
       {shares.isError ? (
         <div className={css.empty}>

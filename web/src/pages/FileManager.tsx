@@ -28,6 +28,7 @@ import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { appStatusToastID, toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -52,6 +53,8 @@ import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
 import {
   UploadTaskController,
+  uploadRelativePath,
+  type UploadTaskItem,
   type UploadTaskSnapshot,
   type UploadConflictDecision,
 } from '../utils/uploadTask'
@@ -125,7 +128,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [batchTransferTarget, setBatchTransferTarget] = useState<{ names: string[]; mode: 'copy' | 'move' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
-  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+  const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
+  const [uploadConflict, setUploadConflict] = useState<{
+    item: UploadTaskItem
+    resolve: (decision: UploadConflictDecision) => void
+  } | null>(null)
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
 
   const permissionQuery = useQuery({
@@ -216,10 +223,10 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const allVisibleSelected = selectableEntries.length > 0 && selectableEntries.every((entry) => selectedNames.has(entry.name))
 
   const onError = (err: unknown) => {
-    setNotice({ kind: 'error', message: err instanceof ApiRequestError ? err.message : '操作失败，请重试。' })
+    toastError(err instanceof ApiRequestError ? err.message : '操作失败，请重试。')
   }
 
-  function startUpload(files: FileList | null, kind: 'file' | 'files' | 'directory') {
+  function startUpload(files: FileList | File[] | null, kind: 'file' | 'files' | 'directory') {
     if (!files?.length) return
     const controller = new UploadTaskController({
       sourceKey,
@@ -234,19 +241,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           overwrite: options.overwrite,
           signal: options.signal,
         }),
-      resolveConflict: async (item): Promise<UploadConflictDecision> =>
-        window.confirm(`文件 ${item.relativePath} 已存在，是否覆盖本次任务中的同类冲突？`)
-          ? 'overwrite'
-          : 'skip',
+      resolveConflict: (item) => new Promise<UploadConflictDecision>((resolve) => {
+        setUploadConflict({ item, resolve })
+      }),
       onChange: setUploadTask,
     })
     uploadController.current = controller
     void controller.start().then(() => {
-      const finalTask = controller.getSnapshot()
       refresh()
-      if (finalTask.status === 'completed') {
-        setNotice({ kind: 'success', message: `已上传 ${finalTask.completedFiles} 个文件。` })
-      }
     }).catch(onError)
     if (fileInput.current) fileInput.current.value = ''
     fileInput.current?.removeAttribute('webkitdirectory')
@@ -262,10 +264,36 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   }
 
   function openFolderPicker() {
+    setDirectoryPickerOpen(true)
+  }
+
+  function openLegacyFolderPicker() {
     folderUploadMode.current = true
     fileInput.current?.setAttribute('webkitdirectory', '')
     fileInput.current?.setAttribute('directory', '')
     fileInput.current?.click()
+  }
+
+  async function chooseDirectory() {
+    setDirectoryPickerOpen(false)
+    if (!hasDirectoryPicker()) {
+      openLegacyFolderPicker()
+      return
+    }
+
+    try {
+      const directoryHandle = await getDirectoryPickerWindow().showDirectoryPicker?.({ mode: 'read' })
+      if (!directoryHandle) return
+      const files = await readDirectoryFiles(directoryHandle)
+      if (files.length === 0) {
+        toastInfo('所选目录中没有可上传的文件。')
+        return
+      }
+      startUpload(files, 'directory')
+    } catch (error) {
+      if (isAbortError(error)) return
+      onError(error)
+    }
   }
 
   return (
@@ -322,7 +350,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
       </div>
 
       {uploadTask && (
-        <UploadTaskPanel
+        <UploadTaskToastHost
           task={uploadTask}
           onCancel={() => uploadController.current?.cancel()}
           onRetry={() => void uploadController.current?.retryFailed()}
@@ -333,13 +361,6 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             }
           }}
         />
-      )}
-
-      {notice && (
-        <div className={notice.kind === 'error' ? css.noticeError : css.noticeSuccess} role={notice.kind === 'error' ? 'alert' : 'status'}>
-          <span>{notice.message}</span>
-          <button type="button" onClick={() => setNotice(null)}>关闭</button>
-        </div>
       )}
 
       <div className={css.layout}>
@@ -625,6 +646,24 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         currentPath={currentPath}
       />
 
+      <DirectoryUploadDialog
+        open={directoryPickerOpen}
+        onOpenChange={setDirectoryPickerOpen}
+        supportsDirectoryPicker={hasDirectoryPicker()}
+        onChoose={() => void chooseDirectory()}
+      />
+
+      {uploadConflict && (
+        <UploadConflictDialog
+          item={uploadConflict.item}
+          onDecision={(decision) => {
+            const pending = uploadConflict
+            setUploadConflict(null)
+            pending.resolve(decision)
+          }}
+        />
+      )}
+
       {/* 重命名 */}
       {renameTarget && (
         <RenameDialog
@@ -646,7 +685,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onClose={() => setTransferTarget(null)}
           onChanged={(targetSourceKey, mode) => {
             refresh([sourceKey, targetSourceKey])
-            setNotice({ kind: 'success', message: mode === 'copy' ? '复制完成。' : '移动完成。' })
+            toastSuccess(mode === 'copy' ? '复制完成。' : '移动完成。')
           }}
         />
       )}
@@ -662,12 +701,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onChanged={(targetSourceKey, mode, completed, failed) => {
             refresh([sourceKey, targetSourceKey])
             setSelectedNames(new Set())
-            setNotice({
-              kind: failed > 0 ? 'error' : 'success',
-              message: failed > 0
-                ? `${mode === 'copy' ? '复制' : '移动'}完成 ${completed} 项，${failed} 项失败。`
-                : `${mode === 'copy' ? '复制' : '移动'}完成，共 ${completed} 项。`,
-            })
+            const message = failed > 0
+              ? `${mode === 'copy' ? '复制' : '移动'}完成 ${completed} 项，${failed} 项失败。`
+              : `${mode === 'copy' ? '复制' : '移动'}完成，共 ${completed} 项。`
+            if (failed > 0) toastError(message)
+            else toastSuccess(message)
           }}
         />
       )}
@@ -691,7 +729,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onClose={() => setDeleteTarget(null)}
           onChanged={() => {
             refresh()
-            setNotice({ kind: 'success', message: `已将 ${deleteTarget.name} 移入回收站。` })
+            toastSuccess(`已将 ${deleteTarget.name} 移入回收站。`)
           }}
           onError={onError}
         />
@@ -700,12 +738,55 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   )
 }
 
-function UploadTaskPanel({
+function UploadTaskToastHost({
   task,
   onCancel,
   onRetry,
   onClose,
 }: {
+  task: UploadTaskSnapshot
+  onCancel: () => void
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const toastID = appStatusToastID
+
+  useEffect(() => {
+    toast.custom(
+      (id) => (
+        <UploadTaskToast
+          toastID={id}
+          task={task}
+          onCancel={onCancel}
+          onRetry={onRetry}
+          onClose={onClose}
+        />
+      ),
+      {
+        id: toastID,
+        duration: Infinity,
+        dismissible: false,
+        unstyled: true,
+        position: 'bottom-right',
+      },
+    )
+  }, [onCancel, onClose, onRetry, task, toastID])
+
+  useEffect(() => () => {
+    toast.dismiss(toastID)
+  }, [toastID])
+
+  return null
+}
+
+function UploadTaskToast({
+  toastID,
+  task,
+  onCancel,
+  onRetry,
+  onClose,
+}: {
+  toastID: string | number
   task: UploadTaskSnapshot
   onCancel: () => void
   onRetry: () => void
@@ -725,35 +806,156 @@ function UploadTaskPanel({
     completed_with_errors: '部分文件失败',
     cancelled: '已取消',
   }[task.status]
+  const summary = task.status === 'completed'
+    ? `已上传 ${task.completedFiles} 个文件。`
+    : `${finished} / ${task.totalFiles} 个文件 · ${formatBytes(task.uploadedBytes)} / ${formatBytes(task.totalBytes)}`
 
   return (
-    <section className={css.uploadPanel} aria-live="polite" aria-label="上传任务">
-      <div className={css.uploadPanelHeader}>
-        <div>
+    <section className={css.uploadToast} role="status" aria-live="polite" aria-label="上传任务">
+      <div className={css.uploadToastHeader}>
+        <div className={css.uploadToastTitleGroup}>
           <strong>{statusLabel}</strong>
-          <span className={css.uploadPanelMeta}>
-            {finished} / {task.totalFiles} 个文件 · {formatBytes(task.uploadedBytes)} / {formatBytes(task.totalBytes)}
+          <span className={css.uploadToastMeta}>
+            {summary}
           </span>
+          {task.status === 'completed' && (
+            <span className={css.uploadToastMeta}>
+              {formatBytes(task.uploadedBytes)} / {formatBytes(task.totalBytes)}
+            </span>
+          )}
         </div>
-        <div className={css.uploadPanelActions}>
-          {isRunning && <Button variant="secondary" onClick={onCancel}>取消</Button>}
-          {task.failedFiles > 0 && !isRunning && <Button variant="secondary" onClick={onRetry}>重试失败项</Button>}
-          {!isRunning && <button className={css.uploadPanelClose} type="button" onClick={onClose}>关闭</button>}
-        </div>
+        {!isRunning && (
+          <button className={css.uploadToastClose} type="button" onClick={() => {
+            toast.dismiss(toastID)
+            onClose()
+          }}>关闭</button>
+        )}
       </div>
-      <div className={css.uploadProgressTrack} aria-label={`上传进度 ${percent}%`}>
-        <div className={css.uploadProgressValue} style={{ width: `${percent}%` }} />
+      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`上传进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className={css.uploadToastProgressValue} style={{ width: `${percent}%` }} />
       </div>
       {task.failedFiles > 0 && (
-        <ul className={css.uploadErrorList}>
+        <ul className={css.uploadToastErrorList}>
           {task.items.filter((item) => item.status === 'failed').slice(0, 3).map((item) => (
             <li key={item.id}>{item.relativePath}：{item.error || '上传失败'}</li>
           ))}
           {task.failedFiles > 3 && <li>还有 {task.failedFiles - 3} 个失败项</li>}
         </ul>
       )}
+      {(isRunning || task.failedFiles > 0) && (
+        <div className={css.uploadToastActions}>
+          {isRunning && <button type="button" className={css.uploadToastAction} onClick={onCancel}>取消上传</button>}
+          {task.failedFiles > 0 && !isRunning && <button type="button" className={css.uploadToastAction} onClick={onRetry}>重试失败项</button>}
+        </div>
+      )}
     </section>
   )
+}
+
+function DirectoryUploadDialog({
+  open,
+  onOpenChange,
+  supportsDirectoryPicker,
+  onChoose,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  supportsDirectoryPicker: boolean
+  onChoose: () => void
+}) {
+  return (
+    <DialogWrap
+      open={open}
+      onOpenChange={onOpenChange}
+      title="上传目录"
+      description="选择一个目录，目录中的文件会按原有层级上传到当前位置。"
+      footer={(
+        <>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button onClick={onChoose}>选择目录</Button>
+        </>
+      )}
+    >
+      <p className={css.dialogHint}>
+        {supportsDirectoryPicker
+          ? '选择后会读取目录中的文件，并保留子目录结构。'
+          : '当前浏览器不支持目录读取 API，将使用兼容模式选择目录。'}
+      </p>
+    </DialogWrap>
+  )
+}
+
+function UploadConflictDialog({
+  item,
+  onDecision,
+}: {
+  item: UploadTaskItem
+  onDecision: (decision: UploadConflictDecision) => void
+}) {
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => {
+        if (!open) onDecision('cancel')
+      }}
+      title="发现重名文件"
+      description="请选择本次上传任务遇到同名文件时的处理方式。"
+      footer={(
+        <>
+          <Button variant="secondary" onClick={() => onDecision('skip')}>跳过冲突文件</Button>
+          <Button variant="danger" onClick={() => onDecision('overwrite')}>覆盖冲突文件</Button>
+        </>
+      )}
+    >
+      <p className={css.dialogHint}>
+        <strong>{item.relativePath}</strong> 已存在。选择后，后续同类冲突将沿用这个策略。
+      </p>
+      <Button variant="ghost" onClick={() => onDecision('cancel')}>取消整个上传任务</Button>
+    </DialogWrap>
+  )
+}
+
+type DirectoryHandleWithValues = FileSystemDirectoryHandle & {
+  values: () => AsyncIterableIterator<FileSystemFileHandle | DirectoryHandleWithValues>
+}
+
+type DirectoryPickerWindow = Window & {
+  showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<DirectoryHandleWithValues>
+}
+
+function getDirectoryPickerWindow() {
+  return window as DirectoryPickerWindow
+}
+
+function hasDirectoryPicker() {
+  return typeof window !== 'undefined' && typeof getDirectoryPickerWindow().showDirectoryPicker === 'function'
+}
+
+async function readDirectoryFiles(
+  directory: DirectoryHandleWithValues,
+  parentPath = directory.name,
+): Promise<File[]> {
+  const files: File[] = []
+  for await (const entry of directory.values()) {
+    const relativePath = `${parentPath}/${entry.name}`
+    if (entry.kind === 'directory') {
+      files.push(...await readDirectoryFiles(entry as DirectoryHandleWithValues, relativePath))
+    } else {
+      const file = await (entry as FileSystemFileHandle).getFile()
+      files.push(withRelativePath(file, relativePath))
+    }
+  }
+  return files.sort((a, b) => uploadRelativePath(a).localeCompare(uploadRelativePath(b)))
+}
+
+function withRelativePath(file: File, relativePath: string) {
+  const copy = new File([file], file.name, { type: file.type, lastModified: file.lastModified })
+  Object.defineProperty(copy, 'webkitRelativePath', { value: relativePath })
+  return copy
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function SelectionToolbar({

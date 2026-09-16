@@ -13,6 +13,12 @@ test('directory can be created, renamed, copied, moved and cleaned up', async ({
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
 
+  await page.getByRole('button', { name: '上传目录' }).click()
+  const directoryDialog = page.getByRole('dialog', { name: '上传目录', exact: true })
+  await expect(directoryDialog).toBeVisible()
+  await expect(directoryDialog).toContainText('保留子目录结构')
+  await directoryDialog.getByRole('button', { name: '取消', exact: true }).click()
+
   await page.getByRole('button', { name: '创建文件夹' }).click()
   const createDialog = page.getByRole('dialog', { name: '新建文件夹' })
   await createDialog.getByLabel('目录名').fill(originalName)

@@ -15,6 +15,7 @@ import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { IconChevronLeft, IconFile, IconFolder, IconRefresh, IconRestore, IconTrash } from '../components/ui/Icon'
+import { toastSuccess } from '../components/ui/Toast'
 import { formatBytes, formatDate } from '../utils/format'
 import * as css from './Trash.css'
 
@@ -31,7 +32,6 @@ export function TrashPage() {
   })
   const [restoreTarget, setRestoreTarget] = useState<TrashEntry | null>(null)
   const [purgeTarget, setPurgeTarget] = useState<TrashEntry | null>(null)
-  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['trash', sourceKey] })
@@ -71,13 +71,6 @@ export function TrashPage() {
           <IconRefresh size={14} /> {trash.isFetching ? '刷新中…' : '刷新'}
         </Button>
       </header>
-
-      {notice ? (
-        <div className={notice.kind === 'error' ? css.noticeError : css.noticeSuccess} role={notice.kind === 'error' ? 'alert' : 'status'}>
-          <span>{notice.message}</span>
-          <button onClick={() => setNotice(null)}>关闭</button>
-        </div>
-      ) : null}
 
       <section className={css.panel}>
         {trash.isPending ? <div className={css.centerState}>正在读取回收站…</div> : null}
@@ -143,7 +136,7 @@ export function TrashPage() {
           onClose={() => setRestoreTarget(null)}
           onSuccess={() => {
             setRestoreTarget(null)
-            setNotice({ kind: 'success', message: `已恢复 ${restoreTarget.name}。` })
+            toastSuccess(`已恢复 ${restoreTarget.name}。`)
             refresh()
           }}
         />
@@ -155,7 +148,7 @@ export function TrashPage() {
           onClose={() => setPurgeTarget(null)}
           onSuccess={() => {
             setPurgeTarget(null)
-            setNotice({ kind: 'success', message: `已永久删除 ${purgeTarget.name}。` })
+            toastSuccess(`已永久删除 ${purgeTarget.name}。`)
             refresh()
           }}
         />

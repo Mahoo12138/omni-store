@@ -31,6 +31,7 @@ import {
   IconTrash,
 } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
+import { toastError, toastSuccess } from '../components/ui/Toast'
 import { resolveImageBedTarget } from './imageBedTarget'
 import * as css from './ImageBed.css'
 
@@ -89,7 +90,6 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const [selectedTarget, setSelectedTarget] = useState('')
-  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState(1)
@@ -97,6 +97,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [copied, setCopied] = useState('')
   const [infoOpen, setInfoOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ImageRecord | null>(null)
 
   const history = useQuery({
     queryKey: ['imagebed-history', page],
@@ -122,32 +123,32 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   const setDefaultMut = useMutation({
     mutationFn: setDefaultImageBedTarget,
     onSuccess: async () => {
-      setNotice({ tone: 'success', text: '默认图床目标已更新' })
+      toastSuccess('默认图床目标已更新')
       await queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] })
     },
-    onError: (error) => setNotice({ tone: 'error', text: errorMessage(error, '设置默认目标失败') }),
+    onError: (error) => toastError(errorMessage(error, '设置默认目标失败')),
   })
 
   const deleteMut = useMutation({
     mutationFn: deleteImage,
     onSuccess: async () => {
-      setNotice({ tone: 'success', text: '图片已删除' })
+      setDeleteTarget(null)
+      toastSuccess('图片已删除')
       await queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
     },
-    onError: (error) => setNotice({ tone: 'error', text: errorMessage(error, '删除失败') }),
+    onError: (error) => toastError(errorMessage(error, '删除失败')),
   })
 
   async function onUpload(files: FileList | File[]) {
     const queuedFiles = Array.from(files)
     if (queuedFiles.length === 0 || !currentTarget) return
-    setNotice(null)
     setUploading(true)
     try {
       for (const file of queuedFiles) await uploadImage(file, currentTarget)
-      setNotice({ tone: 'success', text: `${queuedFiles.length} 张图片上传成功` })
+      toastSuccess(`${queuedFiles.length} 张图片上传成功`)
       await queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
     } catch (error) {
-      setNotice({ tone: 'error', text: errorMessage(error, '上传失败') })
+      toastError(errorMessage(error, '上传失败'))
     } finally {
       setUploading(false)
       if (fileInput.current) fileInput.current.value = ''
@@ -170,11 +171,6 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
     <AppShell title="图床">
       <div className={css.pageHeader}>
         <h1 className={css.pageTitle}>图床</h1>
-        {notice ? (
-          <div className={notice.tone === 'success' ? css.successNotice : css.errorNotice} role="status">
-            {notice.text}
-          </div>
-        ) : null}
       </div>
 
       <div className={css.workspace}>
@@ -349,11 +345,7 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
                   list={viewMode === 'list'}
                   copied={copied}
                   onCopy={copyText}
-                  onDelete={(imageId) => {
-                    if (window.confirm('确定删除这张图片吗？物理文件会一并删除。')) {
-                      deleteMut.mutate(imageId)
-                    }
-                  }}
+                  onDelete={() => setDeleteTarget(image)}
                 />
               ))}
             </div>
@@ -408,6 +400,25 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
             </Link>
           </div>
+        </DialogWrap>
+      ) : null}
+
+      {deleteTarget ? (
+        <DialogWrap
+          open
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+          title="删除图片"
+          description={`“${deleteTarget.original_filename || `${deleteTarget.image_id}.${deleteTarget.ext}`}”删除后无法恢复。`}
+          footer={(
+            <>
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>取消</Button>
+              <Button variant="danger" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate(deleteTarget.image_id)}>
+                {deleteMut.isPending ? '删除中…' : '删除图片'}
+              </Button>
+            </>
+          )}
+        >
+          <p style={{ margin: 0 }}>物理文件会一并删除，请确认继续。</p>
         </DialogWrap>
       ) : null}
     </AppShell>

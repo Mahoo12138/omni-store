@@ -41,11 +41,10 @@ test('user image can be uploaded, served from history and deleted', async ({ pag
   expect(publicResponse.status()).toBe(200)
   expect(publicResponse.headers()['content-type']).toBe('image/png')
 
-  page.once('dialog', async (dialog) => {
-    expect(dialog.type()).toBe('confirm')
-    await dialog.accept()
-  })
   await card.getByRole('button', { name: '删除图片' }).click()
+  const deleteDialog = page.getByRole('dialog', { name: '删除图片', exact: true })
+  await expect(deleteDialog).toBeVisible()
+  await deleteDialog.getByRole('button', { name: '删除图片', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('图片已删除')
   await expect(card).toHaveCount(0)
 

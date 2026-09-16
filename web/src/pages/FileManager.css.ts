@@ -124,92 +124,72 @@ export const headerActions = style({
   flexShrink: 0,
 })
 
-const noticeBase = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: vars.space.md,
-  padding: '11px 14px',
-  marginBottom: vars.space.md,
-  borderRadius: vars.radius.md,
-  fontSize: vars.fontSize.sm,
-})
-
-globalStyle(`${noticeBase} button`, {
-  border: 0,
-  padding: '3px 5px',
-  background: 'transparent',
-  color: 'inherit',
-  cursor: 'pointer',
-  fontWeight: 600,
-})
-
-export const noticeSuccess = style([noticeBase, {
-  color: vars.color.success,
-  backgroundColor: vars.color.successSubtle,
-}])
-
-export const noticeError = style([noticeBase, {
-  color: vars.color.danger,
-  backgroundColor: vars.color.dangerSubtle,
-}])
-
-export const uploadPanel = style({
+export const uploadToast = style({
+  width: 'min(360px, calc(100vw - 32px))',
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.sm,
   padding: vars.space.md,
-  marginBottom: vars.space.md,
   backgroundColor: vars.color.surface,
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
-  boxShadow: vars.shadow.sm,
+  boxShadow: vars.shadow.md,
+  color: vars.color.text,
+  fontFamily: vars.font.body,
 })
 
-export const uploadPanelHeader = style({
+export const uploadToastHeader = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: vars.space.md,
 })
 
-export const uploadPanelMeta = style({
+export const uploadToastTitleGroup = style({
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+})
+
+export const uploadToastMeta = style({
   display: 'block',
-  marginTop: '4px',
   color: vars.color.textSecondary,
   fontSize: vars.fontSize.sm,
 })
 
-export const uploadPanelActions = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-})
-
-export const uploadPanelClose = style({
+export const uploadToastClose = style({
   border: 0,
   padding: '4px 6px',
   background: 'transparent',
   color: vars.color.textSecondary,
   cursor: 'pointer',
   fontSize: vars.fontSize.sm,
+  whiteSpace: 'nowrap',
+  selectors: {
+    '&:hover': { color: vars.color.text },
+    '&:focus-visible': {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: '2px',
+    },
+  },
 })
 
-export const uploadProgressTrack = style({
+export const uploadToastProgressTrack = style({
   height: '6px',
   overflow: 'hidden',
   backgroundColor: vars.color.primarySubtle,
   borderRadius: vars.radius.full,
 })
 
-export const uploadProgressValue = style({
+export const uploadToastProgressValue = style({
   height: '100%',
   backgroundColor: vars.color.primary,
   borderRadius: vars.radius.full,
   transition: `width ${vars.motion.base} ${vars.motion.ease}`,
 })
 
-export const uploadErrorList = style({
+export const uploadToastErrorList = style({
   display: 'flex',
   flexDirection: 'column',
   gap: '3px',
@@ -218,6 +198,41 @@ export const uploadErrorList = style({
   color: vars.color.danger,
   fontSize: vars.fontSize.sm,
 })
+
+export const uploadToastActions = style({
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: vars.space.sm,
+})
+
+export const uploadToastAction = style({
+  border: 0,
+  padding: '4px 6px',
+  background: 'transparent',
+  color: vars.color.primary,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  selectors: {
+    '&:hover': { color: vars.color.primaryHover },
+    '&:focus-visible': {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: '2px',
+    },
+  },
+})
+
+export const dialogHint = style({
+  margin: 0,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  lineHeight: 1.6,
+})
+
+// 批量复制 / 移动弹窗复用同一套进度条与错误列表。
+export const uploadProgressTrack = uploadToastProgressTrack
+export const uploadProgressValue = uploadToastProgressValue
+export const uploadErrorList = uploadToastErrorList
 
 export const selectionToolbar = style({
   display: 'flex',
