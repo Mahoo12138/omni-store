@@ -104,17 +104,6 @@ export const metaValue = style({
   maxWidth: '100%',
 })
 
-// 状态徽章行（正常/已公开/WebDAV/图床）
-export const statusRow = style({
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: '8px 16px',
-  marginTop: '14px',
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.sm,
-})
-
 // 顶部操作按钮
 export const headerActions = style({
   display: 'flex',
@@ -122,6 +111,77 @@ export const headerActions = style({
   alignItems: 'center',
   gap: vars.space.sm,
   flexShrink: 0,
+})
+
+export const clipboardBar = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  backgroundColor: vars.color.primarySubtle,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  color: vars.color.text,
+  '@media': {
+    'screen and (max-width: 720px)': {
+      alignItems: 'stretch',
+      flexWrap: 'wrap',
+    },
+  },
+})
+
+export const clipboardIcon = style({
+  width: '34px',
+  height: '34px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.surface,
+  color: vars.color.primary,
+})
+
+export const clipboardContent = style({
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  fontSize: vars.fontSize.sm,
+})
+
+export const clipboardSummary = style({
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'baseline',
+  flexWrap: 'wrap',
+  gap: `0 ${vars.space.sm}`,
+})
+
+export const clipboardMeta = style({
+  overflow: 'hidden',
+  color: vars.color.textSecondary,
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+})
+
+export const clipboardActions = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  marginLeft: 'auto',
+  flexShrink: 0,
+  '@media': {
+    'screen and (max-width: 720px)': {
+      width: '100%',
+      marginLeft: '42px',
+    },
+    'screen and (max-width: 460px)': {
+      marginLeft: 0,
+      flexWrap: 'wrap',
+    },
+  },
 })
 
 export const uploadToast = style({
@@ -137,6 +197,10 @@ export const uploadToast = style({
   color: vars.color.text,
   fontFamily: vars.font.body,
 })
+
+export const clipboardToast = style([uploadToast, {
+  gap: vars.space.sm,
+}])
 
 export const uploadToastHeader = style({
   display: 'flex',
@@ -183,10 +247,12 @@ export const uploadToastProgressTrack = style({
 })
 
 export const uploadToastProgressValue = style({
+  width: '100%',
   height: '100%',
   backgroundColor: vars.color.primary,
   borderRadius: vars.radius.full,
-  transition: `width ${vars.motion.base} ${vars.motion.ease}`,
+  transformOrigin: 'left center',
+  transition: `transform ${vars.motion.base} ${vars.motion.ease}`,
 })
 
 export const uploadToastErrorList = style({
@@ -229,11 +295,6 @@ export const dialogHint = style({
   lineHeight: 1.6,
 })
 
-// 批量复制 / 移动弹窗复用同一套进度条与错误列表。
-export const uploadProgressTrack = uploadToastProgressTrack
-export const uploadProgressValue = uploadToastProgressValue
-export const uploadErrorList = uploadToastErrorList
-
 export const selectionToolbar = style({
   display: 'flex',
   alignItems: 'center',
@@ -267,32 +328,6 @@ export const selectionClear = style({
   fontSize: vars.fontSize.sm,
 })
 
-export const batchTransferSelection = style({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: vars.space.xs,
-})
-
-globalStyle(`${batchTransferSelection} span`, {
-  maxWidth: '100%',
-  padding: '4px 8px',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  backgroundColor: vars.color.surfaceHover,
-  borderRadius: vars.radius.sm,
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.sm,
-})
-
-export const batchTransferProgress = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.sm,
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.sm,
-})
-
 // --- 面包屑 ---
 
 export const crumb = style({
@@ -322,6 +357,16 @@ export const crumbLink = style({
     },
   },
 })
+
+export const crumbSourceTrigger = style([
+  crumbLink,
+  {
+    border: 0,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    background: 'transparent',
+  },
+])
 
 export const crumbCurrent = style({
   padding: '2px 6px',
@@ -487,6 +532,13 @@ export const actionBtnDanger = style([
         color: vars.color.danger,
       },
     },
+  },
+])
+
+export const actionMenuTrigger = style([
+  actionBtn,
+  {
+    flexShrink: 0,
   },
 ])
 

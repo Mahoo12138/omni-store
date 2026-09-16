@@ -9,7 +9,8 @@ test('password-protected file share can be created, opened and revoked', async (
 
   await page.getByRole('button', { name: '打开存储源 公开演示资料' }).click()
   const fileRow = page.getByRole('row', { name: /README\.txt/ })
-  await fileRow.getByRole('button', { name: '创建分享' }).click()
+  await fileRow.getByRole('button', { name: '更多操作 README.txt' }).click()
+  await page.getByRole('menuitem', { name: '创建分享', exact: true }).click()
   await page.getByPlaceholder('留空表示无需密码').fill('e2e-share')
   await page.getByRole('spinbutton').fill('2')
   await page.getByRole('button', { name: '创建分享', exact: true }).click()

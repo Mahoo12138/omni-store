@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMe, logout } from '../../api/auth'
+import { useFileClipboard } from '../files/FileClipboard'
 import {
   IconChevronDown,
   IconFolder,
@@ -29,6 +30,7 @@ export function AppShell({
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const clipboard = useFileClipboard()
   const { pathname } = useLocation()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
@@ -45,6 +47,7 @@ export function AppShell({
   const user = me.data
 
   async function onLogout() {
+    clipboard.clear()
     await logout()
     queryClient.removeQueries({ queryKey: ['me'] })
     navigate({ to: '/login' })

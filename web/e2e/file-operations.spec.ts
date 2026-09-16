@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 
-test('directory can be created, renamed, copied, moved and cleaned up', async ({ page }) => {
+test('directory can be created, renamed, copied, cut-pasted and cleaned up', async ({ page }) => {
   const suffix = Date.now()
   const originalName = `e2e-ops-${suffix}`
   const renamedName = `${originalName}-renamed`
-  const copiedName = `${originalName}-copy`
-  const movedName = `${originalName}-moved`
+  const pasteDestinationName = `${originalName}-paste-target`
+  const moveDestinationName = `${originalName}-move-target`
 
   await page.goto('/login')
   await page.getByLabel('用户名').fill('demo')
@@ -26,43 +26,61 @@ test('directory can be created, renamed, copied, moved and cleaned up', async ({
   let row = page.getByRole('row', { name: new RegExp(originalName) })
   await expect(row).toBeVisible()
 
-  await row.getByRole('button', { name: '重命名' }).click()
+  await row.getByRole('button', { name: `更多操作 ${originalName}` }).click()
+  await page.getByRole('menuitem', { name: '重命名', exact: true }).click()
   const renameDialog = page.getByRole('dialog', { name: '重命名' })
   await renameDialog.getByLabel('新名称').fill(renamedName)
   await renameDialog.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
   await expect(page.getByRole('row', { name: new RegExp(`${originalName}$`) })).toHaveCount(0)
 
+  for (const name of [pasteDestinationName, moveDestinationName]) {
+    await page.getByRole('button', { name: '创建文件夹' }).click()
+    const createDialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await createDialog.getByLabel('目录名').fill(name)
+    await createDialog.getByRole('button', { name: '创建', exact: true }).click()
+    await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible()
+  }
+
   row = page.getByRole('row', { name: new RegExp(renamedName) })
   await row.getByRole('button', { name: '复制' }).click()
-  const copyDialog = page.getByRole('dialog', { name: '复制' })
-  await copyDialog.getByLabel('目标路径').fill(`/${copiedName}`)
-  await copyDialog.getByRole('button', { name: '复制', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('复制完成')
-  await expect(page.getByRole('row', { name: new RegExp(copiedName) })).toBeVisible()
+  const clipboard = page.getByRole('region', { name: '文件剪贴板' })
+  await expect(clipboard).toContainText('已复制 1 项')
+  const pasteButton = clipboard.getByRole('button', { name: '粘贴到此处' })
+  await expect(pasteButton).toBeDisabled()
+  await pasteButton.locator('..').hover()
+  await expect(page.getByRole('tooltip')).toContainText(`目标目录与“${renamedName}”的来源目录相同`)
 
-  row = page.getByRole('row', { name: new RegExp(copiedName) })
-  await row.getByRole('button', { name: '移动' }).click()
-  const moveDialog = page.getByRole('dialog', { name: '移动' })
-  await moveDialog.getByLabel('目标路径').fill(`/${movedName}`)
-  await moveDialog.getByRole('button', { name: '移动', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('移动完成')
-  await expect(page.getByRole('row', { name: new RegExp(movedName) })).toBeVisible()
-  await expect(page.getByRole('row', { name: new RegExp(copiedName) })).toHaveCount(0)
+  await page.getByRole('row', { name: new RegExp(pasteDestinationName) }).getByRole('button', { name: pasteDestinationName, exact: true }).click()
+  await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
+  await expect(page.getByRole('status')).toContainText('已粘贴 1 项')
+  await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
 
-  for (const name of [renamedName, movedName]) {
+  row = page.getByRole('row', { name: new RegExp(renamedName) })
+  await row.getByRole('button', { name: `更多操作 ${renamedName}` }).click()
+  await page.getByRole('menuitem', { name: '剪切', exact: true }).click()
+  await expect(page.getByRole('region', { name: '文件剪贴板' })).toContainText('已剪切 1 项')
+  await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
+  await page.getByRole('row', { name: new RegExp(moveDestinationName) }).getByRole('button', { name: moveDestinationName, exact: true }).click()
+  await page.getByRole('region', { name: '文件剪贴板' }).getByRole('button', { name: '粘贴到此处' }).click()
+  await expect(page.getByRole('status')).toContainText('已粘贴 1 项')
+  await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
+
+  await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
+
+  for (const name of [renamedName, pasteDestinationName, moveDestinationName]) {
     row = page.getByRole('row', { name: new RegExp(name) })
-    await row.getByRole('button', { name: '删除' }).click()
+    await row.getByRole('button', { name: `更多操作 ${name}` }).click()
+    await page.getByRole('menuitem', { name: '删除', exact: true }).click()
     await page.getByRole('dialog', { name: '移入回收站' }).getByRole('button', { name: '移入回收站' }).click()
-    await expect(page.getByRole('status')).toContainText(`已将 ${name} 移入回收站`)
+    await expect(row).toHaveCount(0)
   }
 
   await page.getByRole('button', { name: '回收站' }).click()
-  for (const name of [renamedName, movedName]) {
+  for (const name of [renamedName, pasteDestinationName, moveDestinationName]) {
     row = page.getByRole('row', { name: new RegExp(name) })
     await row.getByRole('button', { name: '永久删除' }).click()
     await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除' }).click()
-    await expect(page.getByRole('status')).toContainText(`已永久删除 ${name}`)
     await expect(row).toHaveCount(0)
   }
 })

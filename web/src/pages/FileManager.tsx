@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -21,19 +21,25 @@ import { ApiRequestError } from '../api/client'
 import { createShare, type FileShare } from '../api/shares'
 import { fetchMyQuota, type UserQuota } from '../api/auth'
 import { AppShell } from '../components/layout/AppShell'
+import { useFileClipboard, type FileClipboardItem, type FileClipboardOperation } from '../components/files/FileClipboard'
 import { FileTable } from '../components/files/FileTable'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
+import { Menu, type MenuOption } from '../components/ui/Menu'
 import { Select } from '../components/ui/Select'
 import { appStatusToastID, toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
+import { Tooltip } from '../components/ui/Tooltip'
 import {
   IconChevronLeft,
   IconChevronRight,
+  IconCheck,
+  IconClipboard,
   IconCloud,
   IconCopy,
+  IconChevronDown,
   IconDownload,
   IconEdit,
   IconExternalLink,
@@ -42,10 +48,11 @@ import {
   IconHome,
   IconLink,
   IconList,
-  IconMove,
+  IconMore,
   IconQuestion,
   IconRefresh,
   IconSearch,
+  IconScissors,
   IconTrash,
   IconUpload,
 } from '../components/ui/Icon'
@@ -63,8 +70,19 @@ import * as css from './FileManager.css'
 type ViewMode = 'list' | 'grid'
 const DEFAULT_PAGE_SIZE = 20
 
+type PasteTaskSnapshot = {
+  status: 'running' | 'completed' | 'completed_with_errors'
+  operation: 'copy' | 'cut'
+  total: number
+  completed: number
+  failed: number
+  current: string
+  targetPath: string
+  errors: string[]
+}
+
 // /app/sources/$sourceKey（docs/file.png / file-1.png）：
-//   - 有存储源：标题 / 状态行 / 按钮 + 面包屑 / 工具条 / 表格 / 分页 + 右侧存储源信息卡
+//   - 有存储源：标题 / 按钮 + 面包屑 / 工具条 / 表格 / 分页 + 右侧存储源信息卡
 //   - 没有可用存储源：空状态 + 右侧"暂无可用存储源"卡
 export function FileManagerPage() {
   const { sourceKey } = useParams({ from: '/app/sources/$sourceKey' })
@@ -107,6 +125,7 @@ export function FileManagerPage() {
 
 function FileManagerView({ source, sources }: { source: UserSource; sources: UserSource[] }) {
   const sourceKey = source.key
+  const clipboard = useFileClipboard()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const search = useSearch({ from: '/app/sources/$sourceKey' })
@@ -120,12 +139,12 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [view, setView] = useState<ViewMode>('list')
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [uploadTask, setUploadTask] = useState<UploadTaskSnapshot | null>(null)
+  const [pasteTask, setPasteTask] = useState<PasteTaskSnapshot | null>(null)
+  const closePasteTask = useCallback(() => setPasteTask(null), [])
 
   // 各种操作弹窗
   const [mkdirOpen, setMkdirOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
-  const [transferTarget, setTransferTarget] = useState<{ name: string; mode: 'copy' | 'move' } | null>(null)
-  const [batchTransferTarget, setBatchTransferTarget] = useState<{ names: string[]; mode: 'copy' | 'move' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
@@ -221,6 +240,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const selectableEntries = entries.filter((entry) => entry.type !== 'unsupported')
   const selectedEntries = entries.filter((entry) => selectedNames.has(entry.name) && entry.type !== 'unsupported')
   const allVisibleSelected = selectableEntries.length > 0 && selectableEntries.every((entry) => selectedNames.has(entry.name))
+  const pasteDisabledReason = getPasteDisabledReason(clipboard.items, clipboard.operation, sourceKey, currentPath, canWrite)
 
   const onError = (err: unknown) => {
     toastError(err instanceof ApiRequestError ? err.message : '操作失败，请重试。')
@@ -267,6 +287,87 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     setDirectoryPickerOpen(true)
   }
 
+  function clipboardItem(entry: FileEntry): FileClipboardItem {
+    const path = currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`
+    return {
+      id: `${sourceKey}:${path}`,
+      sourceKey,
+      sourceName: source.name,
+      path,
+      name: entry.name,
+      type: entry.type === 'dir' ? 'dir' : 'file',
+    }
+  }
+
+  function copyEntries(entriesToCopy: FileEntry[]) {
+    const items = entriesToCopy.filter((entry) => entry.type !== 'unsupported').map(clipboardItem)
+    if (items.length === 0) return
+    clipboard.copy(items)
+    setSelectedNames(new Set())
+    toastSuccess(`已复制 ${items.length} 项到剪贴板。`)
+  }
+
+  function cutEntries(entriesToCut: FileEntry[]) {
+    const items = entriesToCut.filter((entry) => entry.type !== 'unsupported').map(clipboardItem)
+    if (items.length === 0) return
+    clipboard.cut(items)
+    setSelectedNames(new Set())
+    toastSuccess(`已剪切 ${items.length} 项到剪贴板。`)
+  }
+
+  async function pasteClipboard() {
+    const items = clipboard.items
+    const operation = clipboard.operation
+    const targetPath = currentPath
+    if (!operation || items.length === 0 || pasteDisabledReason || pasteTask?.status === 'running') return
+
+    let completed = 0
+    let failed = 0
+    const errors: string[] = []
+    const failedItems: FileClipboardItem[] = []
+    setPasteTask({
+      status: 'running',
+      operation,
+      total: items.length,
+      completed,
+      failed,
+      current: items[0]?.name ?? '',
+      targetPath,
+      errors: [],
+    })
+
+    for (const item of items) {
+      setPasteTask({ status: 'running', operation, total: items.length, completed, failed, current: item.name, targetPath, errors: [...errors] })
+      const destinationPath = joinPath(targetPath, item.name)
+      try {
+        if (operation === 'copy') await copyFile(item.sourceKey, item.path, sourceKey, destinationPath)
+        else await moveFile(item.sourceKey, item.path, sourceKey, destinationPath)
+        completed += 1
+      } catch (error) {
+        failed += 1
+        failedItems.push(item)
+        errors.push(`${item.name}：${error instanceof ApiRequestError ? error.message : '粘贴失败'}`)
+      }
+      setPasteTask({ status: 'running', operation, total: items.length, completed, failed, current: item.name, targetPath, errors: [...errors] })
+    }
+
+    setPasteTask({
+      status: failed > 0 ? 'completed_with_errors' : 'completed',
+      operation,
+      total: items.length,
+      completed,
+      failed,
+      current: '',
+      targetPath,
+      errors: [...errors],
+    })
+    refresh([sourceKey, ...items.map((item) => item.sourceKey)])
+    if (operation === 'cut') {
+      if (failed === 0) clipboard.clear()
+      else clipboard.cut(failedItems)
+    }
+  }
+
   function openLegacyFolderPicker() {
     folderUploadMode.current = true
     fileInput.current?.setAttribute('webkitdirectory', '')
@@ -296,6 +397,29 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     }
   }
 
+  useEffect(() => {
+    function handleClipboardShortcut(event: KeyboardEvent) {
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'c' && selectedEntries.length > 0) {
+        event.preventDefault()
+        copyEntries(selectedEntries)
+      } else if (key === 'x' && canWrite && selectedEntries.length > 0) {
+        event.preventDefault()
+        cutEntries(selectedEntries)
+      } else if (key === 'v' && clipboard.items.length > 0 && !pasteDisabledReason && pasteTask?.status !== 'running') {
+        event.preventDefault()
+        void pasteClipboard()
+      }
+    }
+
+    window.addEventListener('keydown', handleClipboardShortcut)
+    return () => window.removeEventListener('keydown', handleClipboardShortcut)
+  }, [canWrite, clipboard.items, pasteDisabledReason, pasteTask?.status, selectedEntries])
+
   return (
     <AppShell title={source.name}>
       {/* 页面头：只保留当前任务、能力与主要操作，技术信息放在右栏。 */}
@@ -303,16 +427,6 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         <div className={css.headerIntro}>
           <h1 className={css.pageTitle}>{source.name}</h1>
           <p className={css.pageDescription}>{source.description || '管理此存储源中的文件。'}</p>
-          <div className={css.statusRow}>
-            <span>{currentPermission === 'read_write' ? '当前目录可读写' : '当前目录只读'}</span>
-            {source.webdav_enabled && <span>WebDAV</span>}
-            {source.image_bed_enabled && <span>图床</span>}
-            {source.public_read_enabled && source.public_mount_path && (
-              <a href={`/p${source.public_mount_path}`} target="_blank" rel="noreferrer">
-                公开访问 <IconExternalLink size={12} />
-              </a>
-            )}
-          </div>
         </div>
 
         <div className={css.headerActions}>
@@ -363,10 +477,23 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         />
       )}
 
+      {pasteTask && (
+        <PasteTaskToastHost
+          task={pasteTask}
+          onClose={closePasteTask}
+        />
+      )}
+
       <div className={css.layout}>
         <div className={css.main}>
           {/* 面包屑：存储源列表 / 源名 / 子路径 */}
-          <Breadcrumb sourceKey={sourceKey} sourceName={source.name} currentPath={currentPath} upOne={upOne} />
+          <Breadcrumb
+            sourceKey={sourceKey}
+            sourceName={source.name}
+            sources={sources}
+            currentPath={currentPath}
+            upOne={upOne}
+          />
 
           {/* 工具条：当前位置 / 搜索 / 视图切换 / 刷新 */}
           <div className={css.toolbar}>
@@ -406,15 +533,24 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             </div>
           </div>
 
-          {selectedEntries.length > 0 && (
+          {selectedEntries.length > 0 ? (
             <SelectionToolbar
               count={selectedEntries.length}
-              canMove={canWrite}
-              onCopy={() => setBatchTransferTarget({ names: selectedEntries.map((entry) => entry.name), mode: 'copy' })}
-              onMove={() => setBatchTransferTarget({ names: selectedEntries.map((entry) => entry.name), mode: 'move' })}
+              canCut={canWrite}
+              onCopy={() => copyEntries(selectedEntries)}
+              onCut={() => cutEntries(selectedEntries)}
               onClear={() => setSelectedNames(new Set())}
             />
-          )}
+          ) : clipboard.items.length > 0 ? (
+            <ClipboardBar
+              operation={clipboard.operation!}
+              items={clipboard.items}
+              canPaste={!pasteDisabledReason && pasteTask?.status !== 'running'}
+              disabledReason={pasteTask?.status === 'running' ? '正在粘贴，请稍候…' : pasteDisabledReason}
+              onPaste={() => void pasteClipboard()}
+              onClear={clipboard.clear}
+            />
+          ) : null}
 
           {/* 文件表格 / 网格 */}
           {view === 'list' ? (
@@ -466,41 +602,41 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                       <button
                         className={css.actionBtn}
                         title="复制"
-                        onClick={() => setTransferTarget({ name: entry.name, mode: 'copy' })}
+                        onClick={() => copyEntries([entry])}
                       >
                         <IconCopy size={15} />
                       </button>
                       {canWrite && (
-                        <>
-                          <button
-                            className={css.actionBtn}
-                            title="创建分享"
-                            onClick={() => setShareTarget({ name: entry.name, type: 'file' })}
-                          >
-                            <IconLink size={15} />
-                          </button>
-                          <button
-                            className={css.actionBtn}
-                            title="重命名"
-                            onClick={() => setRenameTarget({ name: entry.name })}
-                          >
-                            <IconEdit size={15} />
-                          </button>
-                          <button
-                            className={css.actionBtn}
-                            title="移动"
-                            onClick={() => setTransferTarget({ name: entry.name, mode: 'move' })}
-                          >
-                            <IconMove size={15} />
-                          </button>
-                          <button
-                            className={css.actionBtnDanger}
-                            title="删除"
-                            onClick={() => setDeleteTarget({ name: entry.name, type: entry.type })}
-                          >
-                            <IconTrash size={15} />
-                          </button>
-                        </>
+                        <EntryActionsMenu
+                          entryName={entry.name}
+                          items={[
+                            {
+                              id: 'share',
+                              label: '创建分享',
+                              icon: <IconLink size={15} />,
+                              onSelect: () => setShareTarget({ name: entry.name, type: 'file' }),
+                            },
+                            {
+                              id: 'rename',
+                              label: '重命名',
+                              icon: <IconEdit size={15} />,
+                              onSelect: () => setRenameTarget({ name: entry.name }),
+                            },
+                            {
+                              id: 'cut',
+                              label: '剪切',
+                              icon: <IconScissors size={15} />,
+                              onSelect: () => cutEntries([entry]),
+                            },
+                            {
+                              id: 'delete',
+                              label: '删除',
+                              icon: <IconTrash size={15} />,
+                              danger: true,
+                              onSelect: () => setDeleteTarget({ name: entry.name, type: entry.type }),
+                            },
+                          ]}
+                        />
                       )}
                     </span>
                   )
@@ -511,7 +647,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                     <button
                       className={css.actionBtn}
                       title="复制"
-                      onClick={() => setTransferTarget({ name: entry.name, mode: 'copy' })}
+                      onClick={() => copyEntries([entry])}
                     >
                       <IconCopy size={15} />
                     </button>
@@ -524,27 +660,30 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                         >
                           <IconLink size={15} />
                         </button>
-                        <button
-                          className={css.actionBtn}
-                          title="重命名"
-                          onClick={() => setRenameTarget({ name: entry.name })}
-                        >
-                          <IconEdit size={15} />
-                        </button>
-                        <button
-                          className={css.actionBtn}
-                          title="移动"
-                          onClick={() => setTransferTarget({ name: entry.name, mode: 'move' })}
-                        >
-                          <IconMove size={15} />
-                        </button>
-                        <button
-                          className={css.actionBtnDanger}
-                          title="删除"
-                          onClick={() => setDeleteTarget({ name: entry.name, type: entry.type })}
-                        >
-                          <IconTrash size={15} />
-                        </button>
+                        <EntryActionsMenu
+                          entryName={entry.name}
+                          items={[
+                            {
+                              id: 'rename',
+                              label: '重命名',
+                              icon: <IconEdit size={15} />,
+                              onSelect: () => setRenameTarget({ name: entry.name }),
+                            },
+                            {
+                              id: 'cut',
+                              label: '剪切',
+                              icon: <IconScissors size={15} />,
+                              onSelect: () => cutEntries([entry]),
+                            },
+                            {
+                              id: 'delete',
+                              label: '删除',
+                              icon: <IconTrash size={15} />,
+                              danger: true,
+                              onSelect: () => setDeleteTarget({ name: entry.name, type: entry.type }),
+                            },
+                          ]}
+                        />
                       </>
                     )}
                   </span>
@@ -558,8 +697,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               onOpenDir={goTo}
               onDelete={(name, type) => setDeleteTarget({ name, type })}
               onRename={(name) => setRenameTarget({ name })}
-              onCopy={(name) => setTransferTarget({ name, mode: 'copy' })}
-              onMove={(name) => setTransferTarget({ name, mode: 'move' })}
+              onCopy={(name) => {
+                const entry = entries.find((item) => item.name === name)
+                if (entry) copyEntries([entry])
+              }}
+              onCut={(name) => {
+                const entry = entries.find((item) => item.name === name)
+                if (entry) cutEntries([entry])
+              }}
               onShare={(name, type) => setShareTarget({ name, type })}
               canWrite={canWrite}
               filter={filter}
@@ -672,41 +817,6 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           target={renameTarget}
           onClose={() => setRenameTarget(null)}
           onChanged={refresh}
-        />
-      )}
-
-      {/* 复制 / 移动 */}
-      {transferTarget && (
-        <TransferDialog
-          sourceKey={sourceKey}
-          currentPath={currentPath}
-          target={transferTarget}
-          sources={sources}
-          onClose={() => setTransferTarget(null)}
-          onChanged={(targetSourceKey, mode) => {
-            refresh([sourceKey, targetSourceKey])
-            toastSuccess(mode === 'copy' ? '复制完成。' : '移动完成。')
-          }}
-        />
-      )}
-
-      {batchTransferTarget && (
-        <BatchTransferDialog
-          sourceKey={sourceKey}
-          currentPath={currentPath}
-          names={batchTransferTarget.names}
-          mode={batchTransferTarget.mode}
-          sources={sources}
-          onClose={() => setBatchTransferTarget(null)}
-          onChanged={(targetSourceKey, mode, completed, failed) => {
-            refresh([sourceKey, targetSourceKey])
-            setSelectedNames(new Set())
-            const message = failed > 0
-              ? `${mode === 'copy' ? '复制' : '移动'}完成 ${completed} 项，${failed} 项失败。`
-              : `${mode === 'copy' ? '复制' : '移动'}完成，共 ${completed} 项。`
-            if (failed > 0) toastError(message)
-            else toastSuccess(message)
-          }}
         />
       )}
 
@@ -832,7 +942,7 @@ function UploadTaskToast({
         )}
       </div>
       <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`上传进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className={css.uploadToastProgressValue} style={{ width: `${percent}%` }} />
+        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
       </div>
       {task.failedFiles > 0 && (
         <ul className={css.uploadToastErrorList}>
@@ -847,6 +957,133 @@ function UploadTaskToast({
           {isRunning && <button type="button" className={css.uploadToastAction} onClick={onCancel}>取消上传</button>}
           {task.failedFiles > 0 && !isRunning && <button type="button" className={css.uploadToastAction} onClick={onRetry}>重试失败项</button>}
         </div>
+      )}
+    </section>
+  )
+}
+
+function ClipboardBar({
+  operation,
+  items,
+  canPaste,
+  disabledReason,
+  onPaste,
+  onClear,
+}: {
+  operation: FileClipboardOperation
+  items: FileClipboardItem[]
+  canPaste: boolean
+  disabledReason: string
+  onPaste: () => void
+  onClear: () => void
+}) {
+  const first = items[0]
+  const sourceLocation = first ? `${first.sourceName} · ${parentPath(first.path)}` : ''
+  const operationLabel = operation === 'copy' ? '已复制' : '已剪切'
+
+  return (
+    <section className={css.clipboardBar} role="region" aria-label="文件剪贴板">
+      <span className={css.clipboardIcon} aria-hidden="true">
+        {operation === 'copy' ? <IconCopy size={17} /> : <IconScissors size={17} />}
+      </span>
+      <div className={css.clipboardContent}>
+        <div className={css.clipboardSummary}>
+          <strong>{operationLabel} {items.length} 项</strong>
+          <span className={css.clipboardMeta}>来源：{sourceLocation}</span>
+        </div>
+      </div>
+      <div className={css.clipboardActions}>
+        {disabledReason ? (
+          <Tooltip content={disabledReason}>
+            <Button onClick={onPaste} disabled={!canPaste}>
+              <IconClipboard size={14} /> 粘贴到此处
+            </Button>
+          </Tooltip>
+        ) : (
+          <Button onClick={onPaste} disabled={!canPaste}>
+            <IconClipboard size={14} /> 粘贴到此处
+          </Button>
+        )}
+        <Button variant="ghost" onClick={onClear}>清空剪贴板</Button>
+      </div>
+    </section>
+  )
+}
+
+function PasteTaskToastHost({
+  task,
+  onClose,
+}: {
+  task: PasteTaskSnapshot
+  onClose: () => void
+}) {
+  const toastID = appStatusToastID
+
+  useEffect(() => {
+    toast.custom(
+      (id) => <PasteTaskToast toastID={id} task={task} onClose={onClose} />,
+      {
+        id: toastID,
+        duration: Infinity,
+        dismissible: false,
+        unstyled: true,
+        position: 'bottom-right',
+      },
+    )
+  }, [onClose, task, toastID])
+
+  useEffect(() => () => {
+    toast.dismiss(toastID)
+  }, [toastID])
+
+  return null
+}
+
+function PasteTaskToast({
+  toastID,
+  task,
+  onClose,
+}: {
+  toastID: string | number
+  task: PasteTaskSnapshot
+  onClose: () => void
+}) {
+  const processed = task.completed + task.failed
+  const percent = task.total > 0 ? Math.round((processed / task.total) * 100) : 100
+  const verb = task.operation === 'copy' ? '复制' : '剪切'
+  const title = task.status === 'running'
+    ? `正在${verb}`
+    : task.status === 'completed'
+      ? '粘贴完成'
+      : '粘贴完成，但有失败项'
+  const summary = task.status === 'running'
+    ? `${processed} / ${task.total} 项 · 当前：${task.current}`
+    : task.failed > 0
+      ? `${task.completed} 项成功，${task.failed} 项失败`
+      : `已粘贴 ${task.completed} 项到 ${task.targetPath}`
+
+  return (
+    <section className={css.clipboardToast} role="status" aria-live="polite" aria-label="粘贴任务">
+      <div className={css.uploadToastHeader}>
+        <div className={css.uploadToastTitleGroup}>
+          <strong>{title}</strong>
+          <span className={css.uploadToastMeta}>{summary}</span>
+        </div>
+        {task.status !== 'running' && (
+          <button className={css.uploadToastClose} type="button" onClick={() => {
+            toast.dismiss(toastID)
+            onClose()
+          }}>关闭</button>
+        )}
+      </div>
+      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`粘贴进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
+      </div>
+      {task.errors.length > 0 && (
+        <ul className={css.uploadToastErrorList}>
+          {task.errors.slice(0, 3).map((error) => <li key={error}>{error}</li>)}
+          {task.errors.length > 3 && <li>还有 {task.errors.length - 3} 个失败项</li>}
+        </ul>
       )}
     </section>
   )
@@ -958,26 +1195,71 @@ function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
+function normalizePath(path: string) {
+  const normalized = `/${path.replace(/^\/+/, '').replace(/\/+$/, '')}`
+  return normalized === '/' ? '/' : normalized
+}
+
+function joinPath(directory: string, name: string) {
+  const normalized = normalizePath(directory)
+  return normalized === '/' ? `/${name}` : `${normalized}/${name}`
+}
+
+function parentPath(path: string) {
+  const normalized = normalizePath(path)
+  const slash = normalized.lastIndexOf('/')
+  return slash <= 0 ? '/' : normalized.slice(0, slash)
+}
+
+function isPathInside(path: string, directory: string) {
+  const normalizedPath = normalizePath(path)
+  const normalizedDirectory = normalizePath(directory)
+  return normalizedPath === normalizedDirectory || normalizedPath.startsWith(`${normalizedDirectory}/`)
+}
+
+function getPasteDisabledReason(
+  items: FileClipboardItem[],
+  operation: FileClipboardOperation | null,
+  targetSourceKey: string,
+  targetPath: string,
+  canWrite: boolean,
+) {
+  if (!operation || items.length === 0) return '剪贴板为空'
+  if (!canWrite) return '当前目录只读，无法粘贴'
+
+  const normalizedTarget = normalizePath(targetPath)
+  for (const item of items) {
+    if (item.sourceKey !== targetSourceKey) continue
+    if (normalizedTarget === parentPath(item.path)) {
+      return `目标目录与“${item.name}”的来源目录相同`
+    }
+    if (item.type === 'dir' && isPathInside(normalizedTarget, item.path)) {
+      return `不能把“${item.name}”粘贴到自身目录内`
+    }
+  }
+  return ''
+}
+
 function SelectionToolbar({
   count,
-  canMove,
+  canCut,
   onCopy,
-  onMove,
+  onCut,
   onClear,
 }: {
   count: number
-  canMove: boolean
+  canCut: boolean
   onCopy: () => void
-  onMove: () => void
+  onCut: () => void
   onClear: () => void
 }) {
   return (
     <div className={css.selectionToolbar} role="toolbar" aria-label="批量文件操作">
       <strong>已选择 {count} 项</strong>
-      <span className={css.selectionToolbarHint}>选择目标目录后批量处理</span>
+      <span className={css.selectionToolbarHint}>选择复制或剪切，前往目标目录后粘贴</span>
       <span className={css.selectionToolbarActions}>
         <Button variant="secondary" onClick={onCopy}><IconCopy size={14} /> 复制</Button>
-        {canMove && <Button onClick={onMove}><IconMove size={14} /> 移动</Button>}
+        {canCut && <Button onClick={onCut}><IconScissors size={14} /> 剪切</Button>}
         <button className={css.selectionClear} type="button" onClick={onClear}>取消选择</button>
       </span>
     </div>
@@ -989,21 +1271,37 @@ function SelectionToolbar({
 function Breadcrumb({
   sourceKey,
   sourceName,
+  sources,
   currentPath,
   upOne,
 }: {
   sourceKey: string
   sourceName: string
+  sources: UserSource[]
   currentPath: string
   upOne: () => void
 }) {
   const navigate = useNavigate()
   const segs = currentPath === '/' ? [] : currentPath.split('/').filter(Boolean)
+  const sourceItems: MenuOption[] = sources.map((source) => ({
+    id: source.key,
+    label: source.name,
+    icon: source.key === sourceKey ? <IconCheck size={14} /> : undefined,
+    current: source.key === sourceKey,
+    onSelect: () => navigate({
+      to: '/app/sources/$sourceKey',
+      params: { sourceKey: source.key },
+      search: { path: '/', page: 1 },
+    }),
+  }))
   return (
     <nav className={css.crumb} aria-label="面包屑">
-      <span className={css.crumbLink} onClick={() => navigate({ to: '/app' })}>
-        <IconHome size={14} /> 存储源列表
-      </span>
+      <Menu
+        ariaLabel="存储源列表"
+        triggerClassName={css.crumbSourceTrigger}
+        trigger={<><IconHome size={14} /> 存储源列表 <IconChevronDown size={12} /></>}
+        items={sourceItems}
+      />
       <span className={css.crumbSep}>/</span>
       <span
         className={segs.length === 0 ? css.crumbCurrent : css.crumbLink}
@@ -1035,6 +1333,19 @@ function Breadcrumb({
   )
 }
 
+type EntryAction = MenuOption
+
+function EntryActionsMenu({ entryName, items }: { entryName: string; items: EntryAction[] }) {
+  return (
+    <Menu
+      ariaLabel={`更多操作 ${entryName}`}
+      triggerClassName={css.actionMenuTrigger}
+      trigger={<IconMore size={15} />}
+      items={items}
+    />
+  )
+}
+
 // --- 网格视图（轻量） ---
 
 function GridView({
@@ -1044,7 +1355,7 @@ function GridView({
   onDelete,
   onRename,
   onCopy,
-  onMove,
+  onCut,
   onShare,
   canWrite,
   filter,
@@ -1057,7 +1368,7 @@ function GridView({
   onDelete: (name: string, type: string) => void
   onRename: (name: string) => void
   onCopy: (name: string) => void
-  onMove: (name: string) => void
+  onCut: (name: string) => void
   onShare: (name: string, type: 'file' | 'dir') => void
   canWrite: boolean
   filter: string
@@ -1137,19 +1448,20 @@ function GridView({
                   >
                     <IconLink size={12} />
                   </button>
-                  <button className={css.actionBtn} title="重命名" onClick={() => onRename(e.name)}>
-                    <IconEdit size={12} />
-                  </button>
-                  <button className={css.actionBtn} title="移动" onClick={() => onMove(e.name)}>
-                    <IconMove size={12} />
-                  </button>
-                  <button
-                    className={css.actionBtnDanger}
-                    title="删除"
-                    onClick={() => onDelete(e.name, e.type)}
-                  >
-                    <IconTrash size={12} />
-                  </button>
+                  <EntryActionsMenu
+                    entryName={e.name}
+                    items={[
+                      { id: 'rename', label: '重命名', icon: <IconEdit size={12} />, onSelect: () => onRename(e.name) },
+                      { id: 'cut', label: '剪切', icon: <IconScissors size={12} />, onSelect: () => onCut(e.name) },
+                      {
+                        id: 'delete',
+                        label: '删除',
+                        icon: <IconTrash size={12} />,
+                        danger: true,
+                        onSelect: () => onDelete(e.name, e.type),
+                      },
+                    ]}
+                  />
                 </>
               )}
             </span>
@@ -1209,10 +1521,10 @@ function SourceInfoCard({
             badge={source.public_read_enabled ? 'green' : 'gray'}
           />
           {source.webdav_enabled && (
-            <div>
+            <div className={css.sideKvRow}>
               <span className={css.sideKvLabel}>WebDAV</span>
               <a className={css.sideLink} href="/dav" target="_blank" rel="noreferrer">
-                <IconLink size={12} /> /dav
+                <IconLink size={12} /> <span>/dav</span>
                 <IconExternalLink size={12} />
               </a>
             </div>
@@ -1341,7 +1653,7 @@ function NoSourceView() {
   )
 }
 
-// --- 弹窗：新建 / 重命名 / 移动 / 删除 ---
+// --- 弹窗：新建 / 重命名 / 删除 ---
 
 function MkdirDialog({
   open,
@@ -1447,226 +1759,6 @@ function RenameDialog({
       <Field label="新名称" required error={err}>
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-    </DialogWrap>
-  )
-}
-
-function TransferDialog({
-  sourceKey,
-  currentPath,
-  target,
-  sources,
-  onClose,
-  onChanged,
-}: {
-  sourceKey: string
-  currentPath: string
-  target: { name: string; mode: 'copy' | 'move' }
-  sources: UserSource[]
-  onClose: () => void
-  onChanged: (targetSourceKey: string, mode: 'copy' | 'move') => void
-}) {
-  const fromPath = currentPath === '/' ? `/${target.name}` : `${currentPath}/${target.name}`
-  const [targetSourceKey, setTargetSourceKey] = useState(sourceKey)
-  const [toPath, setToPath] = useState(fromPath)
-  const [err, setErr] = useState('')
-  useEffect(() => {
-    setTargetSourceKey(sourceKey)
-    setToPath(fromPath)
-    setErr('')
-  }, [fromPath, sourceKey, target.mode])
-
-  const mut = useMutation({
-    mutationFn: () => target.mode === 'copy'
-      ? copyFile(sourceKey, fromPath, targetSourceKey, toPath.trim())
-      : moveFile(sourceKey, fromPath, targetSourceKey, toPath.trim()),
-    onSuccess: () => {
-      onClose()
-      onChanged(targetSourceKey, target.mode)
-    },
-    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : `${target.mode === 'copy' ? '复制' : '移动'}失败`),
-  })
-
-  function submit() {
-    setErr('')
-    if (!toPath.trim()) return
-    if (!toPath.startsWith('/')) { setErr('目标路径必须是绝对路径（以 / 开头）'); return }
-    if (targetSourceKey === sourceKey && toPath.trim() === fromPath) {
-      setErr('同一存储源内的目标路径不能与原路径相同')
-      return
-    }
-    mut.mutate()
-  }
-
-  const verb = target.mode === 'copy' ? '复制' : '移动'
-
-  return (
-    <DialogWrap
-      open
-      onOpenChange={(o) => { if (!o) onClose() }}
-      title={verb}
-      description={`${verb}到当前或其他存储源；不会覆盖已有目标。`}
-      wide
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button onClick={submit} disabled={mut.isPending || !toPath.trim()}>
-            {mut.isPending ? `${verb}中…` : verb}
-          </Button>
-        </>
-      }
-    >
-      <Field label="原路径">
-        <Input readOnly value={fromPath} />
-      </Field>
-      <Field label="目标存储源" required hint="最终权限会按目标路径再次校验。">
-        <Select
-          value={targetSourceKey}
-          onValueChange={setTargetSourceKey}
-          options={sources.map((item) => ({
-            value: item.key,
-            label: item.key === sourceKey ? `${item.name}（当前）` : item.name,
-          }))}
-          ariaLabel="目标存储源"
-        />
-      </Field>
-      <Field label="目标路径" required error={err} hint="例如：/photos/2026">
-        <Input autoFocus value={toPath} onChange={(e) => setToPath(e.target.value)} />
-      </Field>
-    </DialogWrap>
-  )
-}
-
-function BatchTransferDialog({
-  sourceKey,
-  currentPath,
-  names,
-  mode,
-  sources,
-  onClose,
-  onChanged,
-}: {
-  sourceKey: string
-  currentPath: string
-  names: string[]
-  mode: 'copy' | 'move'
-  sources: UserSource[]
-  onClose: () => void
-  onChanged: (targetSourceKey: string, mode: 'copy' | 'move', completed: number, failed: number) => void
-}) {
-  const [targetSourceKey, setTargetSourceKey] = useState(sourceKey)
-  const [targetDirectory, setTargetDirectory] = useState(currentPath)
-  const [err, setErr] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState<{ completed: number; failed: number; current: string; errors: string[] } | null>(null)
-  const verb = mode === 'copy' ? '复制' : '移动'
-
-  useEffect(() => {
-    setTargetSourceKey(sourceKey)
-    setTargetDirectory(currentPath)
-    setErr('')
-    setBusy(false)
-    setProgress(null)
-  }, [currentPath, mode, names.join('|'), sourceKey])
-
-  function destinationPath(directory: string, name: string) {
-    const normalized = directory.trim().replace(/\/+$/, '') || '/'
-    return normalized === '/' ? `/${name}` : `${normalized}/${name}`
-  }
-
-  async function submit() {
-    const directory = targetDirectory.trim().replace(/\/+$/, '') || '/'
-    setErr('')
-    if (!directory.startsWith('/')) {
-      setErr('目标目录必须是绝对路径（以 / 开头）')
-      return
-    }
-    const currentDirectory = currentPath.replace(/\/+$/, '') || '/'
-    if (targetSourceKey === sourceKey && directory === currentDirectory) {
-      setErr('目标目录不能与当前目录相同')
-      return
-    }
-
-    setBusy(true)
-    let completed = 0
-    let failed = 0
-    const errors: string[] = []
-    setProgress({ completed, failed, current: names[0] ?? '', errors })
-    for (const name of names) {
-      setProgress({ completed, failed, current: name, errors: [...errors] })
-      const fromPath = currentPath === '/' ? `/${name}` : `${currentPath}/${name}`
-      const toPath = destinationPath(directory, name)
-      try {
-        if (mode === 'copy') await copyFile(sourceKey, fromPath, targetSourceKey, toPath)
-        else await moveFile(sourceKey, fromPath, targetSourceKey, toPath)
-        completed += 1
-      } catch (error) {
-        failed += 1
-        errors.push(`${name}：${error instanceof ApiRequestError ? error.message : `${verb}失败`}`)
-      }
-      setProgress({ completed, failed, current: name, errors: [...errors] })
-    }
-    setBusy(false)
-    setProgress({ completed, failed, current: '', errors: [...errors] })
-    onChanged(targetSourceKey, mode, completed, failed)
-    if (failed === 0) onClose()
-  }
-
-  return (
-    <DialogWrap
-      open
-      onOpenChange={(open) => { if (!open && !busy) onClose() }}
-      title={`批量${verb}`}
-      description={`${verb}所选 ${names.length} 项到目标目录；不会覆盖已有目标。`}
-      wide
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>取消</Button>
-          {progress && !busy && progress.failed > 0 ? (
-            <Button onClick={onClose}>关闭</Button>
-          ) : (
-            <Button onClick={() => void submit()} disabled={busy || names.length === 0 || !targetDirectory.trim()}>
-              {busy ? `${verb}中… ${progress?.completed ?? 0}/${names.length}` : verb}
-            </Button>
-          )}
-        </>
-      }
-    >
-      <Field label="所选项目">
-        <div className={css.batchTransferSelection}>
-          {names.slice(0, 8).map((name) => <span key={name}>{name}</span>)}
-          {names.length > 8 && <span>还有 {names.length - 8} 项</span>}
-        </div>
-      </Field>
-      <Field label="目标存储源" required hint="每个项目会单独按目标路径再次校验权限。">
-        <Select
-          value={targetSourceKey}
-          onValueChange={setTargetSourceKey}
-          options={sources.map((item) => ({
-            value: item.key,
-            label: item.key === sourceKey ? `${item.name}（当前）` : item.name,
-          }))}
-          ariaLabel="目标存储源"
-          disabled={busy}
-        />
-      </Field>
-      <Field label="目标目录" required error={err} hint="例如：/photos/2026">
-        <Input autoFocus value={targetDirectory} onChange={(event) => setTargetDirectory(event.target.value)} disabled={busy} />
-      </Field>
-      {progress && (
-        <div className={css.batchTransferProgress} aria-live="polite">
-          <div>{busy ? `正在处理：${progress.current}` : `已完成 ${progress.completed} 项，失败 ${progress.failed} 项`}</div>
-          <div className={css.uploadProgressTrack}>
-            <div
-              className={css.uploadProgressValue}
-              style={{ width: `${Math.round(((progress.completed + progress.failed) / names.length) * 100)}%` }}
-            />
-          </div>
-          {progress.errors.length > 0 && (
-            <ul className={css.uploadErrorList}>{progress.errors.map((message) => <li key={message}>{message}</li>)}</ul>
-          )}
-        </div>
-      )}
     </DialogWrap>
   )
 }

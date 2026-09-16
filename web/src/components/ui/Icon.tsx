@@ -170,10 +170,33 @@ export const IconMove = (p: IconProps) => (
   </Svg>
 )
 
+export const IconScissors = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="6.5" cy="7.5" r="2.5" />
+    <circle cx="6.5" cy="16.5" r="2.5" />
+    <path d="M8.5 8.8L20 3M8.5 15.2L20 21M10 12h10" />
+  </Svg>
+)
+
 export const IconCopy = (p: IconProps) => (
   <Svg {...p}>
     <rect x="9" y="9" width="12" height="12" rx="2" />
     <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </Svg>
+)
+
+export const IconClipboard = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="5" y="4" width="14" height="17" rx="2" />
+    <path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h3" />
+  </Svg>
+)
+
+export const IconMore = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
   </Svg>
 )
 
