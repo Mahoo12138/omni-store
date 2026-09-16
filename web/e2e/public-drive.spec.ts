@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('anonymous visitor can browse and filter the public drive but must log in to write', async ({ page }) => {
+test('anonymous visitor can browse, preview and download the public drive', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '公开网盘' })).toBeVisible()
   await page.getByRole('button', { name: '打开目录 公开演示资料' }).click()
@@ -27,7 +27,7 @@ test('anonymous visitor can browse and filter the public drive but must log in t
   await page.getByRole('button', { name: 'guides', exact: true }).click()
   await expect(page).toHaveURL(/\/p\/demo\/guides$/)
   await expect(page.getByRole('link', { name: 'getting-started.md', exact: true })).toBeVisible()
-
-  await page.getByRole('button', { name: '上传文件' }).click()
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByText('公开目录仅支持预览和下载')).toBeVisible()
+  await expect(page.getByRole('button', { name: '上传文件' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '新建文件夹' })).toHaveCount(0)
 })

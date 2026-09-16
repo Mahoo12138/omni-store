@@ -1,6 +1,17 @@
 import { keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
+export const readOnlyNotice = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  minHeight: '36px',
+  padding: `0 ${vars.space.sm}`,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  whiteSpace: 'nowrap',
+})
+
 // 视图切换按钮组：列表 / 网格（docs/index.png 右上角）。
 export const viewToggle = style({
   display: 'inline-flex',

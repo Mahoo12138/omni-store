@@ -2,19 +2,17 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { browsePublic, rawUrl } from '../api/public'
-import { fetchMe } from '../api/auth'
 import { PublicBreadcrumb, PublicShell } from '../components/layout/PublicShell'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
 import {
   EntryIcon,
   IconDownload,
-  IconFolderPlus,
   IconGrid,
+  IconInfo,
   IconList,
   IconRefresh,
   IconSearch,
-  IconUpload,
 } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
@@ -24,7 +22,6 @@ import * as css from './PublicBrowse.css'
 type ViewMode = 'list' | 'grid'
 
 // 公开目录浏览 /p/*（docs/index.png）：匿名只读，文件点击即在新页打开 raw。
-// 写操作（上传/新建）需要登录：点击后引导到 /app 或 /login。
 export function PublicBrowsePage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -35,13 +32,6 @@ export function PublicBrowsePage() {
 
   // /p/photos/2026 -> photos/2026
   const virtualPath = decodeURIComponent(location.pathname.replace(/^\/p\/?/, '')).replace(/\/+$/, '')
-
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: fetchMe,
-    retry: false,
-    staleTime: 60_000,
-  })
 
   const browse = useQuery({
     queryKey: ['public-browse', virtualPath, page],
@@ -61,14 +51,6 @@ export function PublicBrowsePage() {
     }
   }
 
-  function requireLogin() {
-    if (me.data) {
-      navigate({ to: '/app' })
-    } else {
-      navigate({ to: '/login' })
-    }
-  }
-
   const entries = useMemo(() => {
     const items = browse.data?.items ?? []
     if (!filter.trim()) return items
@@ -81,15 +63,9 @@ export function PublicBrowsePage() {
       <PublicBreadcrumb segments={segments} onNavigate={goTo} />
 
       <div className={ft.toolbar}>
-        <div className={ft.toolbarGroup}>
-          <Button variant="primary" onClick={requireLogin}>
-            <IconUpload />
-            上传文件
-          </Button>
-          <Button variant="secondary" onClick={requireLogin}>
-            <IconFolderPlus />
-            新建文件夹
-          </Button>
+        <div className={css.readOnlyNotice} role="note">
+          <IconInfo size={15} />
+          <span>公开目录仅支持预览和下载</span>
         </div>
         <div className={ft.toolbarGroup}>
           <span className={ft.searchBox}>
