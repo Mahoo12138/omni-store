@@ -73,6 +73,7 @@ import * as css from './FileManager.css'
 type PasteTaskSnapshot = {
   status: 'running' | 'completed' | 'completed_with_errors'
   operation: 'copy' | 'cut'
+  action?: 'drag'
   total: number
   completed: number
   failed: number
@@ -476,6 +477,69 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     }
   }
 
+  function startInternalDrag(entry: FileEntry, event: DragEvent<HTMLElement>) {
+    const names = selectedNames.has(entry.name) ? selectedEntries.map((item) => item.name) : [entry.name]
+    event.dataTransfer.setData('application/x-omnistore-file-items', JSON.stringify(names))
+  }
+
+  async function dropEntriesOnDirectory(directory: FileEntry, event: DragEvent<HTMLElement>) {
+    if (!canWrite || directory.type !== 'dir') return
+    if (runningFileTask) {
+      toastInfo(runningFileTask)
+      return
+    }
+
+    let names: unknown
+    try {
+      names = JSON.parse(event.dataTransfer.getData('application/x-omnistore-file-items'))
+    } catch {
+      names = null
+    }
+    const draggedNames = Array.isArray(names) ? new Set(names.filter((name): name is string => typeof name === 'string')) : new Set<string>()
+    const dragged = entries.filter((entry) => draggedNames.has(entry.name) && entry.type !== 'unsupported')
+    if (dragged.length === 0) return
+
+    const targetPath = joinPath(currentPath, directory.name)
+    const items = dragged.map(clipboardItem)
+    const nestedMoves = items.filter((item) => targetPath === item.path || targetPath.startsWith(`${item.path}/`))
+    if (nestedMoves.length > 0) {
+      toastError(`不能将“${nestedMoves[0].name}”移动到自身或其子目录。`)
+      return
+    }
+
+    let completed = 0
+    let failed = 0
+    const errors: string[] = []
+    const failedItems: FileClipboardItem[] = []
+    setPasteTask({ status: 'running', operation: 'cut', action: 'drag', total: items.length, completed, failed, current: items[0].name, targetPath, errors: [] })
+    for (const item of items) {
+      setPasteTask({ status: 'running', operation: 'cut', action: 'drag', total: items.length, completed, failed, current: item.name, targetPath, errors: [...errors] })
+      try {
+        await moveFile(item.sourceKey, item.path, sourceKey, joinPath(targetPath, item.name))
+        completed += 1
+      } catch (error) {
+        failed += 1
+        failedItems.push(item)
+        errors.push(`${item.name}：${error instanceof ApiRequestError ? error.message : '移动失败'}`)
+      }
+      setPasteTask({ status: 'running', operation: 'cut', action: 'drag', total: items.length, completed, failed, current: item.name, targetPath, errors: [...errors] })
+    }
+
+    setSelectedNames(new Set(failedItems.map((item) => item.name)))
+    refresh()
+    setPasteTask({
+      status: failed > 0 ? 'completed_with_errors' : 'completed',
+      operation: 'cut',
+      action: 'drag',
+      total: items.length,
+      completed,
+      failed,
+      current: '',
+      targetPath,
+      errors,
+    })
+  }
+
   async function deleteSelectedEntries() {
     if (!canWrite || selectedEntries.length === 0 || batchDeleteTask?.status === 'running') return
     const targets = [...selectedEntries]
@@ -760,6 +824,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               allSelected={allVisibleSelected}
               onToggleSelected={toggleSelected}
               onToggleAll={toggleAllSelected}
+              onDragEntryStart={canWrite ? startInternalDrag : undefined}
+              onDropOnDirectory={canWrite ? (entry, event) => void dropEntriesOnDirectory(entry, event) : undefined}
               fileHref={(entry) =>
                 downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)
               }
@@ -890,6 +956,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               filter={filter}
               selectedNames={selectedNames}
               onToggleSelected={toggleSelected}
+              onDragEntryStart={canWrite ? startInternalDrag : undefined}
+              onDropOnDirectory={canWrite ? (entry, event) => void dropEntriesOnDirectory(entry, event) : undefined}
             />
           )}
 
@@ -1248,20 +1316,22 @@ function PasteTaskToast({
 }) {
   const processed = task.completed + task.failed
   const percent = task.total > 0 ? Math.round((processed / task.total) * 100) : 100
-  const verb = task.operation === 'copy' ? '复制' : '剪切'
+  const verb = task.action === 'drag' ? '移动' : task.operation === 'copy' ? '复制' : '剪切'
   const title = task.status === 'running'
     ? `正在${verb}`
     : task.status === 'completed'
-      ? '粘贴完成'
-      : '粘贴完成，但有失败项'
+      ? task.action === 'drag' ? '移动完成' : '粘贴完成'
+      : task.action === 'drag' ? '移动完成，但有失败项' : '粘贴完成，但有失败项'
   const summary = task.status === 'running'
     ? `${processed} / ${task.total} 项 · 当前：${task.current}`
     : task.failed > 0
       ? `${task.completed} 项成功，${task.failed} 项失败`
-      : `已粘贴 ${task.completed} 项到 ${task.targetPath}`
+      : task.action === 'drag'
+        ? `已移动 ${task.completed} 项到 ${task.targetPath}`
+        : `已粘贴 ${task.completed} 项到 ${task.targetPath}`
 
   return (
-    <section className={css.clipboardToast} role="status" aria-live="polite" aria-label="粘贴任务">
+    <section className={css.clipboardToast} role="status" aria-live="polite" aria-label={task.action === 'drag' ? '拖拽移动任务' : '粘贴任务'}>
       <div className={css.uploadToastHeader}>
         <div className={css.uploadToastTitleGroup}>
           <strong>{title}</strong>
@@ -1659,6 +1729,8 @@ function GridView({
   filter,
   selectedNames,
   onToggleSelected,
+  onDragEntryStart,
+  onDropOnDirectory,
 }: {
   entries: FileEntry[]
   loading?: boolean
@@ -1672,7 +1744,10 @@ function GridView({
   filter: string
   selectedNames: ReadonlySet<string>
   onToggleSelected: (name: string, selected: boolean) => void
+  onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLDivElement>) => void
+  onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLDivElement>) => void
 }) {
+  const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   if (loading) {
     return <div style={{ padding: 32, textAlign: 'center', color: vars.color.textSecondary }}>加载中…</div>
   }
@@ -1698,6 +1773,7 @@ function GridView({
       {entries.map((e) => (
         <div
           key={e.name}
+          draggable={Boolean(onDragEntryStart && e.type !== 'unsupported')}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -1707,7 +1783,33 @@ function GridView({
             borderRadius: vars.radius.md,
             cursor: 'pointer',
             transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
+            background: dropTargetName === e.name ? vars.color.primarySubtle : undefined,
+            outline: dropTargetName === e.name ? `2px solid ${vars.color.primary}` : undefined,
           }}
+          onDragStart={onDragEntryStart ? (event) => {
+            if (e.type === 'unsupported') {
+              event.preventDefault()
+              return
+            }
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
+            onDragEntryStart(e, event)
+          } : undefined}
+          onDragOver={onDropOnDirectory && e.type === 'dir' ? (event) => {
+            if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'move'
+            setDropTargetName(e.name)
+          } : undefined}
+          onDragLeave={onDropOnDirectory && e.type === 'dir' ? (event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
+          } : undefined}
+          onDrop={onDropOnDirectory && e.type === 'dir' ? (event) => {
+            if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+            event.preventDefault()
+            setDropTargetName(null)
+            onDropOnDirectory(e, event)
+          } : undefined}
           onDoubleClick={() => e.type === 'dir' && onOpenDir(e.name)}
         >
           {e.type !== 'unsupported' && (

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type DragEvent, type ReactNode } from 'react'
 import type { FileEntry } from '../../api/sources'
 import { EntryIcon } from '../ui/Icon'
 import { formatBytes, formatDate } from '../../utils/format'
@@ -21,6 +21,8 @@ export function FileTable({
   onToggleSelected,
   allSelected = false,
   onToggleAll,
+  onDragEntryStart,
+  onDropOnDirectory,
 }: {
   entries: FileEntry[] | undefined
   loading?: boolean
@@ -39,7 +41,10 @@ export function FileTable({
   onToggleSelected?: (name: string, selected: boolean) => void
   allSelected?: boolean
   onToggleAll?: (selected: boolean) => void
+  onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
+  onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
 }) {
+  const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   return (
     <div className={css.tableWrap}>
       <table className={css.table}>
@@ -66,7 +71,35 @@ export function FileTable({
         </thead>
         <tbody>
           {entries?.map((entry) => (
-            <tr key={entry.name} className={css.row}>
+            <tr
+              key={entry.name}
+              className={`${css.row} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
+              draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
+              onDragStart={onDragEntryStart ? (event) => {
+                if (entry.type === 'unsupported') {
+                  event.preventDefault()
+                  return
+                }
+                event.dataTransfer.effectAllowed = 'move'
+                event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
+                onDragEntryStart(entry, event)
+              } : undefined}
+              onDragOver={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                setDropTargetName(entry.name)
+              } : undefined}
+              onDragLeave={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
+              } : undefined}
+              onDrop={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+                event.preventDefault()
+                setDropTargetName(null)
+                onDropOnDirectory(entry, event)
+              } : undefined}
+            >
               {selectable && (
                 <td className={css.selectionCell}>
                   <input

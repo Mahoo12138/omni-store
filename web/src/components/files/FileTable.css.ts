@@ -93,6 +93,12 @@ export const row = style({
   },
 })
 
+export const dropTarget = style({
+  backgroundColor: vars.color.primarySubtle,
+  outline: `2px solid ${vars.color.primary}`,
+  outlineOffset: '-2px',
+})
+
 // vanilla-extract 不允许在 selectors 里写 `&:not(:last-child) td`，
 // 改用 globalStyle 在外层包裹：除最后一行外的单元格显示下边框。
 globalStyle(`${row}:not(:last-child) td`, {
