@@ -84,3 +84,81 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
     await expect(row).toHaveCount(0)
   }
 })
+
+test('multi-select paste reports partial conflicts and keeps only failed copies for retry', async ({ page }) => {
+  const suffix = Date.now()
+  const sourceA = `e2e-partial-a-${suffix}`
+  const sourceB = `e2e-partial-b-${suffix}`
+  const target = `e2e-partial-target-${suffix}`
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('demo')
+  await page.getByLabel('密码').fill('OmniStore-Test-Demo!')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
+
+  async function createFolder(name: string) {
+    await page.getByRole('button', { name: '创建文件夹' }).click()
+    const dialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await dialog.getByLabel('目录名').fill(name)
+    await dialog.getByRole('button', { name: '创建', exact: true }).click()
+    await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible()
+  }
+
+  await createFolder(sourceA)
+  await createFolder(sourceB)
+  await createFolder(target)
+  await page.getByRole('row', { name: new RegExp(target) }).getByRole('button', { name: target, exact: true }).click()
+  await createFolder(sourceA)
+  await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
+
+  await page.getByRole('row', { name: new RegExp(sourceA) }).getByRole('checkbox', { name: `选择 ${sourceA}` }).check()
+  await page.getByRole('row', { name: new RegExp(sourceB) }).getByRole('checkbox', { name: `选择 ${sourceB}` }).check()
+  const selectionToolbar = page.getByRole('toolbar', { name: '批量文件操作' })
+  await expect(selectionToolbar).toContainText('已选择 2 项')
+  await selectionToolbar.getByRole('button', { name: '复制', exact: true }).click()
+
+  const clipboard = page.getByRole('region', { name: '文件剪贴板' })
+  await expect(clipboard).toContainText('已复制 2 项')
+  await page.getByRole('row', { name: new RegExp(target) }).getByRole('button', { name: target, exact: true }).click()
+  await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
+
+  const pasteStatus = page.getByRole('status', { name: '粘贴任务' })
+  await expect(pasteStatus).toContainText('1 项成功，1 项失败')
+  await expect(page.getByRole('row', { name: new RegExp(sourceB) })).toBeVisible()
+  await expect(page.getByRole('row', { name: new RegExp(sourceA) })).toBeVisible()
+  await expect(clipboard).toContainText('已复制 1 项')
+  await page.screenshot({ path: '/tmp/omni-store-partial-copy-paste.png', fullPage: false })
+
+  const conflictRow = page.getByRole('row', { name: new RegExp(sourceA) })
+  await conflictRow.getByRole('button', { name: `更多操作 ${sourceA}` }).click()
+  await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+  await page.getByRole('dialog', { name: '移入回收站' }).getByRole('button', { name: '移入回收站' }).click()
+  await expect(conflictRow).toHaveCount(0)
+
+  await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
+  await expect(pasteStatus).toContainText(`已粘贴 1 项到 /${target}`)
+  await expect(page.getByRole('row', { name: new RegExp(sourceA) })).toBeVisible()
+  await clipboard.getByRole('button', { name: '清空剪贴板' }).click()
+
+  await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
+  for (const name of [sourceA, sourceB, target]) {
+    const row = page.getByRole('row', { name: new RegExp(name) })
+    await row.getByRole('button', { name: `更多操作 ${name}` }).click()
+    await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+    await page.getByRole('dialog', { name: '移入回收站' }).getByRole('button', { name: '移入回收站' }).click()
+    await expect(row).toHaveCount(0)
+  }
+
+  await page.getByRole('button', { name: '回收站' }).click()
+  for (const name of [sourceA, sourceB, target]) {
+    const rows = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
+    while (await rows.count() > 0) {
+      const count = await rows.count()
+      const row = rows.first()
+      await row.getByRole('button', { name: '永久删除' }).click()
+      await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除', exact: true }).click()
+      await expect(rows).toHaveCount(count - 1)
+    }
+  }
+})

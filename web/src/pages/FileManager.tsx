@@ -365,6 +365,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     if (operation === 'cut') {
       if (failed === 0) clipboard.clear()
       else clipboard.cut(failedItems)
+    } else if (failed > 0) {
+      clipboard.copy(failedItems)
     }
   }
 
