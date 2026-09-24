@@ -44,6 +44,7 @@ const actionLabels: Readonly<Record<string, string>> = {
   revoke_share: '撤销文件分享',
   revoke_user_credentials: '撤销用户全部凭据',
   share_download: '通过分享下载文件',
+  batch_download: '批量下载文件',
   trash: '移入回收站',
   unlock: '解锁 WebDAV 文件',
   update_access_policy: '更新访问策略',

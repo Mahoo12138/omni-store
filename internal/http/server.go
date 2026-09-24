@@ -158,6 +158,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/sources/{key}/files", s.requireAuth(s.handleListFiles))
 	mux.HandleFunc("GET /api/v1/sources/{key}/files/stat", s.requireAuth(s.handleStatFile))
 	mux.HandleFunc("GET /api/v1/sources/{key}/download", s.requireAuth(s.handleDownloadFile))
+	mux.HandleFunc("POST /api/v1/sources/{key}/download/archive", s.requireAuth(s.handleDownloadArchive))
 	mux.HandleFunc("POST /api/v1/sources/{key}/folders", s.requireAuth(s.handleCreateFolder))
 	mux.HandleFunc("POST /api/v1/sources/{key}/upload", s.requireAuth(s.handleUploadFile))
 	mux.HandleFunc("DELETE /api/v1/sources/{key}/files", s.requireAuth(s.handleDeleteFile))

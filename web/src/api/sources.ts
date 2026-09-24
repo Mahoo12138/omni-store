@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiFetchBlob } from './client'
 
 export interface UserSource {
   key: string
@@ -125,6 +125,25 @@ export async function listFiles(sourceKey: string, params: ListFilesParams): Pro
 
 export function downloadFileUrl(sourceKey: string, path: string): string {
   return `/api/v1/sources/${encodeURIComponent(sourceKey)}/download?path=${encodeURIComponent(path)}`
+}
+
+export async function downloadArchive(sourceKey: string, paths: string[]): Promise<string> {
+  const response = await apiFetchBlob(`/api/v1/sources/${encodeURIComponent(sourceKey)}/download/archive`, {
+    method: 'POST',
+    body: JSON.stringify({ paths }),
+  })
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = match?.[1] ?? 'omnistore-download.zip'
+  const objectURL = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = objectURL
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(objectURL)
+  return filename
 }
 
 export async function createFolder(sourceKey: string, path: string, name: string): Promise<void> {

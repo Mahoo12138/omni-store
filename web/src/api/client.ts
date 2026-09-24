@@ -61,3 +61,31 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return body.data
 }
+
+export async function apiFetchBlob(path: string, init?: RequestInit): Promise<Response> {
+  const method = init?.method ?? 'GET'
+  const headers: Record<string, string> = {
+    Accept: 'application/octet-stream',
+    ...(init?.headers as Record<string, string>),
+  }
+  if (method !== 'GET' && method !== 'HEAD' && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+  if (typeof init?.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const response = await fetch(path, { ...init, method, headers })
+  if (!response.ok) {
+    let error: ApiError = { code: 'INTERNAL_ERROR', message: '请求失败' }
+    let requestId = ''
+    try {
+      const body = await response.json() as ErrorEnvelope
+      error = body.error ?? error
+      requestId = body.request_id ?? ''
+    } catch {
+      // 非 JSON 错误响应使用通用错误。
+    }
+    throw new ApiRequestError(error, requestId)
+  }
+  return response
+}

@@ -5,6 +5,7 @@ import {
   copyFile,
   createFolder,
   deleteFile,
+  downloadArchive,
   downloadFileUrl,
   fetchMySources,
   fetchPathPermission,
@@ -148,6 +149,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [uploadTask, setUploadTask] = useState<UploadTaskSnapshot | null>(null)
   const [pasteTask, setPasteTask] = useState<PasteTaskSnapshot | null>(null)
   const [batchDeleteTask, setBatchDeleteTask] = useState<BatchDeleteTaskSnapshot | null>(null)
+  const [archiveDownloading, setArchiveDownloading] = useState(false)
   const closePasteTask = useCallback(() => setPasteTask(null), [])
 
   // 各种操作弹窗
@@ -270,6 +272,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
       ? '正在粘贴，请稍候…'
       : batchDeleteTask?.status === 'running'
         ? '正在批量删除，请稍候…'
+        : archiveDownloading
+          ? '正在打包下载，请稍候…'
         : ''
   const pasteDisabledReason = runningFileTask || getPasteDisabledReason(clipboard.items, clipboard.operation, sourceKey, currentPath, canWrite)
 
@@ -344,6 +348,22 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     clipboard.cut(items)
     setSelectedNames(new Set())
     toastSuccess(`已剪切 ${items.length} 项到剪贴板。`)
+  }
+
+  async function downloadSelectedEntries() {
+    if (selectedEntries.length === 0 || archiveDownloading) return
+    const paths = selectedEntries.map((entry) => joinPath(currentPath, entry.name))
+    setArchiveDownloading(true)
+    toastInfo(`正在打包 ${paths.length} 项，请稍候…`)
+    try {
+      await downloadArchive(sourceKey, paths)
+      setSelectedNames(new Set())
+      toastSuccess(`已开始下载 ${paths.length} 项。`)
+    } catch (error) {
+      onError(error)
+    } finally {
+      setArchiveDownloading(false)
+    }
   }
 
   async function pasteClipboard() {
@@ -630,9 +650,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           {selectedEntries.length > 0 ? (
             <SelectionToolbar
               count={selectedEntries.length}
+              canDownload={!runningFileTask}
               canCut={canWrite}
               canDelete={canWrite && !runningFileTask}
               onCopy={() => copyEntries(selectedEntries)}
+              onDownload={() => void downloadSelectedEntries()}
               onCut={() => cutEntries(selectedEntries)}
               onDelete={() => setBatchDeleteOpen(true)}
               onClear={() => setSelectedNames(new Set())}
@@ -1406,17 +1428,21 @@ function getPasteDisabledReason(
 
 function SelectionToolbar({
   count,
+  canDownload,
   canCut,
   canDelete,
   onCopy,
+  onDownload,
   onCut,
   onDelete,
   onClear,
 }: {
   count: number
+  canDownload: boolean
   canCut: boolean
   canDelete: boolean
   onCopy: () => void
+  onDownload: () => void
   onCut: () => void
   onDelete: () => void
   onClear: () => void
@@ -1424,8 +1450,9 @@ function SelectionToolbar({
   return (
     <div className={css.selectionToolbar} role="toolbar" aria-label="批量文件操作">
       <strong>已选择 {count} 项</strong>
-      <span className={css.selectionToolbarHint}>选择复制或剪切，前往目标目录后粘贴</span>
+      <span className={css.selectionToolbarHint}>下载所选项，或复制/剪切后前往目标目录粘贴</span>
       <span className={css.selectionToolbarActions}>
+        <Button variant="secondary" onClick={onDownload} disabled={!canDownload}><IconDownload size={14} /> 下载</Button>
         <Button variant="secondary" onClick={onCopy}><IconCopy size={14} /> 复制</Button>
         {canCut && <Button onClick={onCut}><IconScissors size={14} /> 剪切</Button>}
         {canCut && <Button variant="dangerGhost" onClick={onDelete} disabled={!canDelete}><IconTrash size={14} /> 移入回收站</Button>}

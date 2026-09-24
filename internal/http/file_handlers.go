@@ -6,9 +6,11 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/files"
@@ -198,6 +200,49 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.Header().Set("Cache-Control", "private, no-store")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func (s *Server) handleDownloadArchive(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	var req struct {
+		Paths []string `json:"paths"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Paths) == 0 || len(req.Paths) > 100 {
+		WriteError(w, r, CodeValidationError, "请选择 1 到 100 个条目", nil)
+		return
+	}
+	for _, relPath := range req.Paths {
+		if !s.authorizeSourcePath(w, r, src, relPath, false, true) {
+			return
+		}
+	}
+
+	pkg, err := s.files.CreateArchive(src, req.Paths)
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	defer os.Remove(pkg.Path)
+	file, err := os.Open(pkg.Path)
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": sanitizeFilename(pkg.Filename)}))
+	w.Header().Set("Content-Length", strconv.FormatInt(pkg.Size, 10))
+	w.Header().Set("Cache-Control", "private, no-store")
+	s.fileAudit(r, "batch_download", src, strings.Join(req.Paths, ","), "", nil)
+	http.ServeContent(w, r, pkg.Filename, time.Time{}, file)
 }
 
 // --- 写操作 ---

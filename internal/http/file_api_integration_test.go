@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"archive/zip"
 	"bytes"
 	"io"
 	"log/slog"
@@ -88,6 +89,26 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	}
 	if rangeResponse.Header().Get("Cache-Control") != "private, no-store" || !strings.Contains(rangeResponse.Header().Get("Content-Disposition"), "note.txt") {
 		t.Fatalf("unexpected private download headers: %v", rangeResponse.Header())
+	}
+	archiveBody := `{"paths":["/docs/note.txt","/docs/blog-images"]}`
+	missingArchiveCSRF := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/download/archive", archiveBody, fixture.cookie, "")
+	assertErrorResponse(t, missingArchiveCSRF, http.StatusForbidden, CodeForbidden)
+	archiveResponse := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/download/archive", archiveBody, fixture.cookie, fixture.csrf)
+	if archiveResponse.Code != http.StatusOK || archiveResponse.Header().Get("Content-Type") != "application/zip" {
+		t.Fatalf("batch download status=%d headers=%v body=%q", archiveResponse.Code, archiveResponse.Header(), archiveResponse.Body.String())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(archiveResponse.Body.Bytes()), int64(archiveResponse.Body.Len()))
+	if err != nil {
+		t.Fatalf("open batch download: %v", err)
+	}
+	archived := make(map[string]bool, len(zr.File))
+	for _, entry := range zr.File {
+		archived[entry.Name] = true
+	}
+	for _, expected := range []string{"note.txt", "blog-images/", "blog-images/posts/2026/a.webp"} {
+		if !archived[expected] {
+			t.Fatalf("batch download missing %q: %v", expected, archived)
+		}
 	}
 
 	rename := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/rename", `{"path":"/docs/note.txt","new_name":"renamed.txt"}`, fixture.cookie, fixture.csrf)

@@ -167,6 +167,11 @@ func (m *Manager) RLock(key string) func() {
 	return m.acquire([]string{key}, false)
 }
 
+// RLockMany 原子获取多个路径读锁，避免批量读取逐个加锁时与等待中的写锁交叉等待。
+func (m *Manager) RLockMany(keys ...string) func() {
+	return m.acquire(keys, false)
+}
+
 // Lock 获取写锁，返回解锁函数。用于上传、删除、重命名、移动、创建目录。
 func (m *Manager) Lock(key string) func() {
 	return m.acquire([]string{key}, true)
