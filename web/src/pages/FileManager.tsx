@@ -162,6 +162,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false)
+  const [batchShareEntries, setBatchShareEntries] = useState<FileEntry[] | null>(null)
   const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
   const [uploadConflict, setUploadConflict] = useState<{
@@ -802,9 +803,11 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               canDownload={!runningFileTask}
               canCut={canWrite}
               canDelete={canWrite && !runningFileTask}
+              canShare={canWrite && !runningFileTask}
               onCopy={() => copyEntries(selectedEntries)}
               onDownload={() => void downloadSelectedEntries()}
               onCut={() => cutEntries(selectedEntries)}
+              onShare={() => setBatchShareEntries([...selectedEntries])}
               onDelete={() => setBatchDeleteOpen(true)}
               onClear={() => setSelectedNames(new Set())}
             />
@@ -1100,6 +1103,15 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           currentPath={currentPath}
           target={shareTarget}
           onClose={() => setShareTarget(null)}
+        />
+      )}
+
+      {batchShareEntries && (
+        <BatchShareDialog
+          sourceKey={sourceKey}
+          currentPath={currentPath}
+          entries={batchShareEntries}
+          onClose={() => setBatchShareEntries(null)}
         />
       )}
 
@@ -1598,9 +1610,11 @@ function SelectionToolbar({
   canDownload,
   canCut,
   canDelete,
+  canShare,
   onCopy,
   onDownload,
   onCut,
+  onShare,
   onDelete,
   onClear,
 }: {
@@ -1608,20 +1622,23 @@ function SelectionToolbar({
   canDownload: boolean
   canCut: boolean
   canDelete: boolean
+  canShare: boolean
   onCopy: () => void
   onDownload: () => void
   onCut: () => void
+  onShare: () => void
   onDelete: () => void
   onClear: () => void
 }) {
   return (
     <div className={css.selectionToolbar} role="toolbar" aria-label="批量文件操作">
       <strong>已选择 {count} 项</strong>
-      <span className={css.selectionToolbarHint}>下载所选项，或复制/剪切后前往目标目录粘贴</span>
+      <span className={css.selectionToolbarHint}>可下载、创建独立分享，或复制/剪切后粘贴</span>
       <span className={css.selectionToolbarActions}>
         <Button variant="secondary" onClick={onDownload} disabled={!canDownload}><IconDownload size={14} /> 下载</Button>
         <Button variant="secondary" onClick={onCopy}><IconCopy size={14} /> 复制</Button>
         {canCut && <Button onClick={onCut}><IconScissors size={14} /> 剪切</Button>}
+        {canShare && <Button variant="secondary" onClick={onShare}><IconLink size={14} /> 创建分享</Button>}
         {canCut && <Button variant="dangerGhost" onClick={onDelete} disabled={!canDelete}><IconTrash size={14} /> 移入回收站</Button>}
         <button className={css.selectionClear} type="button" onClick={onClear}>取消选择</button>
       </span>
@@ -2192,6 +2209,129 @@ function RenameDialog({
       <Field label="新名称" required error={err}>
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
+    </DialogWrap>
+  )
+}
+
+function BatchShareDialog({ sourceKey, currentPath, entries, onClose }: {
+  sourceKey: string
+  currentPath: string
+  entries: FileEntry[]
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [password, setPassword] = useState('')
+  const [expiryDays, setExpiryDays] = useState('0')
+  const [maxDownloads, setMaxDownloads] = useState('0')
+  const [validationError, setValidationError] = useState('')
+  const [running, setRunning] = useState(false)
+  const [attempted, setAttempted] = useState(0)
+  const [attemptTotal, setAttemptTotal] = useState(entries.length)
+  const [currentName, setCurrentName] = useState('')
+  const [created, setCreated] = useState<FileShare[]>([])
+  const [failed, setFailed] = useState<Array<{ entry: FileEntry; message: string }>>([])
+  const [copied, setCopied] = useState(false)
+
+  async function createShares(targets: FileEntry[]) {
+    const days = Number(expiryDays)
+    const limit = Number(maxDownloads || 0)
+    if (!Number.isInteger(limit) || limit < 0 || limit > 1_000_000) {
+      setValidationError('下载次数上限必须是 0 到 1000000 之间的整数')
+      return
+    }
+    if (password.trim() && [...password.trim()].length < 4) {
+      setValidationError('访问密码至少需要 4 个字符')
+      return
+    }
+    setValidationError('')
+    setRunning(true)
+    setAttempted(0)
+    setAttemptTotal(targets.length)
+    setFailed([])
+    const newShares: FileShare[] = []
+    const errors: Array<{ entry: FileEntry; message: string }> = []
+    const expiresAt = days > 0 ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : undefined
+    for (const entry of targets) {
+      setCurrentName(entry.name)
+      try {
+        newShares.push(await createShare({
+          sourceKey,
+          path: joinPath(currentPath, entry.name),
+          password: password.trim(),
+          expiresAt,
+          maxDownloads: limit,
+        }))
+      } catch (error) {
+        errors.push({ entry, message: error instanceof ApiRequestError ? error.message : '创建失败' })
+      }
+      setAttempted((count) => count + 1)
+    }
+    setCreated((previous) => [...previous, ...newShares])
+    setFailed(errors)
+    setCurrentName('')
+    setRunning(false)
+    if (newShares.length > 0) await queryClient.invalidateQueries({ queryKey: ['shares'] })
+  }
+
+  async function copyLinks() {
+    try {
+      await navigator.clipboard.writeText(created.map((share) => `${share.name}\t${share.url}`).join('\n'))
+      setCopied(true)
+    } catch {
+      setValidationError('复制失败，请检查浏览器剪贴板权限。')
+    }
+  }
+
+  const started = running || attempted > 0 || created.length > 0 || failed.length > 0
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open && !running) onClose() }}
+      title="批量创建分享"
+      description={`为所选的 ${entries.length} 个文件和文件夹创建独立分享链接。`}
+      wide
+      footer={running ? (
+        <Button disabled>正在创建 {attempted} / {attemptTotal}</Button>
+      ) : started ? (
+        <>
+          {created.length > 0 && <Button variant="secondary" onClick={() => void copyLinks()}><IconCopy size={14} /> {copied ? '已复制全部链接' : '复制全部链接'}</Button>}
+          {failed.length > 0 && <Button onClick={() => void createShares(failed.map((item) => item.entry))}>重试失败项（{failed.length}）</Button>}
+          <Button onClick={onClose}>完成</Button>
+        </>
+      ) : (
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button onClick={() => void createShares(entries)}>创建 {entries.length} 个分享</Button>
+        </>
+      )}
+    >
+      {!started ? (
+        <>
+          <Field label="访问密码" hint="选填；所有分享使用相同密码。">
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="留空表示无需密码" maxLength={128} disabled={running} />
+          </Field>
+          <Field label="有效期" hint="所有分享使用相同有效期。">
+            <Select value={expiryDays} onValueChange={setExpiryDays} options={[
+              { value: '0', label: '永久有效' }, { value: '1', label: '1 天' }, { value: '7', label: '7 天' },
+              { value: '30', label: '30 天' }, { value: '90', label: '90 天' },
+            ]} ariaLabel="分享有效期" />
+          </Field>
+          <Field label="下载次数上限" hint="填写 0 表示不限制；目录分享按文件下载计数。" error={validationError}>
+            <Input type="number" min={0} max={1000000} step={1} value={maxDownloads} onChange={(event) => setMaxDownloads(event.target.value)} disabled={running} />
+          </Field>
+        </>
+      ) : (
+        <div style={{ maxHeight: 'min(45vh, 360px)', overflow: 'auto', fontSize: vars.fontSize.sm }}>
+          <p role="status" aria-live="polite">{running ? `正在处理 ${attempted} / ${attemptTotal} 项：${currentName}` : `完成：${created.length} 个成功，${failed.length} 个失败`}</p>
+          {created.length > 0 && <ul aria-label="已创建的分享链接" style={{ paddingLeft: 20 }}>
+            {created.map((share) => <li key={share.key}><a href={share.url} target="_blank" rel="noreferrer">{share.name}</a></li>)}
+          </ul>}
+          {failed.length > 0 && <ul aria-label="创建失败的项目" style={{ paddingLeft: 20, color: vars.color.danger }}>
+            {failed.map(({ entry, message }) => <li key={entry.name}>{entry.name}：{message}</li>)}
+          </ul>}
+        </div>
+      )}
+      {validationError && started && <p role="alert" style={{ color: vars.color.danger }}>{validationError}</p>}
     </DialogWrap>
   )
 }
