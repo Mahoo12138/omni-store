@@ -1,6 +1,6 @@
 # Upload Task System Design
 
-状态：Draft / Planned for 1.1
+状态：1.1 已实现
 
 ## Problem
 

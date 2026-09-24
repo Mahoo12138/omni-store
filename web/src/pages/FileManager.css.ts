@@ -1,6 +1,40 @@
 import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
+export const dropSurface = style({
+  position: 'relative',
+  minHeight: '100%',
+})
+
+export const dropOverlay = style({
+  position: 'fixed',
+  inset: 16,
+  zIndex: vars.zIndex.backdrop,
+  display: 'grid',
+  placeItems: 'center',
+  border: `2px dashed ${vars.color.primary}`,
+  borderRadius: vars.radius.lg,
+  backgroundColor: 'oklch(0.955 0.025 257 / 0.88)',
+  pointerEvents: 'none',
+})
+
+export const dropOverlayCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xl} 56px`,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  backgroundColor: vars.color.surface,
+  boxShadow: vars.shadow.md,
+  color: vars.color.primarySubtleInk,
+  textAlign: 'center',
+})
+
+export const dropOverlayTitle = style({ color: vars.color.text, fontSize: vars.fontSize.lg, fontWeight: 600 })
+export const dropOverlayPath = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+
 // --- 页面主区（与右栏双列） ---
 
 export const layout = style({

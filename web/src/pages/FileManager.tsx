@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -59,6 +59,7 @@ import {
 } from '../components/ui/Icon'
 import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
+import { collectDroppedUpload } from '../utils/dropFiles'
 import { readFilePreferences, writeFilePreferences, type FileSortKey, type FileSortOrder } from '../utils/filePreferences'
 import {
   UploadTaskController,
@@ -150,6 +151,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [pasteTask, setPasteTask] = useState<PasteTaskSnapshot | null>(null)
   const [batchDeleteTask, setBatchDeleteTask] = useState<BatchDeleteTaskSnapshot | null>(null)
   const [archiveDownloading, setArchiveDownloading] = useState(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
+  const [readingDroppedFiles, setReadingDroppedFiles] = useState(false)
   const closePasteTask = useCallback(() => setPasteTask(null), [])
 
   // 各种操作弹窗
@@ -283,6 +286,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
 
   function startUpload(files: FileList | File[] | null, kind: 'file' | 'files' | 'directory') {
     if (!files?.length) return
+    if (!canWrite) {
+      toastError('当前目录只读，无法上传文件。')
+      return
+    }
+    if (runningFileTask) {
+      toastInfo(runningFileTask)
+      return
+    }
     const controller = new UploadTaskController({
       sourceKey,
       targetPath: currentPath,
@@ -309,6 +320,50 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     fileInput.current?.removeAttribute('webkitdirectory')
     fileInput.current?.removeAttribute('directory')
     folderUploadMode.current = false
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    if (canWrite) setFileDragActive(true)
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = canWrite && !runningFileTask ? 'copy' : 'none'
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!fileDragActive || event.currentTarget.contains(event.relatedTarget as Node | null)) return
+    setFileDragActive(false)
+  }
+
+  async function handleDrop(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    setFileDragActive(false)
+    if (!canWrite) {
+      toastError('当前目录只读，无法上传文件。')
+      return
+    }
+    if (runningFileTask) {
+      toastInfo(runningFileTask)
+      return
+    }
+    setReadingDroppedFiles(true)
+    try {
+      const dropped = await collectDroppedUpload(event.dataTransfer)
+      if (dropped.files.length === 0) {
+        toastInfo('拖入内容中没有可上传的文件。')
+        return
+      }
+      startUpload(dropped.files, dropped.kind)
+    } catch (error) {
+      onError(error)
+    } finally {
+      setReadingDroppedFiles(false)
+    }
   }
 
   function openFilePicker() {
@@ -510,6 +565,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
 
   return (
     <AppShell title={source.name}>
+      <div
+        className={css.dropSurface}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(event) => void handleDrop(event)}
+      >
       {/* 页面头：只保留当前任务、能力与主要操作，技术信息放在右栏。 */}
       <div className={css.pageHeader}>
         <div className={css.headerIntro}>
@@ -970,6 +1032,16 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onConfirm={() => void deleteSelectedEntries()}
         />
       )}
+      {(fileDragActive || readingDroppedFiles) && (
+        <div className={css.dropOverlay} aria-live="polite">
+          <div className={css.dropOverlayCard}>
+            <IconUpload size={24} />
+            <strong className={css.dropOverlayTitle}>{readingDroppedFiles ? '正在读取拖入内容…' : '松开以上传到当前目录'}</strong>
+            <span className={css.dropOverlayPath}>{currentPath}</span>
+          </div>
+        </div>
+      )}
+      </div>
     </AppShell>
   )
 }
