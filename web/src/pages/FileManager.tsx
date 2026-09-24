@@ -81,6 +81,15 @@ type PasteTaskSnapshot = {
   errors: string[]
 }
 
+type BatchDeleteTaskSnapshot = {
+  status: 'running' | 'completed' | 'completed_with_errors'
+  total: number
+  completed: number
+  failed: number
+  current: string
+  errors: string[]
+}
+
 // /app/sources/$sourceKey（docs/file.png / file-1.png）：
 //   - 有存储源：标题 / 按钮 + 面包屑 / 工具条 / 表格 / 分页 + 右侧存储源信息卡
 //   - 没有可用存储源：空状态 + 右侧"暂无可用存储源"卡
@@ -140,12 +149,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [uploadTask, setUploadTask] = useState<UploadTaskSnapshot | null>(null)
   const [pasteTask, setPasteTask] = useState<PasteTaskSnapshot | null>(null)
+  const [batchDeleteTask, setBatchDeleteTask] = useState<BatchDeleteTaskSnapshot | null>(null)
   const closePasteTask = useCallback(() => setPasteTask(null), [])
 
   // 各种操作弹窗
   const [mkdirOpen, setMkdirOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; type: string } | null>(null)
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false)
   const [shareTarget, setShareTarget] = useState<{ name: string; type: 'file' | 'dir' } | null>(null)
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
   const [uploadConflict, setUploadConflict] = useState<{
@@ -240,7 +251,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const selectableEntries = entries.filter((entry) => entry.type !== 'unsupported')
   const selectedEntries = entries.filter((entry) => selectedNames.has(entry.name) && entry.type !== 'unsupported')
   const allVisibleSelected = selectableEntries.length > 0 && selectableEntries.every((entry) => selectedNames.has(entry.name))
-  const pasteDisabledReason = getPasteDisabledReason(clipboard.items, clipboard.operation, sourceKey, currentPath, canWrite)
+  const runningFileTask = uploadTask?.status === 'running'
+    ? '正在上传，请稍候…'
+    : pasteTask?.status === 'running'
+      ? '正在粘贴，请稍候…'
+      : batchDeleteTask?.status === 'running'
+        ? '正在批量删除，请稍候…'
+        : ''
+  const pasteDisabledReason = runningFileTask || getPasteDisabledReason(clipboard.items, clipboard.operation, sourceKey, currentPath, canWrite)
 
   const onError = (err: unknown) => {
     toastError(err instanceof ApiRequestError ? err.message : '操作失败，请重试。')
@@ -370,6 +388,41 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     }
   }
 
+  async function deleteSelectedEntries() {
+    if (!canWrite || selectedEntries.length === 0 || batchDeleteTask?.status === 'running') return
+    const targets = [...selectedEntries]
+    setBatchDeleteOpen(false)
+    setBatchDeleteTask({ status: 'running', total: targets.length, completed: 0, failed: 0, current: targets[0].name, errors: [] })
+
+    let completed = 0
+    let failed = 0
+    const failedNames: string[] = []
+    const errors: string[] = []
+    for (const entry of targets) {
+      setBatchDeleteTask({ status: 'running', total: targets.length, completed, failed, current: entry.name, errors: [...errors] })
+      try {
+        await deleteFile(sourceKey, joinPath(currentPath, entry.name))
+        completed += 1
+      } catch (error) {
+        failed += 1
+        failedNames.push(entry.name)
+        errors.push(`${entry.name}：${error instanceof ApiRequestError ? error.message : '移入回收站失败'}`)
+      }
+      setBatchDeleteTask({ status: 'running', total: targets.length, completed, failed, current: entry.name, errors: [...errors] })
+    }
+
+    setSelectedNames(new Set(failedNames))
+    refresh()
+    setBatchDeleteTask({
+      status: failed > 0 ? 'completed_with_errors' : 'completed',
+      total: targets.length,
+      completed,
+      failed,
+      current: '',
+      errors,
+    })
+  }
+
   function openLegacyFolderPicker() {
     folderUploadMode.current = true
     fileInput.current?.setAttribute('webkitdirectory', '')
@@ -440,13 +493,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           </Button>
           {canWrite && (
             <>
-              <Button onClick={openFilePicker} disabled={uploadTask?.status === 'running'}>
+              <Button onClick={openFilePicker} disabled={Boolean(runningFileTask)}>
                 <IconUpload size={14} /> 上传文件
               </Button>
-              <Button variant="secondary" onClick={openFolderPicker} disabled={uploadTask?.status === 'running'}>
+              <Button variant="secondary" onClick={openFolderPicker} disabled={Boolean(runningFileTask)}>
                 <IconFolderPlus size={14} /> 上传目录
               </Button>
-              <Button variant="secondary" onClick={() => setMkdirOpen(true)}>
+              <Button variant="secondary" onClick={() => setMkdirOpen(true)} disabled={Boolean(runningFileTask)}>
                 <IconFolderPlus size={14} /> 创建文件夹
               </Button>
               <input
@@ -454,7 +507,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 type="file"
                 multiple
                 hidden
-                disabled={uploadTask?.status === 'running'}
+                disabled={Boolean(runningFileTask)}
                 onChange={(e) => startUpload(
                   e.target.files,
                   folderUploadMode.current ? 'directory' : e.target.files?.length === 1 ? 'file' : 'files',
@@ -483,6 +536,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         <PasteTaskToastHost
           task={pasteTask}
           onClose={closePasteTask}
+        />
+      )}
+
+      {batchDeleteTask && (
+        <BatchDeleteTaskToastHost
+          task={batchDeleteTask}
+          onClose={() => setBatchDeleteTask(null)}
         />
       )}
 
@@ -539,8 +599,10 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             <SelectionToolbar
               count={selectedEntries.length}
               canCut={canWrite}
+              canDelete={canWrite && !runningFileTask}
               onCopy={() => copyEntries(selectedEntries)}
               onCut={() => cutEntries(selectedEntries)}
+              onDelete={() => setBatchDeleteOpen(true)}
               onClear={() => setSelectedNames(new Set())}
             />
           ) : clipboard.items.length > 0 ? (
@@ -548,7 +610,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               operation={clipboard.operation!}
               items={clipboard.items}
               canPaste={!pasteDisabledReason && pasteTask?.status !== 'running'}
-              disabledReason={pasteTask?.status === 'running' ? '正在粘贴，请稍候…' : pasteDisabledReason}
+              disabledReason={pasteDisabledReason}
               onPaste={() => void pasteClipboard()}
               onClear={clipboard.clear}
             />
@@ -846,6 +908,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           onError={onError}
         />
       )}
+
+      {batchDeleteOpen && (
+        <BatchDeleteDialog
+          entries={selectedEntries}
+          onClose={() => setBatchDeleteOpen(false)}
+          onConfirm={() => void deleteSelectedEntries()}
+        />
+      )}
     </AppShell>
   )
 }
@@ -1091,6 +1161,66 @@ function PasteTaskToast({
   )
 }
 
+function BatchDeleteTaskToastHost({ task, onClose }: {
+  task: BatchDeleteTaskSnapshot
+  onClose: () => void
+}) {
+  const toastID = appStatusToastID
+  useEffect(() => {
+    toast.custom(
+      (id) => <BatchDeleteTaskToast toastID={id} task={task} onClose={onClose} />,
+      { id: toastID, duration: Infinity, dismissible: false, unstyled: true, position: 'bottom-right' },
+    )
+  }, [onClose, task, toastID])
+  useEffect(() => () => { toast.dismiss(toastID) }, [toastID])
+  return null
+}
+
+function BatchDeleteTaskToast({ toastID, task, onClose }: {
+  toastID: string | number
+  task: BatchDeleteTaskSnapshot
+  onClose: () => void
+}) {
+  const processed = task.completed + task.failed
+  const percent = task.total > 0 ? Math.round((processed / task.total) * 100) : 100
+  const title = task.status === 'running'
+    ? '正在移入回收站'
+    : task.failed > 0
+      ? '批量删除完成，但有失败项'
+      : '已移入回收站'
+  const summary = task.status === 'running'
+    ? `${processed} / ${task.total} 项 · 当前：${task.current}`
+    : task.failed > 0
+      ? `${task.completed} 项成功，${task.failed} 项失败；失败项仍保持选中`
+      : `已处理 ${task.completed} 项`
+
+  return (
+    <section className={css.clipboardToast} role="status" aria-live="polite" aria-label="批量删除任务">
+      <div className={css.uploadToastHeader}>
+        <div className={css.uploadToastTitleGroup}>
+          <strong>{title}</strong>
+          <span className={css.uploadToastMeta}>{summary}</span>
+        </div>
+        {task.status !== 'running' && (
+          <button className={css.uploadToastClose} type="button" onClick={() => {
+            toast.dismiss(toastID)
+            onClose()
+          }}>关闭</button>
+        )}
+      </div>
+      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`删除进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
+      </div>
+      {task.errors.length > 0 && (
+        <ul className={css.uploadToastErrorList}>
+          {task.errors.slice(0, 3).map((error) => <li key={error}>{error}</li>)}
+          {task.errors.length > 3 && <li>还有 {task.errors.length - 3} 个失败项</li>}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function DirectoryUploadDialog({
   open,
   onOpenChange,
@@ -1245,14 +1375,18 @@ function getPasteDisabledReason(
 function SelectionToolbar({
   count,
   canCut,
+  canDelete,
   onCopy,
   onCut,
+  onDelete,
   onClear,
 }: {
   count: number
   canCut: boolean
+  canDelete: boolean
   onCopy: () => void
   onCut: () => void
+  onDelete: () => void
   onClear: () => void
 }) {
   return (
@@ -1262,9 +1396,40 @@ function SelectionToolbar({
       <span className={css.selectionToolbarActions}>
         <Button variant="secondary" onClick={onCopy}><IconCopy size={14} /> 复制</Button>
         {canCut && <Button onClick={onCut}><IconScissors size={14} /> 剪切</Button>}
+        {canCut && <Button variant="dangerGhost" onClick={onDelete} disabled={!canDelete}><IconTrash size={14} /> 移入回收站</Button>}
         <button className={css.selectionClear} type="button" onClick={onClear}>取消选择</button>
       </span>
     </div>
+  )
+}
+
+function BatchDeleteDialog({ entries, onClose, onConfirm }: {
+  entries: FileEntry[]
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const preview = entries.slice(0, 5)
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={`将 ${entries.length} 项移入回收站？`}
+      description="批量删除确认"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="danger" onClick={onConfirm} disabled={entries.length === 0}>移入回收站</Button>
+        </>
+      }
+    >
+      <p style={{ margin: '0 0 10px', fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        选中的项目会移入回收站；文件夹及其内容会一起移动，之后可在回收站恢复。
+      </p>
+      <ul style={{ margin: 0, paddingLeft: 20, fontSize: vars.fontSize.sm, color: vars.color.textSecondary }}>
+        {preview.map((entry) => <li key={entry.name}>{entry.name}{entry.type === 'dir' ? '（文件夹）' : ''}</li>)}
+        {entries.length > preview.length ? <li>以及其他 {entries.length - preview.length} 项</li> : null}
+      </ul>
+    </DialogWrap>
   )
 }
 

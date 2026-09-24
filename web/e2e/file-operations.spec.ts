@@ -162,3 +162,85 @@ test('multi-select paste reports partial conflicts and keeps only failed copies 
     }
   }
 })
+
+test('batch delete confirms selection and keeps failed entries selected for retry', async ({ page }) => {
+  const suffix = Date.now()
+  const first = `e2e-batch-delete-a-${suffix}`
+  const second = `e2e-batch-delete-b-${suffix}`
+  const browserErrors: string[] = []
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource: the server responded with a status of 500')) {
+      browserErrors.push(message.text())
+    }
+  })
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('demo')
+  await page.getByLabel('密码').fill('OmniStore-Test-Demo!')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
+  await expect(page).toHaveTitle('OmniStore')
+  await expect(page).toHaveURL(/\/app\/sources\/[^/]+/)
+  await expect(page.getByRole('heading', { name: '团队文件' })).toBeVisible()
+
+  async function createFolder(name: string) {
+    await page.getByRole('button', { name: '创建文件夹' }).click()
+    const dialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await dialog.getByLabel('目录名').fill(name)
+    await dialog.getByRole('button', { name: '创建', exact: true }).click()
+    await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible()
+  }
+
+  await createFolder(first)
+  await createFolder(second)
+  await page.getByRole('row', { name: new RegExp(first) }).getByRole('checkbox', { name: `选择 ${first}` }).check()
+  await page.getByRole('row', { name: new RegExp(second) }).getByRole('checkbox', { name: `选择 ${second}` }).check()
+
+  const selectionToolbar = page.getByRole('toolbar', { name: '批量文件操作' })
+  await selectionToolbar.getByRole('button', { name: '移入回收站' }).click()
+  const confirmation = page.getByRole('dialog', { name: '将 2 项移入回收站？' })
+  await expect(confirmation).toContainText(first)
+  await expect(confirmation).toContainText(second)
+  await confirmation.getByRole('button', { name: '取消' }).click()
+  await expect(selectionToolbar).toContainText('已选择 2 项')
+
+  await page.route('**/api/v1/sources/**/files?*', async (route) => {
+    const request = route.request()
+    const requestUrl = new URL(request.url())
+    if (request.method() === 'DELETE' && requestUrl.searchParams.get('path') === `/${second}`) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: '测试用删除失败' }, request_id: 'e2e' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await selectionToolbar.getByRole('button', { name: '移入回收站' }).click()
+  await confirmation.getByRole('button', { name: '移入回收站' }).click()
+  const deleteStatus = page.getByRole('status', { name: '批量删除任务' })
+  await expect(deleteStatus).toContainText('1 项成功，1 项失败')
+  await expect(deleteStatus).toBeInViewport({ ratio: 0.9 })
+  await expect(page.getByRole('row', { name: new RegExp(first) })).toHaveCount(0)
+  await expect(page.getByRole('row', { name: new RegExp(second) }).getByRole('checkbox', { name: `选择 ${second}` })).toBeChecked()
+  await page.screenshot({ path: '/tmp/omni-store-batch-delete-partial.png', fullPage: false })
+
+  await page.unrouteAll()
+  await expect(selectionToolbar).toContainText('已选择 1 项')
+  await selectionToolbar.getByRole('button', { name: '移入回收站' }).click()
+  await page.getByRole('dialog', { name: '将 1 项移入回收站？' }).getByRole('button', { name: '移入回收站' }).click()
+  await expect(deleteStatus).toContainText('已处理 1 项')
+  await expect(page.getByRole('row', { name: new RegExp(second) })).toHaveCount(0)
+
+  await page.getByRole('button', { name: '回收站' }).click()
+  for (const name of [first, second]) {
+    const row = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
+    await row.getByRole('button', { name: '永久删除' }).click()
+    await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除', exact: true }).click()
+    await expect(row).toHaveCount(0)
+  }
+  expect(browserErrors).toEqual([])
+})
