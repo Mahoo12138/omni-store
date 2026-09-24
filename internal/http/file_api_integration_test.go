@@ -25,6 +25,7 @@ type privateFileAPIFixture struct {
 	cookie      *http.Cookie
 	otherCookie *http.Cookie
 	csrf        string
+	otherCSRF   string
 	primary     *models.StorageSource
 	archive     *models.StorageSource
 }
@@ -74,6 +75,53 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	nestedStat := serveTestRequest(t, fixture.handler, http.MethodGet, primaryBase+"/files/stat?path=%2Fdocs%2Fblog-images%2Fposts%2F2026%2Fa.webp", "", fixture.cookie, "")
 	if nestedStat.Code != http.StatusOK {
 		t.Fatalf("relative-path stat status=%d body=%s", nestedStat.Code, nestedStat.Body.String())
+	}
+	missingFavoriteCSRF := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/docs/note.txt"}`, fixture.cookie, "")
+	assertErrorResponse(t, missingFavoriteCSRF, http.StatusForbidden, CodeForbidden)
+	addFavorite := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/docs/note.txt"}`, fixture.cookie, fixture.csrf)
+	if addFavorite.Code != http.StatusOK || !strings.Contains(addFavorite.Body.String(), `"type":"file"`) {
+		t.Fatalf("add file favorite status=%d body=%s", addFavorite.Code, addFavorite.Body.String())
+	}
+	var favoriteEnvelope struct {
+		Data FavoriteItem `json:"data"`
+	}
+	decodeTestJSON(t, addFavorite, &favoriteEnvelope)
+	if favoriteEnvelope.Data.ID <= 0 {
+		t.Fatalf("add favorite returned invalid id: %+v", favoriteEnvelope.Data)
+	}
+	duplicateFavorite := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"docs/note.txt"}`, fixture.cookie, fixture.csrf)
+	var duplicateEnvelope struct {
+		Data FavoriteItem `json:"data"`
+	}
+	decodeTestJSON(t, duplicateFavorite, &duplicateEnvelope)
+	if duplicateFavorite.Code != http.StatusOK || duplicateEnvelope.Data.ID != favoriteEnvelope.Data.ID {
+		t.Fatalf("duplicate favorite was not idempotent status=%d body=%s", duplicateFavorite.Code, duplicateFavorite.Body.String())
+	}
+	addFolderFavorite := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/docs"}`, fixture.cookie, fixture.csrf)
+	if addFolderFavorite.Code != http.StatusOK || !strings.Contains(addFolderFavorite.Body.String(), `"type":"dir"`) {
+		t.Fatalf("add folder favorite status=%d body=%s", addFolderFavorite.Code, addFolderFavorite.Body.String())
+	}
+	for _, favoriteCookie := range []*http.Cookie{fixture.cookie, fixture.otherCookie} {
+		favorites := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/favorites", "", favoriteCookie, "")
+		wantCount := 2
+		if favoriteCookie == fixture.otherCookie {
+			wantCount = 0
+		}
+		if favorites.Code != http.StatusOK || strings.Count(favorites.Body.String(), `"id":`) != wantCount {
+			t.Fatalf("favorite listing count=%d status=%d body=%s", wantCount, favorites.Code, favorites.Body.String())
+		}
+	}
+	forbiddenFavorite := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/docs/note.txt"}`, fixture.otherCookie, fixture.otherCSRF)
+	assertErrorResponse(t, forbiddenFavorite, http.StatusForbidden, CodeForbidden)
+	deleteFavorite := serveTestRequest(t, fixture.handler, http.MethodDelete, "/api/v1/me/favorites/"+itoaTest(favoriteEnvelope.Data.ID), "", fixture.cookie, fixture.csrf)
+	if deleteFavorite.Code != http.StatusOK {
+		t.Fatalf("delete favorite status=%d body=%s", deleteFavorite.Code, deleteFavorite.Body.String())
+	}
+	deleteOtherUserFavorite := serveTestRequest(t, fixture.handler, http.MethodDelete, "/api/v1/me/favorites/"+itoaTest(favoriteEnvelope.Data.ID), "", fixture.otherCookie, fixture.otherCSRF)
+	assertErrorResponse(t, deleteOtherUserFavorite, http.StatusNotFound, CodeFileNotFound)
+	favoriteBeforeRename := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/docs/note.txt"}`, fixture.cookie, fixture.csrf)
+	if favoriteBeforeRename.Code != http.StatusOK {
+		t.Fatalf("favorite before rename status=%d body=%s", favoriteBeforeRename.Code, favoriteBeforeRename.Body.String())
 	}
 	recentAfterUpload := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
 	if recentAfterUpload.Code != http.StatusOK || !strings.Contains(recentAfterUpload.Body.String(), `"path":"docs/note.txt"`) || !strings.Contains(recentAfterUpload.Body.String(), `"path":"docs/blog-images/posts/2026/a.webp"`) {
@@ -132,6 +180,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if recentAfterRename.Code != http.StatusOK || !strings.Contains(recentAfterRename.Body.String(), `"path":"docs/renamed.txt"`) || strings.Contains(recentAfterRename.Body.String(), `"path":"docs/note.txt"`) {
 		t.Fatalf("recent files after rename status=%d body=%s", recentAfterRename.Code, recentAfterRename.Body.String())
 	}
+	favoritesAfterRename := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/favorites", "", fixture.cookie, "")
+	if favoritesAfterRename.Code != http.StatusOK || !strings.Contains(favoritesAfterRename.Body.String(), `"path":"docs/renamed.txt"`) || strings.Contains(favoritesAfterRename.Body.String(), `"path":"docs/note.txt"`) {
+		t.Fatalf("favorite did not follow file rename status=%d body=%s", favoritesAfterRename.Code, favoritesAfterRename.Body.String())
+	}
 	copyBody := `{"path":"/docs/renamed.txt","target_source_key":"` + fixture.archive.Key + `","target_path":"/copied.txt"}`
 	copyResponse := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/copy", copyBody, fixture.cookie, fixture.csrf)
 	if copyResponse.Code != http.StatusOK || !strings.Contains(copyResponse.Body.String(), `"path":"/copied.txt"`) {
@@ -189,6 +241,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if recentFolderUpload.Code != http.StatusOK {
 		t.Fatalf("upload recent folder file status=%d body=%s", recentFolderUpload.Code, recentFolderUpload.Body.String())
 	}
+	favoriteRecentFolderFile := serveTestRequest(t, fixture.handler, http.MethodPost, "/api/v1/me/favorites", `{"source_key":"`+fixture.primary.Key+`","path":"/recent-folder/inside.txt"}`, fixture.cookie, fixture.csrf)
+	if favoriteRecentFolderFile.Code != http.StatusOK {
+		t.Fatalf("favorite nested file status=%d body=%s", favoriteRecentFolderFile.Code, favoriteRecentFolderFile.Body.String())
+	}
 	renameRecentFolder := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/rename", `{"path":"/recent-folder","new_name":"recent-folder-renamed"}`, fixture.cookie, fixture.csrf)
 	if renameRecentFolder.Code != http.StatusOK {
 		t.Fatalf("rename recent folder status=%d body=%s", renameRecentFolder.Code, renameRecentFolder.Body.String())
@@ -202,10 +258,18 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if recentAfterFolderMove.Code != http.StatusOK || !strings.Contains(recentAfterFolderMove.Body.String(), `"source_key":"`+fixture.archive.Key+`","source_name":"Archive","path":"recent-folder-moved/inside.txt"`) || strings.Contains(recentAfterFolderMove.Body.String(), `"path":"recent-folder/inside.txt"`) {
 		t.Fatalf("recent files after folder move status=%d body=%s", recentAfterFolderMove.Code, recentAfterFolderMove.Body.String())
 	}
+	favoritesAfterFolderMove := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/favorites", "", fixture.cookie, "")
+	if favoritesAfterFolderMove.Code != http.StatusOK || !strings.Contains(favoritesAfterFolderMove.Body.String(), `"source_key":"`+fixture.archive.Key+`","source_name":"Archive","path":"recent-folder-moved/inside.txt"`) {
+		t.Fatalf("favorites did not follow folder move status=%d body=%s", favoritesAfterFolderMove.Code, favoritesAfterFolderMove.Body.String())
+	}
 	recentFolderTrashKey := deleteFileAndGetTrashKey(t, fixture, archiveBase, "/recent-folder-moved")
 	purgeRecentFolder := serveTestRequest(t, fixture.handler, http.MethodDelete, archiveBase+"/trash/"+recentFolderTrashKey, "", fixture.cookie, fixture.csrf)
 	if purgeRecentFolder.Code != http.StatusOK {
 		t.Fatalf("purge recent folder status=%d body=%s", purgeRecentFolder.Code, purgeRecentFolder.Body.String())
+	}
+	favoritesAfterPurge := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/favorites", "", fixture.cookie, "")
+	if favoritesAfterPurge.Code != http.StatusOK || strings.Contains(favoritesAfterPurge.Body.String(), `"path":"recent-folder-moved/inside.txt"`) {
+		t.Fatalf("purged favorite target remained listed status=%d body=%s", favoritesAfterPurge.Code, favoritesAfterPurge.Body.String())
 	}
 
 	unknownSource := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/sources/src-does-not-exist/files?path=%2F", "", fixture.cookie, "")
@@ -271,7 +335,7 @@ func newPrivateFileAPIFixture(t *testing.T) privateFileAPIFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherSessionID, _, err := app.sessions.Create(otherUser.ID, "integration-test-other", "127.0.0.1")
+	otherSessionID, otherCSRF, err := app.sessions.Create(otherUser.ID, "integration-test-other", "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,6 +344,7 @@ func newPrivateFileAPIFixture(t *testing.T) privateFileAPIFixture {
 		cookie:      &http.Cookie{Name: SessionCookieName(), Value: sessionID},
 		otherCookie: &http.Cookie{Name: SessionCookieName(), Value: otherSessionID},
 		csrf:        csrf,
+		otherCSRF:   otherCSRF,
 		primary:     primary,
 		archive:     archive,
 	}

@@ -225,6 +225,83 @@ func (s *Server) rebaseRecentFiles(userID int64, sourceID int64, oldPath string,
 	}
 }
 
+// rebaseFavoritePaths keeps bookmarks attached to a moved or renamed path for
+// every user who could previously favorite it.
+func (s *Server) rebaseFavoritePaths(sourceID int64, oldPath string, targetSourceID int64, newPath string) {
+	oldPath, err := security.NormalizeRelPath(oldPath)
+	if err != nil || oldPath == "" {
+		return
+	}
+	newPath, err = security.NormalizeRelPath(newPath)
+	if err != nil || newPath == "" {
+		return
+	}
+	rows, err := s.db.Query(`SELECT id, user_id, relative_path, created_at FROM favorites
+  WHERE storage_source_id = ? AND (relative_path = ? OR substr(relative_path, 1, length(?) + 1) = ? || '/')`,
+		sourceID, oldPath, oldPath, oldPath)
+	if err != nil {
+		s.logger.Warn("读取收藏路径失败", "source_id", sourceID, "err", err)
+		return
+	}
+	type favoritePath struct {
+		id        int64
+		userID    int64
+		path      string
+		createdAt string
+	}
+	items := make([]favoritePath, 0)
+	for rows.Next() {
+		var item favoritePath
+		if err := rows.Scan(&item.id, &item.userID, &item.path, &item.createdAt); err != nil {
+			_ = rows.Close()
+			s.logger.Warn("读取收藏路径失败", "source_id", sourceID, "err", err)
+			return
+		}
+		if item.path == oldPath || strings.HasPrefix(item.path, oldPath+"/") {
+			items = append(items, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		s.logger.Warn("读取收藏路径失败", "source_id", sourceID, "err", err)
+		return
+	}
+	if err := rows.Close(); err != nil {
+		s.logger.Warn("读取收藏路径失败", "source_id", sourceID, "err", err)
+		return
+	}
+	if len(items) == 0 {
+		return
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		s.logger.Warn("更新收藏路径失败", "source_id", sourceID, "err", err)
+		return
+	}
+	defer tx.Rollback()
+	for _, item := range items {
+		targetPath := newPath + strings.TrimPrefix(item.path, oldPath)
+		if targetSourceID == sourceID && targetPath == item.path {
+			continue
+		}
+		if _, err := tx.Exec(`INSERT INTO favorites (user_id, storage_source_id, relative_path, created_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(user_id, storage_source_id, relative_path) DO UPDATE SET created_at =
+    CASE WHEN favorites.created_at > excluded.created_at THEN excluded.created_at ELSE favorites.created_at END`,
+			item.userID, targetSourceID, targetPath, item.createdAt); err != nil {
+			s.logger.Warn("更新收藏路径失败", "path", targetPath, "err", err)
+			return
+		}
+		if _, err := tx.Exec(`DELETE FROM favorites WHERE id = ?`, item.id); err != nil {
+			s.logger.Warn("更新收藏路径失败", "path", item.path, "err", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		s.logger.Warn("更新收藏路径失败", "source_id", sourceID, "err", err)
+	}
+}
+
 // --- 文件列表 / 信息 ---
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
@@ -584,6 +661,7 @@ func (s *Server) handleRestoreTrash(w http.ResponseWriter, r *http.Request) {
 	} else if entry.EntryType == string(files.TypeDir) {
 		s.rebaseRecentFiles(user.ID, src.ID, entry.OriginalRelativePath, src.ID, restored.OriginalRelativePath)
 	}
+	s.rebaseFavoritePaths(src.ID, entry.OriginalRelativePath, src.ID, restored.OriginalRelativePath)
 	WriteData(w, r, restored)
 }
 
@@ -656,6 +734,9 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 	} else if oldStatErr == nil && oldEntry.Type == files.TypeDir {
 		s.rebaseRecentFiles(user.ID, src.ID, req.Path, src.ID, newRel)
 	}
+	if oldStatErr == nil {
+		s.rebaseFavoritePaths(src.ID, req.Path, src.ID, newRel)
+	}
 	WriteData(w, r, map[string]any{"path": "/" + newRel})
 }
 
@@ -695,6 +776,9 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 		s.recordRecentFile(user.ID, target, result.Path)
 	} else if oldStatErr == nil && oldEntry.Type == files.TypeDir {
 		s.rebaseRecentFiles(user.ID, src.ID, req.Path, target.ID, result.Path)
+	}
+	if oldStatErr == nil {
+		s.rebaseFavoritePaths(src.ID, req.Path, target.ID, result.Path)
 	}
 	result.Path = "/" + result.Path
 	WriteData(w, r, result)

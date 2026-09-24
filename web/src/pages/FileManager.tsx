@@ -21,6 +21,7 @@ import {
 import { ApiRequestError } from '../api/client'
 import { createShare, type FileShare } from '../api/shares'
 import { fetchMyQuota, type UserQuota } from '../api/auth'
+import { addFavorite, fetchMyFavorites, removeFavorite, type FavoriteItem } from '../api/favorites'
 import { AppShell } from '../components/layout/AppShell'
 import { useFileClipboard, type FileClipboardItem, type FileClipboardOperation } from '../components/files/FileClipboard'
 import { FileTable } from '../components/files/FileTable'
@@ -55,6 +56,7 @@ import {
   IconRefresh,
   IconSearch,
   IconScissors,
+  IconStar,
   IconTrash,
   IconUpload,
 } from '../components/ui/Icon'
@@ -182,6 +184,30 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     queryFn: () => fetchSourceQuota(sourceKey),
   })
   const userQuotaQuery = useQuery({ queryKey: ['my-quota'], queryFn: fetchMyQuota })
+  const favoritesQuery = useQuery({ queryKey: ['my-favorites'], queryFn: fetchMyFavorites })
+  const favoriteByKey = new Map(
+    (favoritesQuery.data ?? []).map((item) => [`${item.source_key}\0${item.path}`, item]),
+  )
+  const favoriteMutation = useMutation({
+    mutationFn: async (variables: { path: string; favorite?: FavoriteItem }) => {
+      if (variables.favorite) await removeFavorite(variables.favorite.id)
+      else await addFavorite(sourceKey, variables.path)
+    },
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['my-favorites'] })
+      toastSuccess(variables.favorite ? '已取消收藏。' : '已添加到收藏。')
+    },
+    onError: (error) => toastError(error instanceof ApiRequestError ? error.message : '收藏操作失败，请重试。'),
+  })
+
+  function favoriteForEntry(entry: FileEntry): FavoriteItem | undefined {
+    const relativePath = joinPath(currentPath, entry.name).replace(/^\/+/, '')
+    return favoriteByKey.get(`${sourceKey}\0${relativePath}`)
+  }
+
+  function toggleFavorite(entry: FileEntry) {
+    favoriteMutation.mutate({ path: joinPath(currentPath, entry.name), favorite: favoriteForEntry(entry) })
+  }
 
   useEffect(() => {
     return () => uploadController.current?.cancel()
@@ -494,6 +520,12 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         link.href = downloadFileUrl(sourceKey, joinPath(currentPath, entry.name))
         link.click()
       } }]
+    items.push({
+      id: 'favorite',
+      label: favoriteForEntry(entry) ? '取消收藏' : '收藏',
+      icon: <IconStar size={15} />,
+      onSelect: () => toggleFavorite(entry),
+    })
     items.push({ id: 'copy', label: '复制', icon: <IconCopy size={15} />, onSelect: () => copyEntries([entry]) })
     if (canWrite) {
       items.push(
@@ -861,6 +893,17 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 if (entry.type === 'file') {
                   return (
                     <span className={css.actions}>
+                      <button
+                        className={css.actionBtn}
+                        aria-label={`${favoriteForEntry(entry) ? '取消收藏' : '收藏'} ${entry.name}`}
+                        aria-pressed={Boolean(favoriteForEntry(entry))}
+                        title={favoriteForEntry(entry) ? '取消收藏' : '收藏'}
+                        onClick={() => toggleFavorite(entry)}
+                        disabled={favoriteMutation.isPending}
+                        style={favoriteForEntry(entry) ? { color: vars.color.primary } : undefined}
+                      >
+                        <IconStar size={15} />
+                      </button>
                       <a
                         className={css.actionBtn}
                         href={downloadFileUrl(
@@ -917,6 +960,17 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 // dir
                 return (
                   <span className={css.actions}>
+                    <button
+                      className={css.actionBtn}
+                      aria-label={`${favoriteForEntry(entry) ? '取消收藏' : '收藏'} ${entry.name}`}
+                      aria-pressed={Boolean(favoriteForEntry(entry))}
+                      title={favoriteForEntry(entry) ? '取消收藏' : '收藏'}
+                      onClick={() => toggleFavorite(entry)}
+                      disabled={favoriteMutation.isPending}
+                      style={favoriteForEntry(entry) ? { color: vars.color.primary } : undefined}
+                    >
+                      <IconStar size={15} />
+                    </button>
                     <button
                       className={css.actionBtn}
                       title="复制"
@@ -979,6 +1033,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 if (entry) cutEntries([entry])
               }}
               onShare={(name, type) => setShareTarget({ name, type })}
+              onToggleFavorite={(name) => {
+                const entry = entries.find((item) => item.name === name)
+                if (entry) toggleFavorite(entry)
+              }}
+              isFavorite={(name) => {
+                const entry = entries.find((item) => item.name === name)
+                return entry ? Boolean(favoriteForEntry(entry)) : false
+              }}
               canWrite={canWrite}
               filter={filter}
               selectedNames={selectedNames}
@@ -1767,6 +1829,8 @@ function GridView({
   onCopy,
   onCut,
   onShare,
+  onToggleFavorite,
+  isFavorite,
   canWrite,
   filter,
   selectedNames,
@@ -1783,6 +1847,8 @@ function GridView({
   onCopy: (name: string) => void
   onCut: (name: string) => void
   onShare: (name: string, type: 'file' | 'dir') => void
+  onToggleFavorite: (name: string) => void
+  isFavorite: (name: string) => boolean
   canWrite: boolean
   filter: string
   selectedNames: ReadonlySet<string>
@@ -1884,6 +1950,16 @@ function GridView({
           <span style={{ fontSize: vars.fontSize.sm, textAlign: 'center', wordBreak: 'break-all' }}>{e.name}</span>
           {e.type !== 'unsupported' && (
             <span style={{ display: 'flex', gap: 4 }}>
+              <button
+                className={css.actionBtn}
+                aria-label={`${isFavorite(e.name) ? '取消收藏' : '收藏'} ${e.name}`}
+                aria-pressed={isFavorite(e.name)}
+                title={isFavorite(e.name) ? '取消收藏' : '收藏'}
+                onClick={() => onToggleFavorite(e.name)}
+                style={isFavorite(e.name) ? { color: vars.color.primary } : undefined}
+              >
+                <IconStar size={12} />
+              </button>
               <button className={css.actionBtn} title="复制" onClick={() => onCopy(e.name)}>
                 <IconCopy size={12} />
               </button>

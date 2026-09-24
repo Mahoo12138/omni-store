@@ -1,6 +1,8 @@
 package httpserver
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/security"
 )
 
 func pathID(r *http.Request) (int64, bool) {
@@ -424,6 +427,185 @@ func (s *Server) handleMyRecentFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	WriteData(w, r, ListData{Items: items, Total: int64(len(items))})
+}
+
+type FavoriteItem struct {
+	ID         int64     `json:"id"`
+	SourceKey  string    `json:"source_key"`
+	SourceName string    `json:"source_name"`
+	Path       string    `json:"path"`
+	Name       string    `json:"name"`
+	Type       string    `json:"type"`
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modified_at"`
+	CreatedAt  string    `json:"created_at"`
+}
+
+// handleMyFavorites shows only targets that still exist and are currently readable.
+func (s *Server) handleMyFavorites(w http.ResponseWriter, r *http.Request) {
+	user := CurrentUser(r.Context())
+	rows, err := s.db.Query(`SELECT f.id, f.storage_source_id, s.key, s.name, f.relative_path, f.created_at
+  FROM favorites f JOIN storage_sources s ON s.id = f.storage_source_id
+  WHERE f.user_id = ? ORDER BY f.created_at DESC, f.id DESC LIMIT 500`, user.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询收藏失败", nil)
+		return
+	}
+	type candidate struct {
+		id           int64
+		sourceID     int64
+		sourceKey    string
+		sourceName   string
+		relativePath string
+		createdAt    string
+	}
+	candidates := make([]candidate, 0)
+	for rows.Next() {
+		var item candidate
+		if err := rows.Scan(&item.id, &item.sourceID, &item.sourceKey, &item.sourceName, &item.relativePath, &item.createdAt); err != nil {
+			_ = rows.Close()
+			WriteError(w, r, CodeInternalError, "查询收藏失败", nil)
+			return
+		}
+		candidates = append(candidates, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		WriteError(w, r, CodeInternalError, "查询收藏失败", nil)
+		return
+	}
+	if err := rows.Close(); err != nil {
+		WriteError(w, r, CodeInternalError, "查询收藏失败", nil)
+		return
+	}
+
+	items := make([]FavoriteItem, 0, len(candidates))
+	for _, candidate := range candidates {
+		source, err := s.sources.GetByID(candidate.sourceID)
+		if err != nil || source.IsDisabled {
+			continue
+		}
+		allowed, err := s.sources.CanReadPath(user, candidate.sourceKey, candidate.relativePath)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查收藏权限失败", nil)
+			return
+		}
+		if !allowed {
+			continue
+		}
+		entry, err := s.files.Stat(source, candidate.relativePath)
+		if errors.Is(err, files.ErrNotFound) {
+			// Remove dead path references so a later file created at the same path
+			// does not unexpectedly inherit an old favorite.
+			_, _ = s.db.Exec(`DELETE FROM favorites WHERE id = ? AND user_id = ?`, candidate.id, user.ID)
+			continue
+		}
+		if err != nil || (entry.Type != files.TypeFile && entry.Type != files.TypeDir) {
+			continue
+		}
+		items = append(items, FavoriteItem{
+			ID: candidate.id, SourceKey: candidate.sourceKey, SourceName: candidate.sourceName,
+			Path: candidate.relativePath, Name: entry.Name, Type: string(entry.Type),
+			Size: entry.Size, ModifiedAt: entry.MTime, CreatedAt: candidate.createdAt,
+		})
+	}
+	WriteData(w, r, ListData{Items: items, Total: int64(len(items))})
+}
+
+func (s *Server) handleAddFavorite(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SourceKey string `json:"source_key"`
+		Path      string `json:"path"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	source := s.resolveSourceKey(w, r, req.SourceKey)
+	if source == nil {
+		return
+	}
+	relativePath, err := security.NormalizeRelPath(req.Path)
+	if err != nil || relativePath == "" {
+		WriteError(w, r, CodePathInvalid, "收藏路径无效", nil)
+		return
+	}
+	if !s.authorizeSourcePath(w, r, source, relativePath, false, false) {
+		return
+	}
+	entry, err := s.files.Stat(source, relativePath)
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	if entry.Type != files.TypeFile && entry.Type != files.TypeDir {
+		WriteError(w, r, CodePathInvalid, "仅支持收藏文件或文件夹", nil)
+		return
+	}
+	user := CurrentUser(r.Context())
+	tx, err := s.db.Begin()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "添加收藏失败", nil)
+		return
+	}
+	defer tx.Rollback()
+	var id int64
+	err = tx.QueryRow(`SELECT id FROM favorites WHERE user_id = ? AND storage_source_id = ? AND relative_path = ?`, user.ID, source.ID, relativePath).Scan(&id)
+	if err != nil && err != sql.ErrNoRows {
+		WriteError(w, r, CodeInternalError, "读取收藏失败", nil)
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		var count int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM favorites WHERE user_id = ?`, user.ID).Scan(&count); err != nil {
+			WriteError(w, r, CodeInternalError, "统计收藏数量失败", nil)
+			return
+		}
+		if count >= 500 {
+			WriteError(w, r, CodeValidationError, "收藏数量已达上限（500 项）", nil)
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO favorites (user_id, storage_source_id, relative_path, created_at)
+  VALUES (?, ?, ?, ?)`, user.ID, source.ID, relativePath, time.Now().UTC()); err != nil {
+			WriteError(w, r, CodeInternalError, "添加收藏失败", nil)
+			return
+		}
+		if err := tx.QueryRow(`SELECT id FROM favorites WHERE user_id = ? AND storage_source_id = ? AND relative_path = ?`, user.ID, source.ID, relativePath).Scan(&id); err != nil {
+			WriteError(w, r, CodeInternalError, "读取收藏失败", nil)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		WriteError(w, r, CodeInternalError, "添加收藏失败", nil)
+		return
+	}
+	WriteData(w, r, FavoriteItem{
+		ID: id, SourceKey: source.Key, SourceName: source.Name, Path: relativePath,
+		Name: entry.Name, Type: string(entry.Type), Size: entry.Size,
+		ModifiedAt: entry.MTime,
+	})
+}
+
+func (s *Server) handleDeleteFavorite(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("favoriteID"), 10, 64)
+	if err != nil || id <= 0 {
+		WriteError(w, r, CodeValidationError, "收藏标识无效", nil)
+		return
+	}
+	result, err := s.db.Exec(`DELETE FROM favorites WHERE id = ? AND user_id = ?`, id, CurrentUser(r.Context()).ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "移除收藏失败", nil)
+		return
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "移除收藏失败", nil)
+		return
+	}
+	if deleted == 0 {
+		WriteError(w, r, CodeFileNotFound, "收藏不存在", nil)
+		return
+	}
+	WriteData(w, r, map[string]any{"ok": true})
 }
 
 // humanizeActivity 把 audit action 翻译成中文短句。

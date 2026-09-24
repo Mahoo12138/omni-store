@@ -5,15 +5,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
 import {
+  IconActivity,
   IconChevronDown,
   IconFolder,
-  IconActivity,
   IconImage,
+  IconLink,
   IconLogout,
   IconQuestion,
-  IconLink,
   IconSearch,
   IconSettings,
+  IconStar,
   LogoMark,
 } from '../ui/Icon'
 import * as css from './AppShell.css'
@@ -57,6 +58,7 @@ export function AppShell({
   const navItems = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
     { to: '/app/recent', label: '最近文件', icon: <IconActivity />, active: pathname.startsWith('/app/recent') },
+    { to: '/app/favorites', label: '收藏', icon: <IconStar />, active: pathname.startsWith('/app/favorites') },
     { to: '/app/search', label: '搜索', icon: <IconSearch />, active: pathname.startsWith('/app/search') },
     { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
