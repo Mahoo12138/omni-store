@@ -27,6 +27,7 @@ import { FileTable } from '../components/files/FileTable'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
+import { ContextMenu } from '../components/ui/ContextMenu'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { Menu, type MenuOption } from '../components/ui/Menu'
@@ -482,6 +483,28 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     event.dataTransfer.setData('application/x-omnistore-file-items', JSON.stringify(names))
   }
 
+  function buildContextMenuItems(entry: FileEntry): MenuOption[] {
+    if (entry.type === 'unsupported') return []
+    const entryType: 'file' | 'dir' = entry.type
+    const items: MenuOption[] = entry.type === 'dir'
+      ? [{ id: 'open', label: '打开', icon: <IconExternalLink size={15} />, onSelect: () => goTo(entry.name) }]
+      : [{ id: 'download', label: '下载', icon: <IconDownload size={15} />, onSelect: () => {
+        const link = document.createElement('a')
+        link.href = downloadFileUrl(sourceKey, joinPath(currentPath, entry.name))
+        link.click()
+      } }]
+    items.push({ id: 'copy', label: '复制', icon: <IconCopy size={15} />, onSelect: () => copyEntries([entry]) })
+    if (canWrite) {
+      items.push(
+        { id: 'share', label: '创建分享', icon: <IconLink size={15} />, onSelect: () => setShareTarget({ name: entry.name, type: entryType }) },
+        { id: 'rename', label: '重命名', icon: <IconEdit size={15} />, onSelect: () => setRenameTarget({ name: entry.name }) },
+        { id: 'cut', label: '剪切', icon: <IconScissors size={15} />, onSelect: () => cutEntries([entry]) },
+        { id: 'delete', label: '移入回收站', icon: <IconTrash size={15} />, danger: true, onSelect: () => setDeleteTarget({ name: entry.name, type: entry.type }) },
+      )
+    }
+    return items
+  }
+
   async function dropEntriesOnDirectory(directory: FileEntry, event: DragEvent<HTMLElement>) {
     if (!canWrite || directory.type !== 'dir') return
     if (runningFileTask) {
@@ -826,6 +849,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               onToggleAll={toggleAllSelected}
               onDragEntryStart={canWrite ? startInternalDrag : undefined}
               onDropOnDirectory={canWrite ? (entry, event) => void dropEntriesOnDirectory(entry, event) : undefined}
+              contextMenuItems={buildContextMenuItems}
               fileHref={(entry) =>
                 downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)
               }
@@ -958,6 +982,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               onToggleSelected={toggleSelected}
               onDragEntryStart={canWrite ? startInternalDrag : undefined}
               onDropOnDirectory={canWrite ? (entry, event) => void dropEntriesOnDirectory(entry, event) : undefined}
+              contextMenuItems={buildContextMenuItems}
             />
           )}
 
@@ -1731,6 +1756,7 @@ function GridView({
   onToggleSelected,
   onDragEntryStart,
   onDropOnDirectory,
+  contextMenuItems,
 }: {
   entries: FileEntry[]
   loading?: boolean
@@ -1746,6 +1772,7 @@ function GridView({
   onToggleSelected: (name: string, selected: boolean) => void
   onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLDivElement>) => void
   onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLDivElement>) => void
+  contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   if (loading) {
@@ -1771,9 +1798,13 @@ function GridView({
       }}
     >
       {entries.map((e) => (
-        <div
+        <ContextMenu
           key={e.name}
-          draggable={Boolean(onDragEntryStart && e.type !== 'unsupported')}
+          ariaLabel={`文件操作 ${e.name}`}
+          items={contextMenuItems?.(e) ?? []}
+          trigger={
+            <div
+              draggable={Boolean(onDragEntryStart && e.type !== 'unsupported')}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -1866,7 +1897,9 @@ function GridView({
               )}
             </span>
           )}
-        </div>
+            </div>
+          }
+        />
       ))}
     </div>
   )

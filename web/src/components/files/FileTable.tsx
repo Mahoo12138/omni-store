@@ -1,6 +1,8 @@
 import { useState, type DragEvent, type ReactNode } from 'react'
 import type { FileEntry } from '../../api/sources'
 import { EntryIcon } from '../ui/Icon'
+import { ContextMenu } from '../ui/ContextMenu'
+import type { MenuOption } from '../ui/Menu'
 import { formatBytes, formatDate } from '../../utils/format'
 import * as css from './FileTable.css'
 
@@ -23,6 +25,7 @@ export function FileTable({
   onToggleAll,
   onDragEntryStart,
   onDropOnDirectory,
+  contextMenuItems,
 }: {
   entries: FileEntry[] | undefined
   loading?: boolean
@@ -43,6 +46,7 @@ export function FileTable({
   onToggleAll?: (selected: boolean) => void
   onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
   onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
+  contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   return (
@@ -71,35 +75,39 @@ export function FileTable({
         </thead>
         <tbody>
           {entries?.map((entry) => (
-            <tr
+            <ContextMenu
               key={entry.name}
-              className={`${css.row} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
-              draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
-              onDragStart={onDragEntryStart ? (event) => {
-                if (entry.type === 'unsupported') {
-                  event.preventDefault()
-                  return
-                }
-                event.dataTransfer.effectAllowed = 'move'
-                event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
-                onDragEntryStart(entry, event)
-              } : undefined}
-              onDragOver={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-                setDropTargetName(entry.name)
-              } : undefined}
-              onDragLeave={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
-              } : undefined}
-              onDrop={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
-                event.preventDefault()
-                setDropTargetName(null)
-                onDropOnDirectory(entry, event)
-              } : undefined}
-            >
+              ariaLabel={`文件操作 ${entry.name}`}
+              items={contextMenuItems?.(entry) ?? []}
+              trigger={
+                <tr
+                  className={`${css.row} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
+                  draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
+                  onDragStart={onDragEntryStart ? (event) => {
+                    if (entry.type === 'unsupported') {
+                      event.preventDefault()
+                      return
+                    }
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
+                    onDragEntryStart(entry, event)
+                  } : undefined}
+                  onDragOver={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                    if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    setDropTargetName(entry.name)
+                  } : undefined}
+                  onDragLeave={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
+                  } : undefined}
+                  onDrop={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                    if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+                    event.preventDefault()
+                    setDropTargetName(null)
+                    onDropOnDirectory(entry, event)
+                  } : undefined}
+                >
               {selectable && (
                 <td className={css.selectionCell}>
                   <input
@@ -138,7 +146,9 @@ export function FileTable({
               <td className={css.td}>{entry.type === 'file' ? formatBytes(entry.size) : '–'}</td>
               <td className={css.td}>{formatDate(entry.mtime)}</td>
               {renderActions && <td className={css.actionsCell}>{renderActions(entry)}</td>}
-            </tr>
+                </tr>
+              }
+            />
           ))}
         </tbody>
       </table>
