@@ -58,6 +58,7 @@ import {
 } from '../components/ui/Icon'
 import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
+import { readFilePreferences, writeFilePreferences, type FileSortKey, type FileSortOrder } from '../utils/filePreferences'
 import {
   UploadTaskController,
   uploadRelativePath,
@@ -66,9 +67,6 @@ import {
   type UploadConflictDecision,
 } from '../utils/uploadTask'
 import * as css from './FileManager.css'
-
-type ViewMode = 'list' | 'grid'
-const DEFAULT_PAGE_SIZE = 20
 
 type PasteTaskSnapshot = {
   status: 'running' | 'completed' | 'completed_with_errors'
@@ -127,7 +125,7 @@ export function FileManagerPage() {
 
   // 4) 正常文件管理视图
   if (!source) return null
-  return <FileManagerView source={source} sources={sources.data ?? []} />
+  return <FileManagerView key={source.key} source={source} sources={sources.data ?? []} />
 }
 
 // --- 主视图 ---
@@ -145,8 +143,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   const folderUploadMode = useRef(false)
   const uploadController = useRef<UploadTaskController | null>(null)
   const [filter, setFilter] = useState('')
-  const [view, setView] = useState<ViewMode>('list')
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [preferences, setPreferences] = useState(() => readFilePreferences(sourceKey))
+  const { view, pageSize, sort, order } = preferences
   const [uploadTask, setUploadTask] = useState<UploadTaskSnapshot | null>(null)
   const [pasteTask, setPasteTask] = useState<PasteTaskSnapshot | null>(null)
   const [batchDeleteTask, setBatchDeleteTask] = useState<BatchDeleteTaskSnapshot | null>(null)
@@ -181,9 +179,13 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     return () => uploadController.current?.cancel()
   }, [])
 
+  useEffect(() => {
+    writeFilePreferences(sourceKey, preferences)
+  }, [sourceKey, preferences])
+
   const filesQuery = useQuery({
-    queryKey: ['files', sourceKey, currentPath, page, pageSize],
-    queryFn: () => listFiles(sourceKey, { path: currentPath, page, pageSize }),
+    queryKey: ['files', sourceKey, currentPath, page, pageSize, sort, order],
+    queryFn: () => listFiles(sourceKey, { path: currentPath, page, pageSize, sort, order }),
   })
 
   const total = filesQuery.data?.total ?? 0
@@ -191,7 +193,18 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
 
   useEffect(() => {
     setSelectedNames(new Set())
-  }, [sourceKey, currentPath, page, pageSize])
+  }, [sourceKey, currentPath, page, pageSize, sort, order])
+
+  function updatePreferences(next: Partial<typeof preferences>) {
+    setPreferences((current) => ({ ...current, ...next }))
+    setSelectedNames(new Set())
+  }
+
+  function changeSort(value: string) {
+    const [nextSort, nextOrder] = value.split(':') as [FileSortKey, FileSortOrder]
+    updatePreferences({ sort: nextSort, order: nextOrder })
+    navigate({ to: '/app/sources/$sourceKey', params: { sourceKey }, search: { path: currentPath, page: 1 } })
+  }
 
   function refresh(changedSourceKeys: string[] = [sourceKey]) {
     for (const changedSourceKey of new Set(changedSourceKeys)) {
@@ -573,6 +586,21 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 onChange={(e) => setFilter(e.target.value)}
               />
             </span>
+            <Select
+              value={`${sort}:${order}`}
+              onValueChange={changeSort}
+              options={[
+                { value: 'name:asc', label: '名称升序' },
+                { value: 'name:desc', label: '名称降序' },
+                { value: 'size:asc', label: '大小升序' },
+                { value: 'size:desc', label: '大小降序' },
+                { value: 'mtime:asc', label: '修改时间升序' },
+                { value: 'mtime:desc', label: '修改时间降序' },
+              ]}
+              ariaLabel="排序方式"
+              size="compact"
+              width="content"
+            />
             <button className={css.iconBtn} aria-label="刷新" onClick={() => refresh()}>
               <IconRefresh size={16} />
             </button>
@@ -580,7 +608,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               <button
                 className={view === 'list' ? css.viewBtnActive : css.viewBtn}
                 aria-label="列表视图"
-                onClick={() => setView('list')}
+                aria-selected={view === 'list'}
+                role="tab"
+                onClick={() => updatePreferences({ view: 'list' })}
               >
                 <IconList size={16} />
               </button>
@@ -588,7 +618,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               <button
                 className={view === 'grid' ? css.viewBtnActive : css.viewBtn}
                 aria-label="网格视图"
-                onClick={() => setView('grid')}
+                aria-selected={view === 'grid'}
+                role="tab"
+                onClick={() => updatePreferences({ view: 'grid' })}
               >
                 <IconGrid size={16} />
               </button>
@@ -816,7 +848,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 <Select
                   value={String(pageSize)}
                   onValueChange={(nextPageSize) => {
-                    setPageSize(Number(nextPageSize))
+                    updatePreferences({ pageSize: Number(nextPageSize) as 20 | 50 | 100 })
                     navigate({
                       to: '/app/sources/$sourceKey',
                       params: { sourceKey },
