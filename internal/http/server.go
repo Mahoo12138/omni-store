@@ -117,6 +117,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("PATCH /api/v1/me/profile", s.requireAuth(s.handleUpdateProfile))
 	mux.HandleFunc("POST /api/v1/me/password", s.requireAuth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/v1/me/activity", s.requireAuth(s.handleMyActivity))
+	mux.HandleFunc("GET /api/v1/me/recent-files", s.requireAuth(s.handleMyRecentFiles))
 	mux.HandleFunc("GET /api/v1/me/quota", s.requireAuth(s.handleMyQuota))
 	mux.HandleFunc("GET /api/v1/me/tokens", s.requireAuth(s.handleTokenStatus))
 	mux.HandleFunc("POST /api/v1/me/tokens/webdav/reset", s.requireAuth(s.handleResetToken(auth.TokenTypeWebDAV)))

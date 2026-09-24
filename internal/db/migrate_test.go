@@ -32,22 +32,25 @@ func TestParseAndSortMigrationFilenamesBySemanticVersion(t *testing.T) {
 	}
 }
 
-func TestOpenAppliesFrozenInitialMigration(t *testing.T) {
+func TestOpenAppliesInitialAndRecentFilesMigrations(t *testing.T) {
 	conn, err := Open(filepath.Join(t.TempDir(), "omnistore.db"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
 	defer conn.Close()
 
-	var version string
 	var appliedAt string
-	if err := conn.QueryRow(`SELECT version, applied_at FROM schema_migrations`).Scan(&version, &appliedAt); err != nil {
-		t.Fatalf("query migration version: %v", err)
+	if err := conn.QueryRow(`SELECT applied_at FROM schema_migrations WHERE version = 'v1.1.0'`).Scan(&appliedAt); err != nil {
+		t.Fatalf("query v1.1.0 migration: %v", err)
 	}
-	if version != "v1.0.0" || appliedAt == "" {
-		t.Fatalf("unexpected migration record: version=%q applied_at=%q", version, appliedAt)
+	if appliedAt == "" {
+		t.Fatal("v1.1.0 migration has no applied_at")
 	}
-	for _, table := range []string{"users", "storage_sources", "file_records", "images", "audit_logs", "webdav_locks"} {
+	var initialMigrationCount int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = 'v1.0.0'`).Scan(&initialMigrationCount); err != nil || initialMigrationCount != 1 {
+		t.Fatalf("initial migration count=%d err=%v", initialMigrationCount, err)
+	}
+	for _, table := range []string{"users", "storage_sources", "file_records", "images", "audit_logs", "webdav_locks", "recent_files"} {
 		var count int
 		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("table %s count=%d err=%v", table, count, err)

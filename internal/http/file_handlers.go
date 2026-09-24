@@ -129,6 +129,102 @@ func (s *Server) fileAudit(r *http.Request, action string, src *models.StorageSo
 	s.audit.Log(e)
 }
 
+// recordRecentFile is independent of audit retention/configuration and never turns
+// a completed file operation into a failure if the recent-file index is unavailable.
+func (s *Server) recordRecentFile(userID int64, src *models.StorageSource, relPath string) {
+	normalized, err := security.NormalizeRelPath(relPath)
+	if err != nil || normalized == "" {
+		return
+	}
+	_, err = s.db.Exec(`INSERT INTO recent_files (user_id, storage_source_id, relative_path, accessed_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(user_id, storage_source_id, relative_path) DO UPDATE SET accessed_at = excluded.accessed_at`,
+		userID, src.ID, normalized, time.Now().UTC())
+	if err != nil {
+		s.logger.Warn("记录最近文件失败", "source", src.Key, "path", normalized, "err", err)
+		return
+	}
+	if _, err := s.db.Exec(`DELETE FROM recent_files WHERE user_id = ? AND id NOT IN (
+  SELECT id FROM recent_files WHERE user_id = ? ORDER BY accessed_at DESC, id DESC LIMIT 500
+)`, userID, userID); err != nil {
+		s.logger.Warn("清理最近文件记录失败", "user_id", userID, "err", err)
+	}
+}
+
+// rebaseRecentFiles preserves a user's recent child files when a containing
+// directory is renamed, moved, or restored to a different path.
+func (s *Server) rebaseRecentFiles(userID int64, sourceID int64, oldPath string, targetSourceID int64, newPath string) {
+	oldPath, err := security.NormalizeRelPath(oldPath)
+	if err != nil || oldPath == "" {
+		return
+	}
+	newPath, err = security.NormalizeRelPath(newPath)
+	if err != nil || newPath == "" {
+		return
+	}
+	rows, err := s.db.Query(`SELECT id, relative_path FROM recent_files WHERE user_id = ? AND storage_source_id = ?`, userID, sourceID)
+	if err != nil {
+		s.logger.Warn("读取最近文件目录记录失败", "user_id", userID, "err", err)
+		return
+	}
+	type recentPath struct {
+		id   int64
+		path string
+	}
+	items := make([]recentPath, 0)
+	for rows.Next() {
+		var item recentPath
+		if err := rows.Scan(&item.id, &item.path); err != nil {
+			_ = rows.Close()
+			s.logger.Warn("读取最近文件目录记录失败", "user_id", userID, "err", err)
+			return
+		}
+		if item.path == oldPath || strings.HasPrefix(item.path, oldPath+"/") {
+			items = append(items, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		s.logger.Warn("读取最近文件目录记录失败", "user_id", userID, "err", err)
+		return
+	}
+	if err := rows.Close(); err != nil {
+		s.logger.Warn("读取最近文件目录记录失败", "user_id", userID, "err", err)
+		return
+	}
+	if len(items) == 0 {
+		return
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		s.logger.Warn("更新最近文件目录记录失败", "user_id", userID, "err", err)
+		return
+	}
+	defer tx.Rollback()
+	accessedAt := time.Now().UTC()
+	for _, item := range items {
+		targetPath := newPath + strings.TrimPrefix(item.path, oldPath)
+		if targetSourceID == sourceID && targetPath == item.path {
+			continue
+		}
+		if _, err := tx.Exec(`INSERT INTO recent_files (user_id, storage_source_id, relative_path, accessed_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(user_id, storage_source_id, relative_path) DO UPDATE SET accessed_at =
+    CASE WHEN recent_files.accessed_at < excluded.accessed_at THEN excluded.accessed_at ELSE recent_files.accessed_at END`,
+			userID, targetSourceID, targetPath, accessedAt); err != nil {
+			s.logger.Warn("更新最近文件目录记录失败", "user_id", userID, "path", targetPath, "err", err)
+			return
+		}
+		if _, err := tx.Exec(`DELETE FROM recent_files WHERE id = ?`, item.id); err != nil {
+			s.logger.Warn("更新最近文件目录记录失败", "user_id", userID, "path", item.path, "err", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		s.logger.Warn("更新最近文件目录记录失败", "user_id", userID, "err", err)
+	}
+}
+
 // --- 文件列表 / 信息 ---
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +290,7 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer unlock()
 	defer f.Close()
+	s.recordRecentFile(CurrentUser(r.Context()).ID, src, relPath)
 
 	// 私有下载默认强制下载 + 不缓存。
 	filename := sanitizeFilename(path.Base("/" + relPath))
@@ -236,6 +333,13 @@ func (s *Server) handleDownloadArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	user := CurrentUser(r.Context())
+	for _, relPath := range req.Paths {
+		entry, statErr := s.files.Stat(src, relPath)
+		if statErr == nil && entry.Type == files.TypeFile {
+			s.recordRecentFile(user.ID, src, relPath)
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": sanitizeFilename(pkg.Filename)}))
@@ -363,6 +467,7 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.fileAudit(r, "upload", src, relPath, "", nil)
+		s.recordRecentFile(CurrentUser(r.Context()).ID, src, relPath)
 		WriteData(w, r, map[string]any{"path": "/" + relPath, "size": size})
 		return
 	}
@@ -474,6 +579,11 @@ func (s *Server) handleRestoreTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.fileAudit(r, "restore", src, entry.OriginalRelativePath, restored.OriginalRelativePath, nil)
+	if entry.EntryType == string(files.TypeFile) {
+		s.recordRecentFile(user.ID, src, restored.OriginalRelativePath)
+	} else if entry.EntryType == string(files.TypeDir) {
+		s.rebaseRecentFiles(user.ID, src.ID, entry.OriginalRelativePath, src.ID, restored.OriginalRelativePath)
+	}
 	WriteData(w, r, restored)
 }
 
@@ -534,12 +644,18 @@ func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r.Context())
+	oldEntry, oldStatErr := s.files.Stat(src, req.Path)
 	newRel, err = s.files.RenameAs(src, req.Path, req.NewName, &user.ID)
 	if err != nil {
 		writeFileError(w, r, err)
 		return
 	}
 	s.fileAudit(r, "rename", src, strings.TrimPrefix(req.Path, "/"), newRel, nil)
+	if oldStatErr == nil && oldEntry.Type == files.TypeFile {
+		s.recordRecentFile(user.ID, src, newRel)
+	} else if oldStatErr == nil && oldEntry.Type == files.TypeDir {
+		s.rebaseRecentFiles(user.ID, src.ID, req.Path, src.ID, newRel)
+	}
 	WriteData(w, r, map[string]any{"path": "/" + newRel})
 }
 
@@ -567,6 +683,7 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r.Context())
+	oldEntry, oldStatErr := s.files.Stat(src, req.Path)
 	result, err := s.files.MoveAcrossSources(src, target, req.Path, req.TargetPath, &user.ID)
 	if err != nil {
 		s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), strings.TrimPrefix(req.TargetPath, "/"), err)
@@ -574,6 +691,11 @@ func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.fileAudit(r, "move", src, strings.TrimPrefix(req.Path, "/"), result.Path, nil)
+	if oldStatErr == nil && oldEntry.Type == files.TypeFile {
+		s.recordRecentFile(user.ID, target, result.Path)
+	} else if oldStatErr == nil && oldEntry.Type == files.TypeDir {
+		s.rebaseRecentFiles(user.ID, src.ID, req.Path, target.ID, result.Path)
+	}
 	result.Path = "/" + result.Path
 	WriteData(w, r, result)
 }
@@ -602,6 +724,7 @@ func (s *Server) handleCopyFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r.Context())
+	oldEntry, oldStatErr := s.files.Stat(src, req.Path)
 	result, err := s.files.Copy(src, target, req.Path, req.TargetPath, &user.ID)
 	if err != nil {
 		s.fileAudit(r, "copy", src, strings.TrimPrefix(req.Path, "/"), strings.TrimPrefix(req.TargetPath, "/"), err)
@@ -609,6 +732,9 @@ func (s *Server) handleCopyFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.fileAudit(r, "copy", src, strings.TrimPrefix(req.Path, "/"), result.Path, nil)
+	if oldStatErr == nil && oldEntry.Type == files.TypeFile {
+		s.recordRecentFile(user.ID, target, result.Path)
+	}
 	result.Path = "/" + result.Path
 	WriteData(w, r, result)
 }

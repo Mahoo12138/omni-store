@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/models"
 )
@@ -336,6 +338,92 @@ func (s *Server) handleMyActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteData(w, r, ListData{Items: out, Total: int64(len(out))})
+}
+
+type RecentFileItem struct {
+	ID         int64     `json:"id"`
+	SourceKey  string    `json:"source_key"`
+	SourceName string    `json:"source_name"`
+	Path       string    `json:"path"`
+	Name       string    `json:"name"`
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modified_at"`
+	AccessedAt string    `json:"accessed_at"`
+}
+
+// handleMyRecentFiles returns recently uploaded/downloaded or reorganized files
+// that still exist and are currently readable by the requesting user.
+func (s *Server) handleMyRecentFiles(w http.ResponseWriter, r *http.Request) {
+	user := CurrentUser(r.Context())
+	limit := 50
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+	rows, err := s.db.Query(`SELECT rf.id, rf.storage_source_id, s.key, s.name, rf.relative_path, rf.accessed_at
+  FROM recent_files rf JOIN storage_sources s ON s.id = rf.storage_source_id
+  WHERE rf.user_id = ? ORDER BY rf.accessed_at DESC, rf.id DESC LIMIT 500`, user.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询最近文件失败", nil)
+		return
+	}
+	type candidate struct {
+		id           int64
+		sourceID     int64
+		sourceKey    string
+		sourceName   string
+		relativePath string
+		accessedAt   string
+	}
+	candidates := make([]candidate, 0, 100)
+	for rows.Next() {
+		var item candidate
+		if err := rows.Scan(&item.id, &item.sourceID, &item.sourceKey, &item.sourceName, &item.relativePath, &item.accessedAt); err != nil {
+			rows.Close()
+			WriteError(w, r, CodeInternalError, "查询最近文件失败", nil)
+			return
+		}
+		candidates = append(candidates, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		WriteError(w, r, CodeInternalError, "查询最近文件失败", nil)
+		return
+	}
+	if err := rows.Close(); err != nil {
+		WriteError(w, r, CodeInternalError, "查询最近文件失败", nil)
+		return
+	}
+
+	items := make([]RecentFileItem, 0, limit)
+	for _, candidate := range candidates {
+		source, err := s.sources.GetByID(candidate.sourceID)
+		if err != nil || source.IsDisabled {
+			continue
+		}
+		allowed, err := s.sources.CanReadPath(user, candidate.sourceKey, candidate.relativePath)
+		if err != nil {
+			WriteError(w, r, CodeInternalError, "检查最近文件权限失败", nil)
+			return
+		}
+		if !allowed {
+			continue
+		}
+		entry, err := s.files.Stat(source, candidate.relativePath)
+		if err != nil || entry.Type != files.TypeFile {
+			continue
+		}
+		items = append(items, RecentFileItem{
+			ID: candidate.id, SourceKey: candidate.sourceKey, SourceName: candidate.sourceName,
+			Path: candidate.relativePath, Name: entry.Name, Size: entry.Size,
+			ModifiedAt: entry.MTime, AccessedAt: candidate.accessedAt,
+		})
+		if len(items) == limit {
+			break
+		}
+	}
+	WriteData(w, r, ListData{Items: items, Total: int64(len(items))})
 }
 
 // humanizeActivity 把 audit action 翻译成中文短句。

@@ -21,11 +21,12 @@ import (
 )
 
 type privateFileAPIFixture struct {
-	handler http.Handler
-	cookie  *http.Cookie
-	csrf    string
-	primary *models.StorageSource
-	archive *models.StorageSource
+	handler     http.Handler
+	cookie      *http.Cookie
+	otherCookie *http.Cookie
+	csrf        string
+	primary     *models.StorageSource
+	archive     *models.StorageSource
 }
 
 func TestPrivateFileAPILifecycle(t *testing.T) {
@@ -74,6 +75,14 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if nestedStat.Code != http.StatusOK {
 		t.Fatalf("relative-path stat status=%d body=%s", nestedStat.Code, nestedStat.Body.String())
 	}
+	recentAfterUpload := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterUpload.Code != http.StatusOK || !strings.Contains(recentAfterUpload.Body.String(), `"path":"docs/note.txt"`) || !strings.Contains(recentAfterUpload.Body.String(), `"path":"docs/blog-images/posts/2026/a.webp"`) {
+		t.Fatalf("recent files after upload status=%d body=%s", recentAfterUpload.Code, recentAfterUpload.Body.String())
+	}
+	otherUserRecent := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.otherCookie, "")
+	if otherUserRecent.Code != http.StatusOK || !strings.Contains(otherUserRecent.Body.String(), `"items":[]`) {
+		t.Fatalf("recent files leaked to another user status=%d body=%s", otherUserRecent.Code, otherUserRecent.Body.String())
+	}
 	invalidRelativeUpload := serveMultipartUploadWithRelativePath(t, fixture, primaryBase+"/upload?path=%2Fdocs", "../escape.txt", []byte("must reject"))
 	assertErrorResponse(t, invalidRelativeUpload, http.StatusBadRequest, CodePathInvalid)
 	absoluteRelativeUpload := serveMultipartUploadWithRelativePath(t, fixture, primaryBase+"/upload?path=%2Fdocs", "/absolute.txt", []byte("must reject"))
@@ -89,6 +98,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	}
 	if rangeResponse.Header().Get("Cache-Control") != "private, no-store" || !strings.Contains(rangeResponse.Header().Get("Content-Disposition"), "note.txt") {
 		t.Fatalf("unexpected private download headers: %v", rangeResponse.Header())
+	}
+	recentAfterDownload := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterDownload.Code != http.StatusOK || strings.Count(recentAfterDownload.Body.String(), `"path":"docs/note.txt"`) != 1 {
+		t.Fatalf("recent files after download status=%d body=%s", recentAfterDownload.Code, recentAfterDownload.Body.String())
 	}
 	archiveBody := `{"paths":["/docs/note.txt","/docs/blog-images"]}`
 	missingArchiveCSRF := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/download/archive", archiveBody, fixture.cookie, "")
@@ -115,6 +128,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if rename.Code != http.StatusOK || !strings.Contains(rename.Body.String(), `"path":"/docs/renamed.txt"`) {
 		t.Fatalf("rename status=%d body=%s", rename.Code, rename.Body.String())
 	}
+	recentAfterRename := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterRename.Code != http.StatusOK || !strings.Contains(recentAfterRename.Body.String(), `"path":"docs/renamed.txt"`) || strings.Contains(recentAfterRename.Body.String(), `"path":"docs/note.txt"`) {
+		t.Fatalf("recent files after rename status=%d body=%s", recentAfterRename.Code, recentAfterRename.Body.String())
+	}
 	copyBody := `{"path":"/docs/renamed.txt","target_source_key":"` + fixture.archive.Key + `","target_path":"/copied.txt"}`
 	copyResponse := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/copy", copyBody, fixture.cookie, fixture.csrf)
 	if copyResponse.Code != http.StatusOK || !strings.Contains(copyResponse.Body.String(), `"path":"/copied.txt"`) {
@@ -125,6 +142,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if moveResponse.Code != http.StatusOK || !strings.Contains(moveResponse.Body.String(), `"path":"/moved.txt"`) {
 		t.Fatalf("move status=%d body=%s", moveResponse.Code, moveResponse.Body.String())
 	}
+	recentAfterMove := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterMove.Code != http.StatusOK || !strings.Contains(recentAfterMove.Body.String(), `"source_key":"`+fixture.primary.Key+`","source_name":"Primary","path":"moved.txt"`) || strings.Contains(recentAfterMove.Body.String(), `"path":"copied.txt"`) {
+		t.Fatalf("recent files after move status=%d body=%s", recentAfterMove.Code, recentAfterMove.Body.String())
+	}
 
 	search := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/search?q=moved&source_key="+url.QueryEscape(fixture.primary.Key)+"&page=1&page_size=20", "", fixture.cookie, "")
 	if search.Code != http.StatusOK || !strings.Contains(search.Body.String(), `"name":"moved.txt"`) {
@@ -132,6 +153,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	}
 
 	trashKey := deleteFileAndGetTrashKey(t, fixture, primaryBase, "/moved.txt")
+	recentAfterDelete := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterDelete.Code != http.StatusOK || strings.Contains(recentAfterDelete.Body.String(), `"path":"moved.txt"`) {
+		t.Fatalf("deleted file remained in recent list status=%d body=%s", recentAfterDelete.Code, recentAfterDelete.Body.String())
+	}
 	trash := serveTestRequest(t, fixture.handler, http.MethodGet, primaryBase+"/trash", "", fixture.cookie, "")
 	if trash.Code != http.StatusOK || !strings.Contains(trash.Body.String(), trashKey) || !strings.Contains(trash.Body.String(), "moved.txt") {
 		t.Fatalf("trash list status=%d body=%s", trash.Code, trash.Body.String())
@@ -144,6 +169,10 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	if restoredStat.Code != http.StatusOK {
 		t.Fatalf("restored stat status=%d body=%s", restoredStat.Code, restoredStat.Body.String())
 	}
+	recentAfterRestore := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterRestore.Code != http.StatusOK || !strings.Contains(recentAfterRestore.Body.String(), `"path":"restored.txt"`) {
+		t.Fatalf("recent files after restore status=%d body=%s", recentAfterRestore.Code, recentAfterRestore.Body.String())
+	}
 
 	restoredTrashKey := deleteFileAndGetTrashKey(t, fixture, primaryBase, "/restored.txt")
 	purge := serveTestRequest(t, fixture.handler, http.MethodDelete, primaryBase+"/trash/"+restoredTrashKey, "", fixture.cookie, fixture.csrf)
@@ -152,6 +181,32 @@ func TestPrivateFileAPILifecycle(t *testing.T) {
 	}
 	afterPurge := serveTestRequest(t, fixture.handler, http.MethodGet, primaryBase+"/files/stat?path=%2Frestored.txt", "", fixture.cookie, "")
 	assertErrorResponse(t, afterPurge, http.StatusNotFound, CodeFileNotFound)
+	createRecentFolder := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/folders", `{"path":"/","name":"recent-folder"}`, fixture.cookie, fixture.csrf)
+	if createRecentFolder.Code != http.StatusOK {
+		t.Fatalf("create recent folder status=%d body=%s", createRecentFolder.Code, createRecentFolder.Body.String())
+	}
+	recentFolderUpload := serveMultipartUpload(t, fixture, primaryBase+"/upload?path=%2Frecent-folder", "inside.txt", []byte("move with parent"))
+	if recentFolderUpload.Code != http.StatusOK {
+		t.Fatalf("upload recent folder file status=%d body=%s", recentFolderUpload.Code, recentFolderUpload.Body.String())
+	}
+	renameRecentFolder := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/rename", `{"path":"/recent-folder","new_name":"recent-folder-renamed"}`, fixture.cookie, fixture.csrf)
+	if renameRecentFolder.Code != http.StatusOK {
+		t.Fatalf("rename recent folder status=%d body=%s", renameRecentFolder.Code, renameRecentFolder.Body.String())
+	}
+	moveRecentFolderBody := `{"path":"/recent-folder-renamed","target_source_key":"` + fixture.archive.Key + `","target_path":"/recent-folder-moved"}`
+	moveRecentFolder := serveTestRequest(t, fixture.handler, http.MethodPost, primaryBase+"/files/move", moveRecentFolderBody, fixture.cookie, fixture.csrf)
+	if moveRecentFolder.Code != http.StatusOK {
+		t.Fatalf("move recent folder status=%d body=%s", moveRecentFolder.Code, moveRecentFolder.Body.String())
+	}
+	recentAfterFolderMove := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/me/recent-files", "", fixture.cookie, "")
+	if recentAfterFolderMove.Code != http.StatusOK || !strings.Contains(recentAfterFolderMove.Body.String(), `"source_key":"`+fixture.archive.Key+`","source_name":"Archive","path":"recent-folder-moved/inside.txt"`) || strings.Contains(recentAfterFolderMove.Body.String(), `"path":"recent-folder/inside.txt"`) {
+		t.Fatalf("recent files after folder move status=%d body=%s", recentAfterFolderMove.Code, recentAfterFolderMove.Body.String())
+	}
+	recentFolderTrashKey := deleteFileAndGetTrashKey(t, fixture, archiveBase, "/recent-folder-moved")
+	purgeRecentFolder := serveTestRequest(t, fixture.handler, http.MethodDelete, archiveBase+"/trash/"+recentFolderTrashKey, "", fixture.cookie, fixture.csrf)
+	if purgeRecentFolder.Code != http.StatusOK {
+		t.Fatalf("purge recent folder status=%d body=%s", purgeRecentFolder.Code, purgeRecentFolder.Body.String())
+	}
 
 	unknownSource := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/sources/src-does-not-exist/files?path=%2F", "", fixture.cookie, "")
 	assertErrorResponse(t, unknownSource, http.StatusNotFound, CodeSourceNotFound)
@@ -176,10 +231,15 @@ func newPrivateFileAPIFixture(t *testing.T) privateFileAPIFixture {
 	cfg.Data.Dir = dataDir
 	cfg.Database.Path = filepath.Join(dataDir, "omnistore.db")
 	cfg.Server.PublicURL = "http://example.test"
+	cfg.Audit.Enabled = false // 最近文件必须独立于可选审计日志工作。
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	httpServer, app := New(cfg, conn, logger)
 
 	user, err := app.users.Create("file-user", "File API User", "file-password", models.RoleUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherUser, err := app.users.Create("other-file-user", "Other File User", "other-password", models.RoleUser)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,12 +271,17 @@ func newPrivateFileAPIFixture(t *testing.T) privateFileAPIFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	otherSessionID, _, err := app.sessions.Create(otherUser.ID, "integration-test-other", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return privateFileAPIFixture{
-		handler: httpServer.Handler,
-		cookie:  &http.Cookie{Name: SessionCookieName(), Value: sessionID},
-		csrf:    csrf,
-		primary: primary,
-		archive: archive,
+		handler:     httpServer.Handler,
+		cookie:      &http.Cookie{Name: SessionCookieName(), Value: sessionID},
+		otherCookie: &http.Cookie{Name: SessionCookieName(), Value: otherSessionID},
+		csrf:        csrf,
+		primary:     primary,
+		archive:     archive,
 	}
 }
 

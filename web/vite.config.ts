@@ -4,7 +4,7 @@ import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
-  const backend = env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
+  const backend = process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
   return {
     plugins: [react(), vanillaExtractPlugin()],
     build: {

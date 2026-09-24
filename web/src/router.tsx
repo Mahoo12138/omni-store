@@ -86,6 +86,12 @@ const searchRoute = createRoute({
   }),
 })
 
+const recentFilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/app/recent',
+  component: lazyRouteComponent(() => import('./pages/RecentFiles'), 'RecentFilesPage'),
+})
+
 interface FileManagerSearch {
   path: string
   page: number
@@ -137,6 +143,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   appRoute,
   searchRoute,
+  recentFilesRoute,
   fileManagerRoute,
   trashRoute,
   imageBedRoute,
