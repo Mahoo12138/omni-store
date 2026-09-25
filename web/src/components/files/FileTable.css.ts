@@ -59,7 +59,7 @@ export const tableWrap = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
   overflowX: 'auto',
-  '@media': { 'screen and (max-width: 640px)': { overflowX: 'hidden' } },
+  '@media': { 'screen and (max-width: 980px)': { overflowX: 'hidden' } },
 })
 
 export const table = style({
@@ -79,7 +79,7 @@ export const th = style({
 })
 
 export const detailHeading = style([th, {
-  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
+  '@media': { 'screen and (max-width: 980px)': { display: 'none' } },
 }])
 
 export const selectionTh = style([
@@ -88,7 +88,7 @@ export const selectionTh = style([
     width: '42px',
     paddingRight: 0,
     textAlign: 'center',
-    '@media': { 'screen and (max-width: 640px)': { width: 44, padding: '12px 0' } },
+    '@media': { 'screen and (max-width: 980px)': { width: 44, padding: '12px 0' } },
   },
 ])
 
@@ -101,7 +101,7 @@ export const row = style({
 
 export const mobileRow = style({
   '@media': {
-    'screen and (max-width: 640px)': {
+    'screen and (max-width: 980px)': {
       display: 'grid',
       gridTemplateColumns: 'minmax(0, 1fr)',
     },
@@ -110,7 +110,7 @@ export const mobileRow = style({
 
 export const selectableRow = style({
   '@media': {
-    'screen and (max-width: 640px)': {
+    'screen and (max-width: 980px)': {
       display: 'grid',
       gridTemplateColumns: '44px minmax(0, 1fr)',
     },
@@ -127,7 +127,7 @@ export const dropTarget = style({
 // 改用 globalStyle 在外层包裹：除最后一行外的单元格显示下边框。
 globalStyle(`${row}:not(:last-child) td`, {
   borderBottom: `1px solid ${vars.color.border}`,
-  '@media': { 'screen and (max-width: 640px)': { borderBottom: 'none' } },
+  '@media': { 'screen and (max-width: 980px)': { borderBottom: 'none' } },
 })
 
 export const td = style({
@@ -137,7 +137,7 @@ export const td = style({
 })
 
 export const detailCell = style([td, {
-  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
+  '@media': { 'screen and (max-width: 980px)': { display: 'none' } },
 }])
 
 export const selectionCell = style([
@@ -147,7 +147,7 @@ export const selectionCell = style([
     paddingRight: 0,
     textAlign: 'center',
     '@media': {
-      'screen and (max-width: 640px)': {
+      'screen and (max-width: 980px)': {
         gridColumn: 1,
         gridRow: '1 / 3',
         display: 'flex',
@@ -165,7 +165,7 @@ export const checkboxTarget = style({
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
-  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
+  '@media': { 'screen and (max-width: 980px)': { width: 44, height: 44 } },
 })
 
 export const nameCell = style([
@@ -173,11 +173,11 @@ export const nameCell = style([
   {
     whiteSpace: 'normal',
     wordBreak: 'break-all',
-    minWidth: '240px',
+    minWidth: '220px',
     width: '100%',
     color: vars.color.text,
     '@media': {
-      'screen and (max-width: 640px)': {
+      'screen and (max-width: 980px)': {
         minWidth: 0,
         padding: '12px 12px 4px 0',
       },
@@ -188,7 +188,7 @@ export const nameCell = style([
 export const mobileMeta = style({
   display: 'none',
   '@media': {
-    'screen and (max-width: 640px)': {
+    'screen and (max-width: 980px)': {
       display: 'block',
       margin: '6px 0 0 32px',
       color: vars.color.textSecondary,
@@ -231,7 +231,7 @@ export const actionsCell = style([
   {
     textAlign: 'right',
     '@media': {
-      'screen and (max-width: 640px)': {
+      'screen and (max-width: 980px)': {
         padding: '2px 8px 8px 0',
         textAlign: 'left',
       },
@@ -246,19 +246,19 @@ export const actions = style({
 })
 
 globalStyle(`${table} thead`, {
-  '@media': { 'screen and (max-width: 640px)': { display: 'block' } },
+  '@media': { 'screen and (max-width: 980px)': { display: 'block' } },
 })
 globalStyle(`${table} tbody`, {
-  '@media': { 'screen and (max-width: 640px)': { display: 'block' } },
+  '@media': { 'screen and (max-width: 980px)': { display: 'block' } },
 })
 globalStyle(`${row}:not(:last-child)`, {
-  '@media': { 'screen and (max-width: 640px)': { borderBottom: `1px solid ${vars.color.border}` } },
+  '@media': { 'screen and (max-width: 980px)': { borderBottom: `1px solid ${vars.color.border}` } },
 })
 globalStyle(`${mobileRow} ${nameCell}`, {
-  '@media': { 'screen and (max-width: 640px)': { paddingLeft: 12 } },
+  '@media': { 'screen and (max-width: 980px)': { paddingLeft: 12 } },
 })
 globalStyle(`${mobileRow} ${actionsCell}`, {
-  '@media': { 'screen and (max-width: 640px)': { paddingLeft: 12 } },
+  '@media': { 'screen and (max-width: 980px)': { paddingLeft: 12 } },
 })
 
 export const actionBtn = style({
@@ -279,7 +279,7 @@ export const actionBtn = style({
       color: vars.color.primary,
     },
   },
-  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
+  '@media': { 'screen and (max-width: 980px)': { width: 44, height: 44 } },
 })
 
 export const actionBtnDanger = style([

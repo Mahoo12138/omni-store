@@ -34,4 +34,7 @@ test('file browsing keeps its actions available on phones and narrow desktops', 
   const desktopTable = page.getByRole('table')
   await expect(desktopTable).toBeVisible()
   expect(await desktopTable.evaluate((element) => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 900, height: 760 })
+  expect(await desktopTable.evaluate((element) => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)
 })
