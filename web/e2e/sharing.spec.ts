@@ -18,7 +18,9 @@ test('password-protected file share can be created, opened and revoked', async (
   const createdDialog = page.getByRole('dialog', { name: '分享已创建' })
   await expect(createdDialog).toBeVisible()
   const shareURL = await createdDialog.getByRole('textbox').inputValue()
-  expect(shareURL).toMatch(/^http:\/\/127\.0\.0\.1:18080\/s\/shr-[a-f0-9]+$/)
+  const shareLocation = new URL(shareURL)
+  expect(shareLocation.origin).toBe(new URL(page.url()).origin)
+  expect(shareLocation.pathname).toMatch(/^\/s\/shr-[a-f0-9]+$/)
 
   await page.goto(shareURL)
   await expect(page.getByRole('heading', { name: '此分享受密码保护' })).toBeVisible()

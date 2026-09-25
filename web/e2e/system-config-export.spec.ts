@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 test('seeded public demo and administrator config export are usable', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '公开网盘' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '公开演示资料', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '打开目录 公开演示资料' })).toBeVisible()
 
   await page.goto('/login')
   await page.getByLabel('用户名').fill('admin')
