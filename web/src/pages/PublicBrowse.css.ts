@@ -1,5 +1,6 @@
-import { keyframes, style } from '@vanilla-extract/css'
+import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
+import * as ft from '../components/files/FileTable.css'
 
 export const readOnlyNotice = style({
   display: 'inline-flex',
@@ -10,6 +11,20 @@ export const readOnlyNotice = style({
   color: vars.color.textSecondary,
   fontSize: vars.fontSize.sm,
   whiteSpace: 'nowrap',
+})
+
+export const browseHeader = style({
+  minHeight: '56px',
+})
+
+export const browsePanel = style({
+  paddingTop: vars.space.sm,
+})
+
+globalStyle(`${browsePanel} > ${ft.tableWrap}`, {
+  border: 0,
+  borderRadius: 0,
+  backgroundColor: 'transparent',
 })
 
 // 视图切换按钮组：列表 / 网格（docs/index.png 右上角）。
@@ -61,6 +76,13 @@ export const grid = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
   padding: vars.space.md,
+})
+
+globalStyle(`${browsePanel} > ${grid}`, {
+  border: 0,
+  borderRadius: 0,
+  padding: 0,
+  backgroundColor: 'transparent',
 })
 
 const gridCardBase = style({

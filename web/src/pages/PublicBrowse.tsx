@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { browsePublic, rawUrl } from '../api/public'
+import { PublicDriveHero } from '../components/layout/PublicDriveHero'
 import { PublicBreadcrumb, PublicShell } from '../components/layout/PublicShell'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
@@ -18,6 +19,7 @@ import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
 import * as ft from '../components/files/FileTable.css'
 import * as css from './PublicBrowse.css'
+import * as homeCss from './Home.css'
 
 type ViewMode = 'list' | 'grid'
 
@@ -59,107 +61,117 @@ export function PublicBrowsePage() {
   }, [browse.data, filter])
 
   return (
-    <PublicShell>
-      <PublicBreadcrumb segments={segments} onNavigate={goTo} />
+    <PublicShell showHeader={false}>
+      <PublicDriveHero />
+      <section
+        className={homeCss.directorySection}
+        aria-label={`公开目录：${segments.join('/')}`}
+      >
+        <header className={`${homeCss.directoryHeader} ${css.browseHeader}`}>
+          <PublicBreadcrumb segments={segments} onNavigate={goTo} />
+        </header>
 
-      <div className={ft.toolbar}>
-        <div className={css.readOnlyNotice} role="note">
-          <IconInfo size={15} />
-          <span>公开目录仅支持预览和下载</span>
-        </div>
-        <div className={ft.toolbarGroup}>
-          <span className={ft.searchBox}>
-            <span className={ft.searchIcon}>
-              <IconSearch size={16} />
-            </span>
-            <input
-              className={ft.searchInput}
-              placeholder="搜索文件或文件夹"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </span>
-          <div className={css.viewToggle} role="tablist" aria-label="视图切换">
-            <button
-              role="tab"
-              aria-selected={view === 'list'}
-              className={view === 'list' ? css.viewToggleBtnActive : css.viewToggleBtn}
-              onClick={() => setView('list')}
-              title="列表视图"
-              aria-label="列表视图"
-            >
-              <IconList size={16} />
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'grid'}
-              className={view === 'grid' ? css.viewToggleBtnActive : css.viewToggleBtn}
-              onClick={() => setView('grid')}
-              title="网格视图"
-              aria-label="网格视图"
-            >
-              <IconGrid size={16} />
-            </button>
-          </div>
-          <Button
-            variant="ghost"
-            aria-label="刷新目录"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['public-browse'] })}
-            title="刷新"
-          >
-            <IconRefresh />
-          </Button>
-        </div>
-      </div>
-
-      {view === 'list' ? (
-        <FileTable
-          entries={browse.isError ? [] : entries}
-          loading={browse.isPending}
-          emptyTitle={browse.isError ? '路径不存在或不可访问' : filter ? '没有匹配的条目' : '目录为空'}
-          emptyHint={browse.isError ? '目录可能已被取消公开。' : undefined}
-          onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
-          fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
-          fileTarget="_blank"
-          renderActions={(entry) =>
-            entry.type === 'file' ? (
-              <span className={ft.actions}>
-                <a
-                  className={ft.actionBtn}
-                  href={rawUrl(`${virtualPath}/${entry.name}`, true)}
-                  aria-label={`下载 ${entry.name}`}
-                  title="下载"
-                >
-                  <IconDownload size={16} />
-                </a>
+        <div className={`${homeCss.directoryPanel} ${css.browsePanel}`}>
+          <div className={ft.toolbar}>
+            <div className={css.readOnlyNotice} role="note">
+              <IconInfo size={15} />
+              <span>公开目录仅支持预览和下载</span>
+            </div>
+            <div className={ft.toolbarGroup}>
+              <span className={ft.searchBox}>
+                <span className={ft.searchIcon}>
+                  <IconSearch size={16} />
+                </span>
+                <input
+                  className={ft.searchInput}
+                  placeholder="搜索文件或文件夹"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
               </span>
-            ) : null
-          }
-        />
-      ) : (
-        <FileGrid
-          entries={browse.isError ? [] : entries}
-          loading={browse.isPending}
-          onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
-          virtualPath={virtualPath}
-        />
-      )}
+              <div className={css.viewToggle} role="tablist" aria-label="视图切换">
+                <button
+                  role="tab"
+                  aria-selected={view === 'list'}
+                  className={view === 'list' ? css.viewToggleBtnActive : css.viewToggleBtn}
+                  onClick={() => setView('list')}
+                  title="列表视图"
+                  aria-label="列表视图"
+                >
+                  <IconList size={16} />
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={view === 'grid'}
+                  className={view === 'grid' ? css.viewToggleBtnActive : css.viewToggleBtn}
+                  onClick={() => setView('grid')}
+                  title="网格视图"
+                  aria-label="网格视图"
+                >
+                  <IconGrid size={16} />
+                </button>
+              </div>
+              <Button
+                variant="ghost"
+                aria-label="刷新目录"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['public-browse'] })}
+                title="刷新"
+              >
+                <IconRefresh />
+              </Button>
+            </div>
+          </div>
 
-      {browse.isSuccess && (browse.data.has_next || page > 1) && (
-        <div className={ft.pager}>
-          <span>共 {browse.data.total} 项</span>
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            上一页
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!browse.data.has_next}
-            onClick={() => setPage(page + 1)}
-          >
-            下一页
-          </Button>
+          {view === 'list' ? (
+            <FileTable
+              entries={browse.isError ? [] : entries}
+              loading={browse.isPending}
+              emptyTitle={browse.isError ? '路径不存在或不可访问' : filter ? '没有匹配的条目' : '目录为空'}
+              emptyHint={browse.isError ? '目录可能已被取消公开。' : undefined}
+              onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+              fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
+              fileTarget="_blank"
+              renderActions={(entry) =>
+                entry.type === 'file' ? (
+                  <span className={ft.actions}>
+                    <a
+                      className={ft.actionBtn}
+                      href={rawUrl(`${virtualPath}/${entry.name}`, true)}
+                      aria-label={`下载 ${entry.name}`}
+                      title="下载"
+                    >
+                      <IconDownload size={16} />
+                    </a>
+                  </span>
+                ) : null
+              }
+            />
+          ) : (
+            <FileGrid
+              entries={browse.isError ? [] : entries}
+              loading={browse.isPending}
+              onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+              virtualPath={virtualPath}
+            />
+          )}
+
+          {browse.isSuccess && (browse.data.has_next || page > 1) && (
+            <div className={ft.pager}>
+              <span>共 {browse.data.total} 项</span>
+              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                上一页
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!browse.data.has_next}
+                onClick={() => setPage(page + 1)}
+              >
+                下一页
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </section>
     </PublicShell>
   )
 }

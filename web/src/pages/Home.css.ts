@@ -232,11 +232,7 @@ export const directoryHeader = style({
   },
 })
 
-globalStyle(`${directoryHeader} > div`, {
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: '12px',
-})
+globalStyle(`${directoryHeader} > div`, { display: 'flex', alignItems: 'center' })
 
 globalStyle(`${directoryHeader} h2`, {
   margin: 0,
@@ -251,82 +247,160 @@ globalStyle(`${directoryHeader} p`, {
   fontSize: vars.fontSize.sm,
 })
 
-export const indexNumber = style({
-  color: vars.color.primary,
-  fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.xs,
-  fontWeight: 650,
-})
-
 export const directoryPanel = style({
   minHeight: 216,
+  padding: vars.space.md,
   borderTopLeftRadius: 0,
   borderTopRightRadius: 0,
+  border: `1px solid ${vars.color.border}`,
+  borderTop: 0,
+  borderBottomLeftRadius: vars.radius.lg,
+  borderBottomRightRadius: vars.radius.lg,
+  backgroundColor: vars.color.surface,
+  overflow: 'hidden',
   boxShadow: vars.shadow.sm,
 })
 
-export const directoryTable = style({
-  tableLayout: 'auto',
-})
-
-export const directoryRow = style({
-  selectors: {
-    '&:hover': { background: vars.color.primarySubtle },
+export const mountGrid = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+  gap: vars.space.sm,
+  '@media': {
+    'screen and (max-width: 480px)': {
+      gridTemplateColumns: '1fr',
+    },
   },
 })
 
-export const openHeading = style({
-  width: 64,
-  borderBottom: `1px solid ${vars.color.border}`,
+export const mountCard = style({
+  minWidth: 0,
+  minHeight: 166,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  gap: vars.space.sm,
+  padding: vars.space.md,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  backgroundColor: vars.color.surface,
+  color: vars.color.text,
+  textAlign: 'left',
+  fontFamily: vars.font.body,
+  cursor: 'pointer',
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}, box-shadow ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: {
+    '&:hover': {
+      borderColor: vars.color.borderStrong,
+      backgroundColor: vars.color.surfaceHover,
+      boxShadow: vars.shadow.sm,
+      transform: 'translateY(-1px)',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${vars.color.primary}`,
+      outlineOffset: '2px',
+    },
+    '&:active': { transform: 'translateY(0)' },
+  },
 })
 
-export const openCell = style({
-  width: 64,
-  padding: `8px ${vars.space.md}`,
-  textAlign: 'right',
-  whiteSpace: 'nowrap',
+export const mountCardTop = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
 })
 
-globalStyle(`${directoryRow}:not(:last-child) ${openCell}`, {
-  borderBottom: `1px solid ${vars.color.border}`,
-})
-
-globalStyle(`${openCell} button`, {
-  width: 36,
-  height: 36,
+export const mountIcon = style({
+  width: 38,
+  height: 34,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  background: vars.color.surface,
-  color: vars.color.textSecondary,
-  cursor: 'pointer',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
-})
-
-globalStyle(`${openCell} button:hover`, {
-  borderColor: vars.color.primary,
-  background: vars.color.primary,
-  color: vars.color.textOnPrimary,
-})
-
-globalStyle(`${openCell} button:active`, {
-  transform: 'translateX(1px)',
-})
-
-export const path = style({
-  padding: '3px 6px',
+  flexShrink: 0,
   borderRadius: vars.radius.sm,
-  background: vars.color.background,
+  backgroundColor: vars.color.primarySubtle,
+  color: vars.color.primary,
+})
+
+export const mountKind = style({
   color: vars.color.textSecondary,
-  fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
 })
 
-export const loadingState = style({
-  padding: `${vars.space.sm} 0`,
+export const mountArrow = style({
+  marginLeft: 'auto',
+  color: vars.color.textSecondary,
+  transition: `transform ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
+  selectors: {
+    [`${mountCard}:hover &`]: { color: vars.color.primary, transform: 'translateX(2px)' },
+  },
 })
+
+export const mountName = style({
+  overflow: 'hidden',
+  color: vars.color.text,
+  fontSize: vars.fontSize.lg,
+  fontWeight: 650,
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+export const mountPath = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+})
+
+globalStyle(`${mountPath} code`, {
+  minWidth: 0,
+  overflow: 'hidden',
+  padding: '2px 6px',
+  borderRadius: vars.radius.sm,
+  backgroundColor: vars.color.background,
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+export const mountDescription = style({
+  display: '-webkit-box',
+  overflow: 'hidden',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  lineHeight: 1.45,
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  textWrap: 'pretty',
+})
+
+export const mountSkeleton = style({
+  minHeight: 166,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
+  gap: vars.space.sm,
+  padding: vars.space.md,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+})
+
+const skeletonBlock = style({
+  display: 'block',
+  height: '12px',
+  borderRadius: vars.radius.sm,
+  background: `linear-gradient(90deg, ${vars.color.surfaceHover} 25%, ${vars.color.border} 50%, ${vars.color.surfaceHover} 75%)`,
+  backgroundSize: '200% 100%',
+})
+
+export const mountSkeletonIcon = style([
+  skeletonBlock,
+  { width: '36px', height: '34px' },
+])
+
+export const mountSkeletonLine = style([skeletonBlock, { width: '58%' }])
+export const mountSkeletonLineShort = style([skeletonBlock, { width: '82%' }])
 
 export const emptyState = style({
   minHeight: 216,
