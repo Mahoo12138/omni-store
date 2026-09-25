@@ -12,13 +12,10 @@ async function expectLocalHorizontalScroll(page: Page, regionName: string) {
   const region = page.getByRole('region', { name: regionName, exact: true })
   await expect(region).toBeVisible()
 
-  const metrics = await region.evaluate((element) => ({
-    clientWidth: element.clientWidth,
-    scrollWidth: element.scrollWidth,
-    overflowX: getComputedStyle(element).overflowX,
-  }))
-  expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth)
-  expect(metrics.overflowX).toBe('auto')
+  // Source rows load asynchronously; wait for their content to make the region scrollable.
+  await expect.poll(() => region.evaluate((element) => element.scrollWidth - element.clientWidth))
+    .toBeGreaterThan(0)
+  await expect(region).toHaveCSS('overflow-x', 'auto')
 
   await region.evaluate((element) => { element.scrollLeft = 0 })
   await region.hover()
