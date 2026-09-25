@@ -59,6 +59,7 @@ export const tableWrap = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
   overflowX: 'auto',
+  '@media': { 'screen and (max-width: 640px)': { overflowX: 'hidden' } },
 })
 
 export const table = style({
@@ -77,12 +78,17 @@ export const th = style({
   whiteSpace: 'nowrap',
 })
 
+export const detailHeading = style([th, {
+  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
+}])
+
 export const selectionTh = style([
   th,
   {
     width: '42px',
     paddingRight: 0,
     textAlign: 'center',
+    '@media': { 'screen and (max-width: 640px)': { width: 44, padding: '12px 0' } },
   },
 ])
 
@@ -90,6 +96,24 @@ export const row = style({
   transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
     '&:hover': { backgroundColor: vars.color.surfaceHover },
+  },
+})
+
+export const mobileRow = style({
+  '@media': {
+    'screen and (max-width: 640px)': {
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
+  },
+})
+
+export const selectableRow = style({
+  '@media': {
+    'screen and (max-width: 640px)': {
+      display: 'grid',
+      gridTemplateColumns: '44px minmax(0, 1fr)',
+    },
   },
 })
 
@@ -103,6 +127,7 @@ export const dropTarget = style({
 // 改用 globalStyle 在外层包裹：除最后一行外的单元格显示下边框。
 globalStyle(`${row}:not(:last-child) td`, {
   borderBottom: `1px solid ${vars.color.border}`,
+  '@media': { 'screen and (max-width: 640px)': { borderBottom: 'none' } },
 })
 
 export const td = style({
@@ -111,14 +136,37 @@ export const td = style({
   color: vars.color.textSecondary,
 })
 
+export const detailCell = style([td, {
+  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
+}])
+
 export const selectionCell = style([
   td,
   {
     width: '42px',
     paddingRight: 0,
     textAlign: 'center',
+    '@media': {
+      'screen and (max-width: 640px)': {
+        gridColumn: 1,
+        gridRow: '1 / 3',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        width: '44px',
+        padding: 0,
+      },
+    },
   },
 ])
+
+export const checkboxTarget = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
+})
 
 export const nameCell = style([
   td,
@@ -128,8 +176,27 @@ export const nameCell = style([
     minWidth: '240px',
     width: '100%',
     color: vars.color.text,
+    '@media': {
+      'screen and (max-width: 640px)': {
+        minWidth: 0,
+        padding: '12px 12px 4px 0',
+      },
+    },
   },
 ])
+
+export const mobileMeta = style({
+  display: 'none',
+  '@media': {
+    'screen and (max-width: 640px)': {
+      display: 'block',
+      margin: '6px 0 0 32px',
+      color: vars.color.textSecondary,
+      fontSize: vars.fontSize.xs,
+      wordBreak: 'normal',
+    },
+  },
+})
 
 export const nameInner = style({
   display: 'flex',
@@ -163,6 +230,12 @@ export const actionsCell = style([
   td,
   {
     textAlign: 'right',
+    '@media': {
+      'screen and (max-width: 640px)': {
+        padding: '2px 8px 8px 0',
+        textAlign: 'left',
+      },
+    },
   },
 ])
 
@@ -170,6 +243,22 @@ export const actions = style({
   display: 'inline-flex',
   alignItems: 'center',
   gap: '2px',
+})
+
+globalStyle(`${table} thead`, {
+  '@media': { 'screen and (max-width: 640px)': { display: 'block' } },
+})
+globalStyle(`${table} tbody`, {
+  '@media': { 'screen and (max-width: 640px)': { display: 'block' } },
+})
+globalStyle(`${row}:not(:last-child)`, {
+  '@media': { 'screen and (max-width: 640px)': { borderBottom: `1px solid ${vars.color.border}` } },
+})
+globalStyle(`${mobileRow} ${nameCell}`, {
+  '@media': { 'screen and (max-width: 640px)': { paddingLeft: 12 } },
+})
+globalStyle(`${mobileRow} ${actionsCell}`, {
+  '@media': { 'screen and (max-width: 640px)': { paddingLeft: 12 } },
 })
 
 export const actionBtn = style({
@@ -190,6 +279,7 @@ export const actionBtn = style({
       color: vars.color.primary,
     },
   },
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 export const actionBtnDanger = style([

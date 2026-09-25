@@ -43,18 +43,20 @@ export const uploadRow = style({
   gap: 16,
   alignItems: 'stretch',
   '@media': {
-    'screen and (max-width: 980px)': { gridTemplateColumns: '1fr' },
+    'screen and (max-width: 980px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
 })
 
 export const panel = style({
   ...card,
+  minWidth: 0,
   minHeight: 314,
   padding: 12,
 })
 
 export const dropZone = style({
   width: '100%',
+  minWidth: 0,
   height: '100%',
   minHeight: 288,
   display: 'flex',
@@ -96,7 +98,7 @@ export const uploadIcon = style({
 })
 
 export const uploadTitle = style({ fontSize: '15px', fontWeight: 600 })
-export const uploadHint = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs })
+export const uploadHint = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.xs, overflowWrap: 'anywhere' })
 export const hiddenInput = style({ display: 'none' })
 
 export const panelHeading = style({
@@ -130,6 +132,7 @@ export const infoButton = style({
     '&:hover': { background: vars.color.primarySubtle, borderColor: vars.color.primary },
     '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
   },
+  '@media': { 'screen and (max-width: 640px)': { minHeight: 44 } },
 })
 
 export const sectionTitle = style({ margin: 0, fontSize: vars.fontSize.md, fontWeight: 650 })
@@ -210,6 +213,7 @@ export const copyButton = style({
   fontSize: '10px',
   cursor: 'pointer',
   selectors: { '&:hover': { background: vars.color.primarySubtle } },
+  '@media': { 'screen and (max-width: 640px)': { minWidth: 44, minHeight: 44, justifyContent: 'center' } },
 })
 
 export const inlineLink = style({
@@ -229,6 +233,7 @@ export const historyHeader = style({
   justifyContent: 'space-between',
   gap: vars.space.md,
   marginBottom: 8,
+  '@media': { 'screen and (max-width: 640px)': { flexWrap: 'wrap' } },
 })
 
 export const historyTitleWrap = style({ display: 'flex', alignItems: 'center', gap: 8 })
@@ -247,6 +252,7 @@ export const iconButton = style({
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
   selectors: { '&:hover': { color: vars.color.primary, background: vars.color.primarySubtle } },
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 export const historyTools = style({ display: 'flex', alignItems: 'center', gap: 8 })
@@ -270,6 +276,7 @@ export const viewButton = style({
   border: 0,
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 export const viewButtonActive = style([viewButton, {
@@ -361,6 +368,7 @@ export const actionButton = style({
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
   selectors: { '&:hover': { color: vars.color.primary, borderColor: vars.color.primary } },
+  '@media': { 'screen and (max-width: 640px)': { height: 44 } },
 })
 
 export const deleteButton = style([actionButton, {

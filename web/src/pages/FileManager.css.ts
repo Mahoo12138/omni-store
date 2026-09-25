@@ -43,7 +43,7 @@ export const layout = style({
   gap: vars.space.lg,
   alignItems: 'start',
   '@media': {
-    'screen and (max-width: 980px)': {
+    'screen and (max-width: 1400px)': {
       gridTemplateColumns: 'minmax(0, 1fr)',
     },
   },
@@ -63,7 +63,7 @@ export const sideCol = style({
   position: 'sticky',
   top: '88px',
   '@media': {
-    'screen and (max-width: 980px)': {
+    'screen and (max-width: 1400px)': {
       position: 'static',
     },
   },
@@ -271,6 +271,7 @@ export const uploadToastClose = style({
       outlineOffset: '2px',
     },
   },
+  '@media': { 'screen and (max-width: 820px)': { minHeight: 44, padding: '8px 12px' } },
 })
 
 export const uploadToastProgressTrack = style({
@@ -320,6 +321,7 @@ export const uploadToastAction = style({
       outlineOffset: '2px',
     },
   },
+  '@media': { 'screen and (max-width: 820px)': { minHeight: 44, padding: '8px 12px' } },
 })
 
 export const dialogHint = style({
@@ -351,6 +353,7 @@ export const selectionToolbarActions = style({
   alignItems: 'center',
   gap: vars.space.sm,
   marginLeft: 'auto',
+  '@media': { 'screen and (max-width: 640px)': { width: '100%', marginLeft: 0, flexWrap: 'wrap' } },
 })
 
 export const selectionClear = style({
@@ -360,6 +363,7 @@ export const selectionClear = style({
   color: vars.color.textSecondary,
   cursor: 'pointer',
   fontSize: vars.fontSize.sm,
+  '@media': { 'screen and (max-width: 640px)': { minHeight: 44, padding: '8px 12px' } },
 })
 
 // --- 面包屑 ---
@@ -424,6 +428,7 @@ export const toolbar = style({
   backgroundColor: 'oklch(1 0 0 / 0.7)',
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.lg,
+  '@media': { 'screen and (max-width: 640px)': { padding: vars.space.sm } },
 })
 
 export const toolbarLocation = style({
@@ -437,12 +442,14 @@ export const toolbarLocation = style({
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
+  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
 })
 
 export const searchBox = style({
   position: 'relative',
   display: 'inline-flex',
   alignItems: 'center',
+  '@media': { 'screen and (max-width: 640px)': { width: '100%' } },
 })
 
 export const searchIcon = style({
@@ -469,6 +476,7 @@ export const searchInput = style({
     '&::placeholder': { color: vars.color.textSecondary },
     '&:focus': { borderColor: vars.color.primary },
   },
+  '@media': { 'screen and (max-width: 640px)': { width: '100%', height: 44, fontSize: '16px' } },
 })
 
 export const viewToggle = style({
@@ -493,6 +501,7 @@ export const viewBtn = style({
   selectors: {
     '&:hover': { color: vars.color.text },
   },
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 export const viewBtnActive = style([
@@ -527,6 +536,7 @@ export const iconBtn = style({
       color: vars.color.text,
     },
   },
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 // --- 表格行内的操作列 ---
@@ -555,6 +565,7 @@ export const actionBtn = style({
       color: vars.color.primary,
     },
   },
+  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
 })
 
 export const actionBtnDanger = style([
@@ -575,6 +586,103 @@ export const actionMenuTrigger = style([
     flexShrink: 0,
   },
 ])
+
+export const gridWrap = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+  gap: 12,
+  padding: 12,
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  '@media': { 'screen and (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' } },
+})
+
+export const gridCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 6,
+  padding: 12,
+  borderRadius: vars.radius.md,
+  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
+  '@media': {
+    'screen and (max-width: 640px)': {
+      display: 'grid',
+      gridTemplateColumns: '48px minmax(0, 1fr)',
+      gap: '4px 12px',
+      alignItems: 'center',
+      border: `1px solid ${vars.color.border}`,
+    },
+  },
+})
+
+export const gridSelect = style({
+  alignSelf: 'flex-start',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: vars.fontSize.xs,
+  cursor: 'pointer',
+  '@media': {
+    'screen and (max-width: 640px)': {
+      gridColumn: 1,
+      gridRow: 1,
+      width: 44,
+      height: 44,
+      justifyContent: 'center',
+    },
+  },
+})
+
+globalStyle(`${gridSelect} span`, {
+  '@media': { 'screen and (max-width: 640px)': { display: 'none' } },
+})
+
+export const gridIcon = style({
+  width: 64,
+  height: 64,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  '@media': { 'screen and (max-width: 640px)': { gridColumn: 1, gridRow: 2, width: 48, height: 48 } },
+})
+
+export const gridName = style({
+  maxWidth: '100%',
+  padding: 0,
+  border: 0,
+  background: 'transparent',
+  color: vars.color.text,
+  font: 'inherit',
+  fontSize: vars.fontSize.sm,
+  textAlign: 'center',
+  textDecoration: 'none',
+  wordBreak: 'break-all',
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': { color: vars.color.primary },
+    '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
+  },
+  '@media': {
+    'screen and (max-width: 640px)': {
+      gridColumn: 2,
+      gridRow: 1,
+      minHeight: 44,
+      display: 'flex',
+      alignItems: 'center',
+      textAlign: 'left',
+    },
+  },
+})
+
+export const gridActions = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+  gap: 4,
+  '@media': { 'screen and (max-width: 640px)': { gridColumn: 2, gridRow: 2, justifyContent: 'flex-start' } },
+})
 
 // --- 分页 ---
 
@@ -597,6 +705,7 @@ export const pagerNav = style({
   display: 'inline-flex',
   alignItems: 'center',
   gap: '4px',
+  '@media': { 'screen and (max-width: 640px)': { flexWrap: 'wrap' } },
 })
 
 export const pagerBtn = style({
@@ -623,6 +732,7 @@ export const pagerBtn = style({
       cursor: 'not-allowed',
     },
   },
+  '@media': { 'screen and (max-width: 640px)': { minWidth: 44, height: 44 } },
 })
 
 export const pagerBtnActive = style([
@@ -705,7 +815,7 @@ export const emptyShell = style({
   gap: vars.space.lg,
   alignItems: 'start',
   '@media': {
-    'screen and (max-width: 980px)': {
+    'screen and (max-width: 1400px)': {
       gridTemplateColumns: 'minmax(0, 1fr)',
     },
   },

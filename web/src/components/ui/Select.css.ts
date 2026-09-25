@@ -53,8 +53,9 @@ export const triggerSize = styleVariants({
     height: 32,
     padding: `0 ${vars.space.sm}`,
     fontSize: vars.fontSize.sm,
+    '@media': { 'screen and (max-width: 820px)': { height: 44 } },
   },
-  default: { height: 36 },
+  default: { height: 36, '@media': { 'screen and (max-width: 820px)': { height: 44 } } },
   large: {
     height: 52,
     padding: `0 ${vars.space.sm}`,
@@ -177,6 +178,7 @@ export const item = style({
       cursor: 'not-allowed',
     },
   },
+  '@media': { 'screen and (max-width: 820px)': { minHeight: 44 } },
 })
 
 export const itemText = style({

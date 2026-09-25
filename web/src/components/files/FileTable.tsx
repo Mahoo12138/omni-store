@@ -53,23 +53,25 @@ export function FileTable({
     <div className={css.tableWrap}>
       <table className={css.table}>
         <thead>
-          <tr>
+          <tr className={selectable ? css.selectableRow : css.mobileRow}>
             {selectable && (
               <th className={css.selectionTh}>
-                <input
-                  type="checkbox"
-                  aria-label="选择当前页全部条目"
-                  checked={allSelected}
-                  onChange={(event) => onToggleAll?.(event.target.checked)}
-                />
+                <label className={css.checkboxTarget}>
+                  <input
+                    type="checkbox"
+                    aria-label="选择当前页全部条目"
+                    checked={allSelected}
+                    onChange={(event) => onToggleAll?.(event.target.checked)}
+                  />
+                </label>
               </th>
             )}
             <th className={css.th}>名称</th>
-            {showType && <th className={css.th}>类型</th>}
-            <th className={css.th}>大小</th>
-            <th className={css.th}>修改时间</th>
+            {showType && <th className={css.detailHeading}>类型</th>}
+            <th className={css.detailHeading}>大小</th>
+            <th className={css.detailHeading}>修改时间</th>
             {renderActions && (
-              <th className={css.th} aria-label="操作" />
+              <th className={css.detailHeading} aria-label="操作" />
             )}
           </tr>
         </thead>
@@ -81,7 +83,7 @@ export function FileTable({
               items={contextMenuItems?.(entry) ?? []}
               trigger={
                 <tr
-                  className={`${css.row} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
+                  className={`${css.row} ${selectable ? css.selectableRow : css.mobileRow} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
                   draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
                   onDragStart={onDragEntryStart ? (event) => {
                     if (entry.type === 'unsupported') {
@@ -110,13 +112,15 @@ export function FileTable({
                 >
               {selectable && (
                 <td className={css.selectionCell}>
-                  <input
-                    type="checkbox"
-                    aria-label={`选择 ${entry.name}`}
-                    checked={selectedNames?.has(entry.name) ?? false}
-                    disabled={entry.type === 'unsupported'}
-                    onChange={(event) => onToggleSelected?.(entry.name, event.target.checked)}
-                  />
+                  <label className={css.checkboxTarget}>
+                    <input
+                      type="checkbox"
+                      aria-label={`选择 ${entry.name}`}
+                      checked={selectedNames?.has(entry.name) ?? false}
+                      disabled={entry.type === 'unsupported'}
+                      onChange={(event) => onToggleSelected?.(entry.name, event.target.checked)}
+                    />
+                  </label>
                 </td>
               )}
               <td className={css.nameCell}>
@@ -141,10 +145,13 @@ export function FileTable({
                     <span className={css.nameMuted}>{entry.name}（符号链接，不支持）</span>
                   )}
                 </span>
+                <span className={css.mobileMeta}>
+                  {entry.type === 'file' ? formatBytes(entry.size) : '文件夹'} · {formatDate(entry.mtime)}
+                </span>
               </td>
-              {showType && <td className={css.td}>{entry.type === 'dir' ? '文件夹' : guessType(entry.name)}</td>}
-              <td className={css.td}>{entry.type === 'file' ? formatBytes(entry.size) : '–'}</td>
-              <td className={css.td}>{formatDate(entry.mtime)}</td>
+              {showType && <td className={css.detailCell}>{entry.type === 'dir' ? '文件夹' : guessType(entry.name)}</td>}
+              <td className={css.detailCell}>{entry.type === 'file' ? formatBytes(entry.size) : '–'}</td>
+              <td className={css.detailCell}>{formatDate(entry.mtime)}</td>
               {renderActions && <td className={css.actionsCell}>{renderActions(entry)}</td>}
                 </tr>
               }

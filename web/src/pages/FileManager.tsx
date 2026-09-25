@@ -36,6 +36,7 @@ import { Select } from '../components/ui/Select'
 import { appStatusToastID, toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
 import { Tooltip } from '../components/ui/Tooltip'
 import {
+  EntryIcon,
   IconChevronLeft,
   IconChevronRight,
   IconCheck,
@@ -1022,6 +1023,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               entries={entries}
               loading={filesQuery.isPending}
               onOpenDir={goTo}
+              fileHref={(entry) => downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)}
               onDelete={(name, type) => setDeleteTarget({ name, type })}
               onRename={(name) => setRenameTarget({ name })}
               onCopy={(name) => {
@@ -1824,6 +1826,7 @@ function GridView({
   entries,
   loading,
   onOpenDir,
+  fileHref,
   onDelete,
   onRename,
   onCopy,
@@ -1842,6 +1845,7 @@ function GridView({
   entries: FileEntry[]
   loading?: boolean
   onOpenDir: (name: string) => void
+  fileHref: (entry: FileEntry) => string
   onDelete: (name: string, type: string) => void
   onRename: (name: string) => void
   onCopy: (name: string) => void
@@ -1869,17 +1873,7 @@ function GridView({
     )
   }
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-        gap: 12,
-        padding: 12,
-        background: vars.color.surface,
-        border: `1px solid ${vars.color.border}`,
-        borderRadius: vars.radius.lg,
-      }}
-    >
+    <div className={css.gridWrap}>
       {entries.map((e) => (
         <ContextMenu
           key={e.name}
@@ -1888,15 +1882,8 @@ function GridView({
           trigger={
             <div
               draggable={Boolean(onDragEntryStart && e.type !== 'unsupported')}
+          className={css.gridCard}
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            padding: 12,
-            borderRadius: vars.radius.md,
-            cursor: 'pointer',
-            transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
             background: dropTargetName === e.name ? vars.color.primarySubtle : undefined,
             outline: dropTargetName === e.name ? `2px solid ${vars.color.primary}` : undefined,
           }}
@@ -1927,7 +1914,7 @@ function GridView({
           onDoubleClick={() => e.type === 'dir' && onOpenDir(e.name)}
         >
           {e.type !== 'unsupported' && (
-            <label style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <label className={css.gridSelect}>
               <input
                 type="checkbox"
                 aria-label={`选择 ${e.name}`}
@@ -1935,21 +1922,27 @@ function GridView({
                 onChange={(event) => onToggleSelected(e.name, event.target.checked)}
                 onClick={(event) => event.stopPropagation()}
               />
-              选择
+              <span>选择</span>
             </label>
           )}
           <div
+            className={css.gridIcon}
             onClick={() => e.type === 'dir' && onOpenDir(e.name)}
-            style={{ width: 64, height: 64, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
           >
             {/* 通过名称展示类型图标 */}
             {e.type === 'dir' ? <IconCloud size={48} style={{ color: 'oklch(0.72 0.13 75)' }} /> : (
-              <div style={{ fontSize: 11, color: vars.color.textSecondary }}>{e.name}</div>
+              <EntryIcon name={e.name} type={e.type} />
             )}
           </div>
-          <span style={{ fontSize: vars.fontSize.sm, textAlign: 'center', wordBreak: 'break-all' }}>{e.name}</span>
+          {e.type === 'dir' ? (
+            <button type="button" className={css.gridName} onClick={() => onOpenDir(e.name)}>{e.name}</button>
+          ) : e.type === 'file' ? (
+            <a className={css.gridName} href={fileHref(e)}>{e.name}</a>
+          ) : (
+            <span className={css.gridName}>{e.name}</span>
+          )}
           {e.type !== 'unsupported' && (
-            <span style={{ display: 'flex', gap: 4 }}>
+            <span className={css.gridActions}>
               <button
                 className={css.actionBtn}
                 aria-label={`${isFavorite(e.name) ? '取消收藏' : '收藏'} ${e.name}`}
