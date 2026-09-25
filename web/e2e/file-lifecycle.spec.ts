@@ -15,7 +15,7 @@ test('uploaded file is searchable, recoverable and permanently removable', async
     mimeType: 'text/plain',
     buffer: Buffer.from('OmniStore release lifecycle E2E\n'),
   })
-  await expect(page.getByRole('status')).toContainText('已上传 1 个文件')
+  await expect(page.getByRole('status', { name: '上传任务' })).toContainText('已上传 1 个文件')
   let row = page.getByRole('row', { name: new RegExp(fileName) })
   await expect(row).toBeVisible()
 
@@ -50,7 +50,7 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   await row.getByRole('button', { name: `更多操作 ${fileName}` }).click()
   await page.getByRole('menuitem', { name: '删除', exact: true }).click()
   await page.getByRole('dialog', { name: '移入回收站' }).getByRole('button', { name: '移入回收站' }).click()
-  await expect(page.getByRole('status')).toContainText(`已将 ${fileName} 移入回收站`)
+  await expect(page.getByText(`已将 ${fileName} 移入回收站。`)).toBeVisible()
   await expect(row).toHaveCount(0)
 
   await page.getByRole('button', { name: '回收站' }).click()
@@ -58,7 +58,7 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   await expect(row).toBeVisible()
   await row.getByRole('button', { name: '恢复' }).click()
   await page.getByRole('dialog', { name: '恢复文件' }).getByRole('button', { name: '恢复', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText(`已恢复 ${fileName}`)
+  await expect(page.getByText(`已恢复 ${fileName}`)).toBeVisible()
 
   await page.getByRole('button', { name: '返回 团队文件' }).click()
   row = page.getByRole('row', { name: new RegExp(fileName) })
@@ -71,6 +71,6 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   row = page.getByRole('row', { name: new RegExp(fileName) })
   await row.getByRole('button', { name: '永久删除' }).click()
   await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除' }).click()
-  await expect(page.getByRole('status')).toContainText(`已永久删除 ${fileName}`)
+  await expect(page.getByText(`已永久删除 ${fileName}`)).toBeVisible()
   await expect(row).toHaveCount(0)
 })

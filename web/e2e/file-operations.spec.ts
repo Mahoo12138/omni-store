@@ -53,7 +53,7 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
 
   await page.getByRole('row', { name: new RegExp(pasteDestinationName) }).getByRole('button', { name: pasteDestinationName, exact: true }).click()
   await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
-  await expect(page.getByRole('status')).toContainText('已粘贴 1 项')
+  await expect(page.getByRole('status', { name: '粘贴任务' })).toContainText('已粘贴 1 项')
   await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
 
   row = page.getByRole('row', { name: new RegExp(renamedName) })
@@ -63,7 +63,7 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
   await page.getByRole('row', { name: new RegExp(moveDestinationName) }).getByRole('button', { name: moveDestinationName, exact: true }).click()
   await page.getByRole('region', { name: '文件剪贴板' }).getByRole('button', { name: '粘贴到此处' }).click()
-  await expect(page.getByRole('status')).toContainText('已粘贴 1 项')
+  await expect(page.getByRole('status', { name: '粘贴任务' })).toContainText('已粘贴 1 项')
   await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
 
   await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()

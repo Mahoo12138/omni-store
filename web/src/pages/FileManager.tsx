@@ -33,7 +33,7 @@ import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { Menu, type MenuOption } from '../components/ui/Menu'
 import { Select } from '../components/ui/Select'
-import { appStatusToastID, toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
+import { toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
 import { Tooltip } from '../components/ui/Tooltip'
 import {
   EntryIcon,
@@ -1226,7 +1226,7 @@ function UploadTaskToastHost({
   onRetry: () => void
   onClose: () => void
 }) {
-  const toastID = appStatusToastID
+  const toastID = 'file-upload-task'
 
   useEffect(() => {
     toast.custom(
@@ -1384,7 +1384,7 @@ function PasteTaskToastHost({
   task: PasteTaskSnapshot
   onClose: () => void
 }) {
-  const toastID = appStatusToastID
+  const toastID = 'file-paste-task'
 
   useEffect(() => {
     toast.custom(
@@ -1462,7 +1462,7 @@ function BatchDeleteTaskToastHost({ task, onClose }: {
   task: BatchDeleteTaskSnapshot
   onClose: () => void
 }) {
-  const toastID = appStatusToastID
+  const toastID = 'file-batch-delete-task'
   useEffect(() => {
     toast.custom(
       (id) => <BatchDeleteTaskToast toastID={id} task={task} onClose={onClose} />,
