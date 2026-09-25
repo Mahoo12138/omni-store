@@ -1,5 +1,5 @@
 # 多阶段构建：前端 -> 后端 -> 运行镜像
-FROM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /src/web
 RUN corepack enable && corepack install --global pnpm@11.9.0
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
@@ -7,16 +7,18 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm run build
 
-FROM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 WORKDIR /src
 ARG VERSION=1.0.0-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG TARGETOS
+ARG TARGETARCH
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
     -ldflags="-s -w -X github.com/omni-store/omnistore/internal/buildinfo.Version=${VERSION} -X github.com/omni-store/omnistore/internal/buildinfo.Commit=${COMMIT} -X github.com/omni-store/omnistore/internal/buildinfo.BuildTime=${BUILD_DATE}" \
     -o /out/omnistore ./cmd/omnistore
 
