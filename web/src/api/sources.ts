@@ -127,6 +127,13 @@ export function downloadFileUrl(sourceKey: string, path: string): string {
   return `/api/v1/sources/${encodeURIComponent(sourceKey)}/download?path=${encodeURIComponent(path)}`
 }
 
+/** 内联内容地址，供统一预览渲染器使用；download=1 时转为附件下载。 */
+export function sourceRawUrl(sourceKey: string, path: string, download = false): string {
+  const query = new URLSearchParams({ path })
+  if (download) query.set('download', '1')
+  return `/api/v1/sources/${encodeURIComponent(sourceKey)}/raw?${query}`
+}
+
 export async function downloadArchive(sourceKey: string, paths: string[]): Promise<string> {
   const response = await apiFetchBlob(`/api/v1/sources/${encodeURIComponent(sourceKey)}/download/archive`, {
     method: 'POST',

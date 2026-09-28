@@ -13,6 +13,7 @@ import {
   listFiles,
   moveFile,
   renameFile,
+  sourceRawUrl,
   uploadFile,
   type FileEntry,
   type StorageQuota,
@@ -50,6 +51,7 @@ import {
   IconFolderPlus,
   IconGrid,
   IconHome,
+  IconImage,
   IconLink,
   IconList,
   IconMore,
@@ -63,6 +65,9 @@ import {
 } from '../components/ui/Icon'
 import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
+import { resolvePreview } from '../preview/resolver'
+import { PreviewModal } from '../preview/PreviewModal'
+import type { PreviewItem } from '../preview/PreviewContent'
 import { collectDroppedUpload } from '../utils/dropFiles'
 import { readFilePreferences, writeFilePreferences, type FileSortKey, type FileSortOrder } from '../utils/filePreferences'
 import {
@@ -253,6 +258,33 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
     setFilter('')
     const abs = currentPath === '/' ? `/${seg}` : `${currentPath}/${seg}`
     navigate({ to: '/app/sources/$sourceKey', params: { sourceKey }, search: { path: abs, page: 1 } })
+  }
+
+  // —— 统一预览（1.2.0）：预览项来自当前列表，导航只在文件之间切换 ——
+  const [previewState, setPreviewState] = useState<{ items: PreviewItem[]; index: number } | null>(null)
+
+  function previewItemFor(entry: FileEntry): PreviewItem {
+    return {
+      name: entry.name,
+      size: entry.size,
+      url: sourceRawUrl(sourceKey, joinPath(currentPath, entry.name)),
+    }
+  }
+
+  function openPreview(entry: FileEntry) {
+    const items = entries.filter((e) => e.type === 'file').map(previewItemFor)
+    const index = Math.max(0, items.findIndex((item) => item.name === entry.name))
+    setPreviewState({ items, index })
+  }
+
+  function openOrDownload(entry: FileEntry) {
+    if (resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported') {
+      openPreview(entry)
+      return
+    }
+    const link = document.createElement('a')
+    link.href = downloadFileUrl(sourceKey, joinPath(currentPath, entry.name))
+    link.click()
   }
 
   function upOne() {
@@ -521,6 +553,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         link.href = downloadFileUrl(sourceKey, joinPath(currentPath, entry.name))
         link.click()
       } }]
+    if (entry.type === 'file' && resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported') {
+      items.unshift({ id: 'preview', label: '预览', icon: <IconImage size={15} />, onSelect: () => openPreview(entry) })
+    }
     items.push({
       id: 'favorite',
       label: favoriteForEntry(entry) ? '取消收藏' : '收藏',
@@ -878,6 +913,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                     : undefined
               }
               onOpenDir={goTo}
+              onOpenFile={openOrDownload}
               selectable
               selectedNames={selectedNames}
               allSelected={allVisibleSelected}
@@ -927,6 +963,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                         <EntryActionsMenu
                           entryName={entry.name}
                           items={[
+                            ...(resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported'
+                              ? [{ id: 'preview', label: '预览', icon: <IconImage size={15} />, onSelect: () => openPreview(entry) }]
+                              : []),
                             {
                               id: 'share',
                               label: '创建分享',
@@ -1023,6 +1062,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               entries={entries}
               loading={filesQuery.isPending}
               onOpenDir={goTo}
+              onOpenFile={openOrDownload}
               fileHref={(entry) => downloadFileUrl(sourceKey, currentPath === '/' ? `/${entry.name}` : `${currentPath}/${entry.name}`)}
               onDelete={(name, type) => setDeleteTarget({ name, type })}
               onRename={(name) => setRenameTarget({ name })}
@@ -1210,6 +1250,14 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           </div>
         </div>
       )}
+      {previewState ? (
+        <PreviewModal
+          items={previewState.items}
+          index={previewState.index}
+          onIndexChange={(next) => setPreviewState((current) => (current ? { ...current, index: next } : current))}
+          onClose={() => setPreviewState(null)}
+        />
+      ) : null}
       </div>
     </AppShell>
   )
@@ -1826,6 +1874,7 @@ function GridView({
   entries,
   loading,
   onOpenDir,
+  onOpenFile,
   fileHref,
   onDelete,
   onRename,
@@ -1845,6 +1894,7 @@ function GridView({
   entries: FileEntry[]
   loading?: boolean
   onOpenDir: (name: string) => void
+  onOpenFile?: (entry: FileEntry) => void
   fileHref: (entry: FileEntry) => string
   onDelete: (name: string, type: string) => void
   onRename: (name: string) => void
@@ -1936,6 +1986,8 @@ function GridView({
           </div>
           {e.type === 'dir' ? (
             <button type="button" className={css.gridName} onClick={() => onOpenDir(e.name)}>{e.name}</button>
+          ) : e.type === 'file' && onOpenFile ? (
+            <button type="button" className={css.gridName} onClick={() => onOpenFile(e)}>{e.name}</button>
           ) : e.type === 'file' ? (
             <a className={css.gridName} href={fileHref(e)}>{e.name}</a>
           ) : (

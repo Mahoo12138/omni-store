@@ -14,6 +14,7 @@ export function FileTable({
   emptyTitle = '目录为空',
   emptyHint,
   onOpenDir,
+  onOpenFile,
   fileHref,
   fileTarget,
   renderActions,
@@ -32,6 +33,8 @@ export function FileTable({
   emptyTitle?: string
   emptyHint?: string
   onOpenDir: (name: string) => void
+  // 文件名点击回调；传入后文件名渲染为按钮（统一预览入口），未传入时回退 fileHref 链接。
+  onOpenFile?: (entry: FileEntry) => void
   // 文件名点击目标；不传则文件名不可点。
   fileHref?: (entry: FileEntry) => string
   // 预览链接可显式新开标签页；下载链接保持在当前页面触发浏览器下载。
@@ -128,6 +131,10 @@ export function FileTable({
                   <EntryIcon name={entry.name} type={entry.type} />
                   {entry.type === 'dir' ? (
                     <button className={css.nameLink} onClick={() => onOpenDir(entry.name)}>
+                      {entry.name}
+                    </button>
+                  ) : entry.type === 'file' && onOpenFile ? (
+                    <button className={css.nameLink} onClick={() => onOpenFile(entry)}>
                       {entry.name}
                     </button>
                   ) : entry.type === 'file' && fileHref ? (
