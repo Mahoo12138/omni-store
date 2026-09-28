@@ -19,7 +19,13 @@ test('file browsing keeps its actions available on phones and narrow desktops', 
   await expect(page.getByText('已选择 1 项')).toBeVisible()
 
   await page.getByRole('tab', { name: '网格视图' }).click()
-  await expect(page.getByRole('link', { name: 'demo.png', exact: true })).toHaveAttribute('href', /download/)
+  // 1.2.0：图片文件名点击打开统一预览弹层（移动端同样可用）。
+  await page.getByRole('button', { name: 'demo.png', exact: true }).click()
+  const previewDialog = page.getByRole('dialog', { name: '预览 demo.png' })
+  await expect(previewDialog).toBeVisible()
+  await expect(previewDialog.locator('img')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(previewDialog).toHaveCount(0)
   await page.getByRole('button', { name: 'guides', exact: true }).click()
   await expect(page).toHaveURL(/path=%2Fguides/)
 

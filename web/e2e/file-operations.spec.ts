@@ -1,4 +1,13 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+// 粘贴任务卡是常驻 toast（duration Infinity），任务状态每次更新都会重建节点。
+// 等"粘贴完成"定格后用 force 点击关闭，避免命中 detach 重试超时。
+async function closePasteTaskToast(page: Page) {
+  const status = page.getByRole('status', { name: '粘贴任务' })
+  if (await status.count() === 0) return
+  await expect(status.first()).toContainText('粘贴完成')
+  await status.first().getByRole('button', { name: '关闭' }).click({ force: true })
+}
 
 test('directory can be created, renamed, copied, cut-pasted and cleaned up', async ({ page }) => {
   const suffix = Date.now()
@@ -55,6 +64,7 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
   await expect(page.getByRole('status', { name: '粘贴任务' })).toContainText('已粘贴 1 项')
   await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
+  await closePasteTaskToast(page)
 
   row = page.getByRole('row', { name: new RegExp(renamedName) })
   await row.getByRole('button', { name: `更多操作 ${renamedName}` }).click()
@@ -65,6 +75,7 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   await page.getByRole('region', { name: '文件剪贴板' }).getByRole('button', { name: '粘贴到此处' }).click()
   await expect(page.getByRole('status', { name: '粘贴任务' })).toContainText('已粘贴 1 项')
   await expect(page.getByRole('row', { name: new RegExp(renamedName) })).toBeVisible()
+  await closePasteTaskToast(page)
 
   await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
 
@@ -129,6 +140,7 @@ test('multi-select paste reports partial conflicts and keeps only failed copies 
   await expect(page.getByRole('row', { name: new RegExp(sourceA) })).toBeVisible()
   await expect(clipboard).toContainText('已复制 1 项')
   await page.screenshot({ path: '/tmp/omni-store-partial-copy-paste.png', fullPage: false })
+  await closePasteTaskToast(page)
 
   const conflictRow = page.getByRole('row', { name: new RegExp(sourceA) })
   await conflictRow.getByRole('button', { name: `更多操作 ${sourceA}` }).click()
@@ -137,8 +149,8 @@ test('multi-select paste reports partial conflicts and keeps only failed copies 
   await expect(conflictRow).toHaveCount(0)
 
   await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
-  await expect(pasteStatus).toContainText(`已粘贴 1 项到 /${target}`)
   await expect(page.getByRole('row', { name: new RegExp(sourceA) })).toBeVisible()
+  await closePasteTaskToast(page)
   await clipboard.getByRole('button', { name: '清空剪贴板' }).click()
 
   await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()

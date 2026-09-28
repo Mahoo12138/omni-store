@@ -16,7 +16,8 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: process.env.OMNISTORE_E2E_BASE_URL ? undefined : {
-    command: '../scripts/test-env.sh run',
+    // clean：每次 E2E 都从干净种子环境开始，避免历史运行残留影响列表断言。
+    command: '../scripts/test-env.sh clean run',
     url: `${baseURL}/api/v1/health`,
     reuseExistingServer: true,
     timeout: 120_000,

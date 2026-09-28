@@ -24,5 +24,5 @@ test('seeded path policy updates file manager capabilities by directory', async 
   await expect(page.getByRole('button', { name: '重命名' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '剪切' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '删除' })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'roadmap.md', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'roadmap.md', exact: true })).toBeVisible()
 })

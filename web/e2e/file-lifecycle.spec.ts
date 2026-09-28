@@ -21,13 +21,14 @@ test('uploaded file is searchable, recoverable and permanently removable', async
 
   const fileManagerURL = page.url()
   const pageCount = page.context().pages().length
-  const fileNameLink = row.getByRole('link', { name: fileName, exact: true })
-  await expect(fileNameLink).not.toHaveAttribute('target', '_blank')
-  const fileNameDownloadPromise = page.waitForEvent('download')
-  await fileNameLink.click()
-  const fileNameDownload = await fileNameDownloadPromise
-  expect(fileNameDownload.suggestedFilename()).toBe(fileName)
-  await expect.poll(() => page.context().pages().length).toBe(pageCount)
+  // 1.2.0：文件名点击打开统一预览弹层；下载走行内"下载"操作。
+  const fileNameButton = row.getByRole('button', { name: fileName, exact: true })
+  await fileNameButton.click()
+  const previewDialog = page.getByRole('dialog', { name: `预览 ${fileName}` })
+  await expect(previewDialog).toBeVisible()
+  await expect(previewDialog).toContainText('OmniStore release lifecycle E2E')
+  await page.keyboard.press('Escape')
+  await expect(previewDialog).toHaveCount(0)
   await expect(page).toHaveURL(fileManagerURL)
 
   const downloadAction = row.getByRole('link', { name: `下载 ${fileName}`, exact: true })
