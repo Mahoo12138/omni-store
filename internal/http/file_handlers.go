@@ -376,6 +376,38 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
+// handleRawFile 内联返回文件内容，供文件管理器与分享页共用的预览渲染器使用（1.2.0）。
+// ?download=1 时转为附件下载并记入最近文件；活动内容（HTML/SVG/JS 等）
+// 仍由 setUserContentHeaders 强制附件下载，不因预览绕过同源内容隔离。
+func (s *Server) handleRawFile(w http.ResponseWriter, r *http.Request) {
+	src := s.resolveSource(w, r)
+	if src == nil {
+		return
+	}
+	relPath := r.URL.Query().Get("path")
+	if !s.authorizeSourcePath(w, r, src, relPath, false, false) {
+		return
+	}
+	f, info, unlock, err := s.files.OpenForRead(src, relPath)
+	if err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	defer unlock()
+	defer f.Close()
+	download := r.URL.Query().Get("download") == "1"
+	filename := sanitizeFilename(path.Base("/" + relPath))
+	if err := setUserContentHeaders(w, f, filename, download); err != nil {
+		writeFileError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	if download {
+		s.recordRecentFile(CurrentUser(r.Context()).ID, src, relPath)
+	}
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
 func (s *Server) handleDownloadArchive(w http.ResponseWriter, r *http.Request) {
 	src := s.resolveSource(w, r)
 	if src == nil {

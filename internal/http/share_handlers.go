@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"errors"
+	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -139,6 +140,45 @@ func (s *Server) handlePublicShareRaw(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
+// handlePublicShareArchive 以流式 ZIP 打包下载分享目录（含 ?path= 指定的子目录）。
+// 打包过程直接写入响应，不在磁盘生成中间包；下载消耗一次分享下载次数。
+func (s *Server) handlePublicShareArchive(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("shareKey")
+	share, src, relPath, err := s.shares.Resolve(key, shareSessionToken(r, key), r.URL.Query().Get("path"))
+	if err != nil {
+		s.writePublicShareError(w, r, err)
+		return
+	}
+	if share.EntryType != files.TypeDir {
+		http.NotFound(w, r)
+		return
+	}
+	plan, err := s.files.PrepareStreamArchive(src, relPath)
+	if err != nil {
+		if errors.Is(err, files.ErrLocked) {
+			writeFileError(w, r, err)
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.shares.ReserveDownload(share.ID); err != nil {
+		plan.Release()
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
+		map[string]string{"filename": sanitizeFilename(plan.Filename())}))
+	w.Header().Set("Cache-Control", "private, no-store")
+	s.audit.Log(audit.Entry{ActorType: audit.ActorAnonymous, EntryType: audit.EntryWeb, Action: "share_archive_download",
+		StorageSourceID: &src.ID, RelativePath: strings.TrimPrefix(relPath, "/"), IPAddress: s.proxy.ClientIP(r),
+		UserAgent: r.UserAgent(), Status: audit.StatusSuccess})
+	if err := plan.Write(w); err != nil {
+		s.logger.Error("流式打包分享目录失败", "share", key, "path", relPath, "err", err)
+	}
+}
+
 func shareSessionToken(r *http.Request, shareKey string) string {
 	cookie, err := r.Cookie(shares.AccessCookieName(shareKey))
 	if err != nil {
@@ -161,10 +201,16 @@ func (s *Server) writeShareError(w http.ResponseWriter, r *http.Request, err err
 }
 
 func (s *Server) writePublicShareError(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, shares.ErrLocked) {
+	switch {
+	case errors.Is(err, shares.ErrLocked):
 		WriteError(w, r, CodeUnauthorized, "请先输入访问密码", nil)
-		return
+	case errors.Is(err, shares.ErrExpired):
+		// 过期与次数用完是访客需要理解的状态，不再伪装成 404（docs/design/share-preview-system.md）。
+		WriteError(w, r, CodeShareExpired, "分享已过期", nil)
+	case errors.Is(err, shares.ErrExhausted):
+		WriteError(w, r, CodeShareExhausted, "分享下载次数已用完", nil)
+	default:
+		// 其余情况统一 404：不区分禁用来源、真实文件缺失或已撤销。
+		WriteError(w, r, CodeFileNotFound, "分享不存在或已失效", nil)
 	}
-	// 公开侧统一 404，避免区分失效、次数耗尽、禁用来源或真实文件缺失。
-	WriteError(w, r, CodeFileNotFound, "分享不存在或已失效", nil)
 }

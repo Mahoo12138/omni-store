@@ -38,6 +38,10 @@ var (
 	ErrExpiry         = errors.New("有效期必须晚于当前时间且不能超过 365 天")
 	ErrDownloadLimit  = errors.New("下载次数上限必须在 0 到 1000000 之间")
 	ErrLocked         = errors.New("分享需要访问密码")
+	// ErrExpired / ErrExhausted 仅用于公开信息接口，让访客能区分
+	// “链接不存在”与“分享已过期 / 次数用完”；内容接口仍统一折叠为 404。
+	ErrExpired   = errors.New("分享已过期")
+	ErrExhausted = errors.New("分享下载次数已用完")
 )
 
 type Share struct {
@@ -70,6 +74,8 @@ type PublicInfo struct {
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	MaxDownloads  int64      `json:"max_downloads"`
 	DownloadCount int64      `json:"download_count"`
+	// Size 仅在文件分享且已通过密码校验时返回，供预览解析器判断可否预览。
+	Size *int64 `json:"size,omitempty"`
 }
 
 type CreateInput struct {
@@ -217,7 +223,7 @@ func (s *Service) Delete(user *models.User, key string) (*Share, error) {
 }
 
 func (s *Service) PublicInfo(key, sessionToken string) (*PublicInfo, error) {
-	share, err := s.getActive(key)
+	share, err := s.getForPublic(key)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +234,17 @@ func (s *Service) PublicInfo(key, sessionToken string) (*PublicInfo, error) {
 			return nil, err
 		}
 	}
-	return &PublicInfo{Key: share.Key, Name: share.Name, EntryType: share.EntryType,
+	info := &PublicInfo{Key: share.Key, Name: share.Name, EntryType: share.EntryType,
 		Protected: share.Protected, AccessGranted: granted, ExpiresAt: share.ExpiresAt,
-		MaxDownloads: share.MaxDownloads, DownloadCount: share.DownloadCount}, nil
+		MaxDownloads: share.MaxDownloads, DownloadCount: share.DownloadCount}
+	if granted && share.EntryType == files.TypeFile {
+		if src, srcErr := s.sources.GetByID(share.SourceID); srcErr == nil {
+			if entry, statErr := s.files.Stat(src, share.RelativePath); statErr == nil {
+				info.Size = &entry.Size
+			}
+		}
+	}
+	return info, nil
 }
 
 func (s *Service) Unlock(key, password, limiterKey string) (string, time.Time, error) {
@@ -353,6 +367,29 @@ func (s *Service) getActive(key string) (*Share, error) {
 		return nil, ErrNotFound
 	}
 	return share, err
+}
+
+// getForPublic 在 getActive 的基础上区分过期与次数耗尽，供公开信息页展示明确状态。
+// 目标被删除、进入回收站或存储源不可用时仍返回 ErrNotFound，不泄露内部细节。
+func (s *Service) getForPublic(key string) (*Share, error) {
+	share, err := scanShare(s.db.QueryRow(shareSelect+` WHERE fs.share_key = ? AND fs.trash_key IS NULL`, key), s.publicURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if src, srcErr := s.sources.GetByID(share.SourceID); srcErr != nil || src.IsDisabled {
+		return nil, ErrNotFound
+	}
+	now := time.Now().UTC()
+	if share.ExpiresAt != nil && !share.ExpiresAt.After(now) {
+		return nil, ErrExpired
+	}
+	if share.MaxDownloads > 0 && share.DownloadCount >= share.MaxDownloads {
+		return nil, ErrExhausted
+	}
+	return share, nil
 }
 
 func (s *Service) getActiveWithPassword(key string) (*Share, string, error) {

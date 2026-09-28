@@ -55,7 +55,7 @@ func TestPasswordShareDownloadLimitAndDirectoryBrowse(t *testing.T) {
 	if err := service.ReserveDownload(share.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.PublicInfo(share.Key, token); !errors.Is(err, ErrNotFound) {
+	if _, err := service.PublicInfo(share.Key, token); !errors.Is(err, ErrExhausted) {
 		t.Fatalf("exhausted share error=%v", err)
 	}
 
@@ -161,6 +161,54 @@ func TestShareFollowsMoveTrashRestoreAndPurge(t *testing.T) {
 	}
 	if _, err := service.get(share.Key); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("purged share error=%v", err)
+	}
+}
+
+// 1.2.0：公开信息接口需要区分“不存在”“已过期”“次数用完”，
+// 并在通过密码校验后返回文件大小供预览解析器使用。
+func TestPublicInfoDistinguishesStatesAndExposesSize(t *testing.T) {
+	service, fileService, source, user, _ := newShareTestService(t)
+	if _, _, err := fileService.UploadWithLockTokens(source, "", "photo.png", strings.NewReader("hello"), false, nil, &user.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	fileShare, err := service.Create(user, CreateInput{SourceKey: source.Key, Path: "/photo.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := service.PublicInfo(fileShare.Key, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size == nil || *info.Size != int64(len("hello")) {
+		t.Fatalf("file share size=%v err=%v", info.Size, err)
+	}
+
+	limited, err := service.Create(user, CreateInput{SourceKey: source.Key, Path: "/photo.png", MaxDownloads: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ReserveDownload(limited.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.PublicInfo(limited.Key, ""); !errors.Is(err, ErrExhausted) {
+		t.Fatalf("exhausted info error=%v", err)
+	}
+
+	expired, err := service.Create(user, CreateInput{SourceKey: source.Key, Path: "/photo.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Hour)
+	if _, err := service.db.Exec(`UPDATE file_shares SET expires_at = ? WHERE id = ?`, past, expired.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.PublicInfo(expired.Key, ""); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expired info error=%v", err)
+	}
+
+	if _, err := service.PublicInfo("shr-missing", ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing share error=%v", err)
 	}
 }
 

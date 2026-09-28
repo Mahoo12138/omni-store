@@ -26,8 +26,11 @@ type privateFileAPIFixture struct {
 	otherCookie *http.Cookie
 	csrf        string
 	otherCSRF   string
+	adminCookie *http.Cookie
+	adminCSRF   string
 	primary     *models.StorageSource
 	archive     *models.StorageSource
+	app         *Server
 }
 
 func TestPrivateFileAPILifecycle(t *testing.T) {
@@ -339,14 +342,25 @@ func newPrivateFileAPIFixture(t *testing.T) privateFileAPIFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	admin, err := app.users.Create("admin-file-user", "Admin File User", "admin-password", models.RoleSuperAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminSessionID, adminCSRF, err := app.sessions.Create(admin.ID, "integration-test-admin", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return privateFileAPIFixture{
 		handler:     httpServer.Handler,
 		cookie:      &http.Cookie{Name: SessionCookieName(), Value: sessionID},
 		otherCookie: &http.Cookie{Name: SessionCookieName(), Value: otherSessionID},
 		csrf:        csrf,
 		otherCSRF:   otherCSRF,
+		adminCookie: &http.Cookie{Name: SessionCookieName(), Value: adminSessionID},
+		adminCSRF:   adminCSRF,
 		primary:     primary,
 		archive:     archive,
+		app:         app,
 	}
 }
 

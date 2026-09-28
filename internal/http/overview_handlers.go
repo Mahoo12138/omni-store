@@ -229,14 +229,16 @@ type systemStatusResponse struct {
 		Status  string `json:"status"`
 		Hint    string `json:"hint"`
 	} `json:"anonymous"`
-	Version   string `json:"version"`
-	PublicURL string `json:"public_url"`
+	Version      string `json:"version"`
+	PublicURL    string `json:"public_url"`
+	InstanceName string `json:"instance_name"`
 }
 
 // handleSystemStatus 返回系统功能开关，供登录后首页右栏使用。
 // 不需要鉴权，只暴露开关与状态描述。
 func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
-	out := systemStatusResponse{Version: buildinfo.Version, PublicURL: s.cfg.Server.PublicURL}
+	out := systemStatusResponse{Version: buildinfo.Version, PublicURL: s.cfg.Server.PublicURL,
+		InstanceName: s.instanceName()}
 
 	// S3 兼容存储
 	out.S3.Enabled = s.cfg.Server.S3Enabled
@@ -342,6 +344,10 @@ func humanizeAuditAction(e *audit.LogEntry) string {
 		return "撤销文件分享"
 	case "share_download":
 		return "通过分享下载文件"
+	case "share_archive_download":
+		return "打包下载分享目录"
+	case "update_branding":
+		return "更新实例品牌"
 	case "change_password":
 		return "修改密码"
 	case "login_success":

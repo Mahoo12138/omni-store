@@ -162,6 +162,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/sources/{key}/files", s.requireAuth(s.handleListFiles))
 	mux.HandleFunc("GET /api/v1/sources/{key}/files/stat", s.requireAuth(s.handleStatFile))
 	mux.HandleFunc("GET /api/v1/sources/{key}/download", s.requireAuth(s.handleDownloadFile))
+	mux.HandleFunc("GET /api/v1/sources/{key}/raw", s.requireAuth(s.handleRawFile))
 	mux.HandleFunc("POST /api/v1/sources/{key}/download/archive", s.requireAuth(s.handleDownloadArchive))
 	mux.HandleFunc("POST /api/v1/sources/{key}/folders", s.requireAuth(s.handleCreateFolder))
 	mux.HandleFunc("POST /api/v1/sources/{key}/upload", s.requireAuth(s.handleUploadFile))
@@ -198,6 +199,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}", s.handlePublicShareInfo)
 	mux.HandleFunc("POST /api/v1/public/shares/{shareKey}/unlock", s.handlePublicShareUnlock)
 	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}/browse", s.handlePublicShareBrowse)
+	mux.HandleFunc("GET /share/{shareKey}/archive", s.handlePublicShareArchive)
 	mux.HandleFunc("GET /raw/{virtual_path...}", s.handlePublicRaw)
 	mux.HandleFunc("GET /share/{shareKey}/raw", s.handlePublicShareRaw)
 	mux.HandleFunc("HEAD /share/{shareKey}/raw", s.handlePublicShareRaw)
@@ -235,6 +237,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 
 	// 管理员：审计日志（筛选与分页）
 	mux.HandleFunc("GET /api/v1/admin/audit-logs", s.requireAdmin(s.handleAdminAuditLogs))
+
+	// 管理员：实例品牌信息（1.2.0）
+	mux.HandleFunc("GET /api/v1/admin/branding", s.requireAdmin(s.handleAdminGetBranding))
+	mux.HandleFunc("PUT /api/v1/admin/branding", s.requireAdmin(s.handleAdminSetBranding))
 
 	// 管理员：手动导出系统配置包
 	mux.HandleFunc("GET /api/v1/admin/system/config-export", s.requireAdmin(s.handleAdminExportSystemConfig))

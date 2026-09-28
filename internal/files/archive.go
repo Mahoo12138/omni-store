@@ -89,7 +89,7 @@ func (s *Service) CreateArchive(src *models.StorageSource, relInputs []string) (
 
 	zw := zip.NewWriter(output)
 	for _, root := range roots {
-		if err := addArchiveRoot(zw, root.abs, root.rel, matcher); err != nil {
+		if err := addArchiveRoot(zw, root.abs, root.rel, path.Base(root.rel), matcher); err != nil {
 			_ = zw.Close()
 			return nil, err
 		}
@@ -110,8 +110,7 @@ func (s *Service) CreateArchive(src *models.StorageSource, relInputs []string) (
 	}, nil
 }
 
-func addArchiveRoot(zw *zip.Writer, absoluteRoot, relativeRoot string, matcher *security.ExcludeMatcher) error {
-	rootName := path.Base(relativeRoot)
+func addArchiveRoot(zw *zip.Writer, absoluteRoot, relativeRoot, rootName string, matcher *security.ExcludeMatcher) error {
 	return filepath.WalkDir(absoluteRoot, func(absolutePath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsNotExist(walkErr) {
@@ -176,4 +175,63 @@ func addArchiveRoot(zw *zip.Writer, absoluteRoot, relativeRoot string, matcher *
 		}
 		return closeErr
 	})
+}
+
+// StreamArchivePlan 是一次流式目录打包的准备结果：目标已校验、排除规则已加载、
+// 子树读锁已持有。Write 直接把 ZIP 写入目标 Writer，不在磁盘生成中间文件。
+type StreamArchivePlan struct {
+	unlock       func()
+	absoluteRoot string
+	relativeRoot string
+	rootName     string
+	matcher      *security.ExcludeMatcher
+}
+
+// PrepareStreamArchive 校验打包目标为目录并锁定该子树。
+// relRoot 为空表示打包整个存储源；调用方在放弃计划时应调用 Release。
+func (s *Service) PrepareStreamArchive(src *models.StorageSource, relRoot string) (*StreamArchivePlan, error) {
+	rel, abs, err := s.prepare(src, relRoot)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := s.Stat(src, rel)
+	if err != nil {
+		return nil, err
+	}
+	if entry.Type != TypeDir {
+		return nil, fmt.Errorf("%w: 打包目标必须是目录", ErrInvalid)
+	}
+	matcher, err := s.sources.Matcher(src.ID)
+	if err != nil {
+		return nil, err
+	}
+	rootName := path.Base(rel)
+	if rel == "" {
+		rootName = src.Name
+	}
+	return &StreamArchivePlan{
+		unlock:       s.locks.RLock(locks.Key(src.Key, rel)),
+		absoluteRoot: abs,
+		relativeRoot: rel,
+		rootName:     rootName,
+		matcher:      matcher,
+	}, nil
+}
+
+// Release 释放计划持有的读锁；与 Write 重复调用是安全的。
+func (p *StreamArchivePlan) Release() { p.unlock() }
+
+// Filename 返回响应使用的下载文件名（不含路径部分）。
+func (p *StreamArchivePlan) Filename() string { return p.rootName + ".zip" }
+
+// Write 流式写出 ZIP。遍历继续受 exclude 规则、reserved namespace 和
+// symlink 安全规则约束；开始写出后的错误无法再改变 HTTP 状态。
+func (p *StreamArchivePlan) Write(w io.Writer) error {
+	defer p.unlock()
+	zw := zip.NewWriter(w)
+	if err := addArchiveRoot(zw, p.absoluteRoot, p.relativeRoot, p.rootName, p.matcher); err != nil {
+		_ = zw.Close()
+		return err
+	}
+	return zw.Close()
 }
