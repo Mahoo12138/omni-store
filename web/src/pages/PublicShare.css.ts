@@ -22,3 +22,19 @@ export const crumbs = style({ display: 'flex', alignItems: 'center', flexWrap: '
 export const crumbButton = style({ padding: 0, color: vars.color.textSecondary, background: 'none', border: 0, cursor: 'pointer', font: 'inherit', selectors: { '&:hover': { color: vars.color.primary } } })
 export const currentCrumb = style({ color: vars.color.text, fontWeight: 600 })
 export const pager = style({ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: vars.space.sm, marginTop: vars.space.md, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+
+// —— Share 2.0（1.2.0） ——
+export const toolbar = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: vars.space.sm, marginBottom: vars.space.md })
+export const toolbarActions = style({ display: 'flex', alignItems: 'center', gap: vars.space.sm, flexWrap: 'wrap' })
+export const zipButton = style({ height: 34, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', color: vars.color.text, background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.md, fontSize: vars.fontSize.sm, fontWeight: 600, textDecoration: 'none', selectors: { '&:hover': { borderColor: vars.color.borderStrong, background: vars.color.surfaceHover }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 } } })
+export const viewToggle = style({ display: 'inline-flex', gap: 2, background: vars.color.surfaceHover, borderRadius: vars.radius.full, padding: 2 })
+export const viewOption = style({ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', border: 0, borderRadius: vars.radius.full, background: 'transparent', color: vars.color.textSecondary, font: 'inherit', fontSize: vars.fontSize.sm, cursor: 'pointer', selectors: { '&:hover': { color: vars.color.text }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 }, '&:disabled': { opacity: 0.4, cursor: 'not-allowed' } } })
+export const viewOptionActive = style({ background: vars.color.surface, color: vars.color.text, boxShadow: vars.shadow.sm, cursor: 'default' })
+export const gallery = style({ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: vars.space.sm, marginBottom: vars.space.md })
+export const galleryCell = style({ position: 'relative' })
+export const galleryItem = style({ display: 'block', width: '100%', aspectRatio: '1 / 1', padding: 0, border: 0, background: vars.color.surfaceHover, borderRadius: vars.radius.md, overflow: 'hidden', cursor: 'zoom-in', boxShadow: vars.shadow.sm, selectors: { '&:hover': { boxShadow: vars.shadow.md }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 } } })
+export const galleryImg = style({ width: '100%', height: '100%', objectFit: 'cover', display: 'block' })
+export const galleryName = style({ position: 'absolute', left: 4, right: 4, bottom: 4, padding: '14px 6px 2px', fontSize: vars.fontSize.xs, color: '#fff', textAlign: 'center', background: 'linear-gradient(transparent, oklch(0.2 0.03 258 / 0.72))', borderRadius: vars.radius.sm, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' })
+export const galleryCount = style({ display: 'block', marginTop: vars.space.sm, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+// 文件分享内嵌预览容器：媒体/PDF 需要稳定高度，文本族内部滚动。
+export const embedPreview = style({ height: 'min(72vh, 760px)', marginBottom: vars.space.xl, display: 'flex', flexDirection: 'column' })

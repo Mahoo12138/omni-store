@@ -2,10 +2,12 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAuthStatus } from '../../api/auth'
+import { fetchSystemStatus } from '../../api/system'
 import { IconHome, IconInfo, LogoMark } from '../ui/Icon'
 import * as css from './PublicShell.css'
 
 // 公开侧布局（docs/index.png）：顶栏 = 品牌 / 中央导航 / 登录入口。
+// 品牌名来自实例品牌设置（1.2.0），未配置时回退 OmniStore。
 export function PublicShell({ children, showHeader = true }: { children: ReactNode; showHeader?: boolean }) {
   const { pathname } = useLocation()
   const authStatus = useQuery({
@@ -15,6 +17,13 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
     staleTime: 60_000,
     enabled: showHeader,
   })
+  const systemStatus = useQuery({
+    queryKey: ['system-status'],
+    queryFn: fetchSystemStatus,
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+  const instanceName = systemStatus.data?.instance_name?.trim() || 'OmniStore'
   const isDisk = pathname === '/' || pathname.startsWith('/p')
   const isUpload = pathname.startsWith('/upload')
   const isAbout = pathname.startsWith('/about')
@@ -25,7 +34,7 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
         <header className={`${css.header} ${css.headerResponsive}`}>
           <Link to="/" className={css.brand}>
             <LogoMark size={30} />
-            <span className={css.brandName}>OmniStore</span>
+            <span className={css.brandName}>{instanceName}</span>
           </Link>
           <nav className={css.nav} aria-label="主导航">
             <Link to="/" className={isDisk ? css.navLinkActive : css.navLink}>
@@ -53,7 +62,7 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
         </header>
       )}
       <main className={css.main}>{children}</main>
-      <footer className={css.footer}>OmniStore · 自部署存储中心</footer>
+      <footer className={css.footer}>{instanceName} · 自部署存储中心</footer>
     </div>
   )
 }

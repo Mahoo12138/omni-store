@@ -15,6 +15,7 @@ export interface SystemStatus {
   anonymous: SystemStatusFlag
   version: string
   public_url: string
+  instance_name: string
 }
 
 export async function fetchSystemStatus(): Promise<SystemStatus> {

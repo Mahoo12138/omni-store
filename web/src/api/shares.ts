@@ -28,6 +28,8 @@ export interface PublicShareInfo {
   expires_at?: string
   max_downloads: number
   download_count: number
+  /** 文件分享且已通过密码校验时返回，供预览解析器判断可否预览。 */
+  size?: number
 }
 
 export async function fetchShares(): Promise<FileShare[]> {
@@ -82,4 +84,10 @@ export function publicShareRawUrl(key: string, childPath = '', download = false)
     .join('/')
   const base = `/share/${encodeURIComponent(key)}/raw${encodedPath ? `/${encodedPath}` : ''}`
   return download ? `${base}?download=1` : base
+}
+
+/** 分享目录流式 ZIP 下载地址（childPath 为相对分享根的子目录）。 */
+export function publicShareArchiveUrl(key: string, childPath = ''): string {
+  const query = childPath ? `?path=${encodeURIComponent(childPath)}` : ''
+  return `/share/${encodeURIComponent(key)}/archive${query}`
 }

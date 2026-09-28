@@ -13,6 +13,7 @@ import {
   adminExportSystemConfig,
   adminFetchAuditLogs,
   adminGetAnonymousSettings,
+  adminGetBranding,
   adminGetSource,
   adminListPolicies,
   adminListSources,
@@ -21,6 +22,7 @@ import {
   adminReconcileSource,
   adminRevokeUserCredentials,
   adminSetAnonymousSettings,
+  adminSetBranding,
   adminSetSourceDisabled,
   adminSetUserDisabled,
   adminSetUserQuota,
@@ -99,6 +101,7 @@ type SectionKey =
   | 'audit'
   | 'backup'
   | 'image-bed'
+  | 'branding'
 
 const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: '我的', icon: <IconUser size={15} /> },
@@ -181,6 +184,7 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'users', label: '用户', icon: <IconUser size={15} /> },
   { key: 'audit', label: '审计日志', icon: <IconActivity size={15} /> },
   { key: 'backup', label: '配置导出', icon: <IconDownload size={15} /> },
+  { key: 'branding', label: '品牌信息', icon: <IconGlobe size={15} /> },
   { key: 'image-bed', label: '匿名图床', icon: <IconImage size={15} /> },
 ]
 
@@ -256,6 +260,7 @@ export function AdminOverviewPage() {
           {section === 'audit' && <AuditSection />}
           {section === 'backup' && <BackupSection />}
           {section === 'image-bed' && <ImageBedSection />}
+          {section === 'branding' && <BrandingSection />}
         </div>
       </div>
 
@@ -3057,4 +3062,79 @@ function VersionFooter() {
     [version, commit, buildTime],
   )
   return <div className={css.settingsFooter}>{lines.join('\n')}</div>
+}
+
+// --- 品牌信息（1.2.0）：实例名称，用于公开页/分享页品牌展示 ---
+
+function BrandingSection() {
+  const queryClient = useQueryClient()
+  const branding = useQuery({ queryKey: ['admin-branding'], queryFn: adminGetBranding })
+  const [name, setName] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const save = useMutation({
+    mutationFn: () => adminSetBranding(name),
+    onSuccess: async () => {
+      setEditing(false)
+      setMsg('')
+      await queryClient.invalidateQueries({ queryKey: ['admin-branding'] })
+      await queryClient.invalidateQueries({ queryKey: ['system-status'] })
+    },
+    onError: (error) => {
+      setMsg(error instanceof ApiRequestError ? error.message : '保存失败，请重试。')
+    },
+  })
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    if (name.trim().length > 64) {
+      setMsg('实例名称不能超过 64 个字符。')
+      return
+    }
+    save.mutate()
+  }
+
+  const currentName = branding.data?.instance_name ?? 'OmniStore'
+
+  return (
+    <section className={css.section}>
+      <header className={css.sectionHeaderWithAction}>
+        <div className={css.sectionHeaderCopy}>
+          <h2 id="branding-title" className={css.sectionTitle}>品牌信息</h2>
+          <p className={css.sectionHint}>
+            实例名称显示在公开页与分享页顶部及页脚；清空保存可恢复默认名称 OmniStore。
+          </p>
+        </div>
+        <div className={css.sectionHeaderAction}>
+          <Button
+            onClick={() => {
+              setName(currentName)
+              setEditing((open) => !open)
+              setMsg('')
+            }}
+          >
+            {editing ? '取消' : '修改名称'}
+          </Button>
+        </div>
+      </header>
+      <div className={css.sectionBody}>
+        {editing ? (
+          <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
+            <Field label="实例名称" required error={msg} hint="1-64 个字符，展示于公开侧页面。">
+              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
+            </Field>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button type="submit" disabled={save.isPending}>{save.isPending ? '保存中…' : '保存'}</Button>
+            </div>
+          </form>
+        ) : (
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>实例名称</span>
+            <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
+          </div>
+        )}
+      </div>
+    </section>
+  )
 }

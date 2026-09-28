@@ -413,3 +413,15 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   })
 }
+
+// 实例品牌信息（1.2.0）
+export async function adminGetBranding(): Promise<{ instance_name: string }> {
+  return apiFetch('/api/v1/admin/branding')
+}
+
+export async function adminSetBranding(instanceName: string): Promise<void> {
+  await apiFetch('/api/v1/admin/branding', {
+    method: 'PUT',
+    body: JSON.stringify({ instance_name: instanceName }),
+  })
+}

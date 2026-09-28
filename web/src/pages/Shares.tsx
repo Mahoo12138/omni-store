@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchShares, revokeShare, type FileShare } from '../api/shares'
 import { AppShell } from '../components/layout/AppShell'
+import { QrCodeDialog } from '../components/share/QrCodeDialog'
 import { Badge } from '../components/ui/Badge'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
-import { IconCopy, IconExternalLink, IconFile, IconFolder, IconLink, IconTrash } from '../components/ui/Icon'
+import { IconCopy, IconExternalLink, IconFile, IconFolder, IconLink, IconQr, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatDate } from '../utils/format'
 import * as css from './Shares.css'
@@ -14,6 +15,7 @@ export function SharesPage() {
   const queryClient = useQueryClient()
   const shares = useQuery({ queryKey: ['shares'], queryFn: fetchShares })
   const [revokeTarget, setRevokeTarget] = useState<FileShare | null>(null)
+  const [qrTarget, setQrTarget] = useState<FileShare | null>(null)
 
   const revoke = useMutation({
     mutationFn: (key: string) => revokeShare(key),
@@ -54,8 +56,12 @@ export function SharesPage() {
       ) : null}
       {shares.isSuccess && shares.data.length > 0 ? (
         <div className={css.list}>
-          {shares.data.map((share) => <ShareRow key={share.key} share={share} onCopy={() => void copyLink(share)} onRevoke={() => setRevokeTarget(share)} />)}
+          {shares.data.map((share) => <ShareRow key={share.key} share={share} onCopy={() => void copyLink(share)} onQr={() => setQrTarget(share)} onRevoke={() => setRevokeTarget(share)} />)}
         </div>
+      ) : null}
+
+      {qrTarget ? (
+        <QrCodeDialog url={qrTarget.url} name={qrTarget.name} onClose={() => setQrTarget(null)} />
       ) : null}
 
       {revokeTarget ? (
@@ -80,7 +86,7 @@ export function SharesPage() {
   )
 }
 
-function ShareRow({ share, onCopy, onRevoke }: { share: FileShare; onCopy: () => void; onRevoke: () => void }) {
+function ShareRow({ share, onCopy, onQr, onRevoke }: { share: FileShare; onCopy: () => void; onQr: () => void; onRevoke: () => void }) {
   const left = share.max_downloads > 0 ? Math.max(0, share.max_downloads - share.download_count) : null
   return (
     <article className={css.card}>
@@ -101,6 +107,7 @@ function ShareRow({ share, onCopy, onRevoke }: { share: FileShare; onCopy: () =>
       </div>
       <div className={css.actions}>
         <button className={css.linkButton} onClick={onCopy} aria-label={`复制 ${share.name} 的分享链接`} title="复制链接"><IconCopy size={16} /></button>
+        <button className={css.linkButton} onClick={onQr} aria-label={`查看 ${share.name} 的二维码`} title="二维码"><IconQr size={16} /></button>
         <a className={css.linkButton} href={share.url} target="_blank" rel="noreferrer" aria-label={`打开 ${share.name} 的分享`} title="打开分享"><IconExternalLink size={16} /></a>
         <button className={css.dangerButton} onClick={onRevoke} aria-label={`撤销 ${share.name} 的分享`} title="撤销分享"><IconTrash size={16} /></button>
       </div>
