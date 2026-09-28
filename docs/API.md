@@ -58,6 +58,7 @@ POST /api/v1/sources/{key}/upload?path=/photos
 - `413`：请求/文件超过大小限制；
 - `423`：资源被 WebDAV lock；
 - `429`：登录/请求限流；
+- `410`：分享仍存在但已不可访问（`SHARE_EXPIRED` 已过期 / `SHARE_EXHAUSTED` 次数用完，仅公开信息接口返回）；
 - `507`：存储源或用户配额不足；
 - `500`：内部错误。
 
@@ -156,10 +157,33 @@ relative_path=blog-images/posts/2026/a.webp
 文件读取入口应支持 Range，尤其是：
 
 - private download；
+- private raw（`GET /api/v1/sources/{key}/raw?path=...`，1.2 起供统一预览渲染器内联读取，`download=1` 转附件下载）；
+- share raw（`GET /share/{shareKey}/raw[/{childPath}]`）；
 - public raw；
 - WebDAV GET；
 - image；
-- 后续 preview video/audio。
+- preview video/audio（音视频预览依赖标准 Range/206，无服务端转码）。
+
+## 9.1 分享目录流式 ZIP
+
+```text
+GET /share/{shareKey}/archive?path={子目录，可省略}
+```
+
+- 直接把 ZIP 写入响应（`chunked`），不在磁盘生成中间包；
+- 仅目录分享可用；继续受 exclude、保留名称与 symlink 安全规则约束；
+- 每次请求消耗 1 次下载次数（与 raw 一致）。
+
+## 9.2 公开分享信息状态
+
+`GET /api/v1/public/shares/{shareKey}`：
+
+- `404`：不存在 / 已撤销 / 目标不可用（不区分原因）；
+- `410 SHARE_EXPIRED`：分享已过期；
+- `410 SHARE_EXHAUSTED`：下载次数已用完；
+- `401`：需要密码（`access_granted=false`）。
+
+文件分享在通过密码校验后额外返回 `size`，供预览解析器判断可否预览。
 
 ## 10. Cache-Control
 
@@ -183,3 +207,13 @@ WebDAV/S3 等独立认证入口不复用浏览器 Session CSRF 模型。
 ## 12. 审计
 
 所有关键写 API 在成功和失败场景应产生一致的审计信息，避免仅记录成功路径。
+
+## 13. 实例品牌
+
+```text
+GET /api/v1/admin/branding        # { instance_name }
+PUT /api/v1/admin/branding        # body { "instance_name": "..." }；空值恢复默认
+```
+
+- 仅超级管理员；实例名称存 `system_settings`，1-64 个字符；
+- 公开侧经 `GET /api/v1/system/status` 的 `instance_name` 字段暴露（缺省 `OmniStore`）。

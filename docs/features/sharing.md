@@ -36,18 +36,21 @@ Share 用于把某个私有文件/目录通过随机链接向外提供访问。
 
 进入回收站时分享暂时不可用；恢复后根据已确认的生命周期语义恢复；永久删除后分享失效。
 
-## 5. 1.2 规划
+## 5. Share 2.0（1.2.0）
 
-`1.2` 在不改变 Share 安全模型的前提下增强访问页：
+`1.2.0` 在不改变 Share 安全模型的前提下升级访问页（见 [`design/share-preview-system.md`](../design/share-preview-system.md)）：
 
-- 图片直接预览；
-- PDF；
-- 音频；
-- 视频；
-- 目录列表；
-- 图片画廊；
-- 流式 ZIP 下载；
-- 二维码；
-- 实例品牌信息。
+- 文件分享按统一 Preview 类型直接预览（图片/PDF/文本族/音视频），不支持则仅下载；
+- 目录分享提供 列表 / 画廊 两种视图，画廊展示图片并可进入与文件管理器相同的预览弹层；
+- 目录打包下载使用流式 ZIP（`GET /share/{key}/archive`），直接写入响应，不在磁盘生成中间包，并消耗 1 次下载次数；
+- 打包过程继续受 exclude 规则、保留名称、symlink 安全与子树读锁约束；
+- 公开信息接口区分"不存在（404）"与"已过期 / 次数用完（410，`SHARE_EXPIRED` / `SHARE_EXHAUSTED`）"，内容接口仍统一折叠为 404，不泄露内部细节；
+- 分享管理页提供分享链接二维码；
+- 公开页品牌名来自实例品牌设置（`system_settings.instance_name`，管理员后台可改，缺省 OmniStore）。
 
-分享页复用统一 Preview Resolver，不单独实现第二套播放器/预览器。
+分享页与文件管理器共用统一 Preview Resolver 与渲染器（`web/src/preview/`），不单独实现第二套预览器。
+
+相关设计：
+
+- [`design/preview-resolver.md`](../design/preview-resolver.md)
+- [`design/share-preview-system.md`](../design/share-preview-system.md)

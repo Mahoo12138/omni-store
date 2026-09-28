@@ -112,6 +112,8 @@ HTML、SVG、XML、JavaScript 等主动内容默认强制下载；公开原始�
 
 图片、视频等允许 inline 的内容必须根据确定的 MIME 和安全策略返回。
 
+`1.2.0` 的统一预览沿用同一模型：私有与分享侧的 inline 预览端点复用同一套 `setUserContentHeaders`（嗅探 MIME、`nosniff`、受限 CSP、主动内容强制附件），预览渲染器不引入新的绕过路径；Markdown 以不渲染原始 HTML 的方式输出，SVG 仅以图片语义（`<img>`）渲染。
+
 ## 9. 上传
 
 普通上传：

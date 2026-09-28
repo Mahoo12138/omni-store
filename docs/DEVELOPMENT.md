@@ -34,7 +34,9 @@ go build -o omnistore ./cmd/omnistore
 
 使用 `config.test.yaml` 与 `.testdata/`，避免开发测试污染真实实例。
 
-E2E 测试使用隔离种子环境，不依赖开发者已有数据状态。
+E2E 测试使用隔离种子环境，不依赖开发者已有数据状态：Playwright 启动时以
+`test-env.sh clean run` 重建 `.testdata`，从干净种子状态跑完整套件。手动调试时
+如需同样效果，可执行 `./scripts/test-env.sh clean run`。
 
 ## 4. 配置
 
