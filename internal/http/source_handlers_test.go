@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
@@ -240,7 +241,7 @@ func TestHandleAdminDeleteSourceRejectsPendingImageUploadRecovery(t *testing.T) 
 		t.Fatal(err)
 	}
 	server.imagebed, err = imagebed.NewService(conn, "/images", "http://store.test",
-		filepath.Join(base, "data", "cache", "thumbnails"), server.sources, server.files)
+		filepath.Join(base, "data", "cache", "thumbnails"), server.sources, server.capabilities, server.files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,11 +431,12 @@ func newSourceCreateHandlerServer(t *testing.T) (*Server, *sql.DB, string) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sourceService := sources.NewService(conn, dataDir)
 	return &Server{
-		sources: sourceService,
-		files:   files.NewService(conn, sourceService, locks.NewManager()),
-		audit:   audit.New(conn, false, 0, logger),
-		proxy:   security.NewProxyResolver(nil),
-		logger:  logger,
+		sources:      sourceService,
+		files:        files.NewService(conn, sourceService, locks.NewManager()),
+		capabilities: capabilities.NewService(conn, sourceService),
+		audit:        audit.New(conn, false, 0, logger),
+		proxy:        security.NewProxyResolver(nil),
+		logger:       logger,
 	}, conn, base
 }
 

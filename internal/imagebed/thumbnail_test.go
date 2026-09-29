@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/locks"
@@ -45,12 +46,16 @@ func newThumbnailTestEnv(t *testing.T) *thumbnailTestEnv {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	if _, err := conn.Exec(`UPDATE storage_sources SET image_bed_enabled = 1 WHERE id = ?`, source.ID); err != nil {
-		t.Fatalf("enable image bed: %v", err)
-	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
+	capabilityService := capabilities.NewService(conn, sourceService)
+	enabled := true
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityImageBed, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &source.Key,
+	}); err != nil {
+		t.Fatalf("bind image bed capability: %v", err)
+	}
 	service, err := NewService(conn, "/images", "https://store.example.test",
-		filepath.Join(dataDir, "cache", "thumbnails"), sourceService, fileService)
+		filepath.Join(dataDir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatalf("create image bed service: %v", err)
 	}

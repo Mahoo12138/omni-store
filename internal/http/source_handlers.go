@@ -136,14 +136,12 @@ func (s *Server) handleAdminReconcileSource(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name              *string   `json:"name"`
-		Description       *string   `json:"description"`
-		PublicReadEnabled *bool     `json:"public_read_enabled"`
-		PublicMountPath   *string   `json:"public_mount_path"`
-		WebdavEnabled     *bool     `json:"webdav_enabled"`
-		ImageBedEnabled   *bool     `json:"image_bed_enabled"`
-		QuotaBytes        *int64    `json:"quota_bytes"`
-		ExcludePatterns   *[]string `json:"exclude_patterns"`
+		Name            *string   `json:"name"`
+		Description     *string   `json:"description"`
+		WebdavEnabled   *bool     `json:"webdav_enabled"`
+		S3Enabled       *bool     `json:"s3_enabled"`
+		QuotaBytes      *int64    `json:"quota_bytes"`
+		ExcludePatterns *[]string `json:"exclude_patterns"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -154,14 +152,12 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 	}
 
 	src, err := s.sources.Update(r.PathValue("key"), sources.UpdateInput{
-		Name:              req.Name,
-		Description:       req.Description,
-		PublicReadEnabled: req.PublicReadEnabled,
-		PublicMountPath:   req.PublicMountPath,
-		WebdavEnabled:     req.WebdavEnabled,
-		ImageBedEnabled:   req.ImageBedEnabled,
-		QuotaBytes:        req.QuotaBytes,
-		ExcludePatterns:   req.ExcludePatterns,
+		Name:            req.Name,
+		Description:     req.Description,
+		WebdavEnabled:   req.WebdavEnabled,
+		S3Enabled:       req.S3Enabled,
+		QuotaBytes:      req.QuotaBytes,
+		ExcludePatterns: req.ExcludePatterns,
 	})
 	if err != nil {
 		s.writeSourceError(w, r, err)
@@ -190,6 +186,16 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 	src, err := s.sources.Get(r.PathValue("key"))
 	if err != nil {
 		s.writeSourceError(w, r, err)
+		return
+	}
+	// Site Capability 绑定守卫：仍被绑定的源必须先解除绑定。
+	bound, err := s.capabilities.BoundCapabilities(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查 Site Capability 绑定失败", nil)
+		return
+	}
+	if len(bound) > 0 {
+		WriteError(w, r, CodeConflict, "存储源仍被 Site Capability 绑定，请先解除绑定", map[string]any{"bound_capabilities": bound})
 		return
 	}
 	releaseLifecycle := lifecycle.Write(lifecycle.Source(src.ID))

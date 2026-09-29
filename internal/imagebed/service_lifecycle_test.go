@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/locks"
@@ -20,24 +21,8 @@ import (
 
 func TestUserAndAnonymousImageLifecycle(t *testing.T) {
 	service, sourceService, source, user, otherUser, root := newImageLifecycleFixture(t)
-	if _, err := service.UploadForUser(user, "", "before-default.png", bytes.NewReader(testPNGBytes(t))); !errors.Is(err, ErrNoTarget) {
-		t.Fatalf("upload without default error=%v", err)
-	}
-	targets, err := service.Targets(user)
-	if err != nil || len(targets) != 1 || targets[0].Key != source.Key || targets[0].Permission != models.PermissionReadWrite {
-		t.Fatalf("Targets()=%+v, %v", targets, err)
-	}
-	if target, err := service.DefaultTarget(user.ID); err != nil || target != "" {
-		t.Fatalf("initial DefaultTarget()=%q, %v", target, err)
-	}
-	if err := service.SetDefaultTarget(user, source.Key); err != nil {
-		t.Fatal(err)
-	}
-	if target, err := service.DefaultTarget(user.ID); err != nil || target != source.Key {
-		t.Fatalf("DefaultTarget()=%q, %v", target, err)
-	}
-
-	imageRecord, err := service.UploadForUser(user, "", "actual-image.txt", bytes.NewReader(testPNGBytes(t)))
+	// 绑定图床能力后登录用户可直接上传，无需选择 Source。
+	imageRecord, err := service.UploadForUser(user, "actual-image.txt", bytes.NewReader(testPNGBytes(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +72,7 @@ func TestUserAndAnonymousImageLifecycle(t *testing.T) {
 	if _, err := service.UploadAnonymous("disabled.png", bytes.NewReader(testPNGBytes(t))); !errors.Is(err, ErrAnonymousDisabled) {
 		t.Fatalf("disabled anonymous upload error=%v", err)
 	}
-	if err := service.SetAnonymousSettings(true, source.Key); err != nil {
+	if err := service.SetAnonymousSettings(true); err != nil {
 		t.Fatal(err)
 	}
 	settings, err := service.GetAnonymousSettings()
@@ -105,19 +90,20 @@ func TestUserAndAnonymousImageLifecycle(t *testing.T) {
 	if err := service.DeleteByAdmin(anonymous.ImageID); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.SetAnonymousSettings(false, ""); err != nil {
+	if err := service.SetAnonymousSettings(false); err != nil {
 		t.Fatal(err)
 	}
 	settings, err = service.GetAnonymousSettings()
-	if err != nil || settings.Enabled || settings.Key != "" {
+	if err != nil || settings.Enabled {
 		t.Fatalf("disabled anonymous settings=%+v err=%v", settings, err)
 	}
 
+	// 禁用源后图床整体不可用。
 	if err := sourceService.SetDisabled(source.Key, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.SetDefaultTarget(user, source.Key); !errors.Is(err, ErrTargetInvalid) {
-		t.Fatalf("disabled target error=%v", err)
+	if _, err := service.UploadForUser(user, "while-disabled.png", bytes.NewReader(testPNGBytes(t))); !errors.Is(err, ErrNoTarget) {
+		t.Fatalf("disabled source upload error=%v, want ErrNoTarget", err)
 	}
 }
 
@@ -163,19 +149,15 @@ func newImageLifecycleFixture(t *testing.T) (*Service, *sources.Service, *models
 	if err != nil {
 		t.Fatal(err)
 	}
+	fileService := files.NewService(conn, sourceService, locks.NewManager())
+	capabilityService := capabilities.NewService(conn, sourceService)
 	enabled := true
-	source, err = sourceService.Update(source.Key, sources.UpdateInput{ImageBedEnabled: &enabled})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := sourceService.CreatePolicy(sources.PolicyInput{
-		Name: "Image writers", UserIDs: []int64{user.ID},
-		Sources: []sources.PolicySourceInput{{SourceKey: source.Key, Permission: models.PermissionReadWrite}},
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityImageBed, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &source.Key,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fileService := files.NewService(conn, sourceService, locks.NewManager())
-	service, err := NewService(conn, "/images", "https://store.example.test/", filepath.Join(dataDir, "cache", "thumbnails"), sourceService, fileService)
+	service, err := NewService(conn, "/images", "https://store.example.test/", filepath.Join(dataDir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatal(err)
 	}

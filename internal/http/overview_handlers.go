@@ -21,14 +21,12 @@ type overviewUser struct {
 }
 
 type overviewSource struct {
-	Key               string `json:"key"`
-	Name              string `json:"name"`
-	RootPath          string `json:"root_path"`
-	PublicMountPath   string `json:"public_mount_path,omitempty"`
-	WebdavEnabled     bool   `json:"webdav_enabled"`
-	ImageBedEnabled   bool   `json:"image_bed_enabled"`
-	PublicReadEnabled bool   `json:"public_read_enabled"`
-	IsDisabled        bool   `json:"is_disabled"`
+	Key           string `json:"key"`
+	Name          string `json:"name"`
+	RootPath      string `json:"root_path"`
+	WebdavEnabled bool   `json:"webdav_enabled"`
+	S3Enabled     bool   `json:"s3_enabled"`
+	IsDisabled    bool   `json:"is_disabled"`
 }
 
 type overviewAudit struct {
@@ -55,7 +53,7 @@ type overviewSystem struct {
 type overviewResponse struct {
 	SourceCount         int64            `json:"source_count"`
 	UserCount           int64            `json:"user_count"`
-	PublicMountCount    int64            `json:"public_mount_count"`
+	PublicDriveEnabled  bool             `json:"public_drive_enabled"`
 	AnonymousImageBedOn bool             `json:"anonymous_image_bed_on"`
 	Sources             []overviewSource `json:"sources"`
 	Users               []overviewUser   `json:"users"`
@@ -71,7 +69,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		RecentAudits: []overviewAudit{},
 	}
 
-	// 1) 统计：存储源 / 用户 / 公开挂载
+	// 1) 统计：存储源 / 用户 / 公开盘状态
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM storage_sources`).Scan(&out.SourceCount); err != nil {
 		WriteError(w, r, CodeInternalError, "查询存储源数量失败", nil)
 		return
@@ -80,9 +78,8 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeInternalError, "查询用户数量失败", nil)
 		return
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM storage_sources WHERE is_disabled = 0 AND public_read_enabled = 1 AND public_mount_path IS NOT NULL`).Scan(&out.PublicMountCount); err != nil {
-		WriteError(w, r, CodeInternalError, "查询公开挂载数量失败", nil)
-		return
+	if _, err := s.capabilities.ResolveSource("public_drive"); err == nil {
+		out.PublicDriveEnabled = true
 	}
 
 	// 2) 匿名图床：读 system_settings
@@ -92,7 +89,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3) 存储源列表（限制 4 条与首页表格接近）
-	srcRows, err := s.db.Query(`SELECT key, name, root_path, COALESCE(public_mount_path, ''), webdav_enabled, image_bed_enabled, public_read_enabled, is_disabled
+	srcRows, err := s.db.Query(`SELECT key, name, root_path, webdav_enabled, s3_enabled, is_disabled
   FROM storage_sources ORDER BY id LIMIT 4`)
 	if err != nil {
 		WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
@@ -100,7 +97,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	for srcRows.Next() {
 		var os overviewSource
-		if err := srcRows.Scan(&os.Key, &os.Name, &os.RootPath, &os.PublicMountPath, &os.WebdavEnabled, &os.ImageBedEnabled, &os.PublicReadEnabled, &os.IsDisabled); err != nil {
+		if err := srcRows.Scan(&os.Key, &os.Name, &os.RootPath, &os.WebdavEnabled, &os.S3Enabled, &os.IsDisabled); err != nil {
 			srcRows.Close()
 			WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
 			return

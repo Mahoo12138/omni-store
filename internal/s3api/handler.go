@@ -75,7 +75,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src, err := h.sources.Get(bucket)
-	if err != nil || src.IsDisabled {
+	if err != nil || src.IsDisabled || !src.S3Enabled {
+		// 只有 s3_enabled 的源进入对象操作；未开启源按 NoSuchBucket 处理。
 		h.writeError(w, r, http.StatusNotFound, "NoSuchBucket", "指定的存储源不存在", bucket)
 		return
 	}
@@ -229,7 +230,8 @@ func (h *Handler) listBuckets(w http.ResponseWriter, r *http.Request, user *mode
 	items := make([]bucket, 0, len(views))
 	for _, view := range views {
 		src, err := h.sources.Get(view.Key)
-		if err == nil {
+		// Bucket 列表只返回启用 S3 且用户有权限的源。
+		if err == nil && src.S3Enabled {
 			items = append(items, bucket{Name: src.Key, CreationDate: src.CreatedAt.UTC()})
 		}
 	}

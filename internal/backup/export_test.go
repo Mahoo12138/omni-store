@@ -156,9 +156,9 @@ func seedTransientState(t *testing.T, conn *sql.DB) {
 			is_disabled, quota_bytes, created_at, updated_at
 		) VALUES (1, 'usr_backup', 'backup-user', 'Backup User', 'hash', 'super_admin', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		`INSERT INTO storage_sources (
-			id, key, name, root_path, is_disabled, public_read_enabled,
-			webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at
-		) VALUES (1, 'src_backup', 'Backup Source', '/tmp/backup-source', 0, 0, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+			id, key, name, root_path, is_disabled,
+			webdav_enabled, s3_enabled, quota_bytes, created_at, updated_at
+		) VALUES (1, 'src_backup', 'Backup Source', '/tmp/backup-source', 0, 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		`INSERT INTO sessions (
 			session_id, user_id, csrf_token_hash, expires_at, created_at, last_seen_at
 		) VALUES ('session-backup', 1, 'csrf-hash', '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,

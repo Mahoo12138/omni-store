@@ -28,6 +28,10 @@ type migrationFile struct {
 // Migrate applies each SemVer migration exactly once and records the version in
 // schema_migrations. Applied files are immutable: schema changes must be added
 // as a new vMAJOR.MINOR.PATCH.sql file instead of editing or replaying history.
+//
+// 迁移期间按 SQLite 官方重建流程关闭外键强制（PRAGMA foreign_keys 是事务内
+// no-op，必须在事务外切换），避免重建带子表引用的表时触发级联删除；
+// 全部迁移结束后用 foreign_key_check 校验完整性并恢复强制。
 func Migrate(conn *sql.DB) error {
 	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
   version TEXT PRIMARY KEY,
@@ -60,12 +64,21 @@ func Migrate(conn *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	pending := make([]migrationFile, 0, len(files))
 	for _, file := range files {
-		version := strings.TrimSuffix(file.name, ".sql")
-		if applied[version] {
-			continue
+		if !applied[strings.TrimSuffix(file.name, ".sql")] {
+			pending = append(pending, file)
 		}
+	}
+	if len(pending) == 0 {
+		return nil
+	}
 
+	// 单连接设置下该 PRAGMA 会落在后续事务使用的同一连接上。
+	if _, err := conn.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
+		return fmt.Errorf("迁移前关闭外键强制失败: %w", err)
+	}
+	for _, file := range pending {
 		sqlBytes, err := migrations.FS.ReadFile(file.name)
 		if err != nil {
 			return fmt.Errorf("读取迁移 %s 失败: %w", file.name, err)
@@ -79,15 +92,39 @@ func Migrate(conn *sql.DB) error {
 			return fmt.Errorf("执行迁移 %s 失败: %w", file.name, err)
 		}
 		if _, err := tx.Exec(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
-			version, time.Now().UTC()); err != nil {
+			strings.TrimSuffix(file.name, ".sql"), time.Now().UTC()); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("记录迁移版本 %s 失败: %w", version, err)
+			return fmt.Errorf("记录迁移版本 %s 失败: %w", file.name, err)
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("提交迁移 %s 失败: %w", file.name, err)
 		}
 	}
+	if _, err := conn.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		return fmt.Errorf("恢复外键强制失败: %w", err)
+	}
+	if err := verifyForeignKeyIntegrity(conn); err != nil {
+		return err
+	}
 	return nil
+}
+
+// verifyForeignKeyIntegrity 在迁移后确认没有悬空引用，防止迁移副本漏行。
+func verifyForeignKeyIntegrity(conn *sql.DB) error {
+	rows, err := conn.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("外键完整性检查失败: %w", err)
+	}
+	defer rows.Close()
+	var table string
+	if rows.Next() {
+		if err := rows.Scan(&table, new(any), new(any)); err != nil {
+			rows.Close()
+			return err
+		}
+		return fmt.Errorf("迁移后外键完整性校验失败，表 %s 存在悬空引用", table)
+	}
+	return rows.Err()
 }
 
 func migrationFiles() ([]migrationFile, error) {

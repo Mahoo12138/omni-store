@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,9 +20,9 @@ import (
 )
 
 var (
-	// ErrNoTarget 用户没有可用的图床目标。
-	ErrNoTarget = errors.New("没有可用的图床目标，请先在设置中选择")
-	// ErrTargetInvalid 目标存储源不可用（禁用/未开图床/无读写权限）。
+	// ErrNoTarget 图床能力未开启或未绑定存储源。
+	ErrNoTarget = errors.New("图床未开启或未绑定存储源")
+	// ErrTargetInvalid 目标存储源不可用。
 	ErrTargetInvalid = errors.New("图床目标不可用")
 	// ErrNotFound 图片不存在。
 	ErrNotFound = errors.New("图片不存在")
@@ -31,11 +30,13 @@ var (
 	ErrAnonymousDisabled = errors.New("匿名公共图床未开启")
 )
 
-// 系统设置 key（README §22.9）。
-const (
-	SettingAnonymousEnabled         = "anonymous_image_bed_enabled"
-	SettingAnonymousStorageSourceID = "anonymous_image_bed_storage_source_id"
-)
+// 系统设置 key（README §22.9）。2.0 起图床目标由 Site Capability 绑定决定。
+const SettingAnonymousEnabled = "anonymous_image_bed_enabled"
+
+// capabilitiesLookup 是图床需要的 Site Capability 窄接口。
+type capabilitiesLookup interface {
+	ResolveSource(capability string) (*models.StorageSource, error)
+}
 
 // Service 提供图床能力。
 type Service struct {
@@ -44,6 +45,7 @@ type Service struct {
 	publicURL      string
 	thumbnailCache string
 	sources        *sources.Service
+	capabilities   capabilitiesLookup
 	files          *files.Service
 	locks          *locks.Manager
 	thumbnailLocks *locks.Manager
@@ -51,7 +53,7 @@ type Service struct {
 }
 
 // NewService 创建图床服务。
-func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *sources.Service, fileSvc *files.Service) (*Service, error) {
+func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *sources.Service, capSvc capabilitiesLookup, fileSvc *files.Service) (*Service, error) {
 	rootRel, err := security.NormalizeRelPath(rootPath)
 	if err != nil || rootRel == "" {
 		return nil, fmt.Errorf("image_bed.root_path 非法: %s", rootPath)
@@ -64,79 +66,31 @@ func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *
 	}
 	return &Service{
 		db: db, rootRel: rootRel, publicURL: strings.TrimRight(publicURL, "/"), thumbnailCache: thumbnailCache,
-		sources: srcSvc, files: fileSvc, locks: fileSvc.Locks(), thumbnailLocks: locks.NewManager(),
+		sources: srcSvc, capabilities: capSvc, files: fileSvc, locks: fileSvc.Locks(), thumbnailLocks: locks.NewManager(),
 		thumbnailSlot: make(chan struct{}, 1),
 	}, nil
 }
 
-// --- 图床目标（README §17.3） ---
+// --- 图床目标 ---
 
-// Targets 返回用户当前图床目录可写且已启用图床的存储源。
-func (s *Service) Targets(user *models.User) ([]*models.UserSourceView, error) {
-	list, err := s.sources.ListForUser(user)
+// currentTarget 返回图床能力当前绑定的存储源。
+// 服务授权只在自己托管范围内有效，不要求用户对该源有路径 Policy。
+func (s *Service) currentTarget() (*models.StorageSource, error) {
+	src, err := s.capabilities.ResolveSource("image_bed")
 	if err != nil {
-		return nil, err
-	}
-	out := []*models.UserSourceView{}
-	for _, v := range list {
-		if !v.ImageBedEnabled {
-			continue
-		}
-		allowed, err := s.sources.CanWritePath(user, v.Key, s.userImageRelDir(user, time.Now().UTC()))
-		if err != nil {
-			return nil, err
-		}
-		if allowed {
-			v.Permission = models.PermissionReadWrite
-			out = append(out, v)
-		}
-	}
-	return out, nil
-}
-
-// DefaultTarget 返回用户默认图床目标的不透明 key，可能为空。
-func (s *Service) DefaultTarget(userID int64) (string, error) {
-	var target sql.NullString
-	err := s.db.QueryRow(`SELECT s.key FROM user_preferences p
-  JOIN storage_sources s ON s.id = p.default_image_bed_storage_source_id WHERE p.user_id = ?`,
-		userID).Scan(&target)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return target.String, nil
-}
-
-// SetDefaultTarget 设置用户默认图床目标。
-func (s *Service) SetDefaultTarget(user *models.User, sourceKey string) error {
-	src, err := s.checkTarget(user, sourceKey, s.userImageRelDir(user, time.Now().UTC()))
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec(`INSERT INTO user_preferences (user_id, default_image_bed_storage_source_id, updated_at)
-  VALUES (?, ?, ?)
-  ON CONFLICT(user_id) DO UPDATE SET default_image_bed_storage_source_id = excluded.default_image_bed_storage_source_id,
-    updated_at = excluded.updated_at`,
-		user.ID, src.ID, time.Now().UTC())
-	return err
-}
-
-// checkTarget 校验存储源可作为该用户的图床目标。
-func (s *Service) checkTarget(user *models.User, sourceKey, relPath string) (*models.StorageSource, error) {
-	src, err := s.sources.Get(sourceKey)
-	if err != nil {
-		return nil, ErrTargetInvalid
-	}
-	if src.IsDisabled || !src.ImageBedEnabled {
-		return nil, ErrTargetInvalid
-	}
-	ok, err := s.sources.CanWritePath(user, sourceKey, relPath)
-	if err != nil || !ok {
-		return nil, ErrTargetInvalid
+		return nil, ErrNoTarget
 	}
 	return src, nil
+}
+
+// CurrentTarget 暴露当前绑定目标给状态查询入口。
+func (s *Service) CurrentTarget() (*models.StorageSource, error) {
+	return s.currentTarget()
+}
+
+// checkTarget 返回图床能力绑定的存储源。2.0 起用户不再选择源。
+func (s *Service) checkTarget() (*models.StorageSource, error) {
+	return s.currentTarget()
 }
 
 func (s *Service) userImageRelDir(user *models.User, now time.Time) string {
@@ -145,23 +99,13 @@ func (s *Service) userImageRelDir(user *models.User, now time.Time) string {
 
 // --- 上传 ---
 
-// UploadForUser 登录用户上传图片。source key 为空时使用默认图床目标（README §17.3）。
-func (s *Service) UploadForUser(user *models.User, sourceKey, originalFilename string, body io.Reader) (*models.Image, error) {
-	if sourceKey == "" {
-		var err error
-		sourceKey, err = s.DefaultTarget(user.ID)
-		if err != nil {
-			return nil, err
-		}
-		if sourceKey == "" {
-			return nil, ErrNoTarget
-		}
-	}
+// UploadForUser 登录用户上传图片。目标由 Site Capability 绑定决定（README §17.3）。
+func (s *Service) UploadForUser(user *models.User, originalFilename string, body io.Reader) (*models.Image, error) {
 	now := time.Now().UTC()
 	relDir := s.userImageRelDir(user, now)
-	src, err := s.checkTarget(user, sourceKey, relDir)
+	src, err := s.checkTarget()
 	if err != nil {
-		return nil, ErrTargetInvalid
+		return nil, err
 	}
 	return s.upload(src, relDir, originalFilename, models.ImageOwnerUser, &user.ID, body)
 }
@@ -173,73 +117,38 @@ type AnonymousSettings struct {
 }
 
 // GetAnonymousSettings 读取匿名图床配置（README §17.5，默认关闭）。
+// 目标由 Site Capability 绑定决定；Enabled 只代表入口开关。
 func (s *Service) GetAnonymousSettings() (*AnonymousSettings, error) {
 	out := &AnonymousSettings{}
-	rows, err := s.db.Query(`SELECT key, value FROM system_settings WHERE key IN (?, ?)`,
-		SettingAnonymousEnabled, SettingAnonymousStorageSourceID)
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM system_settings WHERE key = ?`, SettingAnonymousEnabled).Scan(&value)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	out.Enabled = value == "true"
+	if !out.Enabled {
+		return out, nil
+	}
+	src, err := s.capabilities.ResolveSource("image_bed")
 	if err != nil {
-		return nil, err
+		// 绑定不可用时入口保持开启状态但不可上传。
+		out.Key = ""
+		return out, nil
 	}
-	var storageSourceID int64
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		switch k {
-		case SettingAnonymousEnabled:
-			out.Enabled = v == "true"
-		case SettingAnonymousStorageSourceID:
-			if id, parseErr := strconv.ParseInt(v, 10, 64); parseErr == nil {
-				storageSourceID = id
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	// db.Open 采用单连接；必须在关闭 rows 后再查询存储源，避免连接自等待。
-	if storageSourceID > 0 {
-		if src, getErr := s.sources.GetByID(storageSourceID); getErr == nil {
-			out.Key = src.Key
-		}
-	}
+	out.Key = src.Key
 	return out, nil
 }
 
-// SetAnonymousSettings 更新匿名图床配置（仅超级管理员入口调用）。
-func (s *Service) SetAnonymousSettings(enabled bool, sourceKey string) error {
-	var storageSourceID int64
+// SetAnonymousSettings 更新匿名图床入口开关（仅超级管理员入口调用）。
+func (s *Service) SetAnonymousSettings(enabled bool) error {
+	value := "false"
 	if enabled {
-		src, err := s.sources.Get(sourceKey)
-		if err != nil {
-			return ErrTargetInvalid
-		}
-		// 目标必须未禁用且开启图床（README §17.5）。
-		if src.IsDisabled || !src.ImageBedEnabled {
-			return ErrTargetInvalid
-		}
-		storageSourceID = src.ID
+		value = "true"
 	}
-	now := time.Now().UTC()
-	set := func(k, v string) error {
-		_, err := s.db.Exec(`INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
-  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, k, v, now)
-		return err
-	}
-	enabledStr := "false"
-	if enabled {
-		enabledStr = "true"
-	}
-	if err := set(SettingAnonymousEnabled, enabledStr); err != nil {
-		return err
-	}
-	return set(SettingAnonymousStorageSourceID, strconv.FormatInt(storageSourceID, 10))
+	_, err := s.db.Exec(`INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		SettingAnonymousEnabled, value, time.Now().UTC())
+	return err
 }
 
 // UploadAnonymous 匿名上传图片（README §17.5）。调用方负责限流。
@@ -248,14 +157,11 @@ func (s *Service) UploadAnonymous(originalFilename string, body io.Reader) (*mod
 	if err != nil {
 		return nil, err
 	}
-	if !settings.Enabled || settings.Key == "" {
+	if !settings.Enabled {
 		return nil, ErrAnonymousDisabled
 	}
-	src, err := s.sources.Get(settings.Key)
+	src, err := s.currentTarget()
 	if err != nil {
-		return nil, ErrAnonymousDisabled
-	}
-	if src.IsDisabled || !src.ImageBedEnabled {
 		return nil, ErrAnonymousDisabled
 	}
 
@@ -556,15 +462,7 @@ func (s *Service) DeleteByUser(user *models.User, imageID string) error {
 	if img.OwnerType != models.ImageOwnerUser || img.OwnerUserID == nil || *img.OwnerUserID != user.ID {
 		return ErrNotFound // 不暴露他人图片存在性
 	}
-	// 检查用户当前是否仍对该存储源有读写权限。
-	src, err := s.sources.GetByID(img.StorageSourceID)
-	if err != nil {
-		return ErrTargetInvalid
-	}
-	ok, err := s.sources.CanWritePath(user, src.Key, img.RelativePath)
-	if err != nil || !ok {
-		return ErrTargetInvalid
-	}
+	// 图床服务授权只作用于托管范围：所有权校验即可删除，不要求源路径 Policy。
 	return s.deletePhysicalAndRecord(img)
 }
 

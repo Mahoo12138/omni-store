@@ -61,6 +61,10 @@ func newS3Fixture(t *testing.T) *s3Fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s3Enabled := true
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{S3Enabled: &s3Enabled}); err != nil {
+		t.Fatal(err)
+	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
 	credentials := NewCredentials(conn, dataDir, base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)))
 	item, secret, err := credentials.Create(user.ID, "测试客户端")

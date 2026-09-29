@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/config"
 	"github.com/omni-store/omnistore/internal/datadir"
 	"github.com/omni-store/omnistore/internal/db"
@@ -90,11 +91,11 @@ func seed(configFile, fixtureRoot string) error {
 	_ = sessions.DeleteByUser(demo.ID)
 
 	sourceService := sources.NewService(conn, cfg.Data.Dir)
-	publicSource, err := ensureSource(sourceService, "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, true, "/demo", true, 32*1024*1024)
+	publicSource, err := ensureSource(sourceService, "公开演示资料", "无需登录即可浏览的演示目录", publicRoot, 32*1024*1024)
 	if err != nil {
 		return err
 	}
-	teamSource, err := ensureSource(sourceService, "团队文件", "用于测试读写权限和文件操作", teamRoot, false, "", true, 128*1024*1024)
+	teamSource, err := ensureSource(sourceService, "团队文件", "用于测试读写权限和文件操作", teamRoot, 128*1024*1024)
 	if err != nil {
 		return err
 	}
@@ -113,18 +114,24 @@ func seed(configFile, fixtureRoot string) error {
 	if _, err := fileService.ReconcileSource(teamSource); err != nil {
 		return err
 	}
+	capabilityService := capabilities.NewService(conn, sourceService)
+	enabled := true
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityPublicDrive, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &publicSource.Key,
+	}); err != nil {
+		return err
+	}
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityImageBed, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &teamSource.Key,
+	}); err != nil {
+		return err
+	}
 	imageService, err := imagebed.NewService(conn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
-		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), sourceService, fileService)
+		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		return err
 	}
-	if err := imageService.SetDefaultTarget(admin, publicSource.Key); err != nil {
-		return err
-	}
-	if err := imageService.SetDefaultTarget(demo, teamSource.Key); err != nil {
-		return err
-	}
-	if err := imageService.SetAnonymousSettings(true, publicSource.Key); err != nil {
+	if err := imageService.SetAnonymousSettings(true); err != nil {
 		return err
 	}
 
@@ -247,7 +254,7 @@ func ensureUser(service *users.Service, username, displayName, password, role st
 	return service.GetByID(user.ID)
 }
 
-func ensureSource(service *sources.Service, name, description, root string, public bool, mountPath string, imageBed bool, quotaBytes int64) (*models.StorageSource, error) {
+func ensureSource(service *sources.Service, name, description, root string, quotaBytes int64) (*models.StorageSource, error) {
 	var source *models.StorageSource
 	list, err := service.List()
 	if err != nil {
@@ -272,15 +279,10 @@ func ensureSource(service *sources.Service, name, description, root string, publ
 	}
 	webdav := true
 	input := sources.UpdateInput{
-		Name:              &name,
-		Description:       &description,
-		PublicReadEnabled: &public,
-		WebdavEnabled:     &webdav,
-		ImageBedEnabled:   &imageBed,
-		QuotaBytes:        &quotaBytes,
-	}
-	if public || mountPath != "" {
-		input.PublicMountPath = &mountPath
+		Name:          &name,
+		Description:   &description,
+		WebdavEnabled: &webdav,
+		QuotaBytes:    &quotaBytes,
 	}
 	return service.Update(source.Key, input)
 }

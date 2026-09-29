@@ -14,6 +14,7 @@ import (
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/buildinfo"
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/config"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
@@ -43,6 +44,7 @@ type Server struct {
 	tokens         *auth.Tokens
 	imagebed       *imagebed.Service
 	anonLimiter    *imagebed.RateLimiter
+	capabilities   *capabilities.Service
 	audit          *audit.Logger
 	proxy          *security.ProxyResolver
 	s3Keys         *s3api.Credentials
@@ -82,7 +84,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	}
 	s.sources = sources.NewService(dbConn, cfg.Data.Dir)
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
-	s.public = publicdisk.NewService(dbConn, s.sources, s.files)
+	s.capabilities = capabilities.NewService(dbConn, s.sources)
+	s.public = publicdisk.NewService(s.files, s.capabilities)
 	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
 	s.s3Keys = s3api.NewCredentials(dbConn, cfg.Data.Dir, cfg.Security.MasterKey)
@@ -90,7 +93,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.s3Handler = s3api.NewHandler(s.s3Keys, s.sources, s.files, s.audit, s.proxy, logger,
 		cfg.Upload.MaxFileSizeMB, s.s3Multipart)
 	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
-		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.files)
+		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.capabilities, s.files)
 	if err != nil {
 		// 配置错误应在启动时直接失败。
 		panic(err)
@@ -193,14 +196,15 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("PUT /api/v1/admin/policies/{key}", s.requireAdmin(s.handleAdminUpdatePolicy))
 	mux.HandleFunc("DELETE /api/v1/admin/policies/{key}", s.requireAdmin(s.handleAdminDeletePolicy))
 
-	// 公开网盘（匿名可访问，README §12.5）
-	mux.HandleFunc("GET /api/v1/public/mounts", s.handlePublicMounts)
+	// 公开网盘（匿名可访问，2.0：/public 固定映射全局绑定 Source）
+	mux.HandleFunc("GET /api/v1/public/summary", s.handlePublicSummary)
 	mux.HandleFunc("GET /api/v1/public/browse", s.handlePublicBrowse)
 	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}", s.handlePublicShareInfo)
 	mux.HandleFunc("POST /api/v1/public/shares/{shareKey}/unlock", s.handlePublicShareUnlock)
 	mux.HandleFunc("GET /api/v1/public/shares/{shareKey}/browse", s.handlePublicShareBrowse)
 	mux.HandleFunc("GET /share/{shareKey}/archive", s.handlePublicShareArchive)
-	mux.HandleFunc("GET /raw/{virtual_path...}", s.handlePublicRaw)
+	mux.HandleFunc("GET /public/raw/{path...}", s.handlePublicRaw)
+	mux.HandleFunc("HEAD /public/raw/{path...}", s.handlePublicRaw)
 	mux.HandleFunc("GET /share/{shareKey}/raw", s.handlePublicShareRaw)
 	mux.HandleFunc("HEAD /share/{shareKey}/raw", s.handlePublicShareRaw)
 	mux.HandleFunc("GET /share/{shareKey}/raw/{childPath...}", s.handlePublicShareRaw)
@@ -215,9 +219,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /i/{image_file}", s.handleServeImage)
 	mux.HandleFunc("GET /t/{thumbnail_file}", s.handleServeThumbnail)
 
-	// 图床：登录用户（README §17.3/§17.11/§17.12）
-	mux.HandleFunc("GET /api/v1/image-bed/targets", s.requireAuth(s.handleImageBedTargets))
-	mux.HandleFunc("PUT /api/v1/image-bed/default-target", s.requireAuth(s.handleSetImageBedDefaultTarget))
+	// 图床：登录用户（2.0：目标由 Site Capability 绑定决定）
+	mux.HandleFunc("GET /api/v1/image-bed/status", s.requireAuth(s.handleImageBedStatus))
 	mux.HandleFunc("POST /api/v1/image-bed/uploads", s.requireAuth(s.handleImageBedUpload))
 	mux.HandleFunc("GET /api/v1/image-bed/images", s.requireAuth(s.handleImageBedHistory))
 	mux.HandleFunc("DELETE /api/v1/image-bed/images/{image_id}", s.requireAuth(s.handleImageBedDelete))
@@ -235,6 +238,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/admin/image-bed/anonymous-images", s.requireAdmin(s.handleAdminListAnonymousImages))
 	mux.HandleFunc("DELETE /api/v1/admin/image-bed/anonymous-images/{image_id}", s.requireAdmin(s.handleAdminDeleteAnonymousImage))
 
+	// 管理员：Site Capability 绑定（2.0）
+	mux.HandleFunc("GET /api/v1/admin/capabilities", s.requireAdmin(s.handleAdminListCapabilities))
+	mux.HandleFunc("PUT /api/v1/admin/capabilities/{capability}", s.requireAdmin(s.handleAdminUpdateCapability))
+
 	// 管理员：审计日志（筛选与分页）
 	mux.HandleFunc("GET /api/v1/admin/audit-logs", s.requireAdmin(s.handleAdminAuditLogs))
 
@@ -250,7 +257,6 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 		WriteError(w, r, CodeFileNotFound, "接口不存在", nil)
 	})
 	spa := s.spaHandler()
-	mux.HandleFunc("GET /p/{virtual_path...}", s.handlePublicPage(spa))
 	mux.Handle("/", spa)
 
 	var handler http.Handler = mux

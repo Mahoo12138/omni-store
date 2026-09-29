@@ -10,33 +10,31 @@ const (
 
 // StorageSource 对应 storage_sources 表。
 // root_path 只对管理员可见，返回普通用户时必须裁剪。
+// 产品功能开关属于 Site Capability（site_capability_bindings），
+// 存储源只保留访问协议开关（WebDAV / S3）。
 type StorageSource struct {
-	ID                int64     `json:"id"`
-	Key               string    `json:"key"`
-	Name              string    `json:"name"`
-	Description       string    `json:"description"`
-	RootPath          string    `json:"root_path"`
-	IsDisabled        bool      `json:"is_disabled"`
-	PublicReadEnabled bool      `json:"public_read_enabled"`
-	PublicMountPath   *string   `json:"public_mount_path"`
-	WebdavEnabled     bool      `json:"webdav_enabled"`
-	ImageBedEnabled   bool      `json:"image_bed_enabled"`
-	QuotaBytes        int64     `json:"quota_bytes"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID            int64     `json:"id"`
+	Key           string    `json:"key"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	RootPath      string    `json:"root_path"`
+	IsDisabled    bool      `json:"is_disabled"`
+	WebdavEnabled bool      `json:"webdav_enabled"`
+	S3Enabled     bool      `json:"s3_enabled"`
+	QuotaBytes    int64     `json:"quota_bytes"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // UserSourceView 是普通用户可见的存储源信息（不含 root_path）。
 type UserSourceView struct {
-	Key               string `json:"key"`
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	Permission        string `json:"permission"`
-	PublicReadEnabled bool   `json:"public_read_enabled"`
-	PublicMountPath   string `json:"public_mount_path,omitempty"`
-	WebdavEnabled     bool   `json:"webdav_enabled"`
-	ImageBedEnabled   bool   `json:"image_bed_enabled"`
-	QuotaBytes        int64  `json:"quota_bytes"`
+	Key           string `json:"key"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Permission    string `json:"permission"`
+	WebdavEnabled bool   `json:"webdav_enabled"`
+	S3Enabled     bool   `json:"s3_enabled"`
+	QuotaBytes    int64  `json:"quota_bytes"`
 }
 
 // StorageQuota 是存储源实时用量和硬配额摘要；quota_bytes 为 0 表示不限制。

@@ -109,35 +109,6 @@ func (s *Server) handleServeThumbnail(w http.ResponseWriter, r *http.Request) {
 
 // --- 登录用户图床（网页端） ---
 
-func (s *Server) handleImageBedTargets(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
-	targets, err := s.imagebed.Targets(user)
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询图床目标失败", nil)
-		return
-	}
-	def, err := s.imagebed.DefaultTarget(user.ID)
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询默认目标失败", nil)
-		return
-	}
-	WriteData(w, r, map[string]any{"targets": targets, "default_key": def})
-}
-
-func (s *Server) handleSetImageBedDefaultTarget(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Key string `json:"key"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if err := s.imagebed.SetDefaultTarget(CurrentUser(r.Context()), req.Key); err != nil {
-		writeImageBedError(w, r, err)
-		return
-	}
-	WriteData(w, r, map[string]any{"ok": true})
-}
-
 func (s *Server) imageBedAudit(r *http.Request, entryType, action string, userID *int64, storageSourceID *int64, sourceKey string, opErr error) {
 	actorType := audit.ActorUser
 	if userID == nil {
@@ -168,6 +139,16 @@ func imageStorageSourceID(img *models.Image) *int64 {
 	return &id
 }
 
+// handleImageBedStatus 返回当前用户图床可用状态（目标由 Site Capability 绑定决定）。
+func (s *Server) handleImageBedStatus(w http.ResponseWriter, r *http.Request) {
+	src, err := s.imagebed.CurrentTarget()
+	if err != nil {
+		WriteData(w, r, map[string]any{"available": false, "source_key": "", "source_name": ""})
+		return
+	}
+	WriteData(w, r, map[string]any{"available": true, "source_key": src.Key, "source_name": src.Name})
+}
+
 // handleImageBedUpload 网页端登录用户上传（Cookie + CSRF）。
 func (s *Server) handleImageBedUpload(w http.ResponseWriter, r *http.Request) {
 	user := CurrentUser(r.Context())
@@ -177,9 +158,8 @@ func (s *Server) handleImageBedUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourceKey := r.URL.Query().Get("key") // 可临时切换目标（README §17.3）
-	img, err := s.imagebed.UploadForUser(user, sourceKey, path.Base(part.FileName()), part)
-	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, imageStorageSourceID(img), sourceKey, err)
+	img, err := s.imagebed.UploadForUser(user, path.Base(part.FileName()), part)
+	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, imageStorageSourceID(img), "", err)
 	if err != nil {
 		writeImageBedError(w, r, err)
 		return
@@ -241,8 +221,8 @@ func (s *Server) handlePicGoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// PicGo 上传使用默认图床目标，不允许指定存储源 key（README §17.3）。
-	img, err := s.imagebed.UploadForUser(user, "", path.Base(part.FileName()), part)
+	// 图床上传使用 Site Capability 绑定的全局目标，不允许指定存储源 key。
+	img, err := s.imagebed.UploadForUser(user, path.Base(part.FileName()), part)
 	s.imageBedAudit(r, audit.EntryImageBed, "image_upload", &user.ID, imageStorageSourceID(img), "", err)
 	if err != nil {
 		msg := "上传失败"
@@ -316,13 +296,12 @@ func (s *Server) handleAdminGetAnonymousSettings(w http.ResponseWriter, r *http.
 
 func (s *Server) handleAdminSetAnonymousSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Enabled bool   `json:"enabled"`
-		Key     string `json:"key"`
+		Enabled bool `json:"enabled"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.imagebed.SetAnonymousSettings(req.Enabled, req.Key); err != nil {
+	if err := s.imagebed.SetAnonymousSettings(req.Enabled); err != nil {
 		writeImageBedError(w, r, err)
 		return
 	}

@@ -544,14 +544,10 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 			if source.IsDisabled {
 				continue
 			}
-			mount := ""
-			if source.PublicMountPath != nil {
-				mount = *source.PublicMountPath
-			}
 			out = append(out, &models.UserSourceView{
 				Key: source.Key, Name: source.Name, Description: source.Description,
-				Permission: models.PermissionReadWrite, PublicReadEnabled: source.PublicReadEnabled,
-				PublicMountPath: mount, WebdavEnabled: source.WebdavEnabled, ImageBedEnabled: source.ImageBedEnabled,
+				Permission:    models.PermissionReadWrite,
+				WebdavEnabled: source.WebdavEnabled, S3Enabled: source.S3Enabled,
 				QuotaBytes: source.QuotaBytes,
 			})
 		}
@@ -561,7 +557,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 	rows, err := s.db.Query(`SELECT s.key, s.name, s.description,
   CASE MAX(CASE ps.permission WHEN 'read_write' THEN 2 ELSE 1 END)
     WHEN 2 THEN 'read_write' ELSE 'read_only' END,
-  s.public_read_enabled, COALESCE(s.public_mount_path, ''), s.webdav_enabled, s.image_bed_enabled, s.quota_bytes
+  s.webdav_enabled, s.s3_enabled, s.quota_bytes
   FROM user_access_policies up
   JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
   JOIN storage_sources s ON s.id = ps.storage_source_id
@@ -577,7 +573,7 @@ func (s *Service) ListForUser(user *models.User) ([]*models.UserSourceView, erro
 		var view models.UserSourceView
 		var description sql.NullString
 		if err := rows.Scan(&view.Key, &view.Name, &description, &view.Permission,
-			&view.PublicReadEnabled, &view.PublicMountPath, &view.WebdavEnabled, &view.ImageBedEnabled, &view.QuotaBytes); err != nil {
+			&view.WebdavEnabled, &view.S3Enabled, &view.QuotaBytes); err != nil {
 			return nil, err
 		}
 		view.Description = description.String

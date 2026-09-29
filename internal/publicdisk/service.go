@@ -1,156 +1,71 @@
-// Package publicdisk 实现公开网盘：虚拟挂载解析、公开目录浏览、raw 文件访问（README §12）。
+// Package publicdisk 实现公开网盘：全站单 Source 绑定、公开目录浏览、raw 文件访问。
+// 2.0 起 /public/* 固定映射 Site Public Drive 绑定的存储源，不再存在多源挂载。
 package publicdisk
 
 import (
-	"database/sql"
 	"errors"
-	"strings"
 
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
-	"github.com/omni-store/omnistore/internal/sources"
 )
 
-// ErrNotFound 虚拟路径未命中任何公开挂载。
+// ErrNotFound 公开盘未开启、未绑定或路径不存在。对外一律按不存在处理。
 var ErrNotFound = errors.New("公开路径不存在")
 
-// Mount 是公开网盘首页展示的挂载入口。
-type Mount struct {
-	MountPath   string `json:"mount_path"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+// Summary 是公开盘首页展示的摘要。
+type Summary struct {
+	Enabled    bool   `json:"enabled"`
+	SourceKey  string `json:"source_key,omitempty"`
+	SourceName string `json:"source_name,omitempty"`
 }
 
-func matchMount(rel, mountPath string) (string, bool) {
-	mount := strings.TrimPrefix(mountPath, "/")
-	switch {
-	case rel == mount:
-		return "", true
-	case strings.HasPrefix(rel, mount+"/"):
-		return rel[len(mount)+1:], true
-	default:
-		return "", false
-	}
+// capabilitiesLookup 是公开盘需要的 Site Capability 窄接口。
+type capabilitiesLookup interface {
+	ResolveSource(capability string) (*models.StorageSource, error)
 }
 
 // Service 提供公开网盘能力。复用核心文件服务，不绕过任何安全检查。
 type Service struct {
-	db      *sql.DB
-	sources *sources.Service
-	files   *files.Service
+	files        *files.Service
+	capabilities capabilitiesLookup
 }
 
 // NewService 创建公开网盘服务。
-func NewService(db *sql.DB, srcSvc *sources.Service, fileSvc *files.Service) *Service {
-	return &Service{db: db, sources: srcSvc, files: fileSvc}
+func NewService(fileSvc *files.Service, capabilities capabilitiesLookup) *Service {
+	return &Service{files: fileSvc, capabilities: capabilities}
 }
 
-// ListMounts 返回全部可用公开挂载（未禁用且已公开）。
-func (s *Service) ListMounts() ([]*Mount, error) {
-	rows, err := s.db.Query(`SELECT public_mount_path, name, COALESCE(description, '')
-  FROM storage_sources
-  WHERE is_disabled = 0 AND public_read_enabled = 1 AND public_mount_path IS NOT NULL
-  ORDER BY public_mount_path`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	out := []*Mount{}
-	for rows.Next() {
-		var m Mount
-		if err := rows.Scan(&m.MountPath, &m.Name, &m.Description); err != nil {
-			return nil, err
-		}
-		out = append(out, &m)
-	}
-	return out, rows.Err()
-}
-
-// Resolve 将公开虚拟路径解析为存储源和源内相对路径。
-// 挂载路径互不包含（README §12.3），最多命中一个。
-// 检查链路：挂载存在 -> 存储源未禁用 -> public_read_enabled。
+// Resolve 将公开路径解析为绑定的存储源和源内相对路径。
+// 未开启、未绑定或源不可用时返回 ErrNotFound，与路径不存在不可区分。
 func (s *Service) Resolve(virtualPath string) (*models.StorageSource, string, error) {
 	rel, err := security.NormalizeRelPath(virtualPath)
-	if err != nil || rel == "" {
+	if err != nil {
 		return nil, "", ErrNotFound
 	}
-
-	mounts, err := s.ListMounts()
+	src, err := s.capabilities.ResolveSource("public_drive")
 	if err != nil {
-		return nil, "", err
+		return nil, "", ErrNotFound
 	}
-	for _, m := range mounts {
-		inner, matched := matchMount(rel, m.MountPath)
-		if !matched {
-			continue
-		}
-
-		var storageSourceID int64
-		err := s.db.QueryRow(`SELECT id FROM storage_sources WHERE public_mount_path = ?`,
-			m.MountPath).Scan(&storageSourceID)
-		if err != nil {
-			return nil, "", ErrNotFound
-		}
-		src, err := s.sources.GetByID(storageSourceID)
-		if err != nil {
-			return nil, "", ErrNotFound
-		}
-		if src.IsDisabled || !src.PublicReadEnabled {
-			return nil, "", ErrNotFound
-		}
-		return src, inner, nil
-	}
-	return nil, "", ErrNotFound
+	return src, rel, nil
 }
 
-// RedirectPath 将命中旧挂载路径的虚拟路径改写为当前挂载路径，并保留源内子路径。
-// 只有存储源仍启用且公开时才返回重定向，避免旧链接绕过状态检查。
-func (s *Service) RedirectPath(virtualPath string) (string, bool, error) {
-	rel, err := security.NormalizeRelPath(virtualPath)
-	if err != nil || rel == "" {
-		return "", false, nil
-	}
-
-	rows, err := s.db.Query(`SELECT r.mount_path, s.public_mount_path
-  FROM public_mount_redirects r
-	  JOIN storage_sources s ON s.id = r.storage_source_id
-  WHERE s.is_disabled = 0 AND s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL
-  ORDER BY length(r.mount_path) DESC`)
+// Summary 返回公开盘当前状态。
+func (s *Service) Summary() (*Summary, error) {
+	src, err := s.capabilities.ResolveSource("public_drive")
 	if err != nil {
-		return "", false, err
+		return &Summary{Enabled: false}, nil
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var oldPath, currentPath string
-		if err := rows.Scan(&oldPath, &currentPath); err != nil {
-			return "", false, err
-		}
-		inner, matched := matchMount(rel, oldPath)
-		if !matched {
-			continue
-		}
-		target := currentPath
-		if inner != "" {
-			target += "/" + inner
-		}
-		return target, true, nil
-	}
-	if err := rows.Err(); err != nil {
-		return "", false, err
-	}
-	return "", false, nil
+	return &Summary{Enabled: true, SourceKey: src.Key, SourceName: src.Name}, nil
 }
 
 // List 浏览公开目录。公开侧隐藏 symlink（README §10.7）。
 func (s *Service) List(virtualPath string, opts files.ListOptions) (*files.ListResult, error) {
-	src, inner, err := s.Resolve(virtualPath)
+	src, rel, err := s.Resolve(virtualPath)
 	if err != nil {
 		return nil, err
 	}
-	return s.files.List(src, inner, opts, false)
+	return s.files.List(src, rel, opts, false)
 }
 
 // Files 暴露核心文件服务（raw 下载入口使用）。

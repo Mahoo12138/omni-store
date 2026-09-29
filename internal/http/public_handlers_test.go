@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/locks"
@@ -33,107 +34,25 @@ func newPublicContentServer(t *testing.T) (*Server, string) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	enabled, mountPath := true, "/public"
-	if _, err := sourceService.Update(source.Key, sources.UpdateInput{
-		PublicReadEnabled: &enabled, PublicMountPath: &mountPath,
-	}); err != nil {
-		t.Fatalf("enable public mount: %v", err)
-	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
-	return &Server{public: publicdisk.NewService(conn, sourceService, fileService)}, root
-}
-
-func newPublicRedirectServer(t *testing.T) *Server {
-	t.Helper()
-	base := t.TempDir()
-	dataDir := filepath.Join(base, "data")
-	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	root := filepath.Join(base, "source")
-	if err := os.Mkdir(root, 0o755); err != nil {
-		t.Fatalf("create source root: %v", err)
-	}
-	sourceService := sources.NewService(conn, dataDir)
-	source, err := sourceService.Create(sources.CreateInput{Name: "photo-source", RootPath: root})
-	if err != nil {
-		t.Fatalf("create source: %v", err)
-	}
-	enabled, oldPath, newPath := true, "/photos", "/archive"
-	if _, err := sourceService.Update(source.Key, sources.UpdateInput{
-		PublicReadEnabled: &enabled, PublicMountPath: &oldPath,
+	capabilityService := capabilities.NewService(conn, sourceService)
+	enabled := true
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityPublicDrive, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &source.Key,
 	}); err != nil {
-		t.Fatalf("set initial mount: %v", err)
+		t.Fatalf("bind public drive: %v", err)
 	}
-	if _, err := sourceService.Update(source.Key, sources.UpdateInput{PublicMountPath: &newPath}); err != nil {
-		t.Fatalf("rename mount: %v", err)
-	}
-	fileService := files.NewService(conn, sourceService, locks.NewManager())
-	return &Server{public: publicdisk.NewService(conn, sourceService, fileService)}
+	return &Server{public: publicdisk.NewService(fileService, capabilityService)}, root
 }
 
-func TestHandlePublicPageRedirectsOldMountAndPreservesQuery(t *testing.T) {
-	server := newPublicRedirectServer(t)
-	spaCalled := false
-	spa := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		spaCalled = true
-		w.WriteHeader(http.StatusOK)
-	})
-	req := httptest.NewRequest(http.MethodGet, "/p/photos/2026?a=1", nil)
-	req.SetPathValue("virtual_path", "photos/2026")
-	recorder := httptest.NewRecorder()
-
-	server.handlePublicPage(spa)(recorder, req)
-	if recorder.Code != http.StatusPermanentRedirect {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-	if location := recorder.Header().Get("Location"); location != "/p/archive/2026?a=1" {
-		t.Fatalf("unexpected location: %s", location)
-	}
-	if spaCalled {
-		t.Fatal("SPA should not handle an old mount path")
-	}
-}
-
-func TestHandlePublicRawRedirectsOldMountAndPreservesDownload(t *testing.T) {
-	server := newPublicRedirectServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/raw/photos/a.jpg?download=1", nil)
-	req.SetPathValue("virtual_path", "photos/a.jpg")
-	recorder := httptest.NewRecorder()
-
-	server.handlePublicRaw(recorder, req)
-	if recorder.Code != http.StatusPermanentRedirect {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-	if location := recorder.Header().Get("Location"); location != "/raw/archive/a.jpg?download=1" {
-		t.Fatalf("unexpected location: %s", location)
-	}
-}
-
-func TestHandlePublicBrowseRedirectsOldMountAndPreservesOptions(t *testing.T) {
-	server := newPublicRedirectServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/browse?path=%2Fphotos%2F2026&page=2&order=desc", nil)
-	recorder := httptest.NewRecorder()
-
-	server.handlePublicBrowse(recorder, req)
-	if recorder.Code != http.StatusPermanentRedirect {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-	want := "/api/v1/public/browse?order=desc&page=2&path=%2Farchive%2F2026"
-	if location := recorder.Header().Get("Location"); location != want {
-		t.Fatalf("unexpected location: %s", location)
-	}
-}
-
+// 公开盘 raw 端点继续强制主动内容下载，防止公开浏览器执行 HTML。
 func TestHandlePublicRawForcesActiveContentToDownload(t *testing.T) {
 	server, root := newPublicContentServer(t)
 	if err := os.WriteFile(filepath.Join(root, "attack.html"), []byte("<!doctype html><script>alert(document.domain)</script>"), 0o644); err != nil {
 		t.Fatalf("write test file: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/raw/public/attack.html", nil)
-	req.SetPathValue("virtual_path", "public/attack.html")
+	req := httptest.NewRequest(http.MethodGet, "/public/raw/attack.html", nil)
+	req.SetPathValue("path", "attack.html")
 	response := httptest.NewRecorder()
 
 	server.handlePublicRaw(response, req)
@@ -149,5 +68,35 @@ func TestHandlePublicRawForcesActiveContentToDownload(t *testing.T) {
 	}
 	if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("X-Content-Type-Options=%q", got)
+	}
+}
+
+// 未绑定或关闭公开盘时 raw 端点返回真实 404。
+func TestHandlePublicRawReturns404WhenUnbound(t *testing.T) {
+	base := t.TempDir()
+	dataDir := filepath.Join(base, "data")
+	conn, err := db.Open(filepath.Join(dataDir, "omnistore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	root := filepath.Join(base, "source")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sourceService := sources.NewService(conn, dataDir)
+	if _, err := sourceService.Create(sources.CreateInput{Name: "idle-source", RootPath: root}); err != nil {
+		t.Fatal(err)
+	}
+	fileService := files.NewService(conn, sourceService, locks.NewManager())
+	capabilityService := capabilities.NewService(conn, sourceService)
+	server := &Server{public: publicdisk.NewService(fileService, capabilityService)}
+
+	req := httptest.NewRequest(http.MethodGet, "/public/raw/whatever.txt", nil)
+	req.SetPathValue("path", "whatever.txt")
+	response := httptest.NewRecorder()
+	server.handlePublicRaw(response, req)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unbound raw status=%d, want 404", response.Code)
 	}
 }

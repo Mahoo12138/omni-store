@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/locks"
@@ -34,20 +35,23 @@ func TestAnonymousUploadRejectsQuotaOverflowAndCleansTempFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	enabled, quotaBytes := true, int64(16)
-	source, err = sourceService.Update(source.Key, sources.UpdateInput{
-		ImageBedEnabled: &enabled,
-		QuotaBytes:      &quotaBytes,
-	})
-	if err != nil {
+	quotaBytes := int64(16)
+	if _, err := sourceService.Update(source.Key, sources.UpdateInput{QuotaBytes: &quotaBytes}); err != nil {
 		t.Fatalf("configure source: %v", err)
 	}
 	fileService := files.NewService(conn, sourceService, locks.NewManager())
-	service, err := NewService(conn, "images", "https://store.example.test", filepath.Join(dataDir, "cache"), sourceService, fileService)
+	capabilityService := capabilities.NewService(conn, sourceService)
+	enabled := true
+	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityImageBed, capabilities.UpdateInput{
+		Enabled: &enabled, StorageSourceKey: &source.Key,
+	}); err != nil {
+		t.Fatalf("bind image bed capability: %v", err)
+	}
+	service, err := NewService(conn, "images", "https://store.example.test", filepath.Join(dataDir, "cache"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatalf("create image service: %v", err)
 	}
-	if err := service.SetAnonymousSettings(true, source.Key); err != nil {
+	if err := service.SetAnonymousSettings(true); err != nil {
 		t.Fatalf("enable anonymous image bed: %v", err)
 	}
 

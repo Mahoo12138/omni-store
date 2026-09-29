@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -61,14 +60,13 @@ func (s *Service) DataDir() string {
 }
 
 const sourceColumns = `id, key, name, description, root_path, is_disabled,
-  public_read_enabled, public_mount_path, webdav_enabled, image_bed_enabled, quota_bytes, created_at, updated_at`
+  webdav_enabled, s3_enabled, quota_bytes, created_at, updated_at`
 
 func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, error) {
 	var s models.StorageSource
 	var desc sql.NullString
 	err := row.Scan(&s.ID, &s.Key, &s.Name, &desc, &s.RootPath, &s.IsDisabled,
-		&s.PublicReadEnabled, &s.PublicMountPath, &s.WebdavEnabled, &s.ImageBedEnabled,
-		&s.QuotaBytes, &s.CreatedAt, &s.UpdatedAt)
+		&s.WebdavEnabled, &s.S3Enabled, &s.QuotaBytes, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -142,9 +140,8 @@ func (s *Service) CreateWithInitializer(in CreateInput, initialize CreateInitial
 	for attempt := 0; attempt < 5; attempt++ {
 		key = auth.NewRandomToken("src-", 8)
 		result, err = tx.Exec(`INSERT INTO storage_sources
-  (key, name, description, root_path, is_disabled, public_read_enabled,
-   public_mount_path, webdav_enabled, image_bed_enabled, created_at, updated_at)
-  VALUES (?, ?, ?, ?, 0, 0, NULL, 1, 0, ?, ?)`,
+	  (key, name, description, root_path, is_disabled, webdav_enabled, s3_enabled, created_at, updated_at)
+	  VALUES (?, ?, ?, ?, 0, 1, 0, ?, ?)`,
 			key, in.Name, in.Description, realPath, now, now)
 		if err == nil || !strings.Contains(err.Error(), "storage_sources.key") {
 			break
@@ -228,28 +225,22 @@ func (s *Service) List() ([]*models.StorageSource, error) {
 }
 
 // UpdateInput 是可修改的存储源配置。root_path 创建后不可修改（README §10.3）。
+// 产品功能开关不属于存储源，改用 Site Capability 绑定。
 type UpdateInput struct {
-	Name              *string
-	Description       *string
-	PublicReadEnabled *bool
-	PublicMountPath   *string
-	WebdavEnabled     *bool
-	ImageBedEnabled   *bool
-	QuotaBytes        *int64
-	ExcludePatterns   *[]string
+	Name            *string
+	Description     *string
+	WebdavEnabled   *bool
+	S3Enabled       *bool
+	QuotaBytes      *int64
+	ExcludePatterns *[]string
 }
 
-// Update 修改存储源配置。开启公开访问时校验挂载路径格式和冲突（README §12.3/§12.4）。
+// Update 修改存储源配置与协议开关。
 func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, error) {
 	src, err := s.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	var previousMountPath string
-	if src.PublicMountPath != nil {
-		previousMountPath = *src.PublicMountPath
-	}
-
 	if in.Name != nil {
 		if v := strings.TrimSpace(*in.Name); v != "" {
 			src.Name = v
@@ -258,40 +249,17 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 	if in.Description != nil {
 		src.Description = *in.Description
 	}
-	if in.PublicReadEnabled != nil {
-		src.PublicReadEnabled = *in.PublicReadEnabled
-	}
 	if in.WebdavEnabled != nil {
 		src.WebdavEnabled = *in.WebdavEnabled
 	}
-	if in.ImageBedEnabled != nil {
-		src.ImageBedEnabled = *in.ImageBedEnabled
+	if in.S3Enabled != nil {
+		src.S3Enabled = *in.S3Enabled
 	}
 	if in.QuotaBytes != nil {
 		if *in.QuotaBytes < 0 {
 			return nil, ErrQuotaInvalid
 		}
 		src.QuotaBytes = *in.QuotaBytes
-	}
-	if in.PublicMountPath != nil {
-		src.PublicMountPath = in.PublicMountPath
-	}
-
-	// 关闭公开访问时挂载路径可以留空；非空路径始终校验并预留，避免后续开启时产生冲突。
-	if src.PublicMountPath != nil && strings.TrimSpace(*src.PublicMountPath) == "" {
-		src.PublicMountPath = nil
-	}
-	if src.PublicReadEnabled && src.PublicMountPath == nil {
-		return nil, fmt.Errorf("开启公开访问时必须配置公开挂载路径")
-	}
-
-	var normalizedMountPath string
-	if src.PublicMountPath != nil {
-		normalizedMountPath, err = NormalizeMountPath(*src.PublicMountPath, nil)
-		if err != nil {
-			return nil, err
-		}
-		src.PublicMountPath = &normalizedMountPath
 	}
 
 	tx, err := s.db.Begin()
@@ -300,40 +268,10 @@ func (s *Service) Update(key string, in UpdateInput) (*models.StorageSource, err
 	}
 	defer tx.Rollback()
 
-	if src.PublicMountPath != nil {
-		reserved, err := reservedMountPaths(tx, src.ID, normalizedMountPath)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := NormalizeMountPath(normalizedMountPath, reserved); err != nil {
-			return nil, err
-		}
-		// 允许存储源把当前路径改回自己的某个旧路径。
-		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE storage_source_id = ? AND mount_path = ?`,
-			src.ID, normalizedMountPath); err != nil {
-			return nil, err
-		}
-	}
-
-	if previousMountPath != "" && previousMountPath != normalizedMountPath && src.PublicMountPath != nil {
-		if _, err := tx.Exec(`INSERT INTO public_mount_redirects (storage_source_id, mount_path, created_at)
-  VALUES (?, ?, ?) ON CONFLICT(mount_path) DO NOTHING`, src.ID, previousMountPath, time.Now().UTC()); err != nil {
-			return nil, err
-		}
-	}
-	if src.PublicMountPath == nil {
-		// 没有新的目标路径时，旧路径无法安全重定向，不再继续占用。
-		if _, err := tx.Exec(`DELETE FROM public_mount_redirects WHERE storage_source_id = ?`, src.ID); err != nil {
-			return nil, err
-		}
-	}
-
 	_, err = tx.Exec(`UPDATE storage_sources SET
-  name = ?, description = ?, public_read_enabled = ?, public_mount_path = ?,
-  webdav_enabled = ?, image_bed_enabled = ?, quota_bytes = ?, updated_at = ?
+  name = ?, description = ?, webdav_enabled = ?, s3_enabled = ?, quota_bytes = ?, updated_at = ?
   WHERE id = ?`,
-		src.Name, src.Description, src.PublicReadEnabled, src.PublicMountPath,
-		src.WebdavEnabled, src.ImageBedEnabled, src.QuotaBytes, time.Now().UTC(), src.ID)
+		src.Name, src.Description, src.WebdavEnabled, src.S3Enabled, src.QuotaBytes, time.Now().UTC(), src.ID)
 	if err != nil {
 		return nil, fmt.Errorf("更新存储源失败: %w", err)
 	}
@@ -356,28 +294,6 @@ type statementExecer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-// reservedMountPaths 返回其他当前挂载和全部旧路径。当前存储源准备恢复的同名旧路径除外。
-func reservedMountPaths(q queryer, excludeStorageSourceID int64, allowedRedirectPath string) ([]string, error) {
-	rows, err := q.Query(`SELECT public_mount_path FROM storage_sources
-  WHERE public_mount_path IS NOT NULL AND id != ?
-UNION ALL
-SELECT mount_path FROM public_mount_redirects
-  WHERE NOT (storage_source_id = ? AND mount_path = ?)`, excludeStorageSourceID, excludeStorageSourceID, allowedRedirectPath)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
-}
-
 // SetDisabled 启用/禁用存储源。禁用后所有入口不可访问（README §10.1）。
 func (s *Service) SetDisabled(key string, disabled bool) error {
 	res, err := s.db.Exec(`UPDATE storage_sources SET is_disabled = ?, updated_at = ? WHERE key = ?`,
@@ -392,6 +308,8 @@ func (s *Service) SetDisabled(key string, disabled bool) error {
 }
 
 // Delete 删除存储源的 OmniStore 内部记录，不删除真实磁盘文件（README §10.4）。
+// 仍被 Site Capability 绑定的源在数据库层由 RESTRICT 外键拒绝；
+// HTTP 层必须先调用 capabilities.AssertSourceDeletable 给出可读错误。
 func (s *Service) Delete(key string) error {
 	rootTopologyMu.Lock()
 	defer rootTopologyMu.Unlock()
@@ -410,19 +328,10 @@ func (s *Service) Delete(key string) error {
 	for _, q := range []string{
 		`DELETE FROM access_policy_sources WHERE storage_source_id = ?`,
 		`DELETE FROM storage_source_exclude_patterns WHERE storage_source_id = ?`,
-		`DELETE FROM public_mount_redirects WHERE storage_source_id = ?`,
-		`UPDATE user_preferences SET default_image_bed_storage_source_id = NULL, updated_at = CURRENT_TIMESTAMP
-       WHERE default_image_bed_storage_source_id = ?`,
-		`DELETE FROM images WHERE storage_source_id = ?`,
 	} {
 		if _, err := tx.Exec(q, id); err != nil {
 			return err
 		}
-	}
-	// 匿名图床目标指向该存储源时一并清理。
-	if _, err := tx.Exec(`DELETE FROM system_settings
-  WHERE key = 'anonymous_image_bed_storage_source_id' AND value = ?`, strconv.FormatInt(id, 10)); err != nil {
-		return err
 	}
 
 	res, err := tx.Exec(`DELETE FROM storage_sources WHERE id = ?`, id)

@@ -185,17 +185,14 @@ func TestRecoverUploadAcceptsCommittedImageMovedAfterJournalCleanupFailure(t *te
 }
 
 func TestImageUploadLedgerFailureRollsBackImageFileAndBothDatabaseRows(t *testing.T) {
-	service, _, source, user, _, root := newImageLifecycleFixture(t)
-	if err := service.SetDefaultTarget(user, source.Key); err != nil {
-		t.Fatal(err)
-	}
+	service, _, _, user, _, root := newImageLifecycleFixture(t)
 	if _, err := service.db.Exec(`CREATE TRIGGER reject_image_ledger BEFORE INSERT ON file_records
   WHEN NEW.relative_path LIKE 'images/%'
   BEGIN SELECT RAISE(FAIL, 'forced image ledger failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := service.UploadForUser(user, "", "atomic.png", bytes.NewReader(testPNGBytes(t))); err == nil ||
+	if _, err := service.UploadForUser(user, "atomic.png", bytes.NewReader(testPNGBytes(t))); err == nil ||
 		!strings.Contains(err.Error(), "提交图片与文件台账失败") {
 		t.Fatalf("ledger failure upload error=%v", err)
 	}
@@ -252,10 +249,7 @@ func TestRecoverUploadRejectsAmbiguousAndCorruptState(t *testing.T) {
 }
 
 func TestConcurrentImageUploadsCommitAtomicallyWithoutOperationResidue(t *testing.T) {
-	service, _, source, user, _, root := newImageLifecycleFixture(t)
-	if err := service.SetDefaultTarget(user, source.Key); err != nil {
-		t.Fatal(err)
-	}
+	service, _, _, user, _, root := newImageLifecycleFixture(t)
 	const uploads = 20
 	imageBytes := testPNGBytes(t)
 	var wg sync.WaitGroup
@@ -265,7 +259,7 @@ func TestConcurrentImageUploadsCommitAtomicallyWithoutOperationResidue(t *testin
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			img, err := service.UploadForUser(user, "", "concurrent.png", bytes.NewReader(imageBytes))
+			img, err := service.UploadForUser(user, "concurrent.png", bytes.NewReader(imageBytes))
 			if err != nil {
 				errs <- err
 				return
