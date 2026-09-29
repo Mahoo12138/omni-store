@@ -278,10 +278,12 @@ func ensureSource(service *sources.Service, name, description, root string, quot
 		return nil, fmt.Errorf("测试存储源 %s 已指向 %s；请清理 .testdata 后重试", name, source.RootPath)
 	}
 	webdav := true
+	s3 := true
 	input := sources.UpdateInput{
 		Name:          &name,
 		Description:   &description,
 		WebdavEnabled: &webdav,
+		S3Enabled:     &s3,
 		QuotaBytes:    &quotaBytes,
 	}
 	return service.Update(source.Key, input)
