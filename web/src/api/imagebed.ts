@@ -1,5 +1,4 @@
 import { apiFetch } from './client'
-import type { UserSource } from './sources'
 
 export interface ImageRecord {
   id: number
@@ -18,25 +17,20 @@ export interface ImageRecord {
   created_at: string
 }
 
-export async function fetchImageBedTargets(): Promise<{
-  targets: UserSource[]
-  default_key: string
-}> {
-  return apiFetch('/api/v1/image-bed/targets')
+export interface ImageBedStatus {
+  available: boolean
+  source_key: string
+  source_name: string
 }
 
-export async function setDefaultImageBedTarget(sourceKey: string): Promise<void> {
-  await apiFetch('/api/v1/image-bed/default-target', {
-    method: 'PUT',
-    body: JSON.stringify({ key: sourceKey }),
-  })
+export async function fetchImageBedStatus(): Promise<ImageBedStatus> {
+  return apiFetch<ImageBedStatus>('/api/v1/image-bed/status')
 }
 
-export async function uploadImage(file: File, sourceKey?: string): Promise<ImageRecord> {
+export async function uploadImage(file: File): Promise<ImageRecord> {
   const form = new FormData()
   form.append('file', file)
-  const q = sourceKey ? `?key=${encodeURIComponent(sourceKey)}` : ''
-  return apiFetch(`/api/v1/image-bed/uploads${q}`, { method: 'POST', body: form })
+  return apiFetch('/api/v1/image-bed/uploads', { method: 'POST', body: form })
 }
 
 export async function fetchImageHistory(page = 1, pageSize = 50): Promise<{

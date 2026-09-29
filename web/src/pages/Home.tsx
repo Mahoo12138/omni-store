@@ -2,17 +2,17 @@ import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchSetupStatus } from '../api/auth'
-import { fetchPublicMounts } from '../api/public'
+import { fetchPublicSummary } from '../api/public'
 import { PublicDriveHero } from '../components/layout/PublicDriveHero'
 import { PublicShell } from '../components/layout/PublicShell'
-import { IconChevronRight, IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
+import { IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
 import * as css from './Home.css'
 
-// 公开网盘首页：去除全局顶栏，以公开目录索引作为唯一主任务。
+// 公开网盘首页：2.0 起全站单一公开 Source，展示其入口卡片。
 export function HomePage() {
   const navigate = useNavigate()
   const setup = useQuery({ queryKey: ['setup-status'], queryFn: fetchSetupStatus })
-  const mounts = useQuery({ queryKey: ['public-mounts'], queryFn: fetchPublicMounts })
+  const summary = useQuery({ queryKey: ['public-summary'], queryFn: fetchPublicSummary })
 
   useEffect(() => {
     if (setup.data && !setup.data.initialized) {
@@ -20,11 +20,8 @@ export function HomePage() {
     }
   }, [setup.data, navigate])
 
-  function openMount(path: string) {
-    navigate({
-      to: '/p/$',
-      params: { _splat: path.replace(/^\//, '') },
-    })
+  function openPublicDrive() {
+    navigate({ to: '/public/$', params: { _splat: '' } })
   }
 
   return (
@@ -40,7 +37,7 @@ export function HomePage() {
         </header>
 
         <div className={css.directoryPanel}>
-          {mounts.isPending && (
+          {summary.isPending && (
             <div className={css.mountGrid} aria-busy="true" aria-label="正在加载公开目录">
               {Array.from({ length: 3 }).map((_, index) => (
                 <div key={index} className={css.mountSkeleton} aria-hidden="true">
@@ -51,51 +48,44 @@ export function HomePage() {
               ))}
             </div>
           )}
-          {mounts.isSuccess && mounts.data.length === 0 && (
+          {summary.isSuccess && !summary.data.enabled && (
             <div className={css.emptyState}>
               <span className={css.emptyIcon} aria-hidden="true">
                 <IconFolderFilled size={30} />
               </span>
               <div>
-                <h2>等待第一个公开目录</h2>
-                <p>管理员为存储源启用公开挂载后，文件入口会出现在这里。</p>
+                <h2>公开网盘尚未开启</h2>
+                <p>管理员在「站点服务」中绑定公开盘存储源后，文件入口会出现在这里。</p>
               </div>
             </div>
           )}
-          {mounts.isError && (
+          {summary.isError && (
             <div className={css.errorState} role="alert">
               <div>
                 <h2>无法读取公开目录</h2>
                 <p>请检查网络连接后重新加载。</p>
               </div>
-              <button type="button" onClick={() => mounts.refetch()}>重新加载目录</button>
+              <button type="button" onClick={() => summary.refetch()}>重新加载目录</button>
             </div>
           )}
-          {mounts.isSuccess && mounts.data.length > 0 && (
+          {summary.isSuccess && summary.data.enabled && (
             <div className={css.mountGrid} aria-label="公开目录">
-              {mounts.data.map((mount) => (
-                <button
-                  key={mount.mount_path}
-                  type="button"
-                  className={css.mountCard}
-                  onClick={() => openMount(mount.mount_path)}
-                  aria-label={`打开目录 ${mount.name}`}
-                >
-                  <span className={css.mountCardTop}>
-                    <span className={css.mountIcon} aria-hidden="true">
-                      <IconHardDrive size={22} />
-                    </span>
-                    <span className={css.mountKind}>公开目录</span>
-                    <IconChevronRight size={16} className={css.mountArrow} />
+              <button
+                key={summary.data.source_key}
+                type="button"
+                className={css.mountCard}
+                onClick={openPublicDrive}
+                aria-label={`打开目录 ${summary.data.source_name}`}
+              >
+                <span className={css.mountCardTop}>
+                  <span className={css.mountIcon} aria-hidden="true">
+                    <IconHardDrive size={22} />
                   </span>
-                  <span className={css.mountName}>{mount.name}</span>
-                  <span className={css.mountPath}>
-                    <span>路径</span>
-                    <code>{mount.mount_path}</code>
-                  </span>
-                  <span className={css.mountDescription}>{mount.description || '未添加说明'}</span>
-                </button>
-              ))}
+                  <span className={css.mountKind}>公开目录</span>
+                </span>
+                <span className={css.mountName}>{summary.data.source_name || '公开网盘'}</span>
+                <span className={css.mountDescription}>浏览此实例开放共享的全部文件。</span>
+              </button>
             </div>
           )}
         </div>

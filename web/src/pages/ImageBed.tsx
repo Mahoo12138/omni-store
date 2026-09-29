@@ -4,10 +4,9 @@ import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteImage,
-  fetchImageBedTargets,
+  fetchImageBedStatus,
   fetchImageHistory,
   fetchTokenStatus,
-  setDefaultImageBedTarget,
   uploadImage,
 } from '../api/imagebed'
 import type { ImageRecord } from '../api/imagebed'
@@ -32,19 +31,18 @@ import {
 } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
 import { toastError, toastSuccess } from '../components/ui/Toast'
-import { resolveImageBedTarget } from './imageBedTarget'
 import * as css from './ImageBed.css'
 
-type TargetData = Awaited<ReturnType<typeof fetchImageBedTargets>>
+type StatusData = Awaited<ReturnType<typeof fetchImageBedStatus>>
 type TimeFilter = 'all' | 'today' | 'month'
 type ViewMode = 'grid' | 'list'
 
 export function ImageBedPage() {
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
-  const targets = useQuery({ queryKey: ['imagebed-targets'], queryFn: fetchImageBedTargets })
+  const status = useQuery({ queryKey: ['imagebed-status'], queryFn: fetchImageBedStatus })
   const isAdmin = me.data?.role === 'super_admin'
 
-  if (targets.isPending) {
+  if (status.isPending) {
     return (
       <AppShell title="图床">
         <div className={css.loadingState} aria-busy="true">正在加载图床…</div>
@@ -52,7 +50,7 @@ export function ImageBedPage() {
     )
   }
 
-  if (targets.isSuccess && targets.data.targets.length === 0) {
+  if (status.isSuccess && !status.data.available) {
     return (
       <AppShell title="图床">
         <NoTargetView isAdmin={isAdmin} />
@@ -60,22 +58,20 @@ export function ImageBedPage() {
     )
   }
 
-  if (!targets.data) return null
+  if (!status.data) return null
 
-  return <ImageBedContent targetData={targets.data} />
+  return <ImageBedContent status={status.data} />
 }
 
 function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className={css.noTargetPage}>
       <div className={css.noTargetIcon}><IconCloud size={42} /></div>
-      <h1 className={css.noTargetTitle}>
-        {isAdmin ? '还没有可用的图床存储源' : '还没有可用的图床目标'}
-      </h1>
+      <h1 className={css.noTargetTitle}>图床尚未开启</h1>
       <p className={css.noTargetHint}>
         {isAdmin
-          ? '创建存储源并启用图床功能后，即可在这里上传和管理图片。'
-          : '请联系管理员分配一个具备读写权限且已启用图床的存储源。'}
+          ? '在系统设置的「站点服务」中为图床绑定存储源并开启后，即可在这里上传和管理图片。'
+          : '图床能力未开启或未绑定存储源，请联系管理员。'}
       </p>
       {isAdmin ? (
         <Link to="/app/admin" search={{ section: 'sources' }} className={css.primaryLink}>
@@ -86,10 +82,9 @@ function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
-function ImageBedContent({ targetData }: { targetData: TargetData }) {
+function ImageBedContent({ status }: { status: StatusData }) {
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
-  const [selectedTarget, setSelectedTarget] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState(1)
@@ -105,13 +100,6 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
   })
   const tokenStatus = useQuery({ queryKey: ['token-status'], queryFn: fetchTokenStatus })
 
-  const currentTarget = resolveImageBedTarget(
-    selectedTarget,
-    targetData.default_key,
-    targetData.targets,
-  )
-  const currentTargetData = targetData.targets.find((target) => target.key === currentTarget)
-  const currentTargetIndex = targetData.targets.findIndex((target) => target.key === currentTarget)
   const apiEndpoint = `${window.location.origin}/api/v1/image-bed/upload`
 
   const visibleImages = useMemo(
@@ -119,15 +107,6 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
     [history.data?.items, timeFilter],
   )
   const stats = useMemo(() => buildStats(history.data?.items ?? []), [history.data?.items])
-
-  const setDefaultMut = useMutation({
-    mutationFn: setDefaultImageBedTarget,
-    onSuccess: async () => {
-      toastSuccess('默认图床目标已更新')
-      await queryClient.invalidateQueries({ queryKey: ['imagebed-targets'] })
-    },
-    onError: (error) => toastError(errorMessage(error, '设置默认目标失败')),
-  })
 
   const deleteMut = useMutation({
     mutationFn: deleteImage,
@@ -141,10 +120,10 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
 
   async function onUpload(files: FileList | File[]) {
     const queuedFiles = Array.from(files)
-    if (queuedFiles.length === 0 || !currentTarget) return
+    if (queuedFiles.length === 0) return
     setUploading(true)
     try {
-      for (const file of queuedFiles) await uploadImage(file, currentTarget)
+      for (const file of queuedFiles) await uploadImage(file)
       toastSuccess(`${queuedFiles.length} 张图片上传成功`)
       await queryClient.invalidateQueries({ queryKey: ['imagebed-history'] })
     } catch (error) {
@@ -223,32 +202,12 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
                 </div>
               </div>
 
-              <Select
-                value={currentTargetIndex >= 0 ? String(currentTargetIndex) : ''}
-                onValueChange={(index) => {
-                  const nextTarget = targetData.targets[Number(index)]
-                  if (nextTarget) setSelectedTarget(nextTarget.key)
-                }}
-                options={targetData.targets.map((target, index) => ({
-                  value: String(index),
-                  label: `${target.name}${target.key === targetData.default_key ? '（默认）' : ''}`,
-                }))}
-                ariaLabel="选择图床目标"
-                leadingIcon={<IconImage size={19} />}
-                size="large"
-              />
-              <div className={css.targetMetaRow}>
-                <span>{currentTargetData?.description || '图片会保存到当前选中的存储源'}</span>
-                {currentTarget !== targetData.default_key ? (
-                  <button
-                    type="button"
-                    className={css.textButton}
-                    disabled={setDefaultMut.isPending}
-                    onClick={() => setDefaultMut.mutate(currentTarget)}
-                  >
-                    设为默认
-                  </button>
-                ) : <span className={css.defaultLabel}>默认目标</span>}
+              <div className={css.targetSummary} style={{ padding: '4px 0 8px' }}>
+                <span className={css.targetSummaryIcon}><IconImage size={19} /></span>
+                <div className={css.targetSummaryText}>
+                  <strong>{status.source_name || '已绑定存储源'}</strong>
+                  <span>由管理员在「站点服务」中统一绑定，全站唯一</span>
+                </div>
               </div>
 
               <div className={css.interfaceHeading}>
@@ -384,8 +343,8 @@ function ImageBedContent({ targetData }: { targetData: TargetData }) {
               <div className={css.targetSummary}>
                 <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
                 <div className={css.targetSummaryText}>
-                  <strong>{currentTargetData?.name ?? currentTarget}</strong>
-                  <span>{currentTargetData?.description || '当前默认存储位置'}</span>
+                  <strong>{status.source_name || '已绑定存储源'}</strong>
+                  <span>图片由图床能力统一托管</span>
                 </div>
                 <span className={css.statusBadge}>正常</span>
               </div>

@@ -15,6 +15,7 @@ import {
   adminGetAnonymousSettings,
   adminGetBranding,
   adminGetSource,
+  adminListCapabilities,
   adminListPolicies,
   adminListSources,
   adminListUsers,
@@ -1226,8 +1227,9 @@ function StatsSection() {
           <IconUser size={22} />
         </StatCard>
         <StatCard
-          label="公开挂载"
-          value={o?.public_mount_count ?? '—'}
+          label="公开盘"
+          value={o?.public_drive_enabled ? '已开启' : '未开启'}
+          valueIsText
           iconBg={vars.color.tileAmberBg}
           iconFg={vars.color.tileAmberFg}
         >
@@ -1291,7 +1293,7 @@ function StatsSection() {
               <tr>
                 <th className={css.compactTh}>名称</th>
                 <th className={css.compactTh}>真实路径</th>
-                <th className={css.compactTh}>公开</th>
+                <th className={css.compactTh}>协议</th>
                 <th className={css.compactTh}>状态</th>
               </tr>
             </thead>
@@ -1310,7 +1312,10 @@ function StatsSection() {
                     {s.root_path}
                   </td>
                   <td className={css.compactTd}>
-                    {s.public_mount_path ? <span style={{ fontFamily: vars.font.mono }}>{s.public_mount_path}</span> : '—'}
+                    {[
+                      s.webdav_enabled ? 'WebDAV' : null,
+                      s.s3_enabled ? 'S3' : null,
+                    ].filter(Boolean).join(' / ') || '—'}
                   </td>
                   <td className={css.compactTd}>
                     <Badge color={s.is_disabled ? 'gray' : 'green'}>
@@ -1440,10 +1445,13 @@ function SourcesSection() {
                     <span className={css.sourceMetaValue}>{s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}</span>
                   </div>
                   <div className={css.sourceMetaItem}>
-                    <span className={css.sourceMetaLabel}>公开访问</span>
-                    {s.public_read_enabled
-                      ? <Badge color="green">已公开</Badge>
-                      : <span className={css.sourceMetaMuted}>未公开</span>}
+                    <span className={css.sourceMetaLabel}>协议</span>
+                    <span className={css.sourceMetaValue}>
+                      {[
+                        s.webdav_enabled ? 'WebDAV' : null,
+                        s.s3_enabled ? 'S3' : null,
+                      ].filter(Boolean).join(' / ') || '—'}
+                    </span>
                   </div>
                 </div>
                 <div className={css.sourceActions} aria-label={`${s.name} 操作`}>
@@ -1708,7 +1716,7 @@ function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
   )
 }
 
-// --- 编辑存储源 弹窗（WebDAV/图床/公开访问 + 排除规则）---
+// --- 编辑存储源 弹窗（协议开关 + 排除规则；产品功能开关在 Site Capability 设置）---
 
 function EditSourceDialog({
   sourceKey,
@@ -1720,22 +1728,18 @@ function EditSourceDialog({
   const queryClient = useQueryClient()
   const detail = useQuery({ queryKey: ['admin-source', sourceKey], queryFn: () => adminGetSource(sourceKey) })
 
-  const [mountPath, setMountPath] = useState<string | null>(null)
   const [patterns, setPatterns] = useState<string | null>(null)
-  const [publicOn, setPublicOn] = useState<boolean | null>(null)
   const [webdavOn, setWebdavOn] = useState<boolean | null>(null)
-  const [imageBedOn, setImageBedOn] = useState<boolean | null>(null)
+  const [s3On, setS3On] = useState<boolean | null>(null)
   const [quotaGiB, setQuotaGiB] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
 
   // 打开弹窗时，把当前值同步到本地 state
   useEffect(() => {
     if (detail.isSuccess) {
-      setMountPath(detail.data.source.public_mount_path ?? '')
       setPatterns(detail.data.exclude_patterns.join('\n'))
-      setPublicOn(detail.data.source.public_read_enabled)
       setWebdavOn(detail.data.source.webdav_enabled)
-      setImageBedOn(detail.data.source.image_bed_enabled)
+      setS3On(detail.data.source.s3_enabled)
       setQuotaGiB(quotaGiBInputValue(detail.data.source.quota_bytes))
     }
   }, [detail.isSuccess, detail.data])
@@ -1763,7 +1767,6 @@ function EditSourceDialog({
 
   if (!detail.isSuccess) return null
   const src: AdminSource = detail.data.source
-  const mountValue = mountPath ?? src.public_mount_path ?? ''
   const patternsValue = patterns ?? detail.data.exclude_patterns.join('\n')
   const quotaValue = quotaGiB ?? quotaGiBInputValue(src.quota_bytes)
   const quotaNumber = Number(quotaValue)
@@ -1772,10 +1775,8 @@ function EditSourceDialog({
     && Number.isFinite(quotaNumber)
     && quotaNumber >= 0
     && Number.isSafeInteger(quotaBytes)
-  const publicEnabled = publicOn ?? src.public_read_enabled
   const webdavEnabled = webdavOn ?? src.webdav_enabled
-  const imageBedEnabled = imageBedOn ?? src.image_bed_enabled
-  const normalizedMountPath = mountValue.trim()
+  const s3Enabled = s3On ?? src.s3_enabled
   const excludePatterns = patternsValue
     .split('\n')
     .map((pattern) => pattern.trim())
@@ -1783,13 +1784,11 @@ function EditSourceDialog({
   const originalPatterns = detail.data.exclude_patterns.map((pattern) => pattern.trim()).filter(Boolean)
   const patternsChanged = excludePatterns.length !== originalPatterns.length
     || excludePatterns.some((pattern, index) => pattern !== originalPatterns[index])
-  const isDirty = publicEnabled !== src.public_read_enabled
-    || webdavEnabled !== src.webdav_enabled
-    || imageBedEnabled !== src.image_bed_enabled
-    || normalizedMountPath !== (src.public_mount_path ?? '')
+  const isDirty = webdavEnabled !== src.webdav_enabled
+    || s3Enabled !== src.s3_enabled
     || quotaBytes !== src.quota_bytes
     || patternsChanged
-  const formValid = quotaValid && (!publicEnabled || normalizedMountPath !== '')
+  const formValid = quotaValid
 
   function saveSettings() {
     setMsg('')
@@ -1797,15 +1796,9 @@ function EditSourceDialog({
       setMsg('请输入有效的非负配额')
       return
     }
-    if (publicEnabled && !normalizedMountPath) {
-      setMsg('开启公开访问时必须填写公开挂载路径')
-      return
-    }
     updateMut.mutate({
-      public_read_enabled: publicEnabled,
-      public_mount_path: normalizedMountPath,
       webdav_enabled: webdavEnabled,
-      image_bed_enabled: imageBedEnabled,
+      s3_enabled: s3Enabled,
       quota_bytes: quotaBytes,
       exclude_patterns: excludePatterns,
     })
@@ -1830,7 +1823,7 @@ function EditSourceDialog({
         </>
       }
     >
-      <Field label="功能开关" hint="修改后随底部按钮统一保存">
+      <Field label="访问协议" hint="修改后随底部按钮统一保存；产品功能（公开盘、图床等）在「站点服务」设置">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label className={fieldCss.checkboxRow}>
             <input
@@ -1848,25 +1841,13 @@ function EditSourceDialog({
             <input
               type="checkbox"
               className={fieldCss.checkbox}
-              checked={imageBedEnabled}
+              checked={s3Enabled}
               onChange={(e) => {
-                setImageBedOn(e.target.checked)
+                setS3On(e.target.checked)
                 setMsg('')
               }}
             />
-            启用图床（该存储源可作为图床后端）
-          </label>
-          <label className={fieldCss.checkboxRow}>
-            <input
-              type="checkbox"
-              className={fieldCss.checkbox}
-              checked={publicEnabled}
-              onChange={(e) => {
-                setPublicOn(e.target.checked)
-                setMsg('')
-              }}
-            />
-            公开访问（无需登录即可按挂载路径只读浏览）
+            启用 S3（该存储源可作为 Path-style Bucket）
           </label>
         </div>
       </Field>
@@ -1904,21 +1885,6 @@ function EditSourceDialog({
         >
           {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
         </Button>
-      </Field>
-
-      <Field
-        label="公开挂载路径"
-        hint="如 /photos，修改后旧链接会自动重定向到新路径"
-        required={publicEnabled}
-      >
-        <Input
-          value={mountValue}
-          onChange={(e) => {
-            setMountPath(e.target.value)
-            setMsg('')
-          }}
-          placeholder="/photos"
-        />
       </Field>
 
       <Field
@@ -2864,7 +2830,7 @@ function AuditSection() {
 
 function ImageBedSection() {
   const settings = useQuery({ queryKey: ['admin-anon-settings'], queryFn: adminGetAnonymousSettings })
-  const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
+  const capabilitiesQuery = useQuery({ queryKey: ['admin-capabilities'], queryFn: adminListCapabilities })
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => apiFetch<{ status: string; version: string }>('/api/v1/health'),
@@ -2883,8 +2849,6 @@ function ImageBedSection() {
       </section>
     )
   }
-
-  const imageBedSources = sources.data?.filter((s) => s.image_bed_enabled && !s.is_disabled) ?? []
 
   return (
     <>
@@ -2911,7 +2875,7 @@ function ImageBedSection() {
                 <>
                   <Badge color="green">已开启</Badge>
                   <span style={{ marginLeft: 8, color: vars.color.textSecondary }}>
-                    目标存储源：{imageBedSources.find((source) => source.key === settings.data.key)?.name ?? '未配置'}
+                    图床目标：{capabilitiesQuery.data?.find((b) => b.capability === 'image_bed')?.source_name ?? '未绑定'}
                   </span>
                 </>
               ) : (
@@ -2944,7 +2908,6 @@ function ImageBedSection() {
         onOpenChange={(o) => { setEditOpen(o); if (!o) setMsg('') }}
         enabled={settings.data.enabled}
         sourceKey={settings.data.key}
-        imageBedSources={imageBedSources}
       />
     </>
   )
@@ -2955,16 +2918,13 @@ function AnonymousImageBedDialog({
   onOpenChange,
   enabled,
   sourceKey,
-  imageBedSources,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   enabled: boolean
   sourceKey: string
-  imageBedSources: { key: string; name: string }[]
 }) {
   const queryClient = useQueryClient()
-  const [pickSource, setPickSource] = useState(sourceKey)
   const [turnOn, setTurnOn] = useState(enabled)
   const [err, setErr] = useState('')
 
@@ -2979,18 +2939,17 @@ function AnonymousImageBedDialog({
 
   useEffect(() => {
     if (open) {
-      setPickSource(sourceKey)
       setTurnOn(enabled)
       setErr('')
     }
-  }, [open, sourceKey, enabled])
+  }, [open, enabled])
 
   function onSubmit() {
-    if (turnOn && !pickSource) {
-      setErr('请选择目标存储源')
+    if (turnOn && !sourceKey) {
+      setErr('请先在「站点服务」中为图床绑定存储源')
       return
     }
-    mutation.mutate({ enabled: turnOn, key: pickSource })
+    mutation.mutate({ enabled: turnOn })
   }
 
   return (
@@ -3019,26 +2978,16 @@ function AnonymousImageBedDialog({
           允许匿名访问 /upload
         </label>
       </Field>
-      <Field
-        label="目标存储源"
-        required={turnOn}
-        hint={turnOn ? '需为"启用图床"且未禁用的存储源' : '保存时将一同记录'}
-        error={err}
-      >
-        <Select
-          value={imageBedSources.some((source) => source.key === pickSource)
-            ? String(imageBedSources.findIndex((source) => source.key === pickSource))
-            : ''}
-          onValueChange={(index) => setPickSource(imageBedSources[Number(index)]?.key ?? '')}
-          options={imageBedSources.map((source, index) => ({
-            value: String(index),
-            label: source.name,
-          }))}
-          placeholder="选择存储源…"
-          ariaLabel="匿名图床目标存储源"
-          required={turnOn}
-        />
+      <Field label="图床目标" hint="上传目标由「站点服务」中图床能力的绑定存储源决定">
+        <span className={css.kvValue} style={{ fontFamily: vars.font.mono }}>
+          {sourceKey || '未绑定（请先在站点服务中绑定）'}
+        </span>
       </Field>
+      {err && (
+        <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>
+          {err}
+        </div>
+      )}
     </DialogWrap>
   )
 }

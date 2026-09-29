@@ -1,20 +1,20 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAuthStatus } from '../../api/auth'
-import { fetchPublicMounts } from '../../api/public'
+import { fetchPublicSummary } from '../../api/public'
 import { IconImage, LogoMark } from '../ui/Icon'
 import * as css from '../../pages/Home.css'
 
 // Shared public-drive masthead and introduction for the index and file-browser routes.
 export function PublicDriveHero() {
-  const mounts = useQuery({ queryKey: ['public-mounts'], queryFn: fetchPublicMounts })
+  const summary = useQuery({ queryKey: ['public-summary'], queryFn: fetchPublicSummary })
   const authStatus = useQuery({
     queryKey: ['auth-status'],
     queryFn: fetchAuthStatus,
     retry: false,
     staleTime: 60_000,
   })
-  const mountCount = mounts.data?.length ?? 0
+  const enabled = summary.data?.enabled ?? false
 
   return (
     <section className={css.archiveHero} aria-labelledby="public-drive-title">
@@ -48,10 +48,8 @@ export function PublicDriveHero() {
           <p>这里收录此实例开放共享的目录。选择一个目录，即可浏览或下载其中的文件。</p>
         </div>
         <div className={css.directoryCount} aria-live="polite">
-          <strong>
-            {mounts.isPending ? '··' : mounts.isError ? '—' : String(mountCount).padStart(2, '0')}
-          </strong>
-          <span>{mounts.isError ? '目录暂不可用' : '个公开目录'}</span>
+          <strong>{summary.isPending ? '··' : summary.isError ? '—' : enabled ? '已开放' : '未开放'}</strong>
+          <span>{summary.isError ? '目录暂不可用' : '公开网盘'}</span>
         </div>
       </div>
     </section>

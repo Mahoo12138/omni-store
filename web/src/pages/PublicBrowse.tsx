@@ -23,7 +23,7 @@ import * as homeCss from './Home.css'
 
 type ViewMode = 'list' | 'grid'
 
-// 公开目录浏览 /p/*（docs/index.png）：匿名只读，文件点击即在新页打开 raw。
+// 公开目录浏览 /public/*（2.0 固定入口）：匿名只读，文件点击即在新页打开 raw。
 export function PublicBrowsePage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -32,13 +32,13 @@ export function PublicBrowsePage() {
   const [page, setPage] = useState(1)
   const [view, setView] = useState<ViewMode>('list')
 
-  // /p/photos/2026 -> photos/2026
-  const virtualPath = decodeURIComponent(location.pathname.replace(/^\/p\/?/, '')).replace(/\/+$/, '')
+  // /public/photos/2026 -> photos/2026
+  const virtualPath = decodeURIComponent(location.pathname.replace(/^\/public\/?/, '')).replace(/\/+$/, '')
 
   const browse = useQuery({
     queryKey: ['public-browse', virtualPath, page],
     queryFn: () => browsePublic('/' + virtualPath, page),
-    enabled: virtualPath !== '',
+    enabled: true,
   })
 
   const segments = virtualPath.split('/').filter(Boolean)
@@ -49,7 +49,7 @@ export function PublicBrowsePage() {
     if (p === '') {
       navigate({ to: '/' })
     } else {
-      navigate({ to: '/p/$', params: { _splat: p } })
+      navigate({ to: '/public/$', params: { _splat: p } })
     }
   }
 

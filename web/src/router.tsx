@@ -19,7 +19,7 @@ const indexRoute = createRoute({
 
 const publicBrowseRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/p/$',
+  path: '/public/$',
   component: lazyRouteComponent(() => import('./pages/PublicBrowse'), 'PublicBrowsePage'),
 })
 

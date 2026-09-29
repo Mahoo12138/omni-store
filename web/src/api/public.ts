@@ -1,15 +1,14 @@
 import { apiFetch } from './client'
 import type { FileListResult } from './sources'
 
-export interface PublicMount {
-  mount_path: string
-  name: string
-  description: string
+export interface PublicSummary {
+  enabled: boolean
+  source_key?: string
+  source_name?: string
 }
 
-export async function fetchPublicMounts(): Promise<PublicMount[]> {
-  const data = await apiFetch<{ items: PublicMount[]; total: number }>('/api/v1/public/mounts')
-  return data.items ?? []
+export async function fetchPublicSummary(): Promise<PublicSummary> {
+  return apiFetch<PublicSummary>('/api/v1/public/summary')
 }
 
 export async function browsePublic(path: string, page = 1): Promise<FileListResult> {
@@ -19,5 +18,5 @@ export async function browsePublic(path: string, page = 1): Promise<FileListResu
 
 export function rawUrl(virtualPath: string, download = false): string {
   const clean = virtualPath.split('/').filter(Boolean).map(encodeURIComponent).join('/')
-  return `/raw/${clean}${download ? '?download=1' : ''}`
+  return `/public/raw/${clean}${download ? '?download=1' : ''}`
 }

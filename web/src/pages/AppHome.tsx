@@ -172,8 +172,7 @@ export function AppHomePage() {
 function capabilities(source: UserSource): string {
   const parts = [source.permission === 'read_write' ? '读写' : '只读']
   if (source.webdav_enabled) parts.push('WebDAV')
-  if (source.image_bed_enabled) parts.push('图床')
-  if (source.public_read_enabled) parts.push('公开')
+  if (source.s3_enabled) parts.push('S3')
   return parts.join(' · ')
 }
 

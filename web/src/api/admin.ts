@@ -12,13 +12,38 @@ export interface AdminSource {
   description: string
   root_path: string
   is_disabled: boolean
-  public_read_enabled: boolean
-  public_mount_path: string | null
   webdav_enabled: boolean
-  image_bed_enabled: boolean
+  s3_enabled: boolean
   quota_bytes: number
   created_at: string
   updated_at: string
+}
+
+// Site Capability 绑定（2.0）：产品功能归站点，全站单 Source。
+export type SiteCapability = 'public_drive' | 'image_bed' | 'static_assets' | 'transfer_center'
+
+export interface CapabilityBinding {
+  capability: SiteCapability
+  enabled: boolean
+  source_key?: string
+  source_name?: string
+  revision: number
+  updated_at: string
+}
+
+export async function adminListCapabilities(): Promise<CapabilityBinding[]> {
+  const data = await apiFetch<{ items: CapabilityBinding[]; total: number }>('/api/v1/admin/capabilities')
+  return data.items ?? []
+}
+
+export async function adminUpdateCapability(
+  capability: SiteCapability,
+  input: { enabled?: boolean; storage_source_key?: string; expected_revision?: number },
+): Promise<CapabilityBinding> {
+  return apiFetch(`/api/v1/admin/capabilities/${capability}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
 }
 
 export type AccessPermission = 'read_only' | 'read_write'
@@ -218,10 +243,8 @@ export async function adminUpdateSource(
   input: Partial<{
     name: string
     description: string
-    public_read_enabled: boolean
-    public_mount_path: string
     webdav_enabled: boolean
-    image_bed_enabled: boolean
+    s3_enabled: boolean
     quota_bytes: number
     exclude_patterns: string[]
   }>,
@@ -271,7 +294,7 @@ export async function adminDeletePolicy(policyKey: string): Promise<void> {
   await apiFetch(`/api/v1/admin/policies/${encodeURIComponent(policyKey)}`, { method: 'DELETE' })
 }
 
-// 匿名图床配置
+// 匿名图床配置（2.0：目标由 Site Capability 绑定决定，仅保留入口开关）
 export async function adminGetAnonymousSettings(): Promise<{
   enabled: boolean
   key: string
@@ -281,7 +304,6 @@ export async function adminGetAnonymousSettings(): Promise<{
 
 export async function adminSetAnonymousSettings(input: {
   enabled: boolean
-  key: string
 }): Promise<void> {
   await apiFetch('/api/v1/admin/image-bed/anonymous-settings', {
     method: 'PUT',
@@ -360,10 +382,8 @@ export interface OverviewSource {
   key: string
   name: string
   root_path: string
-  public_mount_path?: string
   webdav_enabled: boolean
-  image_bed_enabled: boolean
-  public_read_enabled: boolean
+  s3_enabled: boolean
   is_disabled: boolean
 }
 export interface OverviewUser {
@@ -388,7 +408,7 @@ export interface OverviewAudit {
 export interface AdminOverview {
   source_count: number
   user_count: number
-  public_mount_count: number
+  public_drive_enabled: boolean
   anonymous_image_bed_on: boolean
   sources: OverviewSource[]
   users: OverviewUser[]

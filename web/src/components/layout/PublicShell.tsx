@@ -24,7 +24,7 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
     staleTime: 5 * 60_000,
   })
   const instanceName = systemStatus.data?.instance_name?.trim() || 'OmniStore'
-  const isDisk = pathname === '/' || pathname.startsWith('/p')
+  const isDisk = pathname === '/' || pathname.startsWith('/public')
   const isUpload = pathname.startsWith('/upload')
   const isAbout = pathname.startsWith('/about')
 

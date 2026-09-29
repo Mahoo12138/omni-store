@@ -2081,16 +2081,6 @@ function SourceInfoCard({
             label="我的用量"
             value={quotaLabel(userQuota)}
           />
-          <Row
-            label="公开挂载路径"
-            value={source.public_read_enabled && source.public_mount_path ? source.public_mount_path : '—'}
-            mono
-          />
-          <Row
-            label="状态"
-            value={source.public_read_enabled ? '已公开' : '未公开'}
-            badge={source.public_read_enabled ? 'green' : 'gray'}
-          />
           {source.webdav_enabled && (
             <div className={css.sideKvRow}>
               <span className={css.sideKvLabel}>WebDAV</span>
@@ -2100,9 +2090,7 @@ function SourceInfoCard({
               </a>
             </div>
           )}
-          {source.image_bed_enabled && (
-            <Row label="图床服务" value="已启用" badge="purple" />
-          )}
+          {source.s3_enabled && <Row label="S3" value="已启用" badge="purple" />}
         </div>
       </section>
     </aside>
