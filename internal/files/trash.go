@@ -15,6 +15,7 @@ import (
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/security"
 )
 
 var ErrTrashNotFound = errors.New("回收站条目不存在")
@@ -170,6 +171,10 @@ func (s *Service) inspectTrashSource(src *models.StorageSource, relPath, absPath
 		}
 		if matcher.MatchPrefix(childRel) {
 			return ErrPathExcluded
+		}
+		if security.IsManagedNamespaceName(entry.Name()) {
+			// 回收站作用于整棵子树，不能把托管目录搬离其所属来源。
+			return fmt.Errorf("%w: 目标包含系统托管目录 %s，拒绝整体操作", ErrInvalid, entry.Name())
 		}
 		info, err := entry.Info()
 		if err != nil {
@@ -392,6 +397,9 @@ func (s *Service) validateTrashRestoreTarget(src *models.StorageSource, payloadA
 		}
 		if matcher.MatchPrefix(childRel) {
 			return ErrPathExcluded
+		}
+		if security.IsManagedNamespaceName(entry.Name()) {
+			return fmt.Errorf("%w: 恢复目标包含系统托管目录 %s，拒绝整体操作", ErrInvalid, entry.Name())
 		}
 		info, err := entry.Info()
 		if err != nil {

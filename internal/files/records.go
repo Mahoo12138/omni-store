@@ -104,6 +104,11 @@ func (s *Service) reconcileSource(src *models.StorageSource, rejectReserved bool
 		}
 	}
 	for rel := range existing {
+		if security.ContainsManagedNamespace(rel) {
+			// 托管命名空间中的既有台账行（如图床 scope）不属于普通校准范围，
+			// 不能因本轮未扫描到而被删除；只有所属服务能处理它们。
+			continue
+		}
 		if _, err := tx.Exec(`DELETE FROM file_records WHERE storage_source_id = ? AND relative_path = ?`, src.ID, rel); err != nil {
 			return nil, err
 		}
@@ -176,6 +181,13 @@ func scanSourceFiles(root string, matcher *security.ExcludeMatcher, rejectReserv
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		if security.IsManagedNamespaceName(entry.Name()) {
+			// 托管命名空间不导入普通台账，也不阻止校准；其内容由所属服务维护。
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if security.IsReservedName(entry.Name()) {
 			if rejectReserved {
 				return fmt.Errorf("%w: %s", security.ErrReservedName, rel)

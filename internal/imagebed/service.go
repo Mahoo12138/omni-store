@@ -291,6 +291,9 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		return nil, err
 	}
 	if err := security.ValidateUserRelPath(relDir); err != nil {
+		if errors.Is(err, security.ErrManagedNamespace) {
+			return nil, files.ErrNotFound
+		}
 		return nil, fmt.Errorf("%w: %s", files.ErrInvalid, err)
 	}
 	quotaOwnerUserID := ownerUserID

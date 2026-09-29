@@ -129,7 +129,9 @@ func addArchiveRoot(zw *zip.Writer, absoluteRoot, relativeRoot, rootName string,
 			sourceRel = path.Join(relativeRoot, cleanPart)
 			archiveName = path.Join(rootName, cleanPart)
 		}
-		if sourceRel != relativeRoot && (matcher.Match(sourceRel) || security.IsReservedName(entry.Name())) {
+		// 打包是只读输出，托管命名空间和保留名称整体跳过，不拒绝整个归档。
+		if sourceRel != relativeRoot && (matcher.Match(sourceRel) ||
+			security.IsManagedNamespaceName(entry.Name()) || security.IsReservedName(entry.Name())) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}

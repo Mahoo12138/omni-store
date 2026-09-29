@@ -9,6 +9,14 @@ import (
 // ErrReservedName 表示路径使用了 OmniStore 恢复流程保留的内部名称。
 var ErrReservedName = errors.New("路径包含 OmniStore 保留名称，请先重命名")
 
+// ErrManagedNamespace 表示路径命中系统托管命名空间。该命名空间只能由
+// 受信任的 Site Capability 服务访问，通用入口一律按“资源不存在”处理。
+var ErrManagedNamespace = errors.New("路径包含系统托管命名空间")
+
+// ManagedNamespaceSegment 是每个存储源根下唯一的系统托管目录段。
+// 系统服务（图床、Transfer 等）的内部数据保存在它的固定子目录中。
+const ManagedNamespaceSegment = ".omnistore"
+
 // IsReservedName 判断单个名称是否属于 OmniStore 内部操作命名空间。
 // 外部已存在的同名文件仍是用户数据，但不能经 API 新建、写入或作为移动目标。
 func IsReservedName(name string) bool {
@@ -16,9 +24,29 @@ func IsReservedName(name string) bool {
 		strings.HasPrefix(name, ".omnistore-copy-")
 }
 
-// ValidateUserRelPath 拒绝用户路径任意一段使用内部保留名称。
+// IsManagedNamespaceName 判断单个名称是否为托管命名空间目录本身。
+// 必须整段精确匹配：`.omnistore.txt` 等普通名字不受影响。大小写变体一并
+// 拒绝，因为宿主文件系统的大小写敏感性不可依赖，fail-closed 优先。
+func IsManagedNamespaceName(name string) bool {
+	return strings.EqualFold(name, ManagedNamespaceSegment)
+}
+
+// ContainsManagedNamespace 判断相对路径的任意一段是否为托管命名空间。
+func ContainsManagedNamespace(relPath string) bool {
+	for _, segment := range strings.Split(relPath, "/") {
+		if IsManagedNamespaceName(segment) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateUserRelPath 拒绝用户路径任意一段使用托管命名空间或内部保留名称。
 func ValidateUserRelPath(relPath string) error {
 	for _, segment := range strings.Split(relPath, "/") {
+		if IsManagedNamespaceName(segment) {
+			return fmt.Errorf("%w: %s", ErrManagedNamespace, segment)
+		}
 		if IsReservedName(segment) {
 			return fmt.Errorf("%w: %s", ErrReservedName, segment)
 		}
@@ -70,6 +98,9 @@ func ValidateFileName(name string) error {
 	}
 	if strings.ContainsAny(name, "/\\") {
 		return fmt.Errorf("文件名不能包含斜杠")
+	}
+	if IsManagedNamespaceName(name) {
+		return fmt.Errorf("%w: %s", ErrManagedNamespace, name)
 	}
 	if IsReservedName(name) {
 		return fmt.Errorf("%w: %s", ErrReservedName, name)

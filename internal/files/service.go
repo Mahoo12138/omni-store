@@ -346,7 +346,7 @@ func (s *Service) applyUserQuotaGuard(guard *QuotaWriteGuard, userID, storageSou
 	}
 }
 
-// prepare 执行统一前置检查：规范化路径 -> 排除规则 -> symlink 检查。
+// prepare 执行统一前置检查：规范化路径 -> 保留名称 -> 排除规则 -> symlink 检查。
 // 返回规范化相对路径和绝对路径。
 func (s *Service) prepare(src *models.StorageSource, relInput string) (relPath, absPath string, err error) {
 	relPath, err = security.NormalizeRelPath(relInput)
@@ -354,6 +354,11 @@ func (s *Service) prepare(src *models.StorageSource, relInput string) (relPath, 
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	if err := security.ValidateUserRelPath(relPath); err != nil {
+		if errors.Is(err, security.ErrManagedNamespace) {
+			// 托管命名空间对所有通用入口（读和写）都表现为资源不存在，
+			// 且必须在任何文件系统访问之前拒绝。
+			return "", "", ErrNotFound
+		}
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	matcher, err := s.sources.Matcher(src.ID)
@@ -371,6 +376,38 @@ func (s *Service) prepare(src *models.StorageSource, relInput string) (relPath, 
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	return relPath, absPath, nil
+}
+
+// mapPathValidationError 统一转换单个名称校验错误：托管命名空间返回不存在语义。
+func mapPathValidationError(err error) error {
+	if errors.Is(err, security.ErrManagedNamespace) {
+		return ErrNotFound
+	}
+	return fmt.Errorf("%w: %s", ErrInvalid, err)
+}
+
+// rejectManagedSubtree 检查真实文件系统子树中是否存在托管命名空间目录。
+// 删除/移动等作用于整棵子树的递归写操作不能搬运或销毁托管数据，必须整体拒绝。
+// 使用名称精确匹配而非 exclude 规则，以覆盖大小写变体目录。
+func rejectManagedSubtree(absRoot string) error {
+	var found string
+	err := filepath.WalkDir(absRoot, func(absPath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if security.IsManagedNamespaceName(entry.Name()) {
+			found = entry.Name()
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if found != "" {
+		return fmt.Errorf("%w: 目标包含系统托管目录 %s，拒绝整体操作", ErrInvalid, found)
+	}
+	return nil
 }
 
 // --- 列表（README §13.8） ---
@@ -429,8 +466,8 @@ func (s *Service) List(src *models.StorageSource, relInput string, opts ListOpti
 	entries := make([]Entry, 0, len(dirents))
 	for _, de := range dirents {
 		name := de.Name()
-		// 用户枚举隐藏完整的系统保留命名空间；物理用量统计不使用该过滤。
-		if security.IsReservedName(name) {
+		// 用户枚举隐藏完整的系统保留命名空间和临时前缀；物理用量统计不使用该过滤。
+		if security.IsReservedName(name) || security.IsManagedNamespaceName(name) {
 			continue
 		}
 		childRel := name
@@ -517,7 +554,7 @@ func (s *Service) ListObjects(src *models.StorageSource) ([]ObjectEntry, error) 
 			}
 			return nil
 		}
-		if security.IsReservedName(entry.Name()) {
+		if security.IsReservedName(entry.Name()) || security.IsManagedNamespaceName(entry.Name()) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -701,7 +738,7 @@ func (s *Service) MkdirWithLockTokens(src *models.StorageSource, parentRel, name
 	}
 	defer releaseLifecycle()
 	if err := security.ValidateFileName(name); err != nil {
-		return "", fmt.Errorf("%w: %s", ErrInvalid, err)
+		return "", mapPathValidationError(err)
 	}
 	parent, err := security.NormalizeRelPath(parentRel)
 	if err != nil {
@@ -755,7 +792,7 @@ func (s *Service) UploadWithLockTokens(src *models.StorageSource, dirRel, filena
 	}
 	defer releaseLifecycle()
 	if err := security.ValidateFileName(filename); err != nil {
-		return "", 0, fmt.Errorf("%w: %s", ErrInvalid, err)
+		return "", 0, mapPathValidationError(err)
 	}
 	dir, err := security.NormalizeRelPath(dirRel)
 	if err != nil {
@@ -986,6 +1023,11 @@ func (s *Service) DeleteWithLockTokens(src *models.StorageSource, relInput strin
 	}
 
 	isDir := info.IsDir()
+	if isDir {
+		if err := rejectManagedSubtree(absPath); err != nil {
+			return err
+		}
+	}
 	op := s.newPathOperation(pathOperationDelete, src, relPath, "", isDir, lockOwnerUserID)
 	if err := s.writePathOperation(op); err != nil {
 		return fmt.Errorf("记录永久删除意图失败: %w", err)
@@ -1023,7 +1065,7 @@ func (s *Service) Rename(src *models.StorageSource, relInput, newName string) (s
 // RenameAs 重命名文件或目录并记录执行用户。
 func (s *Service) RenameAs(src *models.StorageSource, relInput, newName string, actorUserID *int64) (string, error) {
 	if err := security.ValidateFileName(newName); err != nil {
-		return "", fmt.Errorf("%w: %s", ErrInvalid, err)
+		return "", mapPathValidationError(err)
 	}
 	relPath, err := security.NormalizeRelPath(relInput)
 	if err != nil || relPath == "" {
@@ -1103,6 +1145,11 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "", ErrUnsupported
+	}
+	if info.IsDir() {
+		if err := rejectManagedSubtree(fromAbs); err != nil {
+			return "", err
+		}
 	}
 	if _, err := os.Lstat(toAbs); err == nil {
 		return "", ErrAlreadyExists // 不覆盖、不自动重命名（README §13.6）

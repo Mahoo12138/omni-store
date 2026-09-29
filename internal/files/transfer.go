@@ -336,6 +336,10 @@ func (s *Service) buildTransferPlan(source, target *models.StorageSource, fromRe
 		if sourceMatcher.MatchPrefix(sourceChild) || targetMatcher.MatchPrefix(targetChild) {
 			return ErrPathExcluded
 		}
+		if security.IsManagedNamespaceName(entry.Name()) {
+			// 复制/跨源移动不能把托管子树搬出其所属来源，也不能静默跳过一部分。
+			return fmt.Errorf("%w: 目标包含系统托管目录 %s，拒绝整体操作", ErrInvalid, entry.Name())
+		}
 		info, err := entry.Info()
 		if err != nil {
 			return err

@@ -6,7 +6,13 @@ import (
 )
 
 // 系统强制排除规则，永远生效，管理员不能关闭（README §11.2）。
+// `.omnistore` 托管命名空间按目录段整体排除（含根级与任意嵌套层级），
+// 让搜索重过滤、递归打包等 matcher 消费方统一隐藏内部子树。
 var forcedExcludePatterns = []string{
+	".omnistore",
+	"**/.omnistore",
+	".omnistore/**",
+	"**/.omnistore/**",
 	".omnistore-upload-*",
 	"**/.omnistore-upload-*",
 	".omnistore-copy-*",

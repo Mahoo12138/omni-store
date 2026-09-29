@@ -120,6 +120,10 @@ func previewDirectory(rootPath string, patterns []string) (*DirectoryPreview, er
 	if !preview.IsEmpty {
 		preview.Warnings = append(preview.Warnings, "该目录已有内容；确认导入后不会移动或复制真实文件，普通文件会自动写入台账并标记为未归属。")
 	}
+	if unknownManagedRoot(rootPath, items) {
+		preview.Warnings = append(preview.Warnings,
+			"目录中存在名为 .omnistore 的未知目录：OmniStore 不会接管、修改或删除它；该目录及其内容将隐藏，无法通过任何 API 访问，如需使用请人工确认后处理。")
+	}
 	if preview.Summary.ExcludedEntries > 0 {
 		preview.Warnings = append(preview.Warnings, "命中排除规则的条目不会在 OmniStore 各入口中显示或访问。")
 	}
@@ -133,6 +137,17 @@ func previewDirectory(rootPath string, patterns []string) (*DirectoryPreview, er
 		preview.Warnings = append(preview.Warnings, "预览仅展示按名称排序后的前 20 个可见首层条目。")
 	}
 	return preview, nil
+}
+
+// unknownManagedRoot 检查目录首层是否存在未知同名托管根。
+// 名称存在不能证明归属，OmniStore 只提示告警，不接管也不删除。
+func unknownManagedRoot(rootPath string, items []os.DirEntry) bool {
+	for _, item := range items {
+		if item.IsDir() && security.IsManagedNamespaceName(filepath.ToSlash(item.Name())) {
+			return true
+		}
+	}
+	return false
 }
 
 func rejectReservedNames(rootPath string) error {

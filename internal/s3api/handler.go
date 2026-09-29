@@ -682,6 +682,11 @@ type s3Error struct {
 }
 
 func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, status int, code, message, resource string) {
+	if r.Method == http.MethodHead {
+		// HEAD 响应不携带错误 XML；正文与 GET 的表示元数据保持一致语义。
+		w.WriteHeader(status)
+		return
+	}
 	h.writeXML(w, status, s3Error{Code: code, Message: message, Resource: resource, RequestID: requestID(r)})
 }
 

@@ -415,6 +415,11 @@ func (s *Server) spaHandler() http.Handler {
 	fileServer := http.FileServerFS(dist)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 托管命名空间不能借 SPA fallback 返回 200 页面；在回退前直接 404。
+		if security.ContainsManagedNamespace(strings.TrimPrefix(r.URL.Path, "/")) {
+			http.NotFound(w, r)
+			return
+		}
 		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if p == "" {
 			p = "index.html"
