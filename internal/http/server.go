@@ -255,8 +255,13 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/admin/static-assets/rebind", s.requireAdmin(s.handleAdminRebindStatic))
 
 	// 公开静态资源读取（2.0 AST）：方法无关注册，保证非允许方法返回 405
-	// 而不是落入 SPA fallback。
-	mux.Handle("/assets/{assetID}/{path...}", s.staticAssetHandler())
+	// 而不是落入 SPA fallback。/assets/ 前缀也承载前端构建产物：
+	// 非公开标识形状的首段必须交还 SPA 静态文件，否则 JS bundle 404 白屏。
+	spa := s.spaHandler()
+	// 同时注册单段与多段模式：避免 ServeMux 对 /assets/{name} 的自动
+	// 尾斜杠重定向把前端 bundle 变成 index.html。
+	mux.Handle("/assets/{assetID}", s.staticAssetHandler(spa))
+	mux.Handle("/assets/{assetID}/{path...}", s.staticAssetHandler(spa))
 
 	// 管理员：审计日志（筛选与分页）
 	mux.HandleFunc("GET /api/v1/admin/audit-logs", s.requireAdmin(s.handleAdminAuditLogs))
@@ -272,7 +277,6 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeFileNotFound, "接口不存在", nil)
 	})
-	spa := s.spaHandler()
 	mux.Handle("/", spa)
 
 	var handler http.Handler = mux

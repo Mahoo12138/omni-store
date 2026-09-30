@@ -36,9 +36,15 @@ func applyStaticCORS(w http.ResponseWriter, mode string, allowedOrigins []string
 }
 
 // staticAssetHandler 分派 /assets/{assetID}/{path...} 的全部方法：
-// GET/HEAD 公开读取、OPTIONS 预检、其余方法 405（内部路径拒绝在 SPA fallback 之前）。
-func (s *Server) staticAssetHandler() http.Handler {
+// 首段不是合法公开标识形状时交给 SPA 静态文件（/assets/ 同时承载前端构建产物，
+// 不能被公开资源路由遮蔽）；标识形状的请求按 GET/HEAD 读取、OPTIONS 预检、
+// 其余方法 405 分派（内部路径拒绝在 SPA fallback 之前）。
+func (s *Server) staticAssetHandler(spa http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !staticassets.IsAssetIDShape(r.PathValue("assetID")) {
+			spa.ServeHTTP(w, r)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
 			s.handleStaticAsset(w, r)

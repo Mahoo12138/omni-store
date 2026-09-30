@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/sources"
+	"github.com/omni-store/omnistore/web"
 )
 
 const staticPNG = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89rest"
@@ -185,12 +187,12 @@ func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 		}
 	}
 
-	// 含 `..` 的原始 URL 会被 ServeMux 规范化重定向：任何情况下都不得返回 200，
-	// 且重定向落点仍然必须 404（越界检查在服务层单元测试中覆盖）。
+	// 含 `..` 的原始 URL 会被 ServeMux 规范化重定向：落点绝不返回真实媒体内容。
+	// 非 ast- 标识形状的落点交给 SPA 外壳（text/html），ast 形状但错误 ID 返回 404。
 	for _, path := range []string{"/../escape.png", "/posts/../../blog-assets/cover.png"} {
 		resp := serveTestRequest(t, fixture.handler, http.MethodGet, base+path, "", nil, "")
 		if resp.Code == http.StatusOK {
-			t.Errorf("dot-segment URL %q must never serve 200 (status=%d)", path, resp.Code)
+			t.Errorf("dot-segment URL %q must not be served inline (status=%d)", path, resp.Code)
 		}
 		if resp.Code == http.StatusTemporaryRedirect || resp.Code == http.StatusMovedPermanently {
 			location := resp.Header().Get("Location")
@@ -201,7 +203,13 @@ func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 			followedRec := httptest.NewRecorder()
 			fixture.handler.ServeHTTP(followedRec, followed)
 			if followedRec.Code == http.StatusOK {
-				t.Errorf("redirect target %q served 200", location)
+				if got := followedRec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+					t.Errorf("redirect target %q served %q with body len %d, want SPA shell",
+						location, got, followedRec.Body.Len())
+				}
+				if strings.Contains(followedRec.Body.String(), "PNG rest") {
+					t.Errorf("redirect target %q leaked media content", location)
+				}
 			}
 		}
 	}
@@ -360,5 +368,53 @@ func TestStaticAssetsIndependentOfPublicDrive(t *testing.T) {
 	bindings := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/admin/capabilities", "", fixture.cookie, "")
 	if !strings.Contains(bindings.Body.String(), `"capability":"static_assets"`) {
 		t.Fatalf("capabilities body=%s", bindings.Body.String())
+	}
+}
+
+// 回归：/assets/ 前缀同时承载前端构建产物（Vite dist/assets/*）。
+// 公开静态资源路由不得遮蔽 JS/CSS bundle，否则页面白屏。
+func TestAssetsPrefixServesFrontendBundles(t *testing.T) {
+	fixture := newStaticHTTPFixture(t)
+	dist, err := fs.Sub(web.DistFS, "dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := fs.ReadDir(dist, "assets")
+	if err != nil {
+		t.Fatalf("dist assets missing: %v", err)
+	}
+	var bundle string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".js") {
+			bundle = entry.Name()
+			break
+		}
+	}
+	if bundle == "" {
+		t.Fatal("no JS bundle found in dist/assets")
+	}
+
+	resp := serveTestRequest(t, fixture.handler, http.MethodGet, "/assets/"+bundle, "", nil, "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("frontend bundle /assets/%s status=%d, want 200 (SPA 静态文件)", bundle, resp.Code)
+	}
+	if got := resp.Header().Get("Content-Type"); !strings.Contains(got, "javascript") {
+		t.Fatalf("bundle content-type=%q", got)
+	}
+
+	// 非 ast- 形状的多段路径同样是前端资源语义：交给 SPA（index.html 外壳）。
+	shell := serveTestRequest(t, fixture.handler, http.MethodGet, "/assets/blog-assets/cover.png", "", nil, "")
+	if shell.Code != http.StatusOK || !strings.Contains(shell.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("non-asset id path status=%d content-type=%q", shell.Code, shell.Header().Get("Content-Type"))
+	}
+	if strings.Contains(shell.Body.String(), "PNG rest") {
+		t.Fatal("non-asset id path must never leak media content")
+	}
+
+	// ast 形状但错误 ID：真实 404，不回退 SPA。
+	wrong := serveTestRequest(t, fixture.handler, http.MethodGet,
+		"/assets/ast-00000000000000000000000000000000/a.png", "", nil, "")
+	if wrong.Code != http.StatusNotFound {
+		t.Fatalf("wrong asset id status=%d, want 404", wrong.Code)
 	}
 }

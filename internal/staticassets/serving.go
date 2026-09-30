@@ -68,6 +68,20 @@ func isWebM(header []byte) bool {
 	return len(header) >= 4 && header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3
 }
 
+// IsAssetIDShape 判断首段是否为合法公开标识形状（ast- + 32 位小写 hex）。
+// /assets/ 前缀同时承载前端构建产物；非标识形状的请求不是静态资源请求。
+func IsAssetIDShape(assetID string) bool {
+	if len(assetID) != len("ast-")+32 || !strings.HasPrefix(assetID, "ast-") {
+		return false
+	}
+	for _, r := range assetID[len("ast-"):] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // classify 验证扩展名与服务端受限读取的签名；矛盾或无法判断一律拒绝。
 func classify(name string, header []byte) (string, bool) {
 	ext := strings.ToLower(filepath.Ext(name))
