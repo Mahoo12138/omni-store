@@ -24,6 +24,7 @@ import (
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/shares"
 	"github.com/omni-store/omnistore/internal/sources"
+	"github.com/omni-store/omnistore/internal/staticassets"
 	"github.com/omni-store/omnistore/internal/users"
 	"github.com/omni-store/omnistore/internal/webdav"
 	"github.com/omni-store/omnistore/web"
@@ -45,6 +46,7 @@ type Server struct {
 	imagebed       *imagebed.Service
 	anonLimiter    *imagebed.RateLimiter
 	capabilities   *capabilities.Service
+	staticassets   *staticassets.Service
 	audit          *audit.Logger
 	proxy          *security.ProxyResolver
 	s3Keys         *s3api.Credentials
@@ -85,6 +87,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.sources = sources.NewService(dbConn, cfg.Data.Dir)
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
+	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
 	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
@@ -243,6 +246,17 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 管理员：Site Capability 绑定（2.0）
 	mux.HandleFunc("GET /api/v1/admin/capabilities", s.requireAdmin(s.handleAdminListCapabilities))
 	mux.HandleFunc("PUT /api/v1/admin/capabilities/{capability}", s.requireAdmin(s.handleAdminUpdateCapability))
+
+	// 管理员：静态资源配置（2.0 AST）
+	mux.HandleFunc("GET /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminGetStaticConfig))
+	mux.HandleFunc("POST /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminConfigureStatic))
+	mux.HandleFunc("PUT /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminUpdateStaticConfig))
+	mux.HandleFunc("POST /api/v1/admin/static-assets/preflight", s.requireAdmin(s.handleAdminPreflightStatic))
+	mux.HandleFunc("POST /api/v1/admin/static-assets/rebind", s.requireAdmin(s.handleAdminRebindStatic))
+
+	// 公开静态资源读取（2.0 AST）：方法无关注册，保证非允许方法返回 405
+	// 而不是落入 SPA fallback。
+	mux.Handle("/assets/{assetID}/{path...}", s.staticAssetHandler())
 
 	// 管理员：审计日志（筛选与分页）
 	mux.HandleFunc("GET /api/v1/admin/audit-logs", s.requireAdmin(s.handleAdminAuditLogs))

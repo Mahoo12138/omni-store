@@ -27,6 +27,13 @@ import {
   adminSetBranding,
   adminSetImageBedRetention,
   adminSetSourceDisabled,
+  adminConfigureStaticAssets,
+  adminGetStaticConfig,
+  adminPreflightStaticAssets,
+  adminRebindStaticAssets,
+  adminUpdateStaticAssets,
+  type StaticAssetConfig,
+  type StaticAssetPreflight,
   adminSetUserDisabled,
   adminSetUserQuota,
   adminUpdateSource,
@@ -104,6 +111,7 @@ type SectionKey =
   | 'audit'
   | 'backup'
   | 'image-bed'
+  | 'static-assets'
   | 'branding'
 
 const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
@@ -189,6 +197,7 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'backup', label: '配置导出', icon: <IconDownload size={15} /> },
   { key: 'branding', label: '品牌信息', icon: <IconGlobe size={15} /> },
   { key: 'image-bed', label: '匿名图床', icon: <IconImage size={15} /> },
+  { key: 'static-assets', label: '静态资源', icon: <IconGlobe size={15} /> },
 ]
 
 export function AdminOverviewPage() {
@@ -263,6 +272,7 @@ export function AdminOverviewPage() {
           {section === 'audit' && <AuditSection />}
           {section === 'backup' && <BackupSection />}
           {section === 'image-bed' && <ImageBedSection />}
+          {section === 'static-assets' && <StaticAssetsSection />}
           {section === 'branding' && <BrandingSection />}
         </div>
       </div>
@@ -3134,5 +3144,348 @@ function BrandingSection() {
         )}
       </div>
     </section>
+  )
+}
+
+// --- 静态资源托管（2.0 AST）：单发布空间 + 固定公开标识 ---
+
+const staticCacheModeLabels: Record<string, string> = {
+  short: '短缓存（默认，5 分钟）',
+  'no-cache': '协商缓存（使用前验证）',
+  long: '长缓存（内容变化必须换 URL，需确认）',
+}
+
+const staticCorsModeLabels: Record<string, string> = {
+  public: '公开跨域（ACAO: *，无凭据）',
+  allowlist: '白名单（精确匹配 Origin）',
+  none: '不添加 CORS 头',
+}
+
+function StaticAssetsSection() {
+  const config = useQuery({ queryKey: ['static-assets-config'], queryFn: adminGetStaticConfig })
+  if (config.isPending) {
+    return (
+      <section className={css.section}>
+        <div className={css.sectionBody}><span className={css.kvLabel}>加载中…</span></div>
+      </section>
+    )
+  }
+  const data = config.data
+  if (!data?.public_asset_id) {
+    return <StaticAssetsConfigureForm />
+  }
+  return <StaticAssetsConfiguredView config={data} />
+}
+
+function StaticAssetsConfigureForm() {
+  const queryClient = useQueryClient()
+  const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
+  const [sourceKey, setSourceKey] = useState('')
+  const [publishRoot, setPublishRoot] = useState('blog-assets')
+  const [preflight, setPreflight] = useState<StaticAssetPreflight | null>(null)
+  const [err, setErr] = useState('')
+
+  const preflightMut = useMutation({
+    mutationFn: () => adminPreflightStaticAssets({ source_key: sourceKey, publish_root: publishRoot }),
+    onSuccess: (result) => { setPreflight(result); setErr('') },
+    onError: (e) => { setErr(e instanceof ApiRequestError ? e.message : '预检失败'); setPreflight(null) },
+  })
+  const configureMut = useMutation({
+    mutationFn: () => adminConfigureStaticAssets({
+      source_key: sourceKey,
+      publish_root: publishRoot.trim(),
+      confirm_publish_root: publishRoot.trim() === '',
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin-capabilities'] })
+    },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '配置失败'),
+  })
+
+  const usableSources = sources.data?.filter((source) => !source.is_disabled) ?? []
+  return (
+    <section className={css.section}>
+      <header className={css.sectionHeaderWithAction}>
+        <div className={css.sectionHeaderCopy}>
+          <h2 className={css.sectionTitle}>静态资源托管</h2>
+          <p className={css.sectionHint}>
+            把一个普通目录按固定地址公开读取，用于博客图片、视频等长期资源。
+            启用后发布目录内的受支持文件将公开读取，无需登录；不提供目录列表不等于保密。
+          </p>
+        </div>
+      </header>
+      <div className={css.sectionBody}>
+        <Field label="发布存储源" required>
+          <Select
+            value={usableSources.some((source) => source.key === sourceKey)
+              ? String(usableSources.findIndex((source) => source.key === sourceKey))
+              : ''}
+            onValueChange={(index) => setSourceKey(usableSources[Number(index)]?.key ?? '')}
+            options={usableSources.map((source, index) => ({ value: String(index), label: source.name }))}
+            placeholder="选择存储源…"
+            ariaLabel="静态资源发布存储源"
+          />
+        </Field>
+        <Field
+          label="发布目录（源内相对路径）"
+          hint={publishRoot.trim() === '' ? '留空表示发布整个存储源根目录，必须显式确认。' : '例如 blog-assets；托管命名空间与排除规则永远不公开。'}
+        >
+          <Input
+            value={publishRoot}
+            onChange={(event) => { setPublishRoot(event.target.value); setErr('') }}
+            placeholder="blog-assets"
+            aria-label="静态资源发布目录"
+          />
+        </Field>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button variant="secondary" disabled={!sourceKey || preflightMut.isPending} onClick={() => preflightMut.mutate()}>
+            {preflightMut.isPending ? '预检中…' : '预检发布目录'}
+          </Button>
+          <Button disabled={!sourceKey || configureMut.isPending} onClick={() => configureMut.mutate()}>
+            {configureMut.isPending ? '保存中…' : '创建发布空间'}
+          </Button>
+        </div>
+        {preflight && (
+          <div className={css.sourcePreview}>
+            <p>样例条目：{preflight.sample_entries.length > 0 ? preflight.sample_entries.join('、') : '（目录为空）'}</p>
+            <p>公开类型：{preflight.supported_types.join('、')}</p>
+            {preflight.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
+          </div>
+        )}
+        {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+      </div>
+    </section>
+  )
+}
+
+function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
+  const queryClient = useQueryClient()
+  const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
+  const [enabled, setEnabled] = useState(config.enabled)
+  const [cacheMode, setCacheMode] = useState(config.cache_mode)
+  const [corsMode, setCorsMode] = useState(config.cors_mode)
+  const [publicOrigin, setPublicOrigin] = useState(config.public_origin)
+  const [allowedOrigins, setAllowedOrigins] = useState(config.allowed_origins.join('\n'))
+  const [rebindOpen, setRebindOpen] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const saveMut = useMutation({
+    mutationFn: () => adminUpdateStaticAssets({
+      enabled,
+      cache_mode: cacheMode,
+      cors_mode: corsMode,
+      public_origin: publicOrigin.trim(),
+      allowed_origins: allowedOrigins.split('\n').map((origin) => origin.trim()).filter(Boolean),
+      expected_revision: config.revision,
+    }),
+    onSuccess: async () => {
+      setMsg('配置已保存；新响应按新策略执行。')
+      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
+    },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '保存失败'),
+  })
+
+  async function copyBaseURL() {
+    await navigator.clipboard.writeText(config.base_url)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <>
+      <section className={css.section}>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 className={css.sectionTitle}>静态资源托管</h2>
+            <p className={css.sectionHint}>
+              发布空间：{config.source_name} / {config.publish_root || '（存储源根目录）'}
+            </p>
+          </div>
+          <div className={css.sectionHeaderAction}>
+            <Button variant="secondary" onClick={() => setRebindOpen(true)}>更换发布空间</Button>
+          </div>
+        </header>
+        <div className={css.sectionBody}>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>状态</span>
+            <span className={css.kvValue}>
+              {config.enabled ? <Badge color="green">公开读取中</Badge> : <Badge color="gray">已关闭（原站 404）</Badge>}
+            </span>
+          </div>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>baseUrl</span>
+            <span className={css.kvValue} style={{ fontFamily: vars.font.mono, wordBreak: 'break-all' }}>
+              {config.base_url}
+            </span>
+            <Button variant="ghost" onClick={() => void copyBaseURL()}>{copied ? '已复制' : '复制'}</Button>
+          </div>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>公开类型</span>
+            <span className={css.kvValue}>JPEG · PNG · GIF · WebP · MP4 · WebM（扩展名与服务端签名同时校验）</span>
+          </div>
+        </div>
+      </section>
+
+      <section className={css.section}>
+        <div className={css.sectionHeader}>
+          <h2 className={css.sectionTitle}>缓存与跨域</h2>
+        </div>
+        <div className={css.sectionBody}>
+          <Field label="启用" hint="关闭后原站公开读取返回 404；无法收回已分发到浏览器/CDN 的缓存。">
+            <label className={fieldCss.checkboxRow}>
+              <input type="checkbox" className={fieldCss.checkbox} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              提供公开读取
+            </label>
+          </Field>
+          <Field label="缓存档位" hint="long 仅适合内容修改就更换 URL 的资源。">
+            <Select
+              value={cacheMode}
+              onValueChange={(value) => setCacheMode(value as StaticAssetConfig['cache_mode'])}
+              options={Object.entries(staticCacheModeLabels).map(([value, label]) => ({ value, label }))}
+              ariaLabel="缓存档位"
+            />
+          </Field>
+          <Field label="跨域档位" hint="CORS 不是图片保密机制；公开媒体可跨站嵌入。">
+            <Select
+              value={corsMode}
+              onValueChange={(value) => setCorsMode(value as StaticAssetConfig['cors_mode'])}
+              options={Object.entries(staticCorsModeLabels).map(([value, label]) => ({ value, label }))}
+              ariaLabel="跨域档位"
+            />
+          </Field>
+          <Field label="对外 origin（可选）" hint="只改变输出的 baseUrl；不自动配置 DNS/TLS/反向代理。">
+            <Input
+              value={publicOrigin}
+              onChange={(event) => setPublicOrigin(event.target.value)}
+              placeholder="https://files.example.com"
+              aria-label="静态资源对外 origin"
+            />
+          </Field>
+          {corsMode === 'allowlist' && (
+            <Field label="允许的 Origin 白名单（每行一个完整 origin）" hint="精确匹配，不支持任意后缀。">
+              <textarea className={fieldCss.textarea} value={allowedOrigins} onChange={(event) => setAllowedOrigins(event.target.value)} />
+            </Field>
+          )}
+          <Button disabled={saveMut.isPending} onClick={() => { setMsg(''); setErr(''); saveMut.mutate() }}>
+            {saveMut.isPending ? '保存中…' : '保存设置'}
+          </Button>
+          {msg && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.textSecondary }}>{msg}</div>}
+          {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+        </div>
+      </section>
+
+      <StaticAssetsRebindDialog
+        open={rebindOpen}
+        onOpenChange={setRebindOpen}
+        config={config}
+        sources={sources.data ?? []}
+      />
+    </>
+  )
+}
+
+function StaticAssetsRebindDialog({
+  open,
+  onOpenChange,
+  config,
+  sources,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  config: StaticAssetConfig
+  sources: AdminSource[]
+}) {
+  const queryClient = useQueryClient()
+  const [mode, setMode] = useState<'reset' | 'relocate'>('reset')
+  const [sourceKey, setSourceKey] = useState(config.source_key)
+  const [publishRoot, setPublishRoot] = useState(config.publish_root)
+  const [confirmRelocate, setConfirmRelocate] = useState(false)
+  const [err, setErr] = useState('')
+
+  const usable = sources.filter((source) => !source.is_disabled)
+  const mutation = useMutation({
+    mutationFn: () => adminRebindStaticAssets({
+      source_key: sourceKey,
+      publish_root: publishRoot.trim(),
+      mode,
+      confirm_publish_root: publishRoot.trim() === '',
+      confirm_relocate: mode === 'relocate' ? confirmRelocate : undefined,
+      expected_revision: config.revision,
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
+      await queryClient.invalidateQueries({ queryKey: ['admin-capabilities'] })
+      onOpenChange(false)
+    },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '重绑失败'),
+  })
+
+  useEffect(() => {
+    if (open) {
+      setMode('reset')
+      setSourceKey(config.source_key)
+      setPublishRoot(config.publish_root)
+      setConfirmRelocate(false)
+      setErr('')
+    }
+  }, [open, config.source_key, config.publish_root])
+
+  return (
+    <DialogWrap
+      open={open}
+      onOpenChange={onOpenChange}
+      title="更换发布空间"
+      description="更换 source 或发布目录属于公开身份变更；普通保存无法完成此操作。"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button disabled={mutation.isPending || (mode === 'relocate' && !confirmRelocate)} onClick={() => mutation.mutate()}>
+            {mutation.isPending ? '执行中…' : '确认重绑'}
+          </Button>
+        </>
+      }
+    >
+      <Field label="重绑模式">
+        <Select
+          value={mode}
+          onValueChange={(value) => setMode(value as 'reset' | 'relocate')}
+          options={[
+            { value: 'reset', label: '重置：生成全新公开标识，旧 baseUrl 原站 404' },
+            { value: 'relocate', label: '迁移保留：同一批内容迁移磁盘后保留标识' },
+          ]}
+          ariaLabel="重绑模式"
+        />
+      </Field>
+      <Field label="新发布存储源">
+        <Select
+          value={usable.some((source) => source.key === sourceKey)
+            ? String(usable.findIndex((source) => source.key === sourceKey))
+            : ''}
+          onValueChange={(index) => setSourceKey(usable[Number(index)]?.key ?? '')}
+          options={usable.map((source, index) => ({ value: String(index), label: source.name }))}
+          ariaLabel="重绑目标存储源"
+        />
+      </Field>
+      <Field label="新发布目录" hint="留空表示存储源根目录（需在下一步确认）。">
+        <Input value={publishRoot} onChange={(event) => setPublishRoot(event.target.value)} aria-label="重绑目标发布目录" />
+      </Field>
+      {mode === 'relocate' && (
+        <Field label="迁移确认" required hint="勾选表示你已确认同一批内容已迁移/复制到新位置并核验，旧相对路径将继续有效。">
+          <label className={fieldCss.checkboxRow}>
+            <input
+              type="checkbox"
+              className={fieldCss.checkbox}
+              checked={confirmRelocate}
+              onChange={(e) => setConfirmRelocate(e.target.checked)}
+            />
+            我确认同一批内容已就位并核验，愿意承担核验责任（写入审计）
+          </label>
+        </Field>
+      )}
+      {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+    </DialogWrap>
   )
 }

@@ -311,6 +311,77 @@ export async function adminSetAnonymousSettings(input: {
   })
 }
 
+// 静态资源托管配置（2.0 AST）
+export interface StaticAssetConfig {
+  enabled: boolean
+  source_key: string
+  source_name: string
+  publish_root: string
+  public_asset_id: string
+  public_origin: string
+  base_url: string
+  cache_mode: 'short' | 'no-cache' | 'long'
+  cors_mode: 'none' | 'public' | 'allowlist'
+  allowed_origins: string[]
+  revision: number
+  updated_at: string
+}
+
+export interface StaticAssetPreflight {
+  source_key: string
+  publish_root: string
+  root_exists: boolean
+  sample_entries: string[]
+  sample_truncated: boolean
+  supported_types: string[]
+  warnings: string[]
+}
+
+export async function adminGetStaticConfig(): Promise<StaticAssetConfig> {
+  return apiFetch<StaticAssetConfig>('/api/v1/admin/static-assets/config')
+}
+
+export async function adminConfigureStaticAssets(input: {
+  source_key: string
+  publish_root: string
+  cache_mode?: string
+  cors_mode?: string
+  public_origin?: string
+  allowed_origins?: string[]
+  confirm_publish_root?: boolean
+}): Promise<StaticAssetConfig> {
+  return apiFetch('/api/v1/admin/static-assets/config', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function adminUpdateStaticAssets(input: {
+  enabled?: boolean
+  cache_mode?: string
+  cors_mode?: string
+  public_origin?: string
+  allowed_origins?: string[]
+  expected_revision?: number
+}): Promise<StaticAssetConfig> {
+  return apiFetch('/api/v1/admin/static-assets/config', { method: 'PUT', body: JSON.stringify(input) })
+}
+
+export async function adminRebindStaticAssets(input: {
+  source_key: string
+  publish_root: string
+  mode: 'reset' | 'relocate'
+  confirm_publish_root?: boolean
+  confirm_relocate?: boolean
+  expected_revision?: number
+}): Promise<StaticAssetConfig> {
+  return apiFetch('/api/v1/admin/static-assets/rebind', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function adminPreflightStaticAssets(input: {
+  source_key: string
+  publish_root: string
+}): Promise<StaticAssetPreflight> {
+  return apiFetch('/api/v1/admin/static-assets/preflight', { method: 'POST', body: JSON.stringify(input) })
+}
+
 // 图床保留策略（2.0 IMG：0 = 不自动过期；登录用户与匿名相互独立）
 export interface ImageBedRetention {
   user_retention_days: number

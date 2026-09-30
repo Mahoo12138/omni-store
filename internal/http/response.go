@@ -29,6 +29,8 @@ const (
 	// 分享仍存在但已不可访问（1.2.0）：仅用于公开信息接口，与真实 404 区分。
 	CodeShareExpired   = "SHARE_EXPIRED"
 	CodeShareExhausted = "SHARE_EXHAUSTED"
+	// 静态资源配置更换发布空间必须走专用重绑（2.0 AST）。
+	CodeStaticRebindRequired = "STATIC_REBIND_REQUIRED"
 )
 
 // statusOf 映射错误码到 HTTP 状态码（README §19.4）。
@@ -42,6 +44,8 @@ func statusOf(code string) int {
 		return http.StatusNotFound
 	case CodeShareExpired, CodeShareExhausted:
 		return http.StatusGone
+	case CodeStaticRebindRequired:
+		return http.StatusConflict
 	case CodeSourceDisabled:
 		return http.StatusForbidden
 	case CodeConflict, CodeFileAlreadyExists:
