@@ -386,6 +386,129 @@ func mapPathValidationError(err error) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, err)
 }
 
+// prepareManaged 为受信任 Site 服务构造的内部路径执行安全解析。
+// 路径必须位于源根 `.omnistore/<scopeDir>/` 之下，仍执行越界与软链接检查，
+// 但不套用用户路径的托管命名空间拒绝规则，也不做排除规则匹配
+// （托管子树整体被系统强制排除，其内部布局由所属服务定义）。
+// 托管根的所有权核验由调用方（managedroot）负责。
+func (s *Service) prepareManaged(src *models.StorageSource, relInput, scopeDir string) (relPath, absPath string, err error) {
+	relPath, err = security.NormalizeRelPath(relInput)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
+	}
+	prefix := security.ManagedNamespaceSegment + "/" + scopeDir
+	if relPath != prefix && !strings.HasPrefix(relPath, prefix+"/") {
+		return "", "", fmt.Errorf("%w: 内部路径必须位于 %s/ 之下", ErrInvalid, prefix)
+	}
+	if err := security.ValidateUserRelPath(relPath); err != nil {
+		// 托管段本身已由前缀检查保证；临时前缀等其余保留名称仍然拒绝。
+		if !errors.Is(err, security.ErrManagedNamespace) {
+			return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
+		}
+	}
+	absPath, err = security.ResolveInSource(src.RootPath, relPath)
+	if err != nil {
+		if errors.Is(err, security.ErrSymlink) {
+			return "", "", ErrUnsupported
+		}
+		return "", "", fmt.Errorf("%w: %s", ErrInvalid, err)
+	}
+	return relPath, absPath, nil
+}
+
+// OpenManagedForRead 打开源托管命名空间内由受信任服务写入的文件。
+// 调用方（如图床 /i/ 服务）必须以自己的业务记录构造路径，不得拼接用户输入。
+func (s *Service) OpenManagedForRead(src *models.StorageSource, relInput, scopeDir string) (*os.File, os.FileInfo, func(), error) {
+	relPath, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unlock := s.locks.RLock(locks.Key(src.Key, relPath))
+
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		unlock()
+		if os.IsNotExist(err) {
+			return nil, nil, nil, ErrNotFound
+		}
+		return nil, nil, nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		unlock()
+		return nil, nil, nil, ErrUnsupported
+	}
+	if !info.Mode().IsRegular() {
+		unlock()
+		return nil, nil, nil, fmt.Errorf("%w: 内部路径不是普通文件", ErrInvalid)
+	}
+
+	f, err := os.Open(absPath)
+	if err != nil {
+		unlock()
+		return nil, nil, nil, err
+	}
+	return f, info, unlock, nil
+}
+
+// DeleteManaged 删除托管命名空间内的服务数据（物理子树 + 内部台账行）。
+// 与用户删除共用崩溃恢复日志和锁，但路径边界按托管命名空间检查。
+func (s *Service) DeleteManaged(src *models.StorageSource, relInput, scopeDir string) error {
+	releaseLifecycle, err := s.guardLifecycle([]*models.StorageSource{src}, nil)
+	if err != nil {
+		return err
+	}
+	defer releaseLifecycle()
+	relPath, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	if err != nil {
+		return err
+	}
+	releasePersistent, err := s.persistentLocks.GuardMutation(context.Background(), src.ID,
+		[]locks.MutationScope{{Path: relPath, IncludeDescendants: true}}, nil, nil)
+	if err != nil {
+		return err
+	}
+	defer releasePersistent()
+
+	unlock := s.locks.Lock(locks.Key(src.Key, relPath))
+	defer unlock()
+
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return ErrUnsupported
+	}
+
+	op := s.newPathOperation(pathOperationDelete, src, relPath, "", info.IsDir(), nil)
+	if err := s.writePathOperation(op); err != nil {
+		return fmt.Errorf("记录内部删除意图失败: %w", err)
+	}
+	if err := os.RemoveAll(absPath); err != nil {
+		return fmt.Errorf("删除内部数据失败，操作将在重启时继续: %w", err)
+	}
+	if err := syncPathParents(absPath); err != nil {
+		return fmt.Errorf("同步内部删除目录失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.markPathFilesystemReady(op.OperationID); err != nil {
+		return fmt.Errorf("记录内部删除文件阶段失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.deletePathMetadata(src.ID, relPath, info.IsDir()); err != nil {
+		return fmt.Errorf("清理内部路径元数据失败，操作将在重启时继续: %w", err)
+	}
+	if err := s.markPathDatabaseReady(op.OperationID); err != nil {
+		return fmt.Errorf("记录内部删除数据库阶段失败，操作将在重启时继续: %w", err)
+	}
+	if err := releasePersistent(relPath); err != nil {
+		return err
+	}
+	_ = s.removePathOperation(op.OperationID)
+	return nil
+}
+
 // rejectManagedSubtree 检查真实文件系统子树中是否存在托管命名空间目录。
 // 删除/移动等作用于整棵子树的递归写操作不能搬运或销毁托管数据，必须整体拒绝。
 // 使用名称精确匹配而非 exclude 规则，以覆盖大小写变体目录。

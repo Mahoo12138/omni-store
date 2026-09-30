@@ -92,7 +92,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.s3Multipart = s3api.NewMultipartStore(dbConn, cfg.Data.Dir, s.files, cfg.Upload.MaxFileSizeMB)
 	s.s3Handler = s3api.NewHandler(s.s3Keys, s.sources, s.files, s.audit, s.proxy, logger,
 		cfg.Upload.MaxFileSizeMB, s.s3Multipart)
-	ib, err := imagebed.NewService(dbConn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
+	ib, err := imagebed.NewService(dbConn, cfg.Server.PublicURL,
 		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), s.sources, s.capabilities, s.files)
 	if err != nil {
 		// 配置错误应在启动时直接失败。
@@ -235,6 +235,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	// 管理员：匿名图床配置与匿名图片管理
 	mux.HandleFunc("GET /api/v1/admin/image-bed/anonymous-settings", s.requireAdmin(s.handleAdminGetAnonymousSettings))
 	mux.HandleFunc("PUT /api/v1/admin/image-bed/anonymous-settings", s.requireAdmin(s.handleAdminSetAnonymousSettings))
+	mux.HandleFunc("GET /api/v1/admin/image-bed/retention", s.requireAdmin(s.handleAdminGetImageBedRetention))
+	mux.HandleFunc("PUT /api/v1/admin/image-bed/retention", s.requireAdmin(s.handleAdminSetImageBedRetention))
 	mux.HandleFunc("GET /api/v1/admin/image-bed/anonymous-images", s.requireAdmin(s.handleAdminListAnonymousImages))
 	mux.HandleFunc("DELETE /api/v1/admin/image-bed/anonymous-images/{image_id}", s.requireAdmin(s.handleAdminDeleteAnonymousImage))
 

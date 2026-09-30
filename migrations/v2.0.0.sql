@@ -140,3 +140,55 @@ ALTER TABLE user_preferences_v2 RENAME TO user_preferences;
 DROP TABLE IF EXISTS public_mount_redirects;
 
 DELETE FROM system_settings WHERE key = 'anonymous_image_bed_storage_source_id';
+
+-- 9. 图床托管台账作用域（IMG）：普通校准/FTS 只处理 file scope；
+--    image_bed scope 只能由图床服务写入与维护。
+ALTER TABLE file_records ADD COLUMN resource_scope TEXT NOT NULL DEFAULT 'file';
+
+UPDATE file_records SET resource_scope = 'image_bed'
+WHERE EXISTS (
+  SELECT 1 FROM images
+  WHERE images.storage_source_id = file_records.storage_source_id
+    AND images.relative_path = file_records.relative_path
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_records_scope
+  ON file_records(resource_scope, record_status);
+
+-- 10. 图床保留策略（IMG-04）：默认不自动过期；设置保留期后由服务写入绝对失效时间。
+ALTER TABLE images ADD COLUMN expires_at DATETIME;
+
+-- 11. FTS 只索引 file scope 的 active 行（普通搜索不依赖图片台账）。
+DROP TRIGGER IF EXISTS trg_file_search_insert;
+DROP TRIGGER IF EXISTS trg_file_search_update;
+DROP TRIGGER IF EXISTS trg_file_search_delete;
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_insert
+AFTER INSERT ON file_records
+WHEN NEW.record_status = 'active' AND NEW.resource_scope = 'file'
+BEGIN
+  INSERT INTO file_search_index(rowid, relative_path) VALUES (NEW.id, NEW.relative_path);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_update
+AFTER UPDATE OF relative_path, record_status, resource_scope ON file_records
+BEGIN
+  DELETE FROM file_search_index WHERE rowid = OLD.id;
+  INSERT INTO file_search_index(rowid, relative_path)
+    SELECT NEW.id, NEW.relative_path WHERE NEW.record_status = 'active' AND NEW.resource_scope = 'file';
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_file_search_delete
+AFTER DELETE ON file_records
+BEGIN
+  DELETE FROM file_search_index WHERE rowid = OLD.id;
+END;
+
+-- 按 scope 重建索引：历史 image_bed 行（旧图片台账）退出普通搜索。
+DELETE FROM file_search_index
+WHERE rowid NOT IN (SELECT id FROM file_records
+  WHERE record_status = 'active' AND resource_scope = 'file');
+INSERT INTO file_search_index(rowid, relative_path)
+SELECT id, relative_path FROM file_records
+WHERE record_status = 'active' AND resource_scope = 'file'
+  AND id NOT IN (SELECT rowid FROM file_search_index);

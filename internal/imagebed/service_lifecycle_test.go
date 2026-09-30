@@ -157,7 +157,7 @@ func newImageLifecycleFixture(t *testing.T) (*Service, *sources.Service, *models
 	}); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(conn, "/images", "https://store.example.test/", filepath.Join(dataDir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
+	service, err := NewService(conn, "https://store.example.test/", filepath.Join(dataDir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatal(err)
 	}

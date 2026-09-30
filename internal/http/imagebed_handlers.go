@@ -3,16 +3,19 @@ package httpserver
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
+	"github.com/omni-store/omnistore/internal/managedroot"
 	"github.com/omni-store/omnistore/internal/models"
 )
 
@@ -45,6 +48,11 @@ func writeImageBedError(w http.ResponseWriter, r *http.Request, err error) {
 		WriteError(w, r, CodeFileNotFound, "图片不存在", nil)
 	case errors.Is(err, imagebed.ErrAnonymousDisabled):
 		WriteError(w, r, CodeForbidden, err.Error(), nil)
+	case errors.Is(err, imagebed.ErrRetentionInvalid):
+		WriteError(w, r, CodeValidationError, err.Error(), nil)
+	case errors.Is(err, managedroot.ErrUnknownRoot), errors.Is(err, managedroot.ErrOwnershipMismatch):
+		// 托管根无法核验：拒绝写入并提示管理员，绝不接管或删除。
+		WriteError(w, r, CodeConflict, err.Error(), nil)
 	case errors.As(err, &maxBytesErr):
 		WriteError(w, r, CodePayloadTooLarge, "图片超过大小限制", nil)
 	case errors.Is(err, files.ErrQuotaExceeded):
@@ -75,9 +83,43 @@ func (s *Server) handleServeImage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", img.MimeType)
 	w.Header().Set("Content-Disposition", "inline")
-	// 图床 URL 内容不可变，长缓存（README §13.11）。
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", imageCacheControl(img.ExpiresAt))
 	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+// thumbnailCacheControl 计算缩略图缓存策略：默认 1 小时；
+// 有 expires_at 的图片不超过剩余有效时间。
+func thumbnailCacheControl(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return "public, max-age=3600"
+	}
+	remaining := time.Until(*expiresAt)
+	if remaining <= 0 {
+		return "no-store"
+	}
+	seconds := int(remaining.Seconds())
+	if seconds > 3600 {
+		seconds = 3600
+	}
+	return fmt.Sprintf("public, max-age=%d", seconds)
+}
+
+// imageCacheControl 计算图床公开缓存策略：
+// 未设置保留期的随机 ID 原图不可变，可长期缓存；
+// 有 expires_at 的图片 freshness 不超过剩余有效时间（public-content-http §3）。
+func imageCacheControl(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return "public, max-age=31536000, immutable"
+	}
+	remaining := time.Until(*expiresAt)
+	if remaining <= 0 {
+		return "no-store"
+	}
+	seconds := int(remaining.Seconds())
+	if seconds > 3600 {
+		seconds = 3600
+	}
+	return fmt.Sprintf("public, max-age=%d", seconds)
 }
 
 // handleServeThumbnail 按需生成并返回固定规格缩略图。
@@ -93,7 +135,7 @@ func (s *Server) handleServeThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, info, etag, err := s.imagebed.OpenThumbnail(r.Context(), imageID)
+	f, info, etag, expiresAt, err := s.imagebed.OpenThumbnail(r.Context(), imageID)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -102,7 +144,7 @@ func (s *Server) handleServeThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Disposition", "inline")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", thumbnailCacheControl(expiresAt))
 	w.Header().Set("ETag", etag)
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
@@ -253,10 +295,16 @@ func (s *Server) handleAnonymousImageBedStatus(w http.ResponseWriter, r *http.Re
 		WriteError(w, r, CodeInternalError, "查询失败", nil)
 		return
 	}
-	// 对外只暴露开关，不暴露目标 key。
+	_, anonymousRetentionDays, err := s.imagebed.RetentionSettings()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询保留策略失败", nil)
+		return
+	}
+	// 对外只暴露开关与保留策略，不暴露目标 key。
 	WriteData(w, r, map[string]any{
-		"enabled":          settings.Enabled,
-		"max_file_size_mb": s.cfg.ImageBed.AnonymousMaxFileSizeMB,
+		"enabled":                  settings.Enabled,
+		"max_file_size_mb":         s.cfg.ImageBed.AnonymousMaxFileSizeMB,
+		"anonymous_retention_days": anonymousRetentionDays,
 	})
 }
 
@@ -279,8 +327,8 @@ func (s *Server) handleAnonymousImageBedUpload(w http.ResponseWriter, r *http.Re
 		writeImageBedError(w, r, err)
 		return
 	}
-	// 匿名用户只拿到公开 URL，不返回内部记录详情。
-	WriteData(w, r, map[string]any{"url": img.PublicURL})
+	// 匿名用户只拿到公开 URL 与绝对失效时间，不返回内部记录详情。
+	WriteData(w, r, map[string]any{"url": img.PublicURL, "expires_at": img.ExpiresAt})
 }
 
 // --- 管理员：匿名图床配置与管理 ---
@@ -307,6 +355,49 @@ func (s *Server) handleAdminSetAnonymousSettings(w http.ResponseWriter, r *http.
 	}
 	s.adminAudit(r, "update_anonymous_image_bed", audit.StatusSuccess, "")
 	WriteData(w, r, map[string]any{"ok": true})
+}
+
+// handleAdminGetImageBedRetention 返回图床保留策略（天；0 = 不自动过期）。
+func (s *Server) handleAdminGetImageBedRetention(w http.ResponseWriter, r *http.Request) {
+	userDays, anonymousDays, err := s.imagebed.RetentionSettings()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询保留策略失败", nil)
+		return
+	}
+	WriteData(w, r, map[string]int{
+		"user_retention_days":      userDays,
+		"anonymous_retention_days": anonymousDays,
+	})
+}
+
+func (s *Server) handleAdminSetImageBedRetention(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserRetentionDays      *int `json:"user_retention_days"`
+		AnonymousRetentionDays *int `json:"anonymous_retention_days"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	userDays, anonymousDays, err := s.imagebed.RetentionSettings()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "查询保留策略失败", nil)
+		return
+	}
+	if req.UserRetentionDays != nil {
+		userDays = *req.UserRetentionDays
+	}
+	if req.AnonymousRetentionDays != nil {
+		anonymousDays = *req.AnonymousRetentionDays
+	}
+	if err := s.imagebed.SetRetentionSettings(userDays, anonymousDays); err != nil {
+		writeImageBedError(w, r, err)
+		return
+	}
+	s.adminAudit(r, "update_image_bed_retention", audit.StatusSuccess, "")
+	WriteData(w, r, map[string]int{
+		"user_retention_days":      userDays,
+		"anonymous_retention_days": anonymousDays,
+	})
 }
 
 func (s *Server) handleAdminListAnonymousImages(w http.ResponseWriter, r *http.Request) {

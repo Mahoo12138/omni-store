@@ -47,11 +47,12 @@ export async function deleteImage(imageId: string): Promise<void> {
 export async function fetchAnonymousStatus(): Promise<{
   enabled: boolean
   max_file_size_mb: number
+  anonymous_retention_days: number
 }> {
   return apiFetch('/api/v1/image-bed/anonymous-status')
 }
 
-export async function uploadAnonymousImage(file: File): Promise<{ url: string }> {
+export async function uploadAnonymousImage(file: File): Promise<{ url: string; expires_at: string | null }> {
   const form = new FormData()
   form.append('file', file)
   return apiFetch('/api/v1/image-bed/anonymous-upload', { method: 'POST', body: form })

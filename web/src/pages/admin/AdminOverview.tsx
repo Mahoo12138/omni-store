@@ -15,6 +15,7 @@ import {
   adminGetAnonymousSettings,
   adminGetBranding,
   adminGetSource,
+  adminGetImageBedRetention,
   adminListCapabilities,
   adminListPolicies,
   adminListSources,
@@ -24,6 +25,7 @@ import {
   adminRevokeUserCredentials,
   adminSetAnonymousSettings,
   adminSetBranding,
+  adminSetImageBedRetention,
   adminSetSourceDisabled,
   adminSetUserDisabled,
   adminSetUserQuota,
@@ -2925,13 +2927,32 @@ function AnonymousImageBedDialog({
   sourceKey: string
 }) {
   const queryClient = useQueryClient()
+  const retention = useQuery({
+    queryKey: ['admin-image-bed-retention'],
+    queryFn: adminGetImageBedRetention,
+    enabled: open,
+  })
   const [turnOn, setTurnOn] = useState(enabled)
+  const [userDays, setUserDays] = useState('0')
+  const [anonymousDays, setAnonymousDays] = useState('0')
   const [err, setErr] = useState('')
 
   const mutation = useMutation({
-    mutationFn: adminSetAnonymousSettings,
+    mutationFn: async () => {
+      const parsedUser = Number(userDays)
+      const parsedAnonymous = Number(anonymousDays)
+      if (!Number.isInteger(parsedUser) || parsedUser < 0 || !Number.isInteger(parsedAnonymous) || parsedAnonymous < 0) {
+        throw new Error('保留天数必须是非负整数')
+      }
+      await adminSetAnonymousSettings({ enabled: turnOn })
+      await adminSetImageBedRetention({
+        user_retention_days: parsedUser,
+        anonymous_retention_days: parsedAnonymous,
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-anon-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-image-bed-retention'] })
       onOpenChange(false)
     },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '保存失败'),
@@ -2940,16 +2961,18 @@ function AnonymousImageBedDialog({
   useEffect(() => {
     if (open) {
       setTurnOn(enabled)
+      setUserDays(String(retention.data?.user_retention_days ?? 0))
+      setAnonymousDays(String(retention.data?.anonymous_retention_days ?? 0))
       setErr('')
     }
-  }, [open, enabled])
+  }, [open, enabled, retention.data])
 
   function onSubmit() {
     if (turnOn && !sourceKey) {
       setErr('请先在「站点服务」中为图床绑定存储源')
       return
     }
-    mutation.mutate({ enabled: turnOn })
+    mutation.mutate()
   }
 
   return (
@@ -2982,6 +3005,32 @@ function AnonymousImageBedDialog({
         <span className={css.kvValue} style={{ fontFamily: vars.font.mono }}>
           {sourceKey || '未绑定（请先在站点服务中绑定）'}
         </span>
+      </Field>
+      <Field label="保留策略（天）" hint="0 表示不自动过期；达到保留期后图片直链与缩略图停止提供，历史记录保留供清理。">
+        <div style={{ display: 'flex', gap: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+            登录用户
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={userDays}
+              onChange={(event) => setUserDays(event.target.value)}
+              aria-label="登录用户图片保留天数"
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+            匿名上传
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={anonymousDays}
+              onChange={(event) => setAnonymousDays(event.target.value)}
+              aria-label="匿名图片保留天数"
+            />
+          </label>
+        </div>
       </Field>
       {err && (
         <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>

@@ -44,7 +44,7 @@ func TestThumbnailHTTPResponseAndConditionalCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create source: %v", err)
 	}
-	originalRel := "images/http.png"
+	originalRel := ".omnistore/image-bed/http.png"
 	originalPath := filepath.Join(sourceRoot, filepath.FromSlash(originalRel))
 	if err := os.MkdirAll(filepath.Dir(originalPath), 0o755); err != nil {
 		t.Fatalf("create image directory: %v", err)

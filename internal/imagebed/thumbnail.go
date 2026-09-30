@@ -27,19 +27,29 @@ const (
 
 // OpenThumbnail 返回按需生成的 JPEG 缩略图。
 // 缓存键包含原图 size、modTime、输出规格和实现版本，原图变化后不会命中旧缓存。
-func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, os.FileInfo, string, error) {
+func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, os.FileInfo, string, *time.Time, error) {
 	img, err := s.Get(imageID)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err != nil || src.IsDisabled {
-		return nil, nil, "", ErrNotFound
+		return nil, nil, "", nil, ErrNotFound
+	}
+	if img.ExpiresAt != nil && !time.Now().Before(*img.ExpiresAt) {
+		return nil, nil, "", nil, ErrNotFound
 	}
 
-	original, originalInfo, releaseOriginal, err := s.files.OpenForRead(src, img.RelativePath)
+	var original *os.File
+	var originalInfo os.FileInfo
+	var releaseOriginal func()
+	if imageIsManaged(img.RelativePath) {
+		original, originalInfo, releaseOriginal, err = s.files.OpenManagedForRead(src, img.RelativePath, managedScopeDir)
+	} else {
+		original, originalInfo, releaseOriginal, err = s.files.OpenForRead(src, img.RelativePath)
+	}
 	if err != nil {
-		return nil, nil, "", ErrNotFound
+		return nil, nil, "", nil, ErrNotFound
 	}
 	defer releaseOriginal()
 	defer original.Close()
@@ -52,25 +62,25 @@ func (s *Service) OpenThumbnail(ctx context.Context, imageID string) (*os.File, 
 	releaseGeneration := s.thumbnailLocks.Lock(cachePath)
 	defer releaseGeneration()
 	if cached, info, err := openCachedThumbnail(cachePath); err == nil {
-		return cached, info, etag, nil
+		return cached, info, etag, img.ExpiresAt, nil
 	}
 
 	select {
 	case s.thumbnailSlot <- struct{}{}:
 		defer func() { <-s.thumbnailSlot }()
 	case <-ctx.Done():
-		return nil, nil, "", ctx.Err()
+		return nil, nil, "", nil, ctx.Err()
 	}
 
 	if err := generateThumbnail(original, cacheDir, cachePath); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	s.removeStaleThumbnailVariants(cacheDir, imageID, cachePath)
 	cached, info, err := openCachedThumbnail(cachePath)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
-	return cached, info, etag, nil
+	return cached, info, etag, img.ExpiresAt, nil
 }
 
 func thumbnailFingerprint(storageSourceID int64, relativePath, imageID string, info os.FileInfo) string {

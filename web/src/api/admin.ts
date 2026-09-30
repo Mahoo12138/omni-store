@@ -311,6 +311,23 @@ export async function adminSetAnonymousSettings(input: {
   })
 }
 
+// 图床保留策略（2.0 IMG：0 = 不自动过期；登录用户与匿名相互独立）
+export interface ImageBedRetention {
+  user_retention_days: number
+  anonymous_retention_days: number
+}
+
+export async function adminGetImageBedRetention(): Promise<ImageBedRetention> {
+  return apiFetch<ImageBedRetention>('/api/v1/admin/image-bed/retention')
+}
+
+export async function adminSetImageBedRetention(input: Partial<ImageBedRetention>): Promise<ImageBedRetention> {
+  return apiFetch('/api/v1/admin/image-bed/retention', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
 // 审计日志
 export async function adminFetchAuditLogs(query: AuditLogQuery): Promise<AuditLogPage> {
   const params = new URLSearchParams({

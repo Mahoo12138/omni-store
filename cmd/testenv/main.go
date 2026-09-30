@@ -126,7 +126,7 @@ func seed(configFile, fixtureRoot string) error {
 	}); err != nil {
 		return err
 	}
-	imageService, err := imagebed.NewService(conn, cfg.ImageBed.RootPath, cfg.Server.PublicURL,
+	imageService, err := imagebed.NewService(conn, cfg.Server.PublicURL,
 		filepath.Join(cfg.Data.Dir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		return err

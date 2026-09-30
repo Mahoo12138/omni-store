@@ -441,6 +441,9 @@ export function AnonymousUploadPage() {
                   <span>JPG · PNG · WebP · GIF</span>
                   <span>单张最大 {status.data.max_file_size_mb} MB</span>
                   <span>最多 3 张并行处理</span>
+                  {status.data.anonymous_retention_days > 0 && (
+                    <span>上传后 {status.data.anonymous_retention_days} 天失效</span>
+                  )}
                 </div>
               </div>
 

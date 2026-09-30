@@ -14,6 +14,7 @@ import (
 	"github.com/omni-store/omnistore/internal/db"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/locks"
+	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
 )
 
@@ -47,7 +48,7 @@ func TestAnonymousUploadRejectsQuotaOverflowAndCleansTempFile(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("bind image bed capability: %v", err)
 	}
-	service, err := NewService(conn, "images", "https://store.example.test", filepath.Join(dataDir, "cache"), sourceService, capabilityService, fileService)
+	service, err := NewService(conn, "https://store.example.test", filepath.Join(dataDir, "cache"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatalf("create image service: %v", err)
 	}
@@ -67,10 +68,17 @@ func TestAnonymousUploadRejectsQuotaOverflowAndCleansTempFile(t *testing.T) {
 
 	var regularFiles []string
 	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr == nil && entry.Type().IsRegular() {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() && entry.Name() == security.ManagedNamespaceSegment {
+			// 托管根内的所有权标识不是上传残留。
+			return filepath.SkipDir
+		}
+		if entry.Type().IsRegular() {
 			regularFiles = append(regularFiles, path)
 		}
-		return walkErr
+		return nil
 	}); err != nil {
 		t.Fatalf("walk source: %v", err)
 	}

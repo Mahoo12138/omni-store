@@ -203,4 +203,33 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 	if err := Migrate(conn); err != nil {
 		t.Fatalf("idempotent migrate: %v", err)
 	}
+
+	// resource_scope 回填：图片台账行标为 image_bed，普通行保持 file。
+	var scope string
+	if err := conn.QueryRowContext(ctx,
+		`SELECT resource_scope FROM file_records WHERE relative_path = 'users/pub/2026/09/a.png'`).Scan(&scope); err != nil {
+		t.Fatal(err)
+	}
+	if scope != "image_bed" {
+		t.Fatalf("image ledger scope = %q, want image_bed", scope)
+	}
+
+	// FTS 不再索引 image_bed scope 行。
+	var ftsCount int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM file_search_index WHERE rowid IN (SELECT id FROM file_records WHERE resource_scope = 'image_bed')`).Scan(&ftsCount); err != nil {
+		t.Fatal(err)
+	}
+	if ftsCount != 0 {
+		t.Fatalf("image ledger rows must leave FTS, count=%d", ftsCount)
+	}
+
+	// images.expires_at 列存在且旧记录为 NULL（不自动过期）。
+	var expiresAt any
+	if err := conn.QueryRowContext(ctx, `SELECT expires_at FROM images WHERE image_id = 'img-legacy'`).Scan(&expiresAt); err != nil {
+		t.Fatal(err)
+	}
+	if expiresAt != nil {
+		t.Fatalf("legacy image expires_at = %v, want NULL", expiresAt)
+	}
 }

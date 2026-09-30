@@ -23,22 +23,23 @@ import (
 const imageUploadOperationVersion = 1
 
 type imageUploadOperation struct {
-	Version           int       `json:"version"`
-	OperationID       string    `json:"operation_id"`
-	StorageSourceID   int64     `json:"storage_source_id"`
-	TempRelativePath  string    `json:"temp_relative_path"`
-	FinalRelativePath string    `json:"final_relative_path"`
-	ImageID           string    `json:"image_id"`
-	OwnerType         string    `json:"owner_type"`
-	OwnerUserID       *int64    `json:"owner_user_id,omitempty"`
-	OriginalFilename  string    `json:"original_filename"`
-	PublicURL         string    `json:"public_url"`
-	Size              int64     `json:"size"`
-	MimeType          string    `json:"mime_type"`
-	Width             int       `json:"width"`
-	Height            int       `json:"height"`
-	Ext               string    `json:"ext"`
-	CreatedAt         time.Time `json:"created_at"`
+	Version           int        `json:"version"`
+	OperationID       string     `json:"operation_id"`
+	StorageSourceID   int64      `json:"storage_source_id"`
+	TempRelativePath  string     `json:"temp_relative_path"`
+	FinalRelativePath string     `json:"final_relative_path"`
+	ImageID           string     `json:"image_id"`
+	OwnerType         string     `json:"owner_type"`
+	OwnerUserID       *int64     `json:"owner_user_id,omitempty"`
+	OriginalFilename  string     `json:"original_filename"`
+	PublicURL         string     `json:"public_url"`
+	Size              int64      `json:"size"`
+	MimeType          string     `json:"mime_type"`
+	Width             int        `json:"width"`
+	Height            int        `json:"height"`
+	Ext               string     `json:"ext"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 // UploadRecoveryResult 描述启动时清理的中断图床上传。
@@ -295,10 +296,11 @@ func (s *Service) commitImageUpload(op imageUploadOperation, prepared *files.Pre
 	defer tx.Rollback()
 	res, err := tx.Exec(`INSERT INTO images
   (image_id, owner_type, owner_user_id, storage_source_id, relative_path, original_filename,
-   public_url, size, mime_type, width, height, ext, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+   public_url, size, mime_type, width, height, ext, expires_at, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		op.ImageID, op.OwnerType, op.OwnerUserID, op.StorageSourceID, op.FinalRelativePath,
-		op.OriginalFilename, op.PublicURL, op.Size, op.MimeType, op.Width, op.Height, op.Ext, op.CreatedAt)
+		op.OriginalFilename, op.PublicURL, op.Size, op.MimeType, op.Width, op.Height, op.Ext,
+		op.ExpiresAt, op.CreatedAt)
 	if err != nil {
 		return 0, err
 	}

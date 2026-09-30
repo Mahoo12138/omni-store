@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/lifecycle"
 	"github.com/omni-store/omnistore/internal/locks"
+	"github.com/omni-store/omnistore/internal/managedroot"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
@@ -28,10 +30,23 @@ var (
 	ErrNotFound = errors.New("图片不存在")
 	// ErrAnonymousDisabled 匿名图床未开启。
 	ErrAnonymousDisabled = errors.New("匿名公共图床未开启")
+	// ErrRetentionInvalid 保留天数非法。
+	ErrRetentionInvalid = errors.New("保留天数必须是非负整数")
 )
 
 // 系统设置 key（README §22.9）。2.0 起图床目标由 Site Capability 绑定决定。
-const SettingAnonymousEnabled = "anonymous_image_bed_enabled"
+const (
+	SettingAnonymousEnabled = "anonymous_image_bed_enabled"
+	// 保留策略（IMG-04）：默认 0 = 不自动过期；匿名与登录用户相互独立。
+	SettingRetentionDays          = "image_bed_retention_days"
+	SettingAnonymousRetentionDays = "image_bed_anonymous_retention_days"
+)
+
+// 托管命名空间布局：新图统一写入 `.omnistore/image-bed/`。
+const (
+	managedScopeDir  = "image-bed"
+	ledgerScopeValue = models.FileRecordScopeImageBed
+)
 
 // capabilitiesLookup 是图床需要的 Site Capability 窄接口。
 type capabilitiesLookup interface {
@@ -41,11 +56,11 @@ type capabilitiesLookup interface {
 // Service 提供图床能力。
 type Service struct {
 	db             *sql.DB
-	rootRel        string // image_bed.root_path 规范化后的源内相对路径，例如 "images"
 	publicURL      string
 	thumbnailCache string
 	sources        *sources.Service
 	capabilities   capabilitiesLookup
+	managedRoots   *managedroot.Service
 	files          *files.Service
 	locks          *locks.Manager
 	thumbnailLocks *locks.Manager
@@ -53,11 +68,7 @@ type Service struct {
 }
 
 // NewService 创建图床服务。
-func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *sources.Service, capSvc capabilitiesLookup, fileSvc *files.Service) (*Service, error) {
-	rootRel, err := security.NormalizeRelPath(rootPath)
-	if err != nil || rootRel == "" {
-		return nil, fmt.Errorf("image_bed.root_path 非法: %s", rootPath)
-	}
+func NewService(db *sql.DB, publicURL, thumbnailCache string, srcSvc *sources.Service, capSvc capabilitiesLookup, fileSvc *files.Service) (*Service, error) {
 	if thumbnailCache == "" {
 		return nil, errors.New("缩略图缓存目录不能为空")
 	}
@@ -65,8 +76,9 @@ func NewService(db *sql.DB, rootPath, publicURL, thumbnailCache string, srcSvc *
 		return nil, fmt.Errorf("创建缩略图缓存目录失败: %w", err)
 	}
 	return &Service{
-		db: db, rootRel: rootRel, publicURL: strings.TrimRight(publicURL, "/"), thumbnailCache: thumbnailCache,
-		sources: srcSvc, capabilities: capSvc, files: fileSvc, locks: fileSvc.Locks(), thumbnailLocks: locks.NewManager(),
+		db: db, publicURL: strings.TrimRight(publicURL, "/"), thumbnailCache: thumbnailCache,
+		sources: srcSvc, capabilities: capSvc, managedRoots: managedroot.NewService(db),
+		files: fileSvc, locks: fileSvc.Locks(), thumbnailLocks: locks.NewManager(),
 		thumbnailSlot: make(chan struct{}, 1),
 	}, nil
 }
@@ -88,13 +100,34 @@ func (s *Service) CurrentTarget() (*models.StorageSource, error) {
 	return s.currentTarget()
 }
 
+// imageIsManaged 判断图片是否位于 2.0 托管命名空间布局。
+// 旧布局图片记录继续按普通路径读取/删除，不重新映射到新根（IMG-03）。
+func imageIsManaged(relativePath string) bool {
+	return security.ContainsManagedNamespace(relativePath)
+}
+
+// openImageOriginal 按记录布局选择读取原语。
+func (s *Service) openImageOriginal(src *models.StorageSource, relativePath string) (*os.File, os.FileInfo, func(), error) {
+	if imageIsManaged(relativePath) {
+		return s.files.OpenManagedForRead(src, relativePath, managedScopeDir)
+	}
+	f, info, unlock, err := s.files.OpenForRead(src, relativePath)
+	return f, info, unlock, err
+}
+
 // checkTarget 返回图床能力绑定的存储源。2.0 起用户不再选择源。
 func (s *Service) checkTarget() (*models.StorageSource, error) {
 	return s.currentTarget()
 }
 
 func (s *Service) userImageRelDir(user *models.User, now time.Time) string {
-	return fmt.Sprintf("%s/users/%s/%04d/%02d", s.rootRel, user.UserPublicID, now.Year(), int(now.Month()))
+	return fmt.Sprintf("%s/%s/users/%s/%04d/%02d", security.ManagedNamespaceSegment, managedScopeDir,
+		user.UserPublicID, now.Year(), int(now.Month()))
+}
+
+func anonymousImageRelDir(now time.Time) string {
+	return fmt.Sprintf("%s/%s/anonymous/%04d/%02d", security.ManagedNamespaceSegment, managedScopeDir,
+		now.Year(), int(now.Month()))
 }
 
 // --- 上传 ---
@@ -166,8 +199,69 @@ func (s *Service) UploadAnonymous(originalFilename string, body io.Reader) (*mod
 	}
 
 	now := time.Now().UTC()
-	relDir := fmt.Sprintf("%s/anonymous/%04d/%02d", s.rootRel, now.Year(), int(now.Month()))
-	return s.upload(src, relDir, originalFilename, models.ImageOwnerAnonymous, nil, body)
+	return s.upload(src, anonymousImageRelDir(now), originalFilename, models.ImageOwnerAnonymous, nil, body)
+}
+
+// RetentionSettings 返回图床保留策略（天；0 = 不自动过期）。
+func (s *Service) RetentionSettings() (userDays, anonymousDays int, err error) {
+	rows, err := s.db.Query(`SELECT key, value FROM system_settings WHERE key IN (?, ?)`,
+		SettingRetentionDays, SettingAnonymousRetentionDays)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return 0, 0, err
+		}
+		parsed, parseErr := strconv.Atoi(strings.TrimSpace(value))
+		if parseErr != nil || parsed < 0 {
+			continue
+		}
+		switch key {
+		case SettingRetentionDays:
+			userDays = parsed
+		case SettingAnonymousRetentionDays:
+			anonymousDays = parsed
+		}
+	}
+	return userDays, anonymousDays, rows.Err()
+}
+
+// SetRetentionSettings 更新保留策略；负数视为非法。
+func (s *Service) SetRetentionSettings(userDays, anonymousDays int) error {
+	if userDays < 0 || anonymousDays < 0 {
+		return ErrRetentionInvalid
+	}
+	now := time.Now().UTC()
+	set := func(key string, days int) error {
+		_, err := s.db.Exec(`INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+			key, strconv.Itoa(days), now)
+		return err
+	}
+	if err := set(SettingRetentionDays, userDays); err != nil {
+		return err
+	}
+	return set(SettingAnonymousRetentionDays, anonymousDays)
+}
+
+// expiresAtFor 按归属类型计算绝对失效时间；0 天表示不过期（返回 nil）。
+func (s *Service) expiresAtFor(ownerType string, uploadedAt time.Time) *time.Time {
+	userDays, anonymousDays, err := s.RetentionSettings()
+	if err != nil {
+		return nil
+	}
+	days := userDays
+	if ownerType == models.ImageOwnerAnonymous {
+		days = anonymousDays
+	}
+	if days <= 0 {
+		return nil
+	}
+	expires := uploadedAt.AddDate(0, 0, days)
+	return &expires
 }
 
 // upload 是公共上传流程（README §17.7）：
@@ -196,11 +290,9 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	if err != nil {
 		return nil, err
 	}
-	if err := security.ValidateUserRelPath(relDir); err != nil {
-		if errors.Is(err, security.ErrManagedNamespace) {
-			return nil, files.ErrNotFound
-		}
-		return nil, fmt.Errorf("%w: %s", files.ErrInvalid, err)
+	// 写入托管命名空间前核验托管根所有权；未知同名目录会阻断上传。
+	if err := s.managedRoots.Ensure(src); err != nil {
+		return nil, err
 	}
 	quotaOwnerUserID := ownerUserID
 	if ownerType != models.ImageOwnerUser {
@@ -212,15 +304,7 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 	}
 	defer quotaGuard.Close()
 
-	// 排除规则检查（README §11.4 图床上传）。
-	matcher, err := s.sources.Matcher(src.ID)
-	if err != nil {
-		return nil, err
-	}
-	if matcher.MatchPrefix(relDir) {
-		return nil, files.ErrPathExcluded
-	}
-
+	// 托管子树整体被系统强制排除，内部布局由图床服务定义，无需排除规则匹配。
 	absDir, err := security.ResolveInSource(src.RootPath, relDir)
 	if err != nil {
 		return nil, err
@@ -322,12 +406,13 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 		if ownerType == models.ImageOwnerUser {
 			fileOwnerType = models.FileOwnerUser
 		}
-		prepared, err := s.files.PrepareFileRecord(src, relPath, fileOwnerType, ownerUserID, ownerUserID)
+		prepared, err := s.files.PrepareManagedFileRecord(src, relPath, managedScopeDir, fileOwnerType, ownerUserID, ownerUserID)
 		if err != nil {
 			rollbackErr := s.rollbackUncommittedImageUpload(op, absPath)
 			unlock()
 			return nil, errors.Join(fmt.Errorf("准备文件台账失败: %w", err), rollbackErr)
 		}
+		op.ExpiresAt = s.expiresAtFor(ownerType, op.CreatedAt)
 		rowID, err := s.commitImageUpload(op, prepared)
 		if err != nil {
 			rollbackErr := s.rollbackUncommittedImageUpload(op, absPath)
@@ -342,7 +427,8 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 			ID: rowID, ImageID: op.ImageID, OwnerType: op.OwnerType, OwnerUserID: op.OwnerUserID,
 			StorageSourceID: op.StorageSourceID, RelativePath: op.FinalRelativePath,
 			OriginalFilename: op.OriginalFilename, PublicURL: op.PublicURL, Size: op.Size,
-			MimeType: op.MimeType, Width: op.Width, Height: op.Height, Ext: op.Ext, CreatedAt: op.CreatedAt,
+			MimeType: op.MimeType, Width: op.Width, Height: op.Height, Ext: op.Ext,
+			ExpiresAt: op.ExpiresAt, CreatedAt: op.CreatedAt,
 		}, nil)
 	}
 	os.Remove(tmpPath)
@@ -352,12 +438,17 @@ func (s *Service) upload(src *models.StorageSource, relDir, originalFilename, ow
 // --- 查询 / 访问 ---
 
 const imageColumns = `id, image_id, owner_type, owner_user_id, storage_source_id, relative_path,
-  COALESCE(original_filename, ''), public_url, size, mime_type, width, height, ext, created_at`
+  COALESCE(original_filename, ''), public_url, size, mime_type, width, height, ext, expires_at, created_at`
 
 func scanImage(row interface{ Scan(...any) error }) (*models.Image, error) {
 	var m models.Image
+	var expiresAt sql.NullTime
 	err := row.Scan(&m.ID, &m.ImageID, &m.OwnerType, &m.OwnerUserID, &m.StorageSourceID, &m.RelativePath,
-		&m.OriginalFilename, &m.PublicURL, &m.Size, &m.MimeType, &m.Width, &m.Height, &m.Ext, &m.CreatedAt)
+		&m.OriginalFilename, &m.PublicURL, &m.Size, &m.MimeType, &m.Width, &m.Height, &m.Ext,
+		&expiresAt, &m.CreatedAt)
+	if expiresAt.Valid {
+		m.ExpiresAt = &expiresAt.Time
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -396,12 +487,16 @@ func (s *Service) OpenImage(imageID, ext string) (*models.Image, *os.File, os.Fi
 	if img.Ext != ext {
 		return nil, nil, nil, nil, ErrNotFound
 	}
+	if img.ExpiresAt != nil && !time.Now().Before(*img.ExpiresAt) {
+		// 保留期已过的图片不再公开提供。
+		return nil, nil, nil, nil, ErrNotFound
+	}
 	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err != nil || src.IsDisabled {
 		return nil, nil, nil, nil, ErrNotFound
 	}
 
-	f, info, unlock, err := s.files.OpenForRead(src, img.RelativePath)
+	f, info, unlock, err := s.openImageOriginal(src, img.RelativePath)
 	if err != nil {
 		return nil, nil, nil, nil, ErrNotFound
 	}
@@ -478,9 +573,14 @@ func (s *Service) DeleteByAdmin(imageID string) error {
 func (s *Service) deletePhysicalAndRecord(img *models.Image) error {
 	src, err := s.sources.GetByID(img.StorageSourceID)
 	if err == nil && !src.IsDisabled {
-		// files.Delete 同时清理 images 记录；物理文件不存在时按已删除处理（README §17.12）。
-		if delErr := s.files.Delete(src, img.RelativePath); delErr != nil &&
-			!errors.Is(delErr, files.ErrNotFound) && !errors.Is(delErr, files.ErrPathExcluded) {
+		// 按布局选择删除原语；物理文件不存在时按已删除处理。
+		var delErr error
+		if imageIsManaged(img.RelativePath) {
+			delErr = s.files.DeleteManaged(src, img.RelativePath, managedScopeDir)
+		} else {
+			delErr = s.files.Delete(src, img.RelativePath)
+		}
+		if delErr != nil && !errors.Is(delErr, files.ErrNotFound) && !errors.Is(delErr, files.ErrPathExcluded) {
 			return delErr
 		}
 	}

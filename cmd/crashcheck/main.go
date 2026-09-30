@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omni-store/omnistore/internal/security"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -775,6 +777,10 @@ func auditSource(db *sql.DB, sourceID int64, root, ignoredPath string) error {
 			return walkErr
 		}
 		if entry.IsDir() {
+			// `.omnistore/` 托管根由所属服务维护，不属于普通台账比对范围。
+			if security.IsManagedNamespaceName(entry.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if path == ignoredPath {

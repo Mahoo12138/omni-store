@@ -12,6 +12,7 @@ import (
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/models"
+	"github.com/omni-store/omnistore/internal/security"
 )
 
 func TestRecoverUploadRollsBackTemporaryAndFinalFilesBeforeDatabaseCommit(t *testing.T) {
@@ -114,7 +115,7 @@ func TestRecoverUploadKeepsCommittedImageAfterJournalCleanupWasInterrupted(t *te
 	if err := os.Rename(tempAbs, finalAbs); err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := service.files.PrepareFileRecord(source, op.FinalRelativePath, models.FileOwnerUser, &user.ID, &user.ID)
+	prepared, err := service.files.PrepareManagedFileRecord(source, op.FinalRelativePath, "image-bed", models.FileOwnerUser, &user.ID, &user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func TestRecoverUploadAcceptsCommittedImageMovedAfterJournalCleanupFailure(t *te
 	if err := os.Rename(tempAbs, finalAbs); err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := service.files.PrepareFileRecord(source, op.FinalRelativePath, models.FileOwnerUser, &user.ID, &user.ID)
+	prepared, err := service.files.PrepareManagedFileRecord(source, op.FinalRelativePath, "image-bed", models.FileOwnerUser, &user.ID, &user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,11 +160,15 @@ func TestRecoverUploadAcceptsCommittedImageMovedAfterJournalCleanupFailure(t *te
 		t.Fatal(err)
 	}
 	moveDir := filepath.ToSlash(filepath.Dir(op.FinalRelativePath)) + "/moved"
-	if _, err := service.files.Mkdir(source, filepath.ToSlash(filepath.Dir(op.FinalRelativePath)), "moved"); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(moveDir)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	movedRel := moveDir + "/" + filepath.Base(op.FinalRelativePath)
-	if _, err := service.files.MoveWithLockTokens(source, op.FinalRelativePath, movedRel, nil, &user.ID); err != nil {
+	// 托管命名空间内的移动由宿主机/服务自身完成，恢复器必须接受已提交图片的新位置。
+	if err := os.Rename(filepath.Join(root, filepath.FromSlash(op.FinalRelativePath)), filepath.Join(root, filepath.FromSlash(movedRel))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.db.Exec(`UPDATE images SET relative_path = ? WHERE image_id = ?`, movedRel, op.ImageID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,7 +192,7 @@ func TestRecoverUploadAcceptsCommittedImageMovedAfterJournalCleanupFailure(t *te
 func TestImageUploadLedgerFailureRollsBackImageFileAndBothDatabaseRows(t *testing.T) {
 	service, _, _, user, _, root := newImageLifecycleFixture(t)
 	if _, err := service.db.Exec(`CREATE TRIGGER reject_image_ledger BEFORE INSERT ON file_records
-  WHEN NEW.relative_path LIKE 'images/%'
+  WHEN NEW.relative_path LIKE '.omnistore/image-bed/%'
   BEGIN SELECT RAISE(FAIL, 'forced image ledger failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -309,15 +314,16 @@ func TestConcurrentImageUploadsCommitAtomicallyWithoutOperationResidue(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if regularFiles != uploads {
-		t.Fatalf("concurrent physical files=%d, want %d", regularFiles, uploads)
+	// 20 张图片之外还有 1 个托管根所有权标识文件（managed-root.json）。
+	if regularFiles != uploads+1 {
+		t.Fatalf("concurrent physical files=%d, want %d (含托管根标识)", regularFiles, uploads+1)
 	}
 }
 
 func newUploadRecoveryOperation(t *testing.T, service *Service, source *models.StorageSource,
 	user *models.User, root string) (imageUploadOperation, string, string) {
 	t.Helper()
-	relDir := "images/recovery"
+	relDir := ".omnistore/image-bed/recovery"
 	absDir := filepath.Join(root, filepath.FromSlash(relDir))
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -374,6 +380,10 @@ func assertNoRegularFiles(t *testing.T, root string) {
 	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.IsDir() && entry.Name() == security.ManagedNamespaceSegment {
+			// 托管根内的所有权标识不属于上传残留。
+			return filepath.SkipDir
 		}
 		if entry.Type().IsRegular() {
 			t.Fatalf("unexpected regular file after rollback: %s", path)

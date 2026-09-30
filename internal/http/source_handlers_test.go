@@ -240,7 +240,7 @@ func TestHandleAdminDeleteSourceRejectsPendingImageUploadRecovery(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.imagebed, err = imagebed.NewService(conn, "/images", "http://store.test",
+	server.imagebed, err = imagebed.NewService(conn, "http://store.test",
 		filepath.Join(base, "data", "cache", "thumbnails"), server.sources, server.capabilities, server.files)
 	if err != nil {
 		t.Fatal(err)

@@ -24,7 +24,8 @@ type scannedFile struct {
 }
 
 // PreparedFileRecord 是已经完成路径、排除规则和真实普通文件校验的台账写入。
-// 字段保持包内私有，其他服务只能通过 PrepareFileRecord 构造，避免绕过文件层校验。
+// 字段保持包内私有，其他服务只能通过 PrepareFileRecord /
+// PrepareManagedFileRecord 构造，避免绕过文件层校验。
 type PreparedFileRecord struct {
 	storageSourceID int64
 	relPath         string
@@ -33,6 +34,7 @@ type PreparedFileRecord struct {
 	ownerType       string
 	actorUserID     *int64
 	mtimeUnixNano   int64
+	resourceScope   string
 	createdAt       time.Time
 }
 
@@ -66,9 +68,11 @@ func (s *Service) reconcileSource(src *models.StorageSource, rejectReserved bool
 		return nil, err
 	}
 	defer tx.Rollback()
+	// 普通校准只处理 file scope；托管台账（image_bed 等）由所属服务维护。
 	existing := make(map[string]scannedFile)
 	rows, err := tx.Query(`SELECT relative_path, size, mtime_unix_nano FROM file_records
-  WHERE storage_source_id = ? AND record_status = ?`, src.ID, models.FileRecordActive)
+  WHERE storage_source_id = ? AND record_status = ? AND resource_scope = ?`,
+		src.ID, models.FileRecordActive, models.FileRecordScopeFile)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +271,41 @@ func (s *Service) PrepareFileRecord(src *models.StorageSource, relInput, ownerTy
 	return &PreparedFileRecord{
 		storageSourceID: src.ID, relPath: relPath, size: info.Size(), ownerUserID: ownerUserID,
 		ownerType: ownerType, actorUserID: actorUserID, mtimeUnixNano: info.ModTime().UnixNano(),
-		createdAt: time.Now().UTC(),
+		resourceScope: models.FileRecordScopeFile,
+		createdAt:     time.Now().UTC(),
+	}, nil
+}
+
+// PrepareManagedFileRecord 校验受信任服务写入托管命名空间的最终文件，
+// 台账以对应的内部作用域（resource_scope）落库；普通校准与 FTS 不处理这些行。
+func (s *Service) PrepareManagedFileRecord(src *models.StorageSource, relInput, scopeDir, ownerType string, ownerUserID, actorUserID *int64) (*PreparedFileRecord, error) {
+	resourceScope, ok := models.ManagedScopeLedgerValue(scopeDir)
+	if !ok {
+		return nil, fmt.Errorf("%w: 未登记的托管作用域 %s", ErrInvalid, scopeDir)
+	}
+	relPath, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, ErrUnsupported
+	}
+	if ownerType != models.FileOwnerUser && ownerType != models.FileOwnerAnonymous &&
+		ownerType != models.FileOwnerSystem && ownerType != models.FileOwnerUnowned {
+		return nil, fmt.Errorf("非法文件所有者类型: %s", ownerType)
+	}
+	if ownerType != models.FileOwnerUser {
+		ownerUserID = nil
+	}
+	return &PreparedFileRecord{
+		storageSourceID: src.ID, relPath: relPath, size: info.Size(), ownerUserID: ownerUserID,
+		ownerType: ownerType, actorUserID: actorUserID, mtimeUnixNano: info.ModTime().UnixNano(),
+		resourceScope: resourceScope,
+		createdAt:     time.Now().UTC(),
 	}, nil
 }
 
@@ -286,8 +324,8 @@ type fileRecordExecer interface {
 func upsertPreparedFileRecord(exec fileRecordExecer, prepared *PreparedFileRecord) error {
 	_, err := exec.Exec(`INSERT INTO file_records
   (storage_source_id, relative_path, size, owner_user_id, owner_type, created_by_user_id,
-   updated_by_user_id, mtime_unix_nano, record_status, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   updated_by_user_id, mtime_unix_nano, record_status, resource_scope, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(storage_source_id, relative_path) DO UPDATE SET
     size = excluded.size,
     owner_user_id = excluded.owner_user_id,
@@ -295,10 +333,12 @@ func upsertPreparedFileRecord(exec fileRecordExecer, prepared *PreparedFileRecor
     updated_by_user_id = excluded.updated_by_user_id,
     mtime_unix_nano = excluded.mtime_unix_nano,
     record_status = excluded.record_status,
+    resource_scope = excluded.resource_scope,
     updated_at = excluded.updated_at`,
 		prepared.storageSourceID, prepared.relPath, prepared.size, prepared.ownerUserID,
 		prepared.ownerType, prepared.actorUserID, prepared.actorUserID,
-		prepared.mtimeUnixNano, models.FileRecordActive, prepared.createdAt, prepared.createdAt)
+		prepared.mtimeUnixNano, models.FileRecordActive, prepared.resourceScope,
+		prepared.createdAt, prepared.createdAt)
 	return err
 }
 

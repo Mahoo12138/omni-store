@@ -12,6 +12,25 @@ const (
 	FileRecordTrash  = "trash"
 )
 
+// 台账作用域（file_records.resource_scope）。
+// 普通校准、FTS 与用户文件视图只处理 file scope；
+// 内部作用域由对应受信任服务写入与维护（ARCHITECTURE §11）。
+const (
+	FileRecordScopeFile     = "file"
+	FileRecordScopeImageBed = "image_bed"
+)
+
+// managedScopeDirs 把托管命名空间子目录映射到台账作用域。
+var managedScopeDirs = map[string]string{
+	"image-bed": FileRecordScopeImageBed,
+}
+
+// ManagedScopeLedgerValue 返回托管子目录对应的 resource_scope 值。
+func ManagedScopeLedgerValue(scopeDir string) (string, bool) {
+	scope, ok := managedScopeDirs[scopeDir]
+	return scope, ok
+}
+
 // FileRecord 是真实普通文件的 SQLite 元数据台账，不保存文件内容。
 type FileRecord struct {
 	ID              int64     `json:"id"`

@@ -54,12 +54,12 @@ func newThumbnailTestEnv(t *testing.T) *thumbnailTestEnv {
 	}); err != nil {
 		t.Fatalf("bind image bed capability: %v", err)
 	}
-	service, err := NewService(conn, "/images", "https://store.example.test",
+	service, err := NewService(conn, "https://store.example.test",
 		filepath.Join(dataDir, "cache", "thumbnails"), sourceService, capabilityService, fileService)
 	if err != nil {
 		t.Fatalf("create image bed service: %v", err)
 	}
-	originalRel := "images/test/original.png"
+	originalRel := ".omnistore/image-bed/test/original.png"
 	originalPath := filepath.Join(sourceRoot, filepath.FromSlash(originalRel))
 	if err := os.MkdirAll(filepath.Dir(originalPath), 0o755); err != nil {
 		t.Fatalf("create original directory: %v", err)
@@ -103,7 +103,7 @@ func writePNG(t *testing.T, path string, width, height int, fill color.NRGBA) {
 
 func openAndDecodeThumbnail(t *testing.T, service *Service, imageID string) (string, string, image.Image) {
 	t.Helper()
-	f, _, etag, err := service.OpenThumbnail(context.Background(), imageID)
+	f, _, etag, _, err := service.OpenThumbnail(context.Background(), imageID)
 	if err != nil {
 		t.Fatalf("open thumbnail: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestConcurrentThumbnailRequestsShareValidCache(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			f, _, _, err := env.service.OpenThumbnail(context.Background(), env.imageID)
+			f, _, _, _, err := env.service.OpenThumbnail(context.Background(), env.imageID)
 			if err != nil {
 				errs <- err
 				return
