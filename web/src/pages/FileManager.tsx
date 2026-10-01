@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -1263,6 +1263,34 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   )
 }
 
+// 任务卡 toast 只在挂载时创建一次；后续状态经 store 原地更新。
+// 反复以同 id 调用 toast.custom 会让 sonner 重建整卡 DOM，
+// 用户点击“关闭/取消”可能落在重建瞬间而落空。
+type StableToastStore<T> = {
+  get: () => T
+  subscribe: (listener: () => void) => () => void
+  set: (next: T) => void
+}
+
+function useStableToastStore<T>(initial: T): StableToastStore<T> {
+  const ref = useRef<StableToastStore<T> | null>(null)
+  if (!ref.current) {
+    const state = { value: initial, listeners: new Set<() => void>() }
+    ref.current = {
+      get: () => state.value,
+      subscribe(listener) {
+        state.listeners.add(listener)
+        return () => { state.listeners.delete(listener) }
+      },
+      set(next) {
+        state.value = next
+        state.listeners.forEach((listener) => listener())
+      },
+    }
+  }
+  return ref.current
+}
+
 function UploadTaskToastHost({
   task,
   onCancel,
@@ -1275,18 +1303,15 @@ function UploadTaskToastHost({
   onClose: () => void
 }) {
   const toastID = 'file-upload-task'
+  const store = useStableToastStore({ task, onCancel, onRetry, onClose })
+
+  useEffect(() => {
+    store.set({ task, onCancel, onRetry, onClose })
+  })
 
   useEffect(() => {
     toast.custom(
-      (id) => (
-        <UploadTaskToast
-          toastID={id}
-          task={task}
-          onCancel={onCancel}
-          onRetry={onRetry}
-          onClose={onClose}
-        />
-      ),
+      (id) => <UploadTaskToastView store={store} toastID={id} />,
       {
         id: toastID,
         duration: Infinity,
@@ -1295,13 +1320,29 @@ function UploadTaskToastHost({
         position: 'bottom-right',
       },
     )
-  }, [onCancel, onClose, onRetry, task, toastID])
+  }, [store, toastID])
 
   useEffect(() => () => {
     toast.dismiss(toastID)
   }, [toastID])
 
   return null
+}
+
+function UploadTaskToastView({ store, toastID }: {
+  store: StableToastStore<{ task: UploadTaskSnapshot; onCancel: () => void; onRetry: () => void; onClose: () => void }>
+  toastID: string | number
+}) {
+  const state = useSyncExternalStore(store.subscribe, store.get)
+  return (
+    <UploadTaskToast
+      toastID={toastID}
+      task={state.task}
+      onCancel={state.onCancel}
+      onRetry={state.onRetry}
+      onClose={state.onClose}
+    />
+  )
 }
 
 function UploadTaskToast({
@@ -1433,10 +1474,15 @@ function PasteTaskToastHost({
   onClose: () => void
 }) {
   const toastID = 'file-paste-task'
+  const store = useStableToastStore({ task, onClose })
+
+  useEffect(() => {
+    store.set({ task, onClose })
+  })
 
   useEffect(() => {
     toast.custom(
-      (id) => <PasteTaskToast toastID={id} task={task} onClose={onClose} />,
+      (id) => <PasteTaskToastView store={store} toastID={id} />,
       {
         id: toastID,
         duration: Infinity,
@@ -1445,13 +1491,21 @@ function PasteTaskToastHost({
         position: 'bottom-right',
       },
     )
-  }, [onClose, task, toastID])
+  }, [store, toastID])
 
   useEffect(() => () => {
     toast.dismiss(toastID)
   }, [toastID])
 
   return null
+}
+
+function PasteTaskToastView({ store, toastID }: {
+  store: StableToastStore<{ task: PasteTaskSnapshot; onClose: () => void }>
+  toastID: string | number
+}) {
+  const state = useSyncExternalStore(store.subscribe, store.get)
+  return <PasteTaskToast toastID={toastID} task={state.task} onClose={state.onClose} />
 }
 
 function PasteTaskToast({
@@ -1511,14 +1565,28 @@ function BatchDeleteTaskToastHost({ task, onClose }: {
   onClose: () => void
 }) {
   const toastID = 'file-batch-delete-task'
+  const store = useStableToastStore({ task, onClose })
+
+  useEffect(() => {
+    store.set({ task, onClose })
+  })
+
   useEffect(() => {
     toast.custom(
-      (id) => <BatchDeleteTaskToast toastID={id} task={task} onClose={onClose} />,
+      (id) => <BatchDeleteTaskToastView store={store} toastID={id} />,
       { id: toastID, duration: Infinity, dismissible: false, unstyled: true, position: 'bottom-right' },
     )
-  }, [onClose, task, toastID])
+  }, [store, toastID])
   useEffect(() => () => { toast.dismiss(toastID) }, [toastID])
   return null
+}
+
+function BatchDeleteTaskToastView({ store, toastID }: {
+  store: StableToastStore<{ task: BatchDeleteTaskSnapshot; onClose: () => void }>
+  toastID: string | number
+}) {
+  const state = useSyncExternalStore(store.subscribe, store.get)
+  return <BatchDeleteTaskToast toastID={toastID} task={state.task} onClose={state.onClose} />
 }
 
 function BatchDeleteTaskToast({ toastID, task, onClose }: {
