@@ -192,3 +192,105 @@ INSERT INTO file_search_index(rowid, relative_path)
 SELECT id, relative_path FROM file_records
 WHERE record_status = 'active' AND resource_scope = 'file'
   AND id NOT IN (SELECT rowid FROM file_search_index);
+
+-- 12. 文件流转中心（2.0 Epic B / Phase 4）：独立 domain 台账，不写 file_records。
+-- 载荷物理位置：`.omnistore/transfer/send/<public_key>/` 与
+-- `.omnistore/transfer/collect/<public_key>/<submission_id>/`；
+-- 源物理用量照常统计这些字节；绑定 Source 是创建时的快照，重绑只影响新任务。
+CREATE TABLE IF NOT EXISTS transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_key TEXT NOT NULL UNIQUE,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id),
+  storage_source_id INTEGER NOT NULL REFERENCES storage_sources(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  pickup_code_hash TEXT NOT NULL,
+  password_hash TEXT,
+  max_downloads INTEGER,
+  download_count INTEGER NOT NULL DEFAULT 0,
+  expires_at DATETIME,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'active', 'revoked', 'expired')),
+  total_files INTEGER NOT NULL DEFAULT 0,
+  total_size INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  finalized_at DATETIME,
+  revoked_at DATETIME,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfers_owner ON transfers(owner_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_transfers_source ON transfers(storage_source_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_gc ON transfers(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS transfer_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+  relative_path TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  ext TEXT NOT NULL DEFAULT '',
+  mime_type TEXT NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL,
+  UNIQUE(transfer_id, relative_path)
+);
+
+CREATE TABLE IF NOT EXISTS transfer_collections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_key TEXT NOT NULL UNIQUE,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id),
+  storage_source_id INTEGER NOT NULL REFERENCES storage_sources(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  code_hash TEXT NOT NULL,
+  password_hash TEXT,
+  max_file_size INTEGER,
+  max_total_size INTEGER,
+  require_name INTEGER NOT NULL DEFAULT 0,
+  require_note INTEGER NOT NULL DEFAULT 0,
+  allowed_exts TEXT NOT NULL DEFAULT '',
+  expires_at DATETIME,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed', 'revoked', 'expired')),
+  total_files INTEGER NOT NULL DEFAULT 0,
+  total_size INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  closed_at DATETIME,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfer_collections_owner ON transfer_collections(owner_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_transfer_collections_source ON transfer_collections(storage_source_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_collections_gc ON transfer_collections(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS transfer_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  collection_id INTEGER NOT NULL REFERENCES transfer_collections(id) ON DELETE CASCADE,
+  submitter_name TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  file_count INTEGER NOT NULL DEFAULT 0,
+  total_size INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfer_submissions_collection ON transfer_submissions(collection_id, created_at);
+
+CREATE TABLE IF NOT EXISTS transfer_submission_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id INTEGER NOT NULL REFERENCES transfer_submissions(id) ON DELETE CASCADE,
+  relative_path TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  ext TEXT NOT NULL DEFAULT '',
+  mime_type TEXT NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL,
+  UNIQUE(submission_id, relative_path)
+);
+
+CREATE TABLE IF NOT EXISTS transfer_access_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash TEXT NOT NULL UNIQUE,
+  transfer_id INTEGER REFERENCES transfers(id) ON DELETE CASCADE,
+  collection_id INTEGER REFERENCES transfer_collections(id) ON DELETE CASCADE,
+  ip_address TEXT,
+  created_at DATETIME NOT NULL,
+  expires_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfer_access_sessions_gc ON transfer_access_sessions(expires_at);

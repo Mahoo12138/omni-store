@@ -1325,3 +1325,37 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 	_ = s.removePathOperation(op.OperationID)
 	return toRel, nil
 }
+
+// WriteManagedFile 把受信任服务的数据原子写入托管命名空间：
+// prepareManaged 解析（越界/软链接检查）→ 同目录临时文件 + fsync → rename →
+// 目录 fsync。不写 file_records 台账，崩溃一致性由调用方的业务日志负责。
+// limited 为 true 时超过 maxBytes 返回 ErrQuotaExceeded 并清理临时文件。
+func (s *Service) WriteManagedFile(src *models.StorageSource, relInput, scopeDir string, body io.Reader, maxBytes int64, limited bool) (int64, error) {
+	_, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	if err != nil {
+		return 0, err
+	}
+	parentAbs := filepath.Dir(absPath)
+	if err := os.MkdirAll(parentAbs, 0o755); err != nil {
+		return 0, fmt.Errorf("创建托管目录失败: %w", err)
+	}
+	tmpPath := filepath.Join(parentAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
+	written, _, _, err := writeUploadTempAt(tmpPath, body, maxBytes, limited)
+	if err != nil {
+		return 0, err
+	}
+	keepTemp := true
+	defer func() {
+		if keepTemp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if err := os.Rename(tmpPath, absPath); err != nil {
+		return 0, fmt.Errorf("发布托管文件失败: %w", err)
+	}
+	keepTemp = false
+	if err := syncDirectory(parentAbs); err != nil {
+		return written, fmt.Errorf("同步托管目录失败: %w", err)
+	}
+	return written, nil
+}
