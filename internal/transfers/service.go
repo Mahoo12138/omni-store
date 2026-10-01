@@ -353,6 +353,35 @@ func (s *Service) getSendByKey(publicKey string) (*sendRow, error) {
   WHERE t.public_key = ?`, publicKey))
 }
 
+// ListSendFilesByID 返回发件包全部文件（打包下载使用；调用方已校验访问权）。
+func (s *Service) ListSendFilesByID(transferID int64) ([]*SendFile, error) {
+	rows, err := s.db.Query(`SELECT `+sendFileColumns+` FROM transfer_files
+  WHERE transfer_id = ? ORDER BY relative_path`, transferID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*SendFile{}
+	for rows.Next() {
+		file, err := scanSendFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, file)
+	}
+	return out, rows.Err()
+}
+
+// SourceActiveTaskCount 返回仍占用该存储源活跃载荷的流转任务数量（删除守卫用）。
+func (s *Service) SourceActiveTaskCount(storageSourceID int64) (int64, error) {
+	var count int64
+	err := s.db.QueryRow(`SELECT
+  (SELECT COUNT(*) FROM transfers WHERE storage_source_id = ? AND status IN ('draft', 'active')) +
+  (SELECT COUNT(*) FROM transfer_collections WHERE storage_source_id = ? AND status = 'active')`,
+		storageSourceID, storageSourceID).Scan(&count)
+	return count, err
+}
+
 // ListSendsByOwner 返回用户创建的发件包（历史）。
 func (s *Service) ListSendsByOwner(ownerUserID int64) ([]*Send, error) {
 	rows, err := s.db.Query(`SELECT `+sendColumns+` FROM transfers t
@@ -759,6 +788,17 @@ func (s *Service) OpenSendFile(src *models.StorageSource, publicKey string, file
 		return nil, nil, nil, nil, ErrNotFound
 	}
 	return file, f, info, unlock, nil
+}
+
+// OpenManagedForDownload 按文件 ID 打开托管载荷（打包下载使用）。
+func (s *Service) OpenManagedForDownload(src *models.StorageSource, publicKey string, fileID int64) (*os.File, os.FileInfo, func(), error) {
+	file, err := scanSendFile(s.db.QueryRow(`SELECT `+sendFileColumns+`
+  FROM transfer_files WHERE transfer_id = (SELECT id FROM transfers WHERE public_key = ?) AND id = ?`,
+		publicKey, fileID))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return s.files.OpenManagedForRead(src, sendPayloadRel(publicKey, file.RelativePath), ManagedScopeDir)
 }
 
 // --- 内部工具 ---

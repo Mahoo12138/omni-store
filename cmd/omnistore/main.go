@@ -186,6 +186,13 @@ func runServer(args []string) error {
 			"completed_uploads", uploadRecovery.CompletedUploads,
 			"rolled_back_uploads", uploadRecovery.RolledBackUploads)
 	}
+	transferUploadRecovery, err := app.Transfers().RecoverUploadOperations()
+	if err != nil {
+		return fmt.Errorf("恢复中断的流转发件上传失败: %w", err)
+	}
+	if transferUploadRecovery > 0 {
+		logger.Info("已收敛中断的流转发件上传", "count", transferUploadRecovery)
+	}
 	stopCleanup := make(chan struct{})
 	httpserver.StartSessionCleanup(app.Sessions(), logger, stopCleanup)
 	if cfg.Server.S3Enabled {
@@ -193,6 +200,7 @@ func runServer(args []string) error {
 	}
 	httpserver.StartWebDAVLockCleanup(app.Files(), logger, stopCleanup)
 	httpserver.StartThumbnailCacheCleanup(app.ImageBed(), logger, stopCleanup)
+	httpserver.StartTransferGC(app.Transfers(), logger, stopCleanup)
 	defer close(stopCleanup)
 
 	servers := []*http.Server{srv}

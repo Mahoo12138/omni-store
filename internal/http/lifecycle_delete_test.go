@@ -21,6 +21,7 @@ import (
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
+	"github.com/omni-store/omnistore/internal/transfers"
 	"github.com/omni-store/omnistore/internal/users"
 )
 
@@ -150,10 +151,12 @@ func newLifecycleDeleteServer(t *testing.T) (*Server, *models.StorageSource, *mo
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	fileService := files.NewService(conn, sourceService, locks.NewManager())
 	return &Server{
 		sources:      sourceService,
-		files:        files.NewService(conn, sourceService, locks.NewManager()),
+		files:        fileService,
 		capabilities: capabilities.NewService(conn, sourceService),
+		transfers:    transfers.NewService(conn, sourceService, capabilities.NewService(conn, sourceService), fileService, dataDir, "test-master-key"),
 		users:        userService,
 		audit:        audit.New(conn, false, 0, logger),
 		proxy:        security.NewProxyResolver(nil),

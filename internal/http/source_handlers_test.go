@@ -24,6 +24,7 @@ import (
 	"github.com/omni-store/omnistore/internal/s3api"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
+	"github.com/omni-store/omnistore/internal/transfers"
 )
 
 func TestHandleAdminPreflightSource(t *testing.T) {
@@ -430,10 +431,12 @@ func newSourceCreateHandlerServer(t *testing.T) (*Server, *sql.DB, string) {
 	t.Cleanup(func() { _ = conn.Close() })
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	sourceService := sources.NewService(conn, dataDir)
+	fileService := files.NewService(conn, sourceService, locks.NewManager())
 	return &Server{
 		sources:      sourceService,
-		files:        files.NewService(conn, sourceService, locks.NewManager()),
+		files:        fileService,
 		capabilities: capabilities.NewService(conn, sourceService),
+		transfers:    transfers.NewService(conn, sourceService, capabilities.NewService(conn, sourceService), fileService, dataDir, "test-master-key"),
 		audit:        audit.New(conn, false, 0, logger),
 		proxy:        security.NewProxyResolver(nil),
 		logger:       logger,

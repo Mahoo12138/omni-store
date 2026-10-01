@@ -198,6 +198,16 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		WriteError(w, r, CodeConflict, "存储源仍被 Site Capability 绑定，请先解除绑定", map[string]any{"bound_capabilities": bound})
 		return
 	}
+	// 活跃流转任务仍把该源作为载荷承载空间。
+	activeTasks, err := s.transfers.SourceActiveTaskCount(src.ID)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查流转任务失败", nil)
+		return
+	}
+	if activeTasks > 0 {
+		WriteError(w, r, CodeConflict, "存储源仍有活跃的流转任务或收集任务，请先撤销或等待过期", map[string]any{"active_transfer_tasks": activeTasks})
+		return
+	}
 	releaseLifecycle := lifecycle.Write(lifecycle.Source(src.ID))
 	defer releaseLifecycle()
 	trashCount, err := s.files.SourceTrashCount(src.ID)
