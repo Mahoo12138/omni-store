@@ -431,7 +431,8 @@ func (s *Server) handlePublicTransferLookup(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handlePublicTransferUnlock(w http.ResponseWriter, r *http.Request) {
 	ip := s.proxy.ClientIP(r)
-	if !s.transferUnlockLimiter.Allow(ip) {
+	// 按「IP + 任务」限流：一个目标的爆破不锁死其他任务的合法取件。
+	if !s.transferUnlockLimiter.Allow(ip + "|" + r.PathValue("publicKey")) {
 		WriteError(w, r, CodeRateLimited, "尝试过于频繁，请稍后再试", nil)
 		return
 	}
@@ -559,7 +560,7 @@ func (s *Server) handlePublicCollectionLookup(w http.ResponseWriter, r *http.Req
 
 func (s *Server) handlePublicCollectionUnlock(w http.ResponseWriter, r *http.Request) {
 	ip := s.proxy.ClientIP(r)
-	if !s.transferUnlockLimiter.Allow(ip) {
+	if !s.transferUnlockLimiter.Allow(ip + "|" + r.PathValue("publicKey")) {
 		WriteError(w, r, CodeRateLimited, "尝试过于频繁，请稍后再试", nil)
 		return
 	}
@@ -590,7 +591,7 @@ func (s *Server) handlePublicCollectionUnlock(w http.ResponseWriter, r *http.Req
 // 无列举、无读取、无覆盖他人提交的入口。
 func (s *Server) handlePublicCollectionSubmit(w http.ResponseWriter, r *http.Request) {
 	ip := s.proxy.ClientIP(r)
-	if !s.collectionSubmitLimiter.Allow(ip) {
+	if !s.collectionSubmitLimiter.Allow(ip + "|" + r.PathValue("publicKey")) {
 		WriteError(w, r, CodeRateLimited, "提交过于频繁，请稍后再试", nil)
 		return
 	}

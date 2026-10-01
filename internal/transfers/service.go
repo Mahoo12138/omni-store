@@ -760,6 +760,11 @@ func (s *Service) ReserveSendDownload(publicKey, sessionToken string) (*Send, *m
 		return nil, nil, err
 	}
 	if affected, _ := result.RowsAffected(); affected == 0 {
+		// 并发竞争失败：重读当前行再分类，避免用过期快照误判。
+		row, err = s.getSendByKey(publicKey)
+		if err != nil {
+			return nil, nil, err
+		}
 		if row.send.MaxDownloads != nil && row.send.DownloadCount >= *row.send.MaxDownloads {
 			return nil, nil, ErrDownloadLimit
 		}

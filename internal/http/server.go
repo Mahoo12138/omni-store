@@ -49,8 +49,8 @@ type Server struct {
 	capabilities            *capabilities.Service
 	staticassets            *staticassets.Service
 	transfers               *transfers.Service
-	transferUnlockLimiter   *imagebed.RateLimiter
-	collectionSubmitLimiter *imagebed.RateLimiter
+	transferUnlockLimiter   *keyedRateLimiter
+	collectionSubmitLimiter *keyedRateLimiter
 	audit                   *audit.Logger
 	proxy                   *security.ProxyResolver
 	s3Keys                  *s3api.Credentials
@@ -93,8 +93,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
 	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.transfers = transfers.NewService(dbConn, s.sources, s.capabilities, s.files, cfg.Data.Dir, cfg.Security.MasterKey)
-	s.transferUnlockLimiter = imagebed.NewRateLimiter(60)
-	s.collectionSubmitLimiter = imagebed.NewRateLimiter(120)
+	s.transferUnlockLimiter = newKeyedRateLimiter(60, time.Hour)
+	s.collectionSubmitLimiter = newKeyedRateLimiter(120, time.Hour)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
 	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
