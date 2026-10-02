@@ -28,3 +28,10 @@ export const browserEmpty = style({ color: vars.color.textSecondary, fontSize: v
 export const browserRow = style({ display: 'flex', alignItems: 'center', gap: vars.space.sm, padding: '4px 6px', borderRadius: vars.radius.sm, fontSize: vars.fontSize.sm, color: vars.color.text })
 export const browserDirButton = style({ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: vars.color.primary, fontWeight: 600, fontSize: vars.fontSize.sm })
 export const browserName = style({ color: vars.color.text })
+
+export const constraintGrid = style({ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vars.space.md })
+export const submissionCard = style({ display: 'grid', gap: vars.space.sm, padding: vars.space.md, background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.md, maxHeight: 320, overflowY: 'auto' })
+export const submissionHeader = style({ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: vars.space.sm, flexWrap: 'wrap' })
+export const submissionMeta = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+export const submissionNote = style({ margin: 0, padding: vars.space.sm, background: vars.color.surfaceHover, borderRadius: vars.radius.sm, color: vars.color.text, fontSize: vars.fontSize.sm, lineHeight: 1.6 })
+export const saveRow = style({ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: vars.space.sm, alignItems: 'center' })

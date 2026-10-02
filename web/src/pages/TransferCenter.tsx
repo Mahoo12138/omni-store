@@ -1,18 +1,26 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiRequestError } from '../api/client'
-import { listFiles, fetchMySources } from '../api/sources'
+import { apiFetchBlob, ApiRequestError } from '../api/client'
+import { listFiles, fetchMySources, type UserSource } from '../api/sources'
 import {
+  closeCollection,
   copyIntoSend,
+  createCollection,
   createSend,
   finalizeSend,
+  listMyCollections,
   listMySends,
   listSendFilesByID,
+  listSubmissions,
   revokeSend,
+  saveSubmissionToFiles,
   uploadToSend,
+  type TransferCollection,
   type TransferFile,
   type TransferSend,
+  type TransferSubmission,
+  downloadBlob,
 } from '../api/transfers'
 import { AppShell } from '../components/layout/AppShell'
 import { QrCodeDialog } from '../components/share/QrCodeDialog'
@@ -22,8 +30,10 @@ import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
-import { IconCloud, IconCopy, IconPlus } from '../components/ui/Icon'
+import { IconCloud, IconCopy, IconDownload, IconPlus } from '../components/ui/Icon'
+import * as fieldCss from '../components/ui/Field.css'
 import { formatBytes } from '../utils/format'
+import { vars } from '../styles/theme.css'
 import { toastError, toastSuccess } from '../components/ui/Toast'
 import * as css from './TransferCenter.css'
 
@@ -128,7 +138,333 @@ export function TransferCenterPage() {
           }}
         />
       ) : null}
+
+      <CollectionsSection />
     </AppShell>
+  )
+}
+
+// --- 收集任务（2.0 Phase 6） ---
+
+const collectionStatusLabels: Record<TransferCollection['status'], { label: string; color: 'green' | 'gray' | 'red' | 'blue' }> = {
+  active: { label: '收集中', color: 'green' },
+  closed: { label: '已关闭', color: 'gray' },
+  revoked: { label: '已撤销', color: 'red' },
+  expired: { label: '已过期', color: 'gray' },
+}
+
+function CollectionsSection() {
+  const queryClient = useQueryClient()
+  const collections = useQuery({ queryKey: ['transfer-collections'], queryFn: listMyCollections })
+  const [createOpen, setCreateOpen] = useState(false)
+  const [codeOnce, setCodeOnce] = useState<{ code: string; publicKey: string; collectionID: number } | null>(null)
+  const [inboxID, setInboxID] = useState<number | null>(null)
+
+  const close = useMutation({
+    mutationFn: closeCollection,
+    onSuccess: async () => {
+      toastSuccess('收集任务已关闭，不再接受新提交')
+      await queryClient.invalidateQueries({ queryKey: ['transfer-collections'] })
+    },
+    onError: (error) => toastError(error instanceof ApiRequestError ? error.message : '关闭失败'),
+  })
+
+  return (
+    <>
+      <div className={css.pageHeader} style={{ marginTop: vars.space.xl }}>
+        <h2 className={css.pageTitle}>收集任务</h2>
+        <Button onClick={() => setCreateOpen(true)}>
+          <IconPlus size={14} /> 新建收集任务
+        </Button>
+      </div>
+      <section className={css.panel} aria-label="收集任务列表">
+        {collections.isPending ? <div className={css.emptyState}>正在加载…</div> : null}
+        {collections.isSuccess && collections.data.length === 0 ? (
+          <div className={css.emptyState}>
+            <strong>还没有收集任务</strong>
+            <span>创建一个收集链接，外部访客凭收件码向你提交文件。</span>
+          </div>
+        ) : null}
+        {collections.data?.map((collection) => {
+          const status = collectionStatusLabels[collection.status]
+          const link = `${window.location.origin}/collect/${collection.public_key}`
+          return (
+            <article key={collection.id} className={css.row} aria-label={`收集任务 ${collection.title || collection.public_key}`}>
+              <div className={css.rowMain}>
+                <h3 className={css.rowTitle}>{collection.title || '（无标题）'}</h3>
+                <div className={css.rowMeta}>
+                  <Badge color={status.color}>{status.label}</Badge>
+                  <span>已收 {collection.total_files} 个文件 · {formatBytes(collection.total_size)}</span>
+                  <span>{collection.expires_at ? `有效期至 ${new Date(collection.expires_at).toLocaleString()}` : '永不过期'}</span>
+                </div>
+              </div>
+              <div className={css.rowActions}>
+                {collection.status === 'active' ? (
+                  <>
+                    <Button variant="secondary" onClick={() => setInboxID(collection.id)}>收件箱</Button>
+                    <Button variant="ghost" onClick={() => { void navigator.clipboard.writeText(link); toastSuccess('收集链接已复制') }}>
+                      <IconCopy size={14} /> 复制链接
+                    </Button>
+                    <Button variant="dangerGhost" onClick={() => close.mutate(collection.id)}>关闭</Button>
+                  </>
+                ) : null}
+                {collection.status !== 'active' ? (
+                  <Button variant="secondary" onClick={() => setInboxID(collection.id)}>收件箱</Button>
+                ) : null}
+              </div>
+            </article>
+          )
+        })}
+      </section>
+
+      {createOpen ? (
+        <CreateCollectionDialog
+          onClose={() => setCreateOpen(false)}
+          onCreated={({ collection, code }) => {
+            setCreateOpen(false)
+            void queryClient.invalidateQueries({ queryKey: ['transfer-collections'] })
+            setCodeOnce({ code, publicKey: collection.public_key, collectionID: collection.id })
+          }}
+        />
+      ) : null}
+      {codeOnce ? (
+        <PickupCodeOnceDialog
+          code={codeOnce.code}
+          publicKey={codeOnce.publicKey}
+          collectBase
+          onSaved={() => {
+            const collectionID = codeOnce.collectionID
+            setCodeOnce(null)
+            void queryClient.invalidateQueries({ queryKey: ['transfer-collections'] })
+            setInboxID(collectionID)
+          }}
+        />
+      ) : null}
+      {inboxID !== null ? (
+        <InboxDialog
+          collectionID={inboxID}
+          onClose={() => {
+            setInboxID(null)
+            void queryClient.invalidateQueries({ queryKey: ['transfer-collections'] })
+          }}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function CreateCollectionDialog({ onClose, onCreated }: {
+  onClose: () => void
+  onCreated: (result: { collection: TransferCollection; code: string }) => void
+}) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [expiry, setExpiry] = useState('168')
+  const [password, setPassword] = useState('')
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState('')
+  const [maxTotalSizeMB, setMaxTotalSizeMB] = useState('')
+  const [requireName, setRequireName] = useState(true)
+  const [requireNote, setRequireNote] = useState(false)
+  const [allowedExts, setAllowedExts] = useState('')
+  const [err, setErr] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: () => createCollection({
+      title: title.trim(),
+      description: description.trim(),
+      expires_in_hours: Number(expiry),
+      password: password.trim() ? password : undefined,
+      max_file_size_mb: maxFileSizeMB.trim() ? Number(maxFileSizeMB) : undefined,
+      max_total_size_mb: maxTotalSizeMB.trim() ? Number(maxTotalSizeMB) : undefined,
+      require_name: requireName,
+      require_note: requireNote,
+      allowed_exts: allowedExts.split(/[,\s]+/).map((ext) => ext.trim()).filter(Boolean),
+    }),
+    onSuccess: onCreated,
+    onError: (error) => setErr(error instanceof ApiRequestError ? error.message : '创建失败'),
+  })
+
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title="新建收集任务"
+      description="生成收集链接与收件码；外部访客只能提交自己的文件，无法查看他人提交。"
+      wide
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button disabled={mutation.isPending || !title.trim()} onClick={() => { setErr(''); mutation.mutate() }}>
+            {mutation.isPending ? '创建中…' : '创建'}
+          </Button>
+        </>
+      }
+    >
+      <Field label="标题" required>
+        <Input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="收集任务标题" placeholder="2026 年 10 月作业收集" />
+      </Field>
+      <Field label="说明">
+        <Input value={description} onChange={(event) => setDescription(event.target.value)} aria-label="收集任务说明" />
+      </Field>
+      <Field label="有效期">
+        <Select value={expiry} onValueChange={setExpiry} options={expiryOptions} ariaLabel="收集任务有效期" />
+      </Field>
+      <Field label="访问密码（可选）">
+        <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} aria-label="收集任务访问密码" />
+      </Field>
+      <div className={css.constraintGrid}>
+        <Field label="单文件上限 MB（可选）">
+          <Input type="number" min="1" value={maxFileSizeMB} onChange={(event) => setMaxFileSizeMB(event.target.value)} aria-label="单文件上限 MB" />
+        </Field>
+        <Field label="总量上限 MB（可选）">
+          <Input type="number" min="1" value={maxTotalSizeMB} onChange={(event) => setMaxTotalSizeMB(event.target.value)} aria-label="总量上限 MB" />
+        </Field>
+      </div>
+      <Field label="允许的扩展名（可选，空格或逗号分隔）" hint="留空表示不限制类型，例如 pdf png docx。">
+        <Input value={allowedExts} onChange={(event) => setAllowedExts(event.target.value)} aria-label="允许的扩展名" />
+      </Field>
+      <Field label="提交表单要求">
+        <div style={{ display: 'grid', gap: 6 }}>
+          <label className={fieldCss.checkboxRow}>
+            <input type="checkbox" className={fieldCss.checkbox} checked={requireName} onChange={(event) => setRequireName(event.target.checked)} />
+            要求提交者姓名
+          </label>
+          <label className={fieldCss.checkboxRow}>
+            <input type="checkbox" className={fieldCss.checkbox} checked={requireNote} onChange={(event) => setRequireNote(event.target.checked)} />
+            要求备注
+          </label>
+        </div>
+      </Field>
+      {err ? <div role="alert" style={{ color: 'var(--color-danger, #c0392b)', fontSize: 13 }}>{err}</div> : null}
+    </DialogWrap>
+  )
+}
+
+function InboxDialog({ collectionID, onClose }: { collectionID: number; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const collections = useQuery({ queryKey: ['transfer-collections'], queryFn: listMyCollections })
+  const collection = collections.data?.find((item) => item.id === collectionID)
+  const submissions = useQuery({ queryKey: ['transfer-inbox', collectionID], queryFn: () => listSubmissions(collectionID) })
+  const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
+  const [saveSource, setSaveSource] = useState('')
+  const [savePath, setSavePath] = useState('')
+  const [downloading, setDownloading] = useState(false)
+  const usableSources = sources.data ?? []
+
+  const save = useMutation({
+    mutationFn: (submissionID: number) => saveSubmissionToFiles(collectionID, submissionID, saveSource, savePath.trim()),
+    onSuccess: (saved) => {
+      toastSuccess(`已保存 ${saved.length} 个文件到 ${saved[0] ? `${saveSource}:${saved[0]}` : '目标目录'}`)
+      void queryClient.invalidateQueries({ queryKey: ['transfer-inbox', collectionID] })
+    },
+    onError: (error) => toastError(error instanceof ApiRequestError ? error.message : '保存失败'),
+  })
+
+  async function downloadFile(submission: TransferSubmission, file: { id: number; relative_path: string }) {
+    setDownloading(true)
+    try {
+      const response = await apiFetchBlob(
+        `/api/v1/transfer-collections/${collectionID}/submissions/${submission.id}/files/${file.id}/download`,
+      )
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
+      const filename = decodeURIComponent(match?.[1] ?? file.relative_path.split('/').pop() ?? 'file')
+      downloadBlob(await response.blob(), filename)
+    } catch (error) {
+      toastError(error instanceof ApiRequestError ? error.message : '下载失败')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <DialogWrap
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={`收件箱：${collection?.title ?? ''}`}
+      description={`已收 ${collection?.total_files ?? 0} 个文件 · ${formatBytes(collection?.total_size ?? 0)}`}
+      wide
+      footer={<Button variant="ghost" onClick={onClose}>关闭</Button>}
+    >
+      {submissions.isPending ? <div className={css.browserEmpty}>加载中…</div> : null}
+      {submissions.isSuccess && submissions.data.length === 0 ? (
+        <div className={css.browserEmpty}>还没有收到提交。</div>
+      ) : null}
+      {submissions.data?.map((submission) => (
+        <SubmissionCard
+          key={submission.id}
+          submission={submission}
+          usableSources={usableSources}
+          saveSource={saveSource}
+          onSourceChange={setSaveSource}
+          savePath={savePath}
+          onPathChange={setSavePath}
+          onSave={() => save.mutate(submission.id)}
+          saving={save.isPending}
+          downloading={downloading}
+          onDownload={downloadFile}
+        />
+      ))}
+    </DialogWrap>
+  )
+}
+
+function SubmissionCard({ submission, usableSources, saveSource, onSourceChange, savePath, onPathChange, onSave, saving, downloading, onDownload }: {
+  submission: TransferSubmission
+  usableSources: UserSource[]
+  saveSource: string
+  onSourceChange: (value: string) => void
+  savePath: string
+  onPathChange: (value: string) => void
+  onSave: () => void
+  saving: boolean
+  downloading: boolean
+  onDownload: (submission: TransferSubmission, file: { id: number; relative_path: string }) => Promise<void>
+}) {
+  return (
+    <section className={css.submissionCard} aria-label={`提交 ${submission.submitter_name || submission.id}`}>
+      <header className={css.submissionHeader}>
+        <strong>{submission.submitter_name || '匿名提交'}</strong>
+        <span className={css.submissionMeta}>
+          {new Date(submission.created_at).toLocaleString()} · {submission.file_count} 个文件 · {formatBytes(submission.total_size)}
+        </span>
+      </header>
+      {submission.note ? <p className={css.submissionNote}>{submission.note}</p> : null}
+      <ul className={css.draftFiles}>
+        {submission.files.map((file) => (
+          <li key={file.id} className={css.draftFileRow}>
+            <span className={css.draftFilePath}>{file.relative_path}</span>
+            <span className={css.draftFileSize}>{formatBytes(file.size)}</span>
+            <Button
+              variant="secondary"
+              disabled={downloading}
+              onClick={() => void onDownload(submission, file)}
+              aria-label={`下载 ${file.relative_path}`}
+            >
+              <IconDownload size={14} /> 下载
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <div className={css.saveRow}>
+        <Select
+          value={saveSource ? String(usableSources.findIndex((item) => item.key === saveSource)) : ''}
+          onValueChange={(index) => onSourceChange(usableSources[Number(index)]?.key ?? '')}
+          options={usableSources.map((item, index) => ({ value: String(index), label: item.name }))}
+          ariaLabel="保存目标存储源"
+          placeholder="选择目标存储源…"
+        />
+        <Input
+          value={savePath}
+          onChange={(event) => onPathChange(event.target.value)}
+          placeholder="目标目录（源内相对路径）"
+          aria-label="保存目标目录"
+        />
+        <Button variant="secondary" disabled={saving || !saveSource} onClick={onSave}>
+          {saving ? '保存中…' : '保存到文件'}
+        </Button>
+      </div>
+    </section>
   )
 }
 
@@ -238,13 +574,14 @@ function CreateSendDialog({ onClose, onCreated }: {
   )
 }
 
-function PickupCodeOnceDialog({ code, publicKey, onSaved }: {
+function PickupCodeOnceDialog({ code, publicKey, collectBase, onSaved }: {
   code: string
   publicKey: string
+  collectBase?: boolean
   onSaved: () => void
 }) {
   const [copied, setCopied] = useState('')
-  const link = `${window.location.origin}/pickup/${publicKey}`
+  const link = `${window.location.origin}${collectBase ? '/collect' : '/pickup'}/${publicKey}`
   async function copy(value: string, key: string) {
     await navigator.clipboard.writeText(value)
     setCopied(key)

@@ -29,6 +29,12 @@ const publicPickupRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/PublicPickup'), 'PublicPickupPage'),
 })
 
+const publicCollectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collect/$publicKey',
+  component: lazyRouteComponent(() => import('./pages/PublicCollect'), 'PublicCollectPage'),
+})
+
 const anonymousUploadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/upload',
@@ -155,6 +161,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
   publicPickupRoute,
+  publicCollectRoute,
   anonymousUploadRoute,
   transferCenterRoute,
   publicShareRoute,

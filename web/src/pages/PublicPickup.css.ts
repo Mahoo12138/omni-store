@@ -23,3 +23,7 @@ export const fileList = style({ listStyle: 'none', margin: 0, padding: 0, displa
 export const fileRow = style({ display: 'flex', alignItems: 'center', gap: vars.space.md, padding: `${vars.space.sm} ${vars.space.md}`, background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.md })
 export const filePath = style({ flex: 1, minWidth: 0, fontFamily: vars.font.mono, fontSize: vars.fontSize.sm, color: vars.color.text, overflowWrap: 'anywhere' })
 export const fileSize = style({ flexShrink: 0, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
+
+export const hiddenInput = style({ display: 'none' })
+export const filePickRow = style({ display: 'flex', alignItems: 'center', gap: vars.space.md })
+export const pickedCount = style({ color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
