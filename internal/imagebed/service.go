@@ -95,6 +95,11 @@ func (s *Service) currentTarget() (*models.StorageSource, error) {
 	return src, nil
 }
 
+// ThumbnailCacheDir 暴露缩略图缓存目录（运维统计用）。
+func (s *Service) ThumbnailCacheDir() string {
+	return s.thumbnailCache
+}
+
 // CurrentTarget 暴露当前绑定目标给状态查询入口。
 func (s *Service) CurrentTarget() (*models.StorageSource, error) {
 	return s.currentTarget()

@@ -19,6 +19,7 @@ import (
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/locks"
+	"github.com/omni-store/omnistore/internal/operations"
 	"github.com/omni-store/omnistore/internal/publicdisk"
 	"github.com/omni-store/omnistore/internal/s3api"
 	"github.com/omni-store/omnistore/internal/security"
@@ -49,6 +50,7 @@ type Server struct {
 	capabilities            *capabilities.Service
 	staticassets            *staticassets.Service
 	transfers               *transfers.Service
+	operations              *operations.Service
 	transferUnlockLimiter   *keyedRateLimiter
 	collectionSubmitLimiter *keyedRateLimiter
 	audit                   *audit.Logger
@@ -93,6 +95,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
 	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.transfers = transfers.NewService(dbConn, s.sources, s.capabilities, s.files, cfg.Data.Dir, cfg.Security.MasterKey)
+	s.operations = operations.NewService(dbConn, cfg.DatabasePath(), cfg.Data.Dir, buildinfo.Version,
+		s.sources, s.files, s.imagebed, s.transfers,
+		auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
+		multipartCleanupAdapter(s.s3Multipart))
 	s.transferUnlockLimiter = newKeyedRateLimiter(60, time.Hour)
 	s.collectionSubmitLimiter = newKeyedRateLimiter(120, time.Hour)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
@@ -401,6 +407,14 @@ func StartS3MultipartCleanup(store *s3api.MultipartStore, logger *slog.Logger, s
 			}
 		}
 	}()
+}
+
+// multipartCleanupAdapter 适配 s3api 的清理结果签名。
+func multipartCleanupAdapter(store *s3api.MultipartStore) func(time.Duration) (int64, int64, int64, error) {
+	return func(maxAge time.Duration) (int64, int64, int64, error) {
+		result, err := store.CleanupExpired(maxAge)
+		return int64(result.UploadsRemoved), int64(result.OrphansRemoved), 0, err
+	}
 }
 
 // Transfers 暴露流转中心服务（启动恢复使用）。
