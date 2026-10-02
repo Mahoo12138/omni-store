@@ -215,7 +215,9 @@ func (s *Service) getCollectionByKey(publicKey string) (*collectionRow, error) {
 
 // ListCollectionsByOwner 返回用户创建的收集任务。
 func (s *Service) ListCollectionsByOwner(ownerUserID int64) ([]*Collection, error) {
-	rows, err := s.db.Query(`SELECT `+collectionColumns+` FROM transfer_collections c
+	rows, err := s.db.Query(`SELECT `+collectionColumns+`,
+  COALESCE(c.password_hash, ''), c.code_hash
+  FROM transfer_collections c
   JOIN storage_sources s ON s.id = c.storage_source_id
   WHERE c.owner_user_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT 200`, ownerUserID)
 	if err != nil {

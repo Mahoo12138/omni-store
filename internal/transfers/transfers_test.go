@@ -478,3 +478,37 @@ func TestManagedPathsAreHiddenFromGenericAPI(t *testing.T) {
 	var orphan sql.NullString
 	_ = orphan
 }
+
+// 回归：列表查询必须与 scanSend/scanCollection 的列数一致（曾因漏摘要列 500）。
+func TestListSendsAndCollectionsRoundTrip(t *testing.T) {
+	service, _, _, _, owner := newTransfersFixture(t)
+	send, pickupCode, err := service.CreateSend(CreateSendInput{
+		OwnerUserID: owner, Title: "listed", Password: "pass-1", MaxDownloads: &[]int64{4}[0],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = pickupCode
+	collection, code, err := service.CreateCollection(CreateCollectionInput{
+		OwnerUserID: owner, Title: "collected", Password: "pass-2", RequireName: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = code
+
+	sends, err := service.ListSendsByOwner(owner)
+	if err != nil {
+		t.Fatalf("ListSendsByOwner: %v", err)
+	}
+	if len(sends) != 1 || sends[0].ID != send.ID || !sends[0].HasPassword || sends[0].SourceKey == "" {
+		t.Fatalf("sends=%+v", sends)
+	}
+	collections, err := service.ListCollectionsByOwner(owner)
+	if err != nil {
+		t.Fatalf("ListCollectionsByOwner: %v", err)
+	}
+	if len(collections) != 1 || collections[0].ID != collection.ID || !collections[0].HasPassword || !collections[0].RequireName {
+		t.Fatalf("collections=%+v", collections)
+	}
+}

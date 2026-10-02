@@ -353,6 +353,15 @@ func (s *Service) getSendByKey(publicKey string) (*sendRow, error) {
   WHERE t.public_key = ?`, publicKey))
 }
 
+// ListOwnSendFiles 返回自己发件包的文件清单（草稿编辑与历史详情使用）。
+func (s *Service) ListOwnSendFiles(transferID, ownerUserID int64) ([]*SendFile, error) {
+	row, err := s.loadOwnSend(transferID, ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	return s.ListSendFilesByID(row.send.ID)
+}
+
 // ListSendFilesByID 返回发件包全部文件（打包下载使用；调用方已校验访问权）。
 func (s *Service) ListSendFilesByID(transferID int64) ([]*SendFile, error) {
 	rows, err := s.db.Query(`SELECT `+sendFileColumns+` FROM transfer_files
@@ -384,7 +393,9 @@ func (s *Service) SourceActiveTaskCount(storageSourceID int64) (int64, error) {
 
 // ListSendsByOwner 返回用户创建的发件包（历史）。
 func (s *Service) ListSendsByOwner(ownerUserID int64) ([]*Send, error) {
-	rows, err := s.db.Query(`SELECT `+sendColumns+` FROM transfers t
+	rows, err := s.db.Query(`SELECT `+sendColumns+`,
+  COALESCE(t.password_hash, ''), t.pickup_code_hash
+  FROM transfers t
   JOIN storage_sources s ON s.id = t.storage_source_id
   WHERE t.owner_user_id = ? ORDER BY t.created_at DESC, t.id DESC LIMIT 200`, ownerUserID)
 	if err != nil {
