@@ -27,6 +27,11 @@ import {
   adminSetBranding,
   adminSetImageBedRetention,
   adminSetSourceDisabled,
+  fetchOperationsStatus,
+  runIntegrityCheck,
+  runOperationsCleanup,
+  type CleanupResult,
+  type IntegrityReport,
   adminConfigureStaticAssets,
   adminGetStaticConfig,
   adminPreflightStaticAssets,
@@ -112,6 +117,7 @@ type SectionKey =
   | 'backup'
   | 'image-bed'
   | 'static-assets'
+  | 'operations'
   | 'branding'
 
 const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
@@ -198,6 +204,7 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'branding', label: '品牌信息', icon: <IconGlobe size={15} /> },
   { key: 'image-bed', label: '匿名图床', icon: <IconImage size={15} /> },
   { key: 'static-assets', label: '静态资源', icon: <IconGlobe size={15} /> },
+  { key: 'operations', label: '运维中心', icon: <IconActivity size={15} /> },
 ]
 
 export function AdminOverviewPage() {
@@ -273,6 +280,7 @@ export function AdminOverviewPage() {
           {section === 'backup' && <BackupSection />}
           {section === 'image-bed' && <ImageBedSection />}
           {section === 'static-assets' && <StaticAssetsSection />}
+          {section === 'operations' && <OperationsSection />}
           {section === 'branding' && <BrandingSection />}
         </div>
       </div>
@@ -3487,5 +3495,210 @@ function StaticAssetsRebindDialog({
       )}
       {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
     </DialogWrap>
+  )
+}
+
+// --- 运维中心（2.0 Epic C）：健康聚合 + 完整性检查 + 清理编排 ---
+
+function OperationsSection() {
+  const status = useQuery({ queryKey: ['operations-status'], queryFn: fetchOperationsStatus, refetchInterval: 30_000 })
+  const queryClient = useQueryClient()
+  const [integrity, setIntegrity] = useState<IntegrityReport | null>(null)
+  const [cleanup, setCleanup] = useState<CleanupResult | null>(null)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const integrityMut = useMutation({
+    mutationFn: runIntegrityCheck,
+    onSuccess: (report) => { setIntegrity(report); setErr('') },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '完整性检查失败'),
+  })
+  const cleanupMut = useMutation({
+    mutationFn: runOperationsCleanup,
+    onSuccess: async (result) => {
+      setCleanup(result)
+      setErr('')
+      await queryClient.invalidateQueries({ queryKey: ['operations-status'] })
+    },
+    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '清理失败'),
+  })
+
+  if (status.isPending) {
+    return (
+      <section className={css.section}>
+        <div className={css.sectionBody}><span className={css.kvLabel}>加载中…</span></div>
+      </section>
+    )
+  }
+  const data = status.data
+  return (
+    <>
+      <section className={css.section}>
+        <header className={css.sectionHeaderWithAction}>
+          <div className={css.sectionHeaderCopy}>
+            <h2 className={css.sectionTitle}>运维中心</h2>
+            <p className={css.sectionHint}>
+              版本 {data?.version} · 数据目录 {data?.data_dir}
+              {` `}· 状态生成于 {data ? new Date(data.generated_at).toLocaleTimeString() : '—'}（30 秒自动刷新）
+            </p>
+          </div>
+          <div className={css.sectionHeaderAction} style={{ display: 'flex', gap: 8 }}>
+            <Button variant="secondary" disabled={integrityMut.isPending} onClick={() => integrityMut.mutate()}>
+              {integrityMut.isPending ? '检查中…' : '完整性检查'}
+            </Button>
+            <Button disabled={cleanupMut.isPending} onClick={() => cleanupMut.mutate()}>
+              {cleanupMut.isPending ? '清理中…' : '运行清理'}
+            </Button>
+          </div>
+        </header>
+        <div className={css.sectionBody}>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>数据库</span>
+            <span className={css.kvValue}>
+              {formatBytes(data?.database.size_bytes ?? 0)} · WAL {formatBytes(data?.database.wal_bytes ?? 0)} ·
+              {' '}quick_check: <strong>{data?.database.quick_check}</strong>
+            </span>
+          </div>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>缓存与垃圾</span>
+            <span className={css.kvValue}>
+              缩略图缓存 {formatBytes(data?.storage.thumbnail_cache_bytes ?? 0)} ·
+              {' '}回收站 {data?.storage.trash_entries ?? 0} 项（{formatBytes(data?.storage.trash_bytes ?? 0)}）·
+              {' '}Multipart {data?.storage.multipart_uploads ?? 0}
+            </span>
+          </div>
+          <div className={css.kvRow}>
+            <span className={css.kvLabel}>流转用量</span>
+            <span className={css.kvValue}>
+              活跃发件包 {data?.transfers.active_sends ?? 0} · 草稿 {data?.transfers.draft_sends ?? 0} ·
+              {' '}收集 {data?.transfers.active_collections ?? 0} · 载荷 {formatBytes(data?.transfers.payload_bytes ?? 0)}
+              {data && data.transfers.active_quota_bytes > 0 ? `（活跃配额 ${formatBytes(data.transfers.active_quota_bytes)}）` : ''}
+            </span>
+          </div>
+          {integrity ? (
+            <div className={css.kvRow}>
+              <span className={css.kvLabel}>完整性检查</span>
+              <span className={css.kvValue}>
+                {integrity.ok
+                  ? <Badge color="green">通过：integrity ok，无外键悬空</Badge>
+                  : <Badge color="red">发现问题：{integrity.integrity.join('；')}（外键悬空 {integrity.fk_violations}）</Badge>}
+              </span>
+            </div>
+          ) : null}
+          {cleanup ? (
+            <div className={css.kvRow}>
+              <span className={css.kvLabel}>本次清理</span>
+              <span className={css.kvValue}>
+                锁 {cleanup.webdav_locks} · 会话 {cleanup.sessions} · Multipart {cleanup.multipart_uploads}+
+                {cleanup.multipart_orphans} · 缩略图 {cleanup.thumbnails} · 流转过期 {cleanup.transfer_gc.transfers_expired}
+                +{cleanup.transfer_gc.collections_expired} · 清扫 {cleanup.transfer_gc.transfers_swept}
+                +{cleanup.transfer_gc.collections_swept} · 孤儿目录 {cleanup.transfer_gc.orphan_dirs_removed} ·
+                {' '}临时文件 {cleanup.transfer_gc.orphan_temp_removed}
+              </span>
+            </div>
+          ) : null}
+          {err ? <div role="alert" style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div> : null}
+        </div>
+      </section>
+
+      <section className={css.section}>
+        <div className={css.sectionHeader}>
+          <h2 id="operations-sources-title" className={css.sectionTitle}>存储源健康</h2>
+        </div>
+        <HorizontalDataRegion name="存储源健康" labelledBy="operations-sources-title" busy={status.isFetching}>
+          <table className={css.compactTable}>
+            <thead>
+              <tr>
+                <th className={css.compactTh}>源</th>
+                <th className={css.compactTh}>根目录</th>
+                <th className={css.compactTh}>物理 / 台账</th>
+                <th className={css.compactTh}>回收站</th>
+                <th className={css.compactTh}>活跃流转</th>
+                <th className={css.compactTh}>协议</th>
+                <th className={css.compactTh}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.sources.map((source) => (
+                <tr key={source.key} className={css.compactTr}>
+                  <td className={css.compactTd} style={{ fontWeight: 500 }}>{source.name}</td>
+                  <td className={css.compactTd}>
+                    {source.root_accessible
+                      ? <Badge color="green">可访问</Badge>
+                      : <Badge color="red">{source.root_issue || '不可访问'}</Badge>}
+                  </td>
+                  <td className={css.compactTd}>
+                    {formatBytes(source.usage_bytes)} / {formatBytes(source.ledger_bytes)}
+                  </td>
+                  <td className={css.compactTd}>{source.trash_count} 项</td>
+                  <td className={css.compactTd}>{source.active_transfers}</td>
+                  <td className={css.compactTd}>
+                    {[source.webdav_enabled ? 'WebDAV' : null, source.s3_enabled ? 'S3' : null].filter(Boolean).join(' / ') || '—'}
+                  </td>
+                  <td className={css.compactTd}>
+                    <Button
+                      variant="ghost"
+                      onClick={async () => {
+                        setErr('')
+                        try {
+                          const { adminReconcileSource } = await import('../../api/admin')
+                          const result = await adminReconcileSource(source.key)
+                          setMsg(`${source.name} 台账已校准：新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
+                          await queryClient.invalidateQueries({ queryKey: ['operations-status'] })
+                        } catch (e) {
+                          setErr(e instanceof ApiRequestError ? e.message : '校准失败')
+                        }
+                      }}
+                    >
+                      校准台账
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </HorizontalDataRegion>
+        {msg ? <div style={{ fontSize: vars.fontSize.sm, color: vars.color.textSecondary, padding: vars.space.sm }}>{msg}</div> : null}
+      </section>
+
+      <section className={css.section}>
+        <div className={css.sectionHeader}>
+          <h2 className={css.sectionTitle}>站点能力健康</h2>
+        </div>
+        <div className={css.sectionBody}>
+          {data?.capabilities.map((capability) => (
+            <div className={css.kvRow} key={capability.capability}>
+              <span className={css.kvLabel}>{capability.capability}</span>
+              <span className={css.kvValue}>
+                {capability.enabled && !capability.source_disabled
+                  ? <Badge color="green">{capability.detail}</Badge>
+                  : capability.source_disabled
+                    ? <Badge color="red">{capability.detail}</Badge>
+                    : <Badge color="gray">{capability.detail}</Badge>}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className={css.section}>
+        <div className={css.sectionHeader}>
+          <h2 className={css.sectionTitle}>最近失败操作</h2>
+        </div>
+        <div className={css.sectionBody}>
+          {data && data.recent_failed_audits.length === 0 ? (
+            <span className={css.kvLabel}>近期没有失败记录。</span>
+          ) : null}
+          {data?.recent_failed_audits.map((entry) => (
+            <div className={css.kvRow} key={entry.id}>
+              <span className={css.kvLabel}>{new Date(entry.created_at).toLocaleString()}</span>
+              <span className={css.kvValue} style={{ fontFamily: vars.font.mono }}>
+                {entry.action} {entry.error_code ? `· ${entry.error_code}` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
   )
 }

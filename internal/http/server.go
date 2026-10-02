@@ -95,10 +95,6 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
 	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.transfers = transfers.NewService(dbConn, s.sources, s.capabilities, s.files, cfg.Data.Dir, cfg.Security.MasterKey)
-	s.operations = operations.NewService(dbConn, cfg.DatabasePath(), cfg.Data.Dir, buildinfo.Version,
-		s.sources, s.files, s.imagebed, s.transfers,
-		auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
-		multipartCleanupAdapter(s.s3Multipart))
 	s.transferUnlockLimiter = newKeyedRateLimiter(60, time.Hour)
 	s.collectionSubmitLimiter = newKeyedRateLimiter(120, time.Hour)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
@@ -116,6 +112,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	}
 	s.imagebed = ib
 	s.anonLimiter = imagebed.NewRateLimiter(cfg.ImageBed.AnonymousRateLimit.PerIPPerHour)
+	s.operations = operations.NewService(dbConn, cfg.DatabasePath(), cfg.Data.Dir, buildinfo.Version,
+		s.sources, s.files, s.imagebed, s.transfers,
+		auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
+		multipartCleanupAdapter(s.s3Multipart))
 
 	mux := http.NewServeMux()
 
@@ -276,6 +276,11 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/close", s.requireAuth(s.handleCloseCollection))
 	mux.HandleFunc("GET /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminGetTransferSettings))
 	mux.HandleFunc("PUT /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminSetTransferSettings))
+
+	// 管理员：运维中心（2.0 Epic C）
+	mux.HandleFunc("GET /api/v1/admin/operations/status", s.requireAdmin(s.handleAdminOperationsStatus))
+	mux.HandleFunc("POST /api/v1/admin/operations/integrity-check", s.requireAdmin(s.handleAdminIntegrityCheck))
+	mux.HandleFunc("POST /api/v1/admin/operations/cleanup", s.requireAdmin(s.handleAdminOperationsCleanup))
 
 	// 流转中心：公开取件与提交（2.0 Phase 4）
 	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}", s.handlePublicTransferLookup)

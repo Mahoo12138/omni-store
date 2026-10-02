@@ -382,6 +382,102 @@ export async function adminPreflightStaticAssets(input: {
   return apiFetch('/api/v1/admin/static-assets/preflight', { method: 'POST', body: JSON.stringify(input) })
 }
 
+// 运维中心（2.0 Epic C）
+export interface OperationsSourceHealth {
+  key: string
+  name: string
+  disabled: boolean
+  root_accessible: boolean
+  usage_bytes: number
+  ledger_bytes: number
+  quota_bytes: number
+  trash_count: number
+  active_transfers: number
+  webdav_enabled: boolean
+  s3_enabled: boolean
+  root_issue?: string
+}
+
+export interface OperationsCapabilityHealth {
+  capability: string
+  enabled: boolean
+  source_key?: string
+  source_name?: string
+  source_disabled: boolean
+  detail: string
+}
+
+export interface OperationsStatus {
+  version: string
+  data_dir: string
+  generated_at: string
+  database: {
+    size_bytes: number
+    wal_bytes: number
+    quick_check: string
+    table_rows: Record<string, number>
+  }
+  sources: OperationsSourceHealth[]
+  capabilities: OperationsCapabilityHealth[]
+  transfers: {
+    active_sends: number
+    draft_sends: number
+    active_collections: number
+    payload_bytes: number
+    active_quota_bytes: number
+    sessions: number
+  }
+  storage: {
+    thumbnail_cache_bytes: number
+    trash_entries: number
+    trash_bytes: number
+    multipart_uploads: number
+  }
+  recent_failed_audits: Array<{
+    id: number
+    action: string
+    error_code: string | null
+    created_at: string
+  }>
+}
+
+export async function fetchOperationsStatus(): Promise<OperationsStatus> {
+  return apiFetch<OperationsStatus>('/api/v1/admin/operations/status')
+}
+
+export interface IntegrityReport {
+  integrity: string[]
+  fk_violations: number
+  ok: boolean
+}
+
+export async function runIntegrityCheck(): Promise<IntegrityReport> {
+  return apiFetch('/api/v1/admin/operations/integrity-check', { method: 'POST' })
+}
+
+export interface CleanupResult {
+  webdav_locks: number
+  sessions: number
+  multipart_uploads: number
+  multipart_orphans: number
+  thumbnails: number
+  transfer_gc: {
+    transfers_expired: number
+    transfers_swept: number
+    drafts_removed: number
+    collections_expired: number
+    collections_swept: number
+    empty_submissions: number
+    orphan_dirs_removed: number
+    orphan_temp_removed: number
+    sessions_removed: number
+  }
+}
+
+export async function runOperationsCleanup(): Promise<CleanupResult> {
+  return apiFetch('/api/v1/admin/operations/cleanup', { method: 'POST' })
+}
+
 // 图床保留策略（2.0 IMG：0 = 不自动过期；登录用户与匿名相互独立）
 export interface ImageBedRetention {
   user_retention_days: number
