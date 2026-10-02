@@ -259,6 +259,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/transfers", s.requireAuth(s.handleListMyTransfers))
 	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/upload", s.requireAuth(s.handleTransferUpload))
 	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/from-store", s.requireAuth(s.handleTransferStoreCopy))
+	mux.HandleFunc("GET /api/v1/transfers/{transferID}/files", s.requireAuth(s.handleTransferFileList))
 	mux.HandleFunc("POST /api/v1/transfers/{transferID}/finalize", s.requireAuth(s.handleFinalizeTransfer))
 	mux.HandleFunc("DELETE /api/v1/transfers/{transferID}", s.requireAuth(s.handleRevokeTransfer))
 	mux.HandleFunc("POST /api/v1/transfer-collections", s.requireAuth(s.handleCreateCollection))

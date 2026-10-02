@@ -137,6 +137,22 @@ func (s *Server) handleRevokeTransfer(w http.ResponseWriter, r *http.Request) {
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
+// handleTransferFileList 返回自己发件包的文件清单（草稿编辑/历史详情）。
+func (s *Server) handleTransferFileList(w http.ResponseWriter, r *http.Request) {
+	user := CurrentUser(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("transferID"), 10, 64)
+	if err != nil {
+		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
+		return
+	}
+	files, err := s.transfers.ListOwnSendFiles(id, user.ID)
+	if err != nil {
+		writeTransferError(w, r, err)
+		return
+	}
+	WriteData(w, r, ListData{Items: files, Total: int64(len(files))})
+}
+
 // handleTransferStoreCopy 把已有普通文件/目录复制进草稿（保留目录结构）。
 func (s *Server) handleTransferStoreCopy(w http.ResponseWriter, r *http.Request) {
 	var req struct {

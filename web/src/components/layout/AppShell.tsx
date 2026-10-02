@@ -8,6 +8,7 @@ import {
   IconActivity,
   IconChevronDown,
   IconFolder,
+  IconCloud,
   IconImage,
   IconLink,
   IconLogout,
@@ -62,6 +63,7 @@ export function AppShell({
     { to: '/app/search', label: '搜索', icon: <IconSearch />, active: pathname.startsWith('/app/search') },
     { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
+    { to: '/app/transfer', label: '流转', icon: <IconCloud />, active: pathname.startsWith('/app/transfer') },
   ]
   // 仅 super_admin 显示"系统设置"入口。
   const showAdmin = user.role === 'super_admin'

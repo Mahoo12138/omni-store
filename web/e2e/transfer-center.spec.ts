@@ -64,9 +64,10 @@ test.describe(() => {
     const transferID = createdData.send.id
     expect(publicKey).toMatch(/^tr-[0-9a-f]{24}$/)
     expect(pickupCode).toHaveLength(8)
-    // 创建响应后取件码不再出现（历史列表不泄露）。
+    // 创建响应后取件码不再出现（历史列表 200 且不泄露明文取件码）。
     const list = await api.get(`${baseURL}/api/v1/transfers`, { headers: authHeaders(session) })
-    expect((await list.text())).not.toContain(pickupCode)
+    expect(list.status()).toBe(200)
+    expect(await list.text()).not.toContain(pickupCode)
 
     // 直传嵌套目录（中文 + 空格路径）。
     const nested = 'docs/2026 方案/最终版 v2.pdf'

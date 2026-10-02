@@ -23,6 +23,12 @@ const publicBrowseRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/PublicBrowse'), 'PublicBrowsePage'),
 })
 
+const publicPickupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/pickup/$publicKey',
+  component: lazyRouteComponent(() => import('./pages/PublicPickup'), 'PublicPickupPage'),
+})
+
 const anonymousUploadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/upload',
@@ -125,6 +131,12 @@ const imageBedRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ImageBed'), 'ImageBedPage'),
 })
 
+const transferCenterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/app/transfer',
+  component: lazyRouteComponent(() => import('./pages/TransferCenter'), 'TransferCenterPage'),
+})
+
 const sharesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/shares',
@@ -142,7 +154,9 @@ const adminRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
+  publicPickupRoute,
   anonymousUploadRoute,
+  transferCenterRoute,
   publicShareRoute,
   aboutRoute,
   loginRoute,
