@@ -260,3 +260,12 @@ func (c *Config) normalize() error {
 func (c *Config) DatabasePath() string {
 	return c.Database.Path
 }
+
+// ParseYAML 解析配置 YAML（备份恢复校验用）；只验证合法性，不加载。
+func ParseYAML(data []byte) (*Config, error) {
+	cfg := Default()
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}

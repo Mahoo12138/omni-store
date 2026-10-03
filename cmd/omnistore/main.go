@@ -3,6 +3,7 @@
 // 用法:
 //
 //	omnistore server [--config path]                                启动 HTTP 服务
+//	omnistore restore <backup.zip> [--config path] [--force]         离线恢复系统备份
 //	omnistore admin reset-password --username <name> [--config path]  紧急重置密码
 //	omnistore version                                                查看构建版本
 package main
@@ -17,11 +18,13 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/backup"
 	"github.com/omni-store/omnistore/internal/buildinfo"
 	"github.com/omni-store/omnistore/internal/config"
 	"github.com/omni-store/omnistore/internal/datadir"
@@ -40,6 +43,8 @@ func main() {
 	switch os.Args[1] {
 	case "server":
 		err = runServer(os.Args[2:])
+	case "restore":
+		err = runRestore(os.Args[2:])
 	case "admin":
 		err = runAdmin(os.Args[2:])
 	case "version", "-v", "--version":
@@ -244,6 +249,67 @@ func runServer(args []string) error {
 }
 
 // runAdmin 处理 admin 子命令。MVP 只有 reset-password（README §8.8）。
+// runRestore 执行离线系统备份恢复；必须在服务停止后运行。
+func runRestore(args []string) error {
+	if len(args) < 1 || strings.HasPrefix(args[0], "--") {
+		return fmt.Errorf("用法: omnistore restore <backup.zip> [--config path] [--force]")
+	}
+	backupPath := args[0]
+	fs := flag.NewFlagSet("restore", flag.ExitOnError)
+	configFile := fs.String("config", "", "配置文件路径")
+	force := fs.Bool("force", false, "跳过数据目录非空确认（用于自动化）")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*configFile)
+	if err != nil {
+		return err
+	}
+	if err := datadir.Prepare(cfg.Data.Dir); err != nil {
+		return err
+	}
+	// 数据目录非空时要求 --force，防止误把恢复跑在活跃实例上。
+	entries, readErr := os.ReadDir(cfg.Data.Dir)
+	if readErr != nil {
+		return readErr
+	}
+	nonTrivial := 0
+	for _, entry := range entries {
+		if entry.Name() != "tmp" && entry.Name() != "logs" {
+			nonTrivial++
+		}
+	}
+	if nonTrivial > 0 && !*force {
+		return fmt.Errorf("数据目录 %s 非空；确认要在其上恢复请加 --force（当前数据库会先备份到 pre-restore-* 目录）", cfg.Data.Dir)
+	}
+
+	report, err := backup.Restore(context.Background(), backup.RestoreOptions{
+		BackupPath: backupPath,
+		Cfg:        cfg,
+		Force:      *force,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println("恢复完成。报告：")
+	fmt.Printf("  备份格式: v%d（实例版本 %s）\n", report.FormatVersion, report.AppVersionInBackup)
+	fmt.Printf("  数据库: %v；快照最高迁移: %s\n", report.DatabaseRestored, report.MaxMigrationRestored)
+	fmt.Printf("  密钥: %d 个\n", len(report.KeysRestored))
+	fmt.Printf("  预恢复备份: %s\n", report.PreRestoreBackupDir)
+	for _, source := range report.Sources {
+		state := "根目录存在"
+		if !source.RootExists {
+			state = "根目录缺失，需要重新绑定"
+		}
+		fmt.Printf("  存储源 %s（%s）→ %s: %s\n", source.Name, source.Key, source.RootPath, state)
+	}
+	for _, warning := range report.Warnings {
+		fmt.Printf("  ⚠ %s\n", warning)
+	}
+	return nil
+}
+
 func runAdmin(args []string) error {
 	if len(args) < 1 || args[0] != "reset-password" {
 		return fmt.Errorf("用法: omnistore admin reset-password --username <name> [--password <new>]")

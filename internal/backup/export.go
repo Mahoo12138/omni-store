@@ -4,7 +4,9 @@ package backup
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +44,11 @@ type manifest struct {
 	Contents      []string  `json:"contents"`
 	Excluded      []string  `json:"excluded"`
 	ResetState    []string  `json:"reset_state"`
+	// FormatVersion >= 3：每个条目的 SHA-256（hex），供恢复前校验。
+	Checksums map[string]string `json:"checksums,omitempty"`
+	// DatabaseMaxMigration 是快照内最高的 schema 版本（如 "v2.0.0"），
+	// 恢复端据此拒绝"新版本实例的备份恢复到旧版本二进制"。
+	DatabaseMaxMigration string `json:"database_max_migration,omitempty"`
 }
 
 // CreatePackage writes a consistent SQLite snapshot plus the effective config and key files.
@@ -74,6 +81,10 @@ func CreatePackage(ctx context.Context, cfg *config.Config, db *sql.DB, appVersi
 	for _, keyFile := range keyFiles {
 		contents = append(contents, path.Join("keys", filepath.ToSlash(keyFile.rel)))
 	}
+	maxMigration, err := maxMigrationVersion(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 
 	output, err := os.CreateTemp(tmpRoot, "omnistore-config-*.zip")
 	if err != nil {
@@ -96,8 +107,8 @@ func CreatePackage(ctx context.Context, cfg *config.Config, db *sql.DB, appVersi
 		_ = zw.Close()
 		return nil, cause
 	}
-	manifestBytes, err := json.MarshalIndent(manifest{
-		FormatVersion: 2,
+	backupManifest := manifest{
+		FormatVersion: 3,
 		AppVersion:    appVersion,
 		ExportedAt:    now,
 		Sensitive:     true,
@@ -110,31 +121,51 @@ func CreatePackage(ctx context.Context, cfg *config.Config, db *sql.DB, appVersi
 			"s3_multipart_uploads",
 			"trash_metadata",
 		},
-	}, "", "  ")
-	if err != nil {
-		return closeWithError(err)
+		DatabaseMaxMigration: maxMigration,
 	}
-	manifestBytes = append(manifestBytes, '\n')
-	if err := addBytes(zw, "manifest.json", manifestBytes, now); err != nil {
-		return closeWithError(err)
+	// FormatVersion 3：逐条目 SHA-256 写入清单（manifest.json 自身除外）。
+	checksums := map[string]string{}
+	addTrackedBytes := func(name string, data []byte) error {
+		sum := sha256.Sum256(data)
+		checksums[name] = hex.EncodeToString(sum[:])
+		return addBytes(zw, name, data, now)
 	}
-	if err := addBytes(zw, "RESTORE.md", []byte(restoreGuide), now); err != nil {
+	addTrackedDiskFile := func(name, diskPath string) error {
+		digest, err := fileSHA256(diskPath)
+		if err != nil {
+			return err
+		}
+		checksums[name] = digest
+		return addDiskFile(zw, name, diskPath)
+	}
+	if err := addTrackedBytes("RESTORE.md", []byte(restoreGuide)); err != nil {
 		return closeWithError(err)
 	}
 	configBytes, err := yaml.Marshal(cfg)
 	if err != nil {
 		return closeWithError(fmt.Errorf("序列化生效配置失败: %w", err))
 	}
-	if err := addBytes(zw, "config/effective-config.yaml", configBytes, now); err != nil {
+	if err := addTrackedBytes("config/effective-config.yaml", configBytes); err != nil {
 		return closeWithError(err)
 	}
-	if err := addDiskFile(zw, "database/omnistore.db", dbSnapshot); err != nil {
+	if err := addTrackedDiskFile("database/omnistore.db", dbSnapshot); err != nil {
 		return closeWithError(err)
 	}
 	for _, keyFile := range keyFiles {
-		if err := addDiskFile(zw, path.Join("keys", filepath.ToSlash(keyFile.rel)), keyFile.abs); err != nil {
+		if err := addTrackedDiskFile(path.Join("keys", filepath.ToSlash(keyFile.rel)), keyFile.abs); err != nil {
 			return closeWithError(err)
 		}
+	}
+	// manifest.json 最后写入：zip 条目顺序对读取方无关，但清单要包含
+	// 其余全部条目的校验和，因此必须在所有条目入包后再生成。
+	backupManifest.Checksums = checksums
+	manifestBytes, err := json.MarshalIndent(backupManifest, "", "  ")
+	if err != nil {
+		return closeWithError(err)
+	}
+	manifestBytes = append(manifestBytes, '\n')
+	if err := addBytes(zw, "manifest.json", manifestBytes, now); err != nil {
+		return closeWithError(err)
 	}
 	if err := zw.Close(); err != nil {
 		return nil, fmt.Errorf("完成配置包失败: %w", err)
@@ -279,6 +310,50 @@ func collectKeyFiles(root string) ([]keyFile, error) {
 		return nil, fmt.Errorf("收集密钥文件失败: %w", err)
 	}
 	return files, nil
+}
+
+// maxMigrationVersion 读取快照中已应用的最高迁移版本（如 "v2.0.0"）。
+func maxMigrationVersion(ctx context.Context, db *sql.DB) (string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT version FROM schema_migrations`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	maximum := ""
+	for rows.Next() {
+		var version string
+		if err := rows.Scan(&version); err != nil {
+			return "", err
+		}
+		if maximum == "" || versionGT(version, maximum) {
+			maximum = version
+		}
+	}
+	return maximum, rows.Err()
+}
+
+// versionGT 比较 vMAJOR.MINOR.PATCH 版本号 a > b。
+func versionGT(a, b string) bool {
+	parse := func(v string) [3]int {
+		var out [3]int
+		_, _ = fmt.Sscanf(strings.TrimPrefix(v, "v"), "%d.%d.%d", &out[0], &out[1], &out[2])
+		return out
+	}
+	pa, pb := parse(a), parse(b)
+	return pa[0] != pb[0] && pa[0] > pb[0] || pa[0] == pb[0] && (pa[1] != pb[1] && pa[1] > pb[1] || pa[1] == pb[1] && pa[2] > pb[2])
+}
+
+func fileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func addBytes(zw *zip.Writer, name string, data []byte, modified time.Time) error {

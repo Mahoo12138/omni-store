@@ -75,8 +75,15 @@ func TestCreatePackageIncludesSnapshotConfigAndKeys(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &m); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if m.AppVersion != "test-version" || !m.Sensitive || m.FormatVersion != 2 {
+	if m.AppVersion != "test-version" || !m.Sensitive || m.FormatVersion != 3 {
 		t.Fatalf("unexpected manifest: %+v", m)
+	}
+	// v3：除 manifest.json 外每个条目都有校验和。
+	if len(m.Checksums) != len(m.Contents)-1 {
+		t.Fatalf("checksums=%v contents=%v", m.Checksums, m.Contents)
+	}
+	if m.DatabaseMaxMigration != "v2.0.0" {
+		t.Fatalf("max migration=%q", m.DatabaseMaxMigration)
 	}
 	for _, state := range []string{
 		"web_sessions", "share_access_sessions", "webdav_locks",
