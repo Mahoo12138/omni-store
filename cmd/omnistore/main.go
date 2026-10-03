@@ -269,19 +269,10 @@ func runRestore(args []string) error {
 	if err := datadir.Prepare(cfg.Data.Dir); err != nil {
 		return err
 	}
-	// 数据目录非空时要求 --force，防止误把恢复跑在活跃实例上。
-	entries, readErr := os.ReadDir(cfg.Data.Dir)
-	if readErr != nil {
-		return readErr
-	}
-	nonTrivial := 0
-	for _, entry := range entries {
-		if entry.Name() != "tmp" && entry.Name() != "logs" {
-			nonTrivial++
-		}
-	}
-	if nonTrivial > 0 && !*force {
-		return fmt.Errorf("数据目录 %s 非空；确认要在其上恢复请加 --force（当前数据库会先备份到 pre-restore-* 目录）", cfg.Data.Dir)
+	// 目标数据库已存在时要求 --force，防止误把恢复跑在活跃实例上。
+	// （dataDir.Prepare 建出的 keys/tmp 等目录不算活跃实例。）
+	if _, err := os.Stat(cfg.DatabasePath()); err == nil && !*force {
+		return fmt.Errorf("目标数据库 %s 已存在；确认要在其上恢复请加 --force（当前数据库会先备份到 pre-restore-* 目录）", cfg.DatabasePath())
 	}
 
 	report, err := backup.Restore(context.Background(), backup.RestoreOptions{
