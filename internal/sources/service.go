@@ -344,6 +344,38 @@ func (s *Service) Delete(key string) error {
 	return tx.Commit()
 }
 
+// UpdateRootPath 重新绑定存储源根路径（备份恢复/磁盘迁移后的管理动作）。
+// 与创建同规则：路径必须存在、不进系统数据目录、不与其它源重叠。
+// 不移动、不校验文件内容；绑定后由管理员执行台账校准。
+func (s *Service) UpdateRootPath(key, newRoot string) (*models.StorageSource, error) {
+	rootTopologyMu.Lock()
+	defer rootTopologyMu.Unlock()
+
+	src, err := s.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.allRootPaths()
+	if err != nil {
+		return nil, err
+	}
+	filtered := existing[:0]
+	for _, path := range existing {
+		if path != src.RootPath {
+			filtered = append(filtered, path)
+		}
+	}
+	realPath, err := ValidateRootPath(newRoot, s.dataDir, filtered)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.Exec(`UPDATE storage_sources SET root_path = ?, updated_at = ? WHERE id = ?`,
+		realPath, time.Now().UTC(), src.ID); err != nil {
+		return nil, fmt.Errorf("更新存储源根路径失败: %w", err)
+	}
+	return s.Get(key)
+}
+
 // --- 排除规则（README §11） ---
 
 // ExcludePatterns 返回存储源的自定义排除规则（不含系统强制规则）。

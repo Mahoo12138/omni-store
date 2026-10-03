@@ -182,6 +182,23 @@ func (s *Server) handleAdminSetSourceDisabled(disabled bool) http.HandlerFunc {
 	}
 }
 
+// handleAdminRebindRoot 重新绑定存储源根路径（备份恢复/磁盘迁移后）。
+func (s *Server) handleAdminRebindRoot(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RootPath string `json:"root_path"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	src, err := s.sources.UpdateRootPath(r.PathValue("key"), req.RootPath)
+	if err != nil {
+		s.writeSourceError(w, r, err)
+		return
+	}
+	s.adminAudit(r, "rebind_source_root", audit.StatusSuccess, req.RootPath)
+	WriteData(w, r, src)
+}
+
 func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request) {
 	src, err := s.sources.Get(r.PathValue("key"))
 	if err != nil {

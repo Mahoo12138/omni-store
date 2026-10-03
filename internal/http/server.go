@@ -200,6 +200,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminGetSource))
 	mux.HandleFunc("PATCH /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminUpdateSource))
 	mux.HandleFunc("POST /api/v1/admin/sources/{key}/reconcile", s.requireAdmin(s.handleAdminReconcileSource))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/rebind-root", s.requireAdmin(s.handleAdminRebindRoot))
 	mux.HandleFunc("POST /api/v1/admin/sources/{key}/disable", s.requireAdmin(s.handleAdminSetSourceDisabled(true)))
 	mux.HandleFunc("POST /api/v1/admin/sources/{key}/enable", s.requireAdmin(s.handleAdminSetSourceDisabled(false)))
 	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}", s.requireAdmin(s.handleAdminDeleteSource))
