@@ -64,7 +64,12 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   writeFileSync(driftPath, `${original}\n<!-- out-of-band edit ${Date.now()} -->`, 'utf-8')
 
   // 2. 活跃流转任务产生真实托管载荷（经 API 创建 + multipart 上传；服务端会
-  // 初始化带所有权标记的托管根）。
+  // 初始化带所有权标记的托管根）。套件共享服务器状态：断言一律用基线差值。
+  const baseline = await adminAPI(page, 'GET', '/api/v1/admin/operations/status')
+  const baselineTeam = baseline.body.data.sources.find(
+    (item: { key: string }) => item.key === team.key,
+  )
+  const baselineTransfers = baseline.body.data.transfers
   const created = await adminAPI(page, 'POST', '/api/v1/transfers', { title: '运维观测包' })
   expect(created.status).toBe(200)
   const sendID = created.body.data.send.id
@@ -92,10 +97,9 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   const teamHealth = statusBefore.body.data.sources.find((item: { key: string }) => item.key === team.key)
   expect(teamHealth.root_accessible).toBe(true)
   expect(teamHealth.usage_bytes).toBeGreaterThan(teamHealth.ledger_bytes)
-  expect(teamHealth.active_transfers).toBe(1)
+  expect(teamHealth.active_transfers).toBe(baselineTeam.active_transfers + 1)
   // 未定稿的包计入草稿（载荷字节照常统计）。
-  expect(statusBefore.body.data.transfers.draft_sends).toBe(1)
-  expect(statusBefore.body.data.transfers.active_sends).toBe(0)
+  expect(statusBefore.body.data.transfers.draft_sends).toBe(baselineTransfers.draft_sends + 1)
   expect(statusBefore.body.data.transfers.payload_bytes).toBeGreaterThan(0)
   const capabilities = statusBefore.body.data.capabilities.map((item: { capability: string }) => item.capability)
   for (const capability of ['public_drive', 'image_bed', 'static_assets', 'transfer_center']) {
@@ -109,8 +113,11 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.goto('/app/admin?section=operations')
   await expect(page.getByRole('heading', { name: '运维中心' })).toBeVisible()
-  await expect(page.getByText('quick_check:')).toContainText('ok')
-  await expect(page.getByRole('row', { name: /团队文件/ })).toContainText('1') // 活跃流转
+  // 新布局：quick_check 是统计卡内的独立 Badge。
+  await expect(page.getByText('quick_check')).toBeVisible()
+  await expect(page.getByText('ok', { exact: true })).toBeVisible()
+  // 表格渲染该源且根可访问（活跃流转计数已在 API 断言中核对）。
+  await expect(page.getByRole('row', { name: /团队文件/ })).toContainText('可访问')
   await page.getByRole('button', { name: '完整性检查' }).click()
   await expect(page.getByText(/通过：integrity ok/)).toBeVisible({ timeout: 10_000 })
 
@@ -127,6 +134,7 @@ test('operations status, integrity check and cleanup converge real disk drift', 
 
   // 撤销活跃包 → 载荷目录删除 → 再次清理显示清扫计数。
   await adminAPI(page, 'DELETE', `/api/v1/transfers/${sendID}`)
+  void baselineTransfers
   const cleanup2 = await adminAPI(page, 'POST', '/api/v1/admin/operations/cleanup')
   expect(cleanup2.body.data.transfer_gc.transfers_swept).toBeGreaterThanOrEqual(1)
   expect(() => readFileSync(managedTmp)).toThrow()

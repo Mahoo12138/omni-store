@@ -1188,3 +1188,119 @@ export const sourcePreviewWarnings = style({
   fontSize: vars.fontSize.xs,
   lineHeight: 1.55,
 })
+
+// 运维中心（2.0 Epic C）：统计卡栅格 + 能力健康 + 失败记录结构化列表
+export const opsStatGrid = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: vars.space.md,
+  '@media': {
+    'screen and (max-width: 1080px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
+    'screen and (max-width: 860px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+  },
+})
+
+export const opsMetricList = style({
+  display: 'grid',
+  gap: '4px',
+  marginTop: vars.space.xs,
+})
+
+export const opsMetricRow = style({
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: vars.space.sm,
+  fontSize: vars.fontSize.sm,
+})
+
+export const opsMetricLabel = style({
+  color: vars.color.textSecondary,
+  whiteSpace: 'nowrap',
+})
+
+export const opsMetricValue = style({
+  color: vars.color.text,
+  fontFamily: vars.font.mono,
+  textAlign: 'right',
+  minWidth: 0,
+  overflowWrap: 'anywhere',
+})
+
+export const opsCapGrid = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: vars.space.md,
+  '@media': {
+    'screen and (max-width: 720px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+  },
+})
+
+export const opsCapCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+  padding: vars.space.md,
+  background: vars.color.surface,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  minWidth: 0,
+})
+
+export const opsCapName = style({
+  fontWeight: 600,
+  color: vars.color.text,
+  fontSize: vars.fontSize.sm,
+})
+
+export const opsFailList = style({
+  display: 'grid',
+  gap: 0,
+})
+
+export const opsFailRow = style({
+  display: 'grid',
+  gridTemplateColumns: 'auto auto minmax(0, 1fr)',
+  alignItems: 'baseline',
+  gap: vars.space.md,
+  padding: `${vars.space.sm} 0`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  fontSize: vars.fontSize.sm,
+  '@media': {
+    'screen and (max-width: 640px)': {
+      gridTemplateColumns: 'auto minmax(0, 1fr)',
+      gridTemplateRows: 'auto auto',
+    },
+  },
+})
+
+globalStyle(`${opsFailRow}:last-child`, { borderBottom: 'none' })
+
+export const opsFailTime = style({
+  fontFamily: vars.font.mono,
+  color: vars.color.textSecondary,
+  whiteSpace: 'nowrap',
+  fontSize: vars.fontSize.xs,
+})
+
+export const opsFailAction = style({
+  fontFamily: vars.font.mono,
+  color: vars.color.text,
+  background: vars.color.surfaceHover,
+  borderRadius: vars.radius.sm,
+  padding: '2px 8px',
+  whiteSpace: 'nowrap',
+  justifySelf: 'start',
+})
+
+export const opsFailReason = style({
+  color: vars.color.textSecondary,
+  minWidth: 0,
+  overflowWrap: 'anywhere',
+})
+
+export const opsHealthBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+})

@@ -3500,6 +3500,24 @@ function StaticAssetsRebindDialog({
 
 // --- 运维中心（2.0 Epic C）：健康聚合 + 完整性检查 + 清理编排 ---
 
+const operationCapabilityLabels: Record<string, string> = {
+  public_drive: '公开网盘',
+  image_bed: '快速图床',
+  static_assets: '静态资源',
+  transfer_center: '流转中心',
+}
+
+// 失败记录时间：今天只显示时刻，更早的带日期，避免整行被长日期占据。
+function formatAuditTime(iso: string): string {
+  const date = new Date(iso)
+  const now = new Date()
+  const sameDay = date.toDateString() === now.toDateString()
+  return sameDay
+    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : date.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 function OperationsSection() {
   const status = useQuery({ queryKey: ['operations-status'], queryFn: fetchOperationsStatus, refetchInterval: 30_000 })
   const queryClient = useQueryClient()
@@ -3552,28 +3570,74 @@ function OperationsSection() {
           </div>
         </header>
         <div className={css.sectionBody}>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>数据库</span>
-            <span className={css.kvValue}>
-              {formatBytes(data?.database.size_bytes ?? 0)} · WAL {formatBytes(data?.database.wal_bytes ?? 0)} ·
-              {' '}quick_check: <strong>{data?.database.quick_check}</strong>
-            </span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>缓存与垃圾</span>
-            <span className={css.kvValue}>
-              缩略图缓存 {formatBytes(data?.storage.thumbnail_cache_bytes ?? 0)} ·
-              {' '}回收站 {data?.storage.trash_entries ?? 0} 项（{formatBytes(data?.storage.trash_bytes ?? 0)}）·
-              {' '}Multipart {data?.storage.multipart_uploads ?? 0}
-            </span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>流转用量</span>
-            <span className={css.kvValue}>
-              活跃发件包 {data?.transfers.active_sends ?? 0} · 草稿 {data?.transfers.draft_sends ?? 0} ·
-              {' '}收集 {data?.transfers.active_collections ?? 0} · 载荷 {formatBytes(data?.transfers.payload_bytes ?? 0)}
-              {data && data.transfers.active_quota_bytes > 0 ? `（活跃配额 ${formatBytes(data.transfers.active_quota_bytes)}）` : ''}
-            </span>
+          <div className={css.opsStatGrid}>
+            <div className={css.statCard}>
+              <span className={css.statIcon} style={{ background: vars.color.tileBlueBg, color: vars.color.tileBlueFg }}>
+                <IconServer size={22} />
+              </span>
+              <div className={css.statBody}>
+                <span className={css.statLabel}>数据库</span>
+                <span className={css.statValue}>{formatBytes(data?.database.size_bytes ?? 0)}</span>
+                <div className={css.opsMetricList}>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>WAL</span>
+                    <span className={css.opsMetricValue}>{formatBytes(data?.database.wal_bytes ?? 0)}</span>
+                  </div>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>quick_check</span>
+                    <span className={css.opsMetricValue}>
+                      {(data?.database.quick_check ?? '') === 'ok'
+                        ? <Badge color="green">ok</Badge>
+                        : <Badge color="red">{data?.database.quick_check}</Badge>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className={css.statCard}>
+              <span className={css.statIcon} style={{ background: vars.color.tileAmberBg, color: vars.color.tileAmberFg }}>
+                <IconTrash size={22} />
+              </span>
+              <div className={css.statBody}>
+                <span className={css.statLabel}>缓存与垃圾</span>
+                <span className={css.statValue}>{formatBytes(data?.storage.thumbnail_cache_bytes ?? 0)}</span>
+                <div className={css.opsMetricList}>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>回收站</span>
+                    <span className={css.opsMetricValue}>{data?.storage.trash_entries ?? 0} 项 · {formatBytes(data?.storage.trash_bytes ?? 0)}</span>
+                  </div>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>Multipart</span>
+                    <span className={css.opsMetricValue}>{data?.storage.multipart_uploads ?? 0}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className={css.statCard}>
+              <span className={css.statIcon} style={{ background: vars.color.tilePurpleBg, color: vars.color.tilePurpleFg }}>
+                <IconCloud size={22} />
+              </span>
+              <div className={css.statBody}>
+                <span className={css.statLabel}>流转负载</span>
+                <span className={css.statValue}>{formatBytes(data?.transfers.payload_bytes ?? 0)}</span>
+                <div className={css.opsMetricList}>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>发件包</span>
+                    <span className={css.opsMetricValue}>活跃 {data?.transfers.active_sends ?? 0} · 草稿 {data?.transfers.draft_sends ?? 0}</span>
+                  </div>
+                  <div className={css.opsMetricRow}>
+                    <span className={css.opsMetricLabel}>收集</span>
+                    <span className={css.opsMetricValue}>{data?.transfers.active_collections ?? 0}</span>
+                  </div>
+                  {data && data.transfers.active_quota_bytes > 0 ? (
+                    <div className={css.opsMetricRow}>
+                      <span className={css.opsMetricLabel}>活跃配额</span>
+                      <span className={css.opsMetricValue}>{formatBytes(data.transfers.active_quota_bytes)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
           {integrity ? (
             <div className={css.kvRow}>
@@ -3666,18 +3730,27 @@ function OperationsSection() {
           <h2 className={css.sectionTitle}>站点能力健康</h2>
         </div>
         <div className={css.sectionBody}>
-          {data?.capabilities.map((capability) => (
-            <div className={css.kvRow} key={capability.capability}>
-              <span className={css.kvLabel}>{capability.capability}</span>
-              <span className={css.kvValue}>
-                {capability.enabled && !capability.source_disabled
-                  ? <Badge color="green">{capability.detail}</Badge>
-                  : capability.source_disabled
-                    ? <Badge color="red">{capability.detail}</Badge>
-                    : <Badge color="gray">{capability.detail}</Badge>}
-              </span>
-            </div>
-          ))}
+          <div className={css.opsCapGrid}>
+            {data?.capabilities.map((capability) => (
+              <div className={css.opsCapCard} key={capability.capability}>
+                <div className={css.opsHealthBadge}>
+                  <span className={css.opsCapName}>
+                    {operationCapabilityLabels[capability.capability] ?? capability.capability}
+                  </span>
+                  {capability.enabled && !capability.source_disabled ? (
+                    <Badge color="green">正常</Badge>
+                  ) : capability.source_disabled ? (
+                    <Badge color="red">源已禁用</Badge>
+                  ) : capability.enabled ? (
+                    <Badge color="gray">未绑定</Badge>
+                  ) : (
+                    <Badge color="gray">已关闭</Badge>
+                  )}
+                </div>
+                <span className={css.opsFailReason}>{capability.detail}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -3689,14 +3762,15 @@ function OperationsSection() {
           {data && data.recent_failed_audits.length === 0 ? (
             <span className={css.kvLabel}>近期没有失败记录。</span>
           ) : null}
-          {data?.recent_failed_audits.map((entry) => (
-            <div className={css.kvRow} key={entry.id}>
-              <span className={css.kvLabel}>{new Date(entry.created_at).toLocaleString()}</span>
-              <span className={css.kvValue} style={{ fontFamily: vars.font.mono }}>
-                {entry.action} {entry.error_code ? `· ${entry.error_code}` : ''}
-              </span>
-            </div>
-          ))}
+          <div className={css.opsFailList}>
+            {data?.recent_failed_audits.map((entry) => (
+              <div className={css.opsFailRow} key={entry.id}>
+                <span className={css.opsFailTime}>{formatAuditTime(entry.created_at)}</span>
+                <span className={css.opsFailAction}>{entry.action}</span>
+                <span className={css.opsFailReason}>{entry.error_code || '未知原因'}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </>
