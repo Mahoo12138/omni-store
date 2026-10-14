@@ -112,12 +112,14 @@ func snapshotHeader(f *os.File) ([]byte, error) {
 
 // Resolved 是一次公开读取的解析结果；调用方负责 Close 与 unlock。
 type Resolved struct {
-	MimeType     string
-	CacheControl string
-	CORP         bool
-	File         *os.File
-	Info         os.FileInfo
-	Unlock       func()
+	MimeType       string
+	CacheControl   string
+	CORP           bool
+	File           *os.File
+	Info           os.FileInfo
+	Unlock         func()
+	CorsMode       string
+	AllowedOrigins []string
 }
 
 // Open 按 /assets/{assetID}/{relativePath} 解析并打开公开文件。
@@ -125,17 +127,19 @@ type Resolved struct {
 // 普通文件 + 类型白名单 → 打开。任何失败都以 ErrNotFound 语义返回，
 // 不区分“不存在”与“不允许”，也不回退到其他公开入口。
 func (s *Service) Open(assetID, relativePath string) (*Resolved, error) {
-	snap, err := s.loadSnapshot()
+	configMu.RLock()
+	defer configMu.RUnlock()
+	snap, err := s.loadSnapshot("WHERE a.public_asset_id = ?", assetID)
 	if err != nil {
-		return nil, err
+		return nil, files.ErrNotFound
 	}
-	if !snap.enabled || snap.sourceID == nil || snap.publicAssetID == "" {
+	if !snap.enabled || snap.sourceDisabled || snap.publicAssetID == "" {
 		return nil, files.ErrNotFound
 	}
 	if assetID != snap.publicAssetID {
 		return nil, files.ErrNotFound
 	}
-	src, err := s.sources.GetByID(*snap.sourceID)
+	src, err := s.sources.GetByID(snap.sourceID)
 	if err != nil || src.IsDisabled {
 		return nil, files.ErrNotFound
 	}
@@ -186,12 +190,14 @@ func (s *Service) Open(assetID, relativePath string) (*Resolved, error) {
 	}
 
 	return &Resolved{
-		MimeType:     mimeType,
-		CacheControl: cacheControlFor(snap.cacheMode),
-		CORP:         true,
-		File:         f,
-		Info:         info,
-		Unlock:       unlock,
+		MimeType:       mimeType,
+		CorsMode:       snap.corsMode,
+		AllowedOrigins: snap.allowedOrigins,
+		CacheControl:   cacheControlFor(snap.cacheMode),
+		CORP:           true,
+		File:           f,
+		Info:           info,
+		Unlock:         unlock,
 	}, nil
 }
 

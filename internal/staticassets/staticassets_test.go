@@ -67,10 +67,10 @@ func TestConfigureLifecycle(t *testing.T) {
 	if _, err := service.Configure(ConfigureInput{SourceKey: source.Key, PublishRoot: "other"}, nil, nil); !errors.Is(err, ErrAlreadyConfigured) {
 		t.Fatalf("re-configure error=%v", err)
 	}
-	if _, err := service.Update(UpdateInput{CacheMode: &[]string{CacheLong}[0]}); err != nil {
+	if _, err := service.Update(UpdateInput{SourceKey: source.Key, CacheMode: &[]string{CacheLong}[0]}); err != nil {
 		t.Fatalf("plain update: %v", err)
 	}
-	updated, err := service.Config()
+	updated, err := service.Config(source.Key)
 	if err != nil || updated.CacheMode != CacheLong {
 		t.Fatalf("update result=%+v err=%v", updated, err)
 	}
@@ -80,10 +80,10 @@ func TestConfigureLifecycle(t *testing.T) {
 
 	// 乐观并发：相同 revision 只有一个成功。
 	stale := updated.Revision
-	if _, err := service.Update(UpdateInput{CacheMode: &[]string{CacheNoCache}[0]}); err != nil {
+	if _, err := service.Update(UpdateInput{SourceKey: source.Key, CacheMode: &[]string{CacheNoCache}[0]}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Update(UpdateInput{ExpectedRevision: &stale}); !errors.Is(err, ErrRevisionConflict) {
+	if _, err := service.Update(UpdateInput{SourceKey: source.Key, ExpectedRevision: &stale}); !errors.Is(err, ErrRevisionConflict) {
 		t.Fatalf("stale revision error=%v", err)
 	}
 }
@@ -103,18 +103,18 @@ func TestUpdateRejectsSilentSpaceChange(t *testing.T) {
 
 	// 普通 PUT 不允许携带 source/publish_root 变更：静态配置 API 根本不接受这些
 	// 字段；这里验证 rebind 的模式约束与 reset/relocate 语义。
-	if _, err := service.Rebind(RebindInput{
+	if _, err := service.Rebind(source.Key, RebindInput{
 		SourceKey: other.Key, PublishRoot: "blog-assets", Mode: "replace",
 	}, nil, nil); !errors.Is(err, ErrRebindModeInvalid) {
 		t.Fatalf("invalid mode error=%v", err)
 	}
-	if _, err := service.Rebind(RebindInput{
+	if _, err := service.Rebind(source.Key, RebindInput{
 		SourceKey: other.Key, PublishRoot: "blog-assets", Mode: "relocate",
 	}, nil, nil); !errors.Is(err, ErrRelocateUnconfirmed) {
 		t.Fatalf("unconfirmed relocate error=%v", err)
 	}
 
-	resetCfg, err := service.Rebind(RebindInput{
+	resetCfg, err := service.Rebind(source.Key, RebindInput{
 		SourceKey: other.Key, PublishRoot: "blog-assets", Mode: "reset",
 	}, nil, nil)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestUpdateRejectsSilentSpaceChange(t *testing.T) {
 		t.Fatal("reset must generate a fresh id")
 	}
 
-	relocated, err := service.Rebind(RebindInput{
+	relocated, err := service.Rebind(other.Key, RebindInput{
 		SourceKey: source.Key, PublishRoot: "blog-assets", Mode: "relocate", ConfirmRelocate: true,
 	}, nil, nil)
 	if err != nil {
@@ -247,14 +247,14 @@ func TestOpenDisabledServiceReturnsNotFound(t *testing.T) {
 	writeTestFile(t, root, "blog-assets/a.png", string(pngBytes()))
 
 	disabled := false
-	if _, err := service.Update(UpdateInput{Enabled: &disabled}); err != nil {
+	if _, err := service.Update(UpdateInput{SourceKey: source.Key, Enabled: &disabled}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Open(cfg.PublicAssetID, "a.png"); !errors.Is(err, files.ErrNotFound) {
 		t.Fatalf("disabled open error=%v", err)
 	}
 	enabled := true
-	if _, err := service.Update(UpdateInput{Enabled: &enabled}); err != nil {
+	if _, err := service.Update(UpdateInput{SourceKey: source.Key, Enabled: &enabled}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.Open(cfg.PublicAssetID, "a.png"); err != nil {
@@ -273,7 +273,7 @@ func TestCacheModes(t *testing.T) {
 		CacheLong:    "public, max-age=31536000, immutable",
 	} {
 		mode := mode
-		if _, err := service.Update(UpdateInput{CacheMode: &mode}); err != nil {
+		if _, err := service.Update(UpdateInput{SourceKey: source.Key, CacheMode: &mode}); err != nil {
 			t.Fatal(err)
 		}
 		resolved, err := service.Open(cfg.PublicAssetID, "a.png")

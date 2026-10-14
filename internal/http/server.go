@@ -295,11 +295,12 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("POST /api/v1/public/transfer-collections/{publicKey}/submit", s.handlePublicCollectionSubmit)
 
 	// 管理员：静态资源配置（2.0 AST）
-	mux.HandleFunc("GET /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminGetStaticConfig))
-	mux.HandleFunc("POST /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminConfigureStatic))
-	mux.HandleFunc("PUT /api/v1/admin/static-assets/config", s.requireAdmin(s.handleAdminUpdateStaticConfig))
-	mux.HandleFunc("POST /api/v1/admin/static-assets/preflight", s.requireAdmin(s.handleAdminPreflightStatic))
-	mux.HandleFunc("POST /api/v1/admin/static-assets/rebind", s.requireAdmin(s.handleAdminRebindStatic))
+	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}/static-access/config", s.requireAdmin(s.handleAdminRemoveStaticConfig))
+	mux.HandleFunc("GET /api/v1/admin/sources/{key}/static-access/config", s.requireAdmin(s.handleAdminGetStaticConfig))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/static-access/config", s.requireAdmin(s.handleAdminConfigureStatic))
+	mux.HandleFunc("PUT /api/v1/admin/sources/{key}/static-access/config", s.requireAdmin(s.handleAdminUpdateStaticConfig))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/static-access/preflight", s.requireAdmin(s.handleAdminPreflightStatic))
+	mux.HandleFunc("POST /api/v1/admin/sources/{key}/static-access/rebind", s.requireAdmin(s.handleAdminRebindStatic))
 
 	// 公开静态资源读取（2.0 AST）：方法无关注册，保证非允许方法返回 405
 	// 而不是落入 SPA fallback。/assets/ 前缀也承载前端构建产物：

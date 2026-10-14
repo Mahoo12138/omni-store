@@ -215,6 +215,16 @@ func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request)
 		WriteError(w, r, CodeConflict, "存储源仍被 Site Capability 绑定，请先解除绑定", map[string]any{"bound_capabilities": bound})
 		return
 	}
+	// 公开身份必须先显式撤销，防止删除源时悄悄破坏静态链接。
+	staticConfig, err := s.staticassets.Config(src.Key)
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "检查静态 HTTP 配置失败", nil)
+		return
+	}
+	if staticConfig.Configured() {
+		WriteError(w, r, CodeConflict, "存储源仍有静态 HTTP 配置，请先关闭并移除配置", nil)
+		return
+	}
 	// 活跃流转任务仍把该源作为载荷承载空间。
 	activeTasks, err := s.transfers.SourceActiveTaskCount(src.ID)
 	if err != nil {

@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"strings"
@@ -23,11 +24,11 @@ func applyStaticCORS(w http.ResponseWriter, mode string, allowedOrigins []string
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Expose-Headers", staticExposeHeaders)
 	case staticassets.CorsAllowlist:
+		w.Header().Add("Vary", "Origin")
 		origin := r.Header.Get("Origin")
 		for _, candidate := range allowedOrigins {
 			if origin != "" && strings.EqualFold(origin, candidate) {
 				w.Header().Set("Access-Control-Allow-Origin", candidate)
-				w.Header().Add("Vary", "Origin")
 				w.Header().Set("Access-Control-Expose-Headers", staticExposeHeaders)
 				return
 			}
@@ -69,10 +70,7 @@ func (s *Server) handleStaticAsset(w http.ResponseWriter, r *http.Request) {
 	defer resolved.Unlock()
 	defer resolved.File.Close()
 
-	cfg, cfgErr := s.staticassets.Config()
-	if cfgErr == nil {
-		applyStaticCORS(w, cfg.CorsMode, cfg.AllowedOrigins, r)
-	}
+	applyStaticCORS(w, resolved.CorsMode, resolved.AllowedOrigins, r)
 	w.Header().Set("Content-Type", resolved.MimeType)
 	w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
 	w.Header().Set("Cache-Control", resolved.CacheControl)
@@ -83,13 +81,15 @@ func (s *Server) handleStaticAsset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStaticAssetOptions(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.staticassets.Config()
-	if err != nil || !cfg.Enabled || cfg.PublicAssetID == "" {
+	resolved, err := s.staticassets.Open(r.PathValue("assetID"), r.PathValue("path"))
+	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
 		http.NotFound(w, r)
 		return
 	}
-	applyStaticCORS(w, cfg.CorsMode, cfg.AllowedOrigins, r)
+	defer resolved.Unlock()
+	defer resolved.File.Close()
+	applyStaticCORS(w, resolved.CorsMode, resolved.AllowedOrigins, r)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD")
 	w.Header().Set("Access-Control-Allow-Headers", staticCORSAllowedHeaders)
 	w.Header().Set("Access-Control-Max-Age", "600")
@@ -99,9 +99,9 @@ func (s *Server) handleStaticAssetOptions(w http.ResponseWriter, r *http.Request
 // --- 管理员：静态资源配置（AST-02/AST-10） ---
 
 func (s *Server) handleAdminGetStaticConfig(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.staticassets.Config()
+	cfg, err := s.staticassets.Config(r.PathValue("key"))
 	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询静态资源配置失败", nil)
+		writeStaticConfigError(w, r, err)
 		return
 	}
 	WriteData(w, r, cfg)
@@ -109,9 +109,13 @@ func (s *Server) handleAdminGetStaticConfig(w http.ResponseWriter, r *http.Reque
 
 func writeStaticConfigError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		WriteError(w, r, CodeSourceNotFound, "存储源不存在", nil)
 	case errors.Is(err, staticassets.ErrRebindRequired):
 		WriteError(w, r, CodeStaticRebindRequired, err.Error(), nil)
 	case errors.Is(err, staticassets.ErrAlreadyConfigured),
+		errors.Is(err, staticassets.ErrTargetConfigured),
+		errors.Is(err, staticassets.ErrDisableRequired),
 		errors.Is(err, staticassets.ErrNotConfigured),
 		errors.Is(err, staticassets.ErrRebindModeInvalid),
 		errors.Is(err, staticassets.ErrRelocateUnconfirmed),
@@ -127,7 +131,6 @@ func writeStaticConfigError(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *Server) handleAdminConfigureStatic(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceKey          string   `json:"source_key"`
 		PublishRoot        string   `json:"publish_root"`
 		CacheMode          string   `json:"cache_mode"`
 		CorsMode           string   `json:"cors_mode"`
@@ -140,7 +143,7 @@ func (s *Server) handleAdminConfigureStatic(w http.ResponseWriter, r *http.Reque
 	}
 	user := CurrentUser(r.Context())
 	cfg, err := s.staticassets.Configure(staticassets.ConfigureInput{
-		SourceKey:          req.SourceKey,
+		SourceKey:          r.PathValue("key"),
 		PublishRoot:        req.PublishRoot,
 		CacheMode:          req.CacheMode,
 		CorsMode:           req.CorsMode,
@@ -158,6 +161,8 @@ func (s *Server) handleAdminConfigureStatic(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handleAdminUpdateStaticConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		SourceKey        *string   `json:"source_key"`
+		PublishRoot      *string   `json:"publish_root"`
 		Enabled          *bool     `json:"enabled"`
 		CacheMode        *string   `json:"cache_mode"`
 		CorsMode         *string   `json:"cors_mode"`
@@ -168,7 +173,20 @@ func (s *Server) handleAdminUpdateStaticConfig(w http.ResponseWriter, r *http.Re
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if req.SourceKey != nil || req.PublishRoot != nil {
+		current, err := s.staticassets.Config(r.PathValue("key"))
+		if err != nil {
+			writeStaticConfigError(w, r, err)
+			return
+		}
+		if (req.SourceKey != nil && *req.SourceKey != current.SourceKey) ||
+			(req.PublishRoot != nil && *req.PublishRoot != current.PublishRoot) {
+			writeStaticConfigError(w, r, staticassets.ErrRebindRequired)
+			return
+		}
+	}
 	cfg, err := s.staticassets.Update(staticassets.UpdateInput{
+		SourceKey:        r.PathValue("key"),
 		Enabled:          req.Enabled,
 		CacheMode:        req.CacheMode,
 		CorsMode:         req.CorsMode,
@@ -197,7 +215,7 @@ func (s *Server) handleAdminRebindStatic(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	user := CurrentUser(r.Context())
-	cfg, err := s.staticassets.Rebind(staticassets.RebindInput{
+	cfg, err := s.staticassets.Rebind(r.PathValue("key"), staticassets.RebindInput{
 		SourceKey:          req.SourceKey,
 		PublishRoot:        req.PublishRoot,
 		Mode:               req.Mode,
@@ -214,14 +232,13 @@ func (s *Server) handleAdminRebindStatic(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleAdminPreflightStatic(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceKey   string `json:"source_key"`
 		PublishRoot string `json:"publish_root"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	result, err := s.staticassets.Preflight(staticassets.PreflightInput{
-		SourceKey:   req.SourceKey,
+		SourceKey:   r.PathValue("key"),
 		PublishRoot: req.PublishRoot,
 	})
 	if err != nil {
@@ -229,4 +246,19 @@ func (s *Server) handleAdminPreflightStatic(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	WriteData(w, r, result)
+}
+
+func (s *Server) handleAdminRemoveStaticConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ExpectedRevision int64 `json:"expected_revision"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.staticassets.Remove(r.PathValue("key"), req.ExpectedRevision); err != nil {
+		writeStaticConfigError(w, r, err)
+		return
+	}
+	s.adminAudit(r, "remove_static_access", audit.StatusSuccess, "")
+	WriteData(w, r, map[string]any{"ok": true})
 }

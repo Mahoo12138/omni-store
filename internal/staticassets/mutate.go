@@ -25,8 +25,9 @@ type ConfigureInput struct {
 	ConfirmPublishRoot bool
 }
 
-// UpdateInput 是普通配置修改；不允许更换 source/publish_root（409 STATIC_REBIND_REQUIRED）。
+// UpdateInput 修改指定源的协议策略，不包含发布位置修改。
 type UpdateInput struct {
+	SourceKey        string
 	Enabled          *bool
 	CacheMode        *string
 	CorsMode         *string
@@ -62,16 +63,16 @@ type PreflightResult struct {
 	Warnings        []string `json:"warnings"`
 }
 
-// Configure 首次创建发布空间：同一事务写入 binding（源 + enabled）与 settings。
+// Configure 为一个源创建独立发布配置。
 func (s *Service) Configure(in ConfigureInput, actorUserID *int64, auditLogger *audit.Logger) (*Config, error) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	snap, err := s.loadSnapshot()
+	snap, err := s.loadSnapshot("WHERE src.key = ?", in.SourceKey)
 	if err != nil {
 		return nil, err
 	}
-	if snap.publicAssetID != "" && snap.sourceID != nil {
+	if snap.publicAssetID != "" {
 		return nil, ErrAlreadyConfigured
 	}
 	src, err := s.sources.Get(in.SourceKey)
@@ -116,36 +117,31 @@ func (s *Service) Configure(in ConfigureInput, actorUserID *int64, auditLogger *
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC()
-	if _, err := tx.Exec(`UPDATE site_capability_bindings
-  SET enabled = 1, storage_source_id = ?, revision = revision + 1, updated_at = ?
-  WHERE capability = ?`, src.ID, now, CapabilityName); err != nil {
+	if _, err := tx.Exec(`INSERT INTO source_static_access
+ (storage_source_id, enabled, publish_root, public_asset_id, public_origin, cache_mode, cors_mode, revision, updated_at)
+ VALUES (?, 1, ?, ?, ?, ?, ?, 1, ?)`, src.ID, root, assetID, origin, in.CacheMode, in.CorsMode, now); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`UPDATE static_asset_settings
-  SET publish_root = ?, public_asset_id = ?, public_origin = ?, cache_mode = ?, cors_mode = ?, updated_at = ?
-  WHERE id = 1`, root, assetID, origin, in.CacheMode, in.CorsMode, now); err != nil {
-		return nil, err
-	}
-	if err := replaceOrigins(tx, origins); err != nil {
+	if err := replaceOrigins(tx, src.ID, origins); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	logConfigAudit(auditLogger, actorUserID, "static_assets_configure", src.Key, root, "")
-	return s.Config()
+	return s.Config(in.SourceKey)
 }
 
-// Update 修改显示性配置（enabled/cache/cors/origin）。更换发布空间返回 ErrRebindRequired。
+// Update 修改协议策略（enabled/cache/cors/origin），发布位置由 Rebind 管理。
 func (s *Service) Update(in UpdateInput) (*Config, error) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	snap, err := s.loadSnapshot()
+	snap, err := s.loadSnapshot("WHERE src.key = ?", in.SourceKey)
 	if err != nil {
 		return nil, err
 	}
-	if snap.sourceID == nil || snap.publicAssetID == "" {
+	if snap.publicAssetID == "" {
 		return nil, ErrNotConfigured
 	}
 	if in.ExpectedRevision != nil && *in.ExpectedRevision != snap.revision {
@@ -179,14 +175,9 @@ func (s *Service) Update(in UpdateInput) (*Config, error) {
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC()
-	if _, err := tx.Exec(`UPDATE site_capability_bindings
-  SET enabled = ?, revision = revision + 1, updated_at = ? WHERE capability = ?`,
-		enabled, now, CapabilityName); err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec(`UPDATE static_asset_settings
-  SET public_origin = ?, cache_mode = ?, cors_mode = ?, updated_at = ? WHERE id = 1`,
-		origin, cacheMode, corsMode, now); err != nil {
+	if _, err := tx.Exec(`UPDATE source_static_access
+ SET enabled = ?, public_origin = ?, cache_mode = ?, cors_mode = ?, revision = revision + 1, updated_at = ?
+ WHERE storage_source_id = ?`, enabled, origin, cacheMode, corsMode, now, snap.sourceID); err != nil {
 		return nil, err
 	}
 	if in.AllowedOrigins != nil {
@@ -194,27 +185,27 @@ func (s *Service) Update(in UpdateInput) (*Config, error) {
 		if normErr != nil {
 			return nil, normErr
 		}
-		if err := replaceOrigins(tx, origins); err != nil {
+		if err := replaceOrigins(tx, snap.sourceID, origins); err != nil {
 			return nil, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return s.Config()
+	return s.Config(in.SourceKey)
 }
 
 // Rebind 专用重绑：reset 生成新公开标识；relocate 显式确认后保留标识。
 // 普通配置 PUT 不允许静默更换 source/publish_root。
-func (s *Service) Rebind(in RebindInput, actorUserID *int64, auditLogger *audit.Logger) (*Config, error) {
+func (s *Service) Rebind(sourceKey string, in RebindInput, actorUserID *int64, auditLogger *audit.Logger) (*Config, error) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	snap, err := s.loadSnapshot()
+	snap, err := s.loadSnapshot("WHERE src.key = ?", sourceKey)
 	if err != nil {
 		return nil, err
 	}
-	if snap.sourceID == nil || snap.publicAssetID == "" {
+	if snap.publicAssetID == "" {
 		return nil, ErrNotConfigured
 	}
 	if in.ExpectedRevision != nil && *in.ExpectedRevision != snap.revision {
@@ -255,21 +246,26 @@ func (s *Service) Rebind(in RebindInput, actorUserID *int64, auditLogger *audit.
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC()
-	if _, err := tx.Exec(`UPDATE site_capability_bindings
-  SET enabled = 1, storage_source_id = ?, revision = revision + 1, updated_at = ?
-  WHERE capability = ?`, src.ID, now, CapabilityName); err != nil {
-		return nil, err
+	// 已配置的目标源不得被覆盖，事务中的主键约束也保护并发迁移。
+	if src.ID != snap.sourceID {
+		var count int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM source_static_access WHERE storage_source_id = ?`, src.ID).Scan(&count); err != nil {
+			return nil, err
+		}
+		if count != 0 {
+			return nil, ErrTargetConfigured
+		}
 	}
-	if _, err := tx.Exec(`UPDATE static_asset_settings
-  SET publish_root = ?, public_asset_id = ?, updated_at = ? WHERE id = 1`,
-		root, assetID, now); err != nil {
+	if _, err := tx.Exec(`UPDATE source_static_access
+ SET storage_source_id = ?, publish_root = ?, public_asset_id = ?, revision = revision + 1, updated_at = ?
+ WHERE storage_source_id = ?`, src.ID, root, assetID, now, snap.sourceID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	logConfigAudit(auditLogger, actorUserID, "static_assets_rebind_"+in.Mode, src.Key, root, "")
-	return s.Config()
+	return s.Config(in.SourceKey)
 }
 
 // Preflight 校验发布空间候选：源/目录存在可读，返回样例与告警；不创建、不写入。
@@ -302,7 +298,7 @@ func (s *Service) Preflight(in PreflightInput) (*PreflightResult, error) {
 	info, err := os.Lstat(absRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			result.Warnings = append(result.Warnings, "发布目录当前不存在；允许先保存配置，读取将返回 404，直到目录创建。")
+			result.Warnings = append(result.Warnings, "发布目录当前不存在；请先创建目录，再配置静态访问。")
 			return result, nil
 		}
 		return nil, err
@@ -334,7 +330,7 @@ func (s *Service) Preflight(in PreflightInput) (*PreflightResult, error) {
 		_ = regErr
 	}
 	if root == "" {
-		result.Warnings = append(result.Warnings, "发布根为存储源根目录：除托管命名空间与排除规则外全部内容可公开读取。")
+		result.Warnings = append(result.Warnings, "发布根为存储源根目录：其中受支持的媒体文件将公开读取；托管命名空间与排除项仍被隔离。")
 	}
 	return result, nil
 }
@@ -373,13 +369,13 @@ func verifyPublishRootDir(src *models.StorageSource, root string) error {
 	return nil
 }
 
-func replaceOrigins(tx *sql.Tx, origins []string) error {
-	if _, err := tx.Exec(`DELETE FROM static_asset_origins`); err != nil {
+func replaceOrigins(tx *sql.Tx, sourceID int64, origins []string) error {
+	if _, err := tx.Exec(`DELETE FROM source_static_origins WHERE storage_source_id = ?`, sourceID); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
 	for _, origin := range origins {
-		if _, err := tx.Exec(`INSERT INTO static_asset_origins (origin, created_at) VALUES (?, ?)`, origin, now); err != nil {
+		if _, err := tx.Exec(`INSERT INTO source_static_origins (storage_source_id, origin, created_at) VALUES (?, ?, ?)`, sourceID, origin, now); err != nil {
 			return err
 		}
 	}
@@ -395,4 +391,25 @@ func logConfigAudit(auditLogger *audit.Logger, actorUserID *int64, action, sourc
 		EntryType: audit.EntryAdmin, Action: action,
 		RelativePath: publishRoot, Status: audit.StatusSuccess, ErrorCode: errorCode,
 	})
+}
+
+// Remove 撤销该源的公开身份；只移除配置，不删除文件。必须先关闭协议。
+func (s *Service) Remove(sourceKey string, expectedRevision int64) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	snap, err := s.loadSnapshot("WHERE src.key = ?", sourceKey)
+	if err != nil {
+		return err
+	}
+	if snap.publicAssetID == "" {
+		return ErrNotConfigured
+	}
+	if snap.revision != expectedRevision {
+		return ErrRevisionConflict
+	}
+	if snap.enabled {
+		return ErrDisableRequired
+	}
+	_, err = s.db.Exec(`DELETE FROM source_static_access WHERE storage_source_id = ?`, snap.sourceID)
+	return err
 }

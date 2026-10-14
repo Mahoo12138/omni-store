@@ -135,13 +135,12 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 	if enabled != 1 || !sourceID.Valid || sourceID.Int64 != 2 {
 		t.Fatalf("image_bed binding = enabled %d source %v, want enabled 1 source 2", enabled, sourceID)
 	}
-	if err := conn.QueryRowContext(ctx,
-		`SELECT enabled, storage_source_id FROM site_capability_bindings WHERE capability = 'static_assets'`).
-		Scan(&enabled, &sourceID); err != nil {
+	var staticCount int
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM source_static_access`).Scan(&staticCount); err != nil {
 		t.Fatal(err)
 	}
-	if enabled != 0 || sourceID.Valid {
-		t.Fatalf("static_assets binding must default to disabled/unbound, got %d %v", enabled, sourceID)
+	if staticCount != 0 {
+		t.Fatal("upgrade must not automatically publish a source")
 	}
 
 	prefColumns := map[string]bool{}

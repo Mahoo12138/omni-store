@@ -11,7 +11,7 @@ const (
 // StorageSource 对应 storage_sources 表。
 // root_path 只对管理员可见，返回普通用户时必须裁剪。
 // 产品功能开关属于 Site Capability（site_capability_bindings），
-// 存储源只保留访问协议开关（WebDAV / S3）。
+// 存储源只保留访问协议开关（WebDAV / S3 / 静态 HTTP）。
 type StorageSource struct {
 	ID            int64     `json:"id"`
 	Key           string    `json:"key"`
@@ -21,6 +21,7 @@ type StorageSource struct {
 	IsDisabled    bool      `json:"is_disabled"`
 	WebdavEnabled bool      `json:"webdav_enabled"`
 	S3Enabled     bool      `json:"s3_enabled"`
+	StaticEnabled bool      `json:"static_enabled"` // 从 source_static_access 派生，只通过专用配置入口变更。
 	QuotaBytes    int64     `json:"quota_bytes"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

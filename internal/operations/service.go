@@ -1,4 +1,4 @@
-// Package operations 聚合 2.0 运维中心（Epic C）所需的状态与维护动作：
+// Package operations 聚合 2.0 仪表盘所需的状态与维护动作：
 // 系统/数据库/存储源/站点能力健康、缓存与回收站统计、流转活跃用量、
 // 最近失败审计；提供一次性清理编排与 SQLite 完整性检查。
 package operations
@@ -40,7 +40,7 @@ type Service struct {
 // multipartCleanupFunc 是 S3 Multipart 清理的窄函数签名。
 type multipartCleanupFunc func(maxAge time.Duration) (uploads, orphans, parts int64, err error)
 
-// NewService 创建运维中心服务。sessions/multipart 可为 nil（对应能力关闭）。
+// NewService 创建运行维护服务。sessions/multipart 可为 nil（对应能力关闭）。
 func NewService(db *sql.DB, dbPath, dataDir, version string, sources *sources.Service,
 	files *files.Service, thumbnails *imagebed.Service, transfers *transfers.Service,
 	sessions *auth.Sessions, multipart multipartCleanupFunc) *Service {
@@ -55,6 +55,7 @@ func NewService(db *sql.DB, dbPath, dataDir, version string, sources *sources.Se
 type SourceHealth struct {
 	Key             string `json:"key"`
 	Name            string `json:"name"`
+	RootPath        string `json:"root_path"`
 	Disabled        bool   `json:"disabled"`
 	RootAccessible  bool   `json:"root_accessible"`
 	UsageBytes      int64  `json:"usage_bytes"`
@@ -64,6 +65,7 @@ type SourceHealth struct {
 	ActiveTransfers int64  `json:"active_transfers"`
 	WebdavEnabled   bool   `json:"webdav_enabled"`
 	S3Enabled       bool   `json:"s3_enabled"`
+	StaticEnabled   bool   `json:"static_enabled"`
 	RootIssue       string `json:"root_issue,omitempty"`
 }
 
@@ -103,7 +105,7 @@ type StorageExtras struct {
 	MultipartUploads    int64 `json:"multipart_uploads"`
 }
 
-// Status 是运维中心全量状态。
+// Status 是仪表盘使用的全量健康状态。
 type Status struct {
 	Version      string             `json:"version"`
 	DataDir      string             `json:"data_dir"`
@@ -178,9 +180,9 @@ func (s *Service) fillSources(status *Status) error {
 	}
 	for _, src := range list {
 		health := SourceHealth{
-			Key: src.Key, Name: src.Name, Disabled: src.IsDisabled,
+			Key: src.Key, Name: src.Name, RootPath: src.RootPath, Disabled: src.IsDisabled,
 			QuotaBytes:    src.QuotaBytes,
-			WebdavEnabled: src.WebdavEnabled, S3Enabled: src.S3Enabled,
+			WebdavEnabled: src.WebdavEnabled, S3Enabled: src.S3Enabled, StaticEnabled: src.StaticEnabled,
 		}
 		root, rootErr := security.ResolveInSource(src.RootPath, "")
 		if rootErr == nil {

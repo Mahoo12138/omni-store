@@ -60,13 +60,14 @@ func (s *Service) DataDir() string {
 }
 
 const sourceColumns = `id, key, name, description, root_path, is_disabled,
-  webdav_enabled, s3_enabled, quota_bytes, created_at, updated_at`
+  webdav_enabled, s3_enabled, quota_bytes, created_at, updated_at,
+ COALESCE((SELECT enabled FROM source_static_access WHERE storage_source_id = storage_sources.id), 0)`
 
 func scanSource(row interface{ Scan(...any) error }) (*models.StorageSource, error) {
 	var s models.StorageSource
 	var desc sql.NullString
 	err := row.Scan(&s.ID, &s.Key, &s.Name, &desc, &s.RootPath, &s.IsDisabled,
-		&s.WebdavEnabled, &s.S3Enabled, &s.QuotaBytes, &s.CreatedAt, &s.UpdatedAt)
+		&s.WebdavEnabled, &s.S3Enabled, &s.QuotaBytes, &s.CreatedAt, &s.UpdatedAt, &s.StaticEnabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

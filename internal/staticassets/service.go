@@ -1,11 +1,12 @@
 // Package staticassets 实现 2.0 静态资源托管：
-// 站点单例发布空间（source + publish_root），固定公开标识 /assets/{public_asset_id}/{path}，
+// 每个存储源独立配置匿名只读 HTTP，固定公开标识 /assets/{public_asset_id}/{path}，
 // 普通文件直接公开读取，不依赖公开盘、Share 或 images 台账。
 // 设计契约见 docs/design/static-assets.md 与 docs/design/public-content-http.md。
 package staticassets
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,11 +14,9 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
-	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/files"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
-	"github.com/omni-store/omnistore/internal/sources"
 )
 
 // 缓存档位与跨域档位（public-content-http §3/§4）。
@@ -31,14 +30,14 @@ const (
 	CorsAllowlist = "allowlist"
 )
 
-// CapabilityName 是静态资源在 site_capability_bindings 中的标识。
-const CapabilityName = capabilities.CapabilityStaticAssets
-
 var (
+	ErrDisableRequired = errors.New("请先关闭静态 HTTP 访问，再移除配置")
 	// ErrNotConfigured 尚未配置发布空间。
 	ErrNotConfigured = errors.New("静态资源尚未配置发布空间")
 	// ErrAlreadyConfigured 已存在发布空间；更换 source/root 必须走 rebind。
 	ErrAlreadyConfigured = errors.New("静态资源已配置，更换发布空间必须走重绑流程")
+	// ErrTargetConfigured 跨源重绑不得覆盖目标已有的独立发布空间。
+	ErrTargetConfigured = errors.New("目标存储源已有静态访问配置，不能覆盖")
 	// ErrRebindRequired 普通 PUT 不允许静默更换发布空间（409 STATIC_REBIND_REQUIRED）。
 	ErrRebindRequired = errors.New("更换发布空间必须使用专用重绑操作")
 	// ErrRebindModeInvalid 重绑模式必须是 reset 或 relocate。
@@ -57,18 +56,18 @@ var (
 	ErrRevisionConflict = errors.New("静态资源配置已被其他人修改")
 )
 
-// configMu 串行化生命周期/配置变更（同一事务写入 binding + settings + revision）。
-var configMu sync.Mutex
+// configMu 保护配置变更及打开文件的短临界区；下载使用已打开文件。
+var configMu sync.RWMutex
 
 // Config 是静态资源配置的一致性快照。
 type Config struct {
 	Enabled        bool      `json:"enabled"`
 	SourceKey      string    `json:"source_key"`
 	SourceName     string    `json:"source_name"`
-	SourceDisabled bool      `json:"-"`
+	SourceDisabled bool      `json:"source_disabled"`
 	PublishRoot    string    `json:"publish_root"`
 	PublicAssetID  string    `json:"public_asset_id"`
-	PublicOrigin   string    `json:"public_origin,omitempty"`
+	PublicOrigin   string    `json:"public_origin"`
 	BaseURL        string    `json:"base_url"`
 	CacheMode      string    `json:"cache_mode"`
 	CorsMode       string    `json:"cors_mode"`
@@ -101,83 +100,71 @@ func NewService(db *sql.DB, sources sourcesLookup, fileSvc *files.Service, insta
 	return &Service{db: db, sources: sources, files: fileSvc, instanceURL: strings.TrimRight(instanceURL, "/")}
 }
 
-// snapshotColumns 一次读取 binding + settings，保证同一请求使用同一配置快照。
-const snapshotQuery = `SELECT b.enabled, b.storage_source_id, b.revision, b.updated_at,
-  s.publish_root, COALESCE(s.public_asset_id, ''), COALESCE(s.public_origin, ''),
-  s.cache_mode, s.cors_mode
-FROM site_capability_bindings b
-JOIN static_asset_settings s ON s.id = 1
-WHERE b.capability = ?`
+// 一条 SQL 读取源状态、配置与 CORS 白名单，避免请求途中混用不同版本。
+const snapshotQuery = `SELECT src.id, src.key, src.name, src.is_disabled,
+  COALESCE(a.enabled, 0), COALESCE(a.revision, 0), src.updated_at, a.updated_at,
+  COALESCE(a.publish_root, ''), COALESCE(a.public_asset_id, ''), COALESCE(a.public_origin, ''),
+  COALESCE(a.cache_mode, 'short'), COALESCE(a.cors_mode, 'public'),
+  (SELECT json_group_array(origin) FROM
+    (SELECT origin FROM source_static_origins WHERE storage_source_id = src.id ORDER BY origin))
+FROM storage_sources src LEFT JOIN source_static_access a ON a.storage_source_id = src.id
+`
 
 type snapshot struct {
-	enabled       bool
-	sourceID      *int64
-	revision      int64
-	updatedAt     time.Time
-	publishRoot   string
-	publicAssetID string
-	publicOrigin  string
-	cacheMode     string
-	corsMode      string
+	enabled        bool
+	sourceID       int64
+	sourceKey      string
+	sourceName     string
+	sourceDisabled bool
+	revision       int64
+	updatedAt      time.Time
+	publishRoot    string
+	publicAssetID  string
+	publicOrigin   string
+	cacheMode      string
+	corsMode       string
+	allowedOrigins []string
 }
 
-func (s *Service) loadSnapshot() (*snapshot, error) {
+func (s *Service) loadSnapshot(where string, value string) (*snapshot, error) {
 	var snap snapshot
-	var sourceID sql.NullInt64
-	err := s.db.QueryRow(snapshotQuery, CapabilityName).Scan(
-		&snap.enabled, &sourceID, &snap.revision, &snap.updatedAt,
+	var originsJSON string
+	var configuredAt sql.NullTime
+	err := s.db.QueryRow(snapshotQuery+where, value).Scan(
+		&snap.sourceID, &snap.sourceKey, &snap.sourceName, &snap.sourceDisabled,
+		&snap.enabled, &snap.revision, &snap.updatedAt, &configuredAt,
 		&snap.publishRoot, &snap.publicAssetID, &snap.publicOrigin,
-		&snap.cacheMode, &snap.corsMode)
+		&snap.cacheMode, &snap.corsMode, &originsJSON)
 	if err != nil {
 		return nil, err
 	}
-	if sourceID.Valid {
-		snap.sourceID = &sourceID.Int64
+	if configuredAt.Valid {
+		snap.updatedAt = configuredAt.Time
+	}
+	if err := json.Unmarshal([]byte(originsJSON), &snap.allowedOrigins); err != nil {
+		return nil, err
 	}
 	return &snap, nil
 }
 
-// Config 返回当前配置视图。base_url 按 public_origin（缺省时用实例 origin）拼接。
-func (s *Service) Config() (*Config, error) {
-	snap, err := s.loadSnapshot()
+// Config 返回指定存储源的配置；未配置的源默认关闭。
+func (s *Service) Config(sourceKey string) (*Config, error) {
+	snap, err := s.loadSnapshot("WHERE src.key = ?", sourceKey)
 	if err != nil {
 		return nil, err
 	}
-	return s.view(snap)
+	return s.view(snap), nil
 }
 
-func (s *Service) view(snap *snapshot) (*Config, error) {
-	cfg := &Config{
-		Enabled:        snap.enabled,
-		PublishRoot:    snap.publishRoot,
-		PublicAssetID:  snap.publicAssetID,
-		PublicOrigin:   snap.publicOrigin,
-		CacheMode:      snap.cacheMode,
-		CorsMode:       snap.corsMode,
-		AllowedOrigins: []string{},
-		Revision:       snap.revision,
-		UpdatedAt:      snap.updatedAt,
+func (s *Service) view(snap *snapshot) *Config {
+	return &Config{
+		Enabled: snap.enabled, SourceKey: snap.sourceKey, SourceName: snap.sourceName,
+		SourceDisabled: snap.sourceDisabled, PublishRoot: snap.publishRoot,
+		PublicAssetID: snap.publicAssetID, PublicOrigin: snap.publicOrigin,
+		CacheMode: snap.cacheMode, CorsMode: snap.corsMode, AllowedOrigins: snap.allowedOrigins,
+		Revision: snap.revision, UpdatedAt: snap.updatedAt,
+		BaseURL: s.BaseURL(snap.publicOrigin, snap.publicAssetID),
 	}
-	origins, err := s.allowedOrigins()
-	if err != nil {
-		return nil, err
-	}
-	cfg.AllowedOrigins = origins
-	if snap.sourceID != nil {
-		src, err := s.sources.GetByID(*snap.sourceID)
-		switch {
-		case err == nil:
-			cfg.SourceKey = src.Key
-			cfg.SourceName = src.Name
-			cfg.SourceDisabled = src.IsDisabled
-		case errors.Is(err, sources.ErrNotFound):
-			// 绑定的源已被删除（数据库层 RESTRICT 之外的历史数据）：按未配置处理。
-		default:
-			return nil, err
-		}
-	}
-	cfg.BaseURL = s.BaseURL(cfg.PublicOrigin, cfg.PublicAssetID)
-	return cfg, nil
 }
 
 // BaseURL 计算对外资源根：public_origin + /assets/{id}/，末尾固定有 /。
@@ -190,23 +177,6 @@ func (s *Service) BaseURL(publicOrigin, assetID string) string {
 		return ""
 	}
 	return strings.TrimRight(origin, "/") + "/assets/" + assetID + "/"
-}
-
-func (s *Service) allowedOrigins() ([]string, error) {
-	rows, err := s.db.Query(`SELECT origin FROM static_asset_origins ORDER BY origin`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var origin string
-		if err := rows.Scan(&origin); err != nil {
-			return nil, err
-		}
-		out = append(out, origin)
-	}
-	return out, rows.Err()
 }
 
 // NormalizePublicOrigin 校验可选的对外 origin：仅 scheme://host[:port]，不含

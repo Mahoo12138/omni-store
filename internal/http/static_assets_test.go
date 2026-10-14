@@ -71,7 +71,7 @@ func newStaticHTTPFixture(t *testing.T) *staticFixture {
 
 func (f *staticFixture) configure(t *testing.T, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	return serveTestRequest(t, f.handler, http.MethodPost, "/api/v1/admin/static-assets/config", body, f.cookie, f.csrf)
+	return serveTestRequest(t, f.handler, http.MethodPost, "/api/v1/admin/sources/"+f.source.Key+"/static-access/config", body, f.cookie, f.csrf)
 }
 
 func decodeStaticConfig(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
@@ -86,7 +86,7 @@ func decodeStaticConfig(t *testing.T, recorder *httptest.ResponseRecorder) map[s
 // 端到端：配置发布空间 → 普通上传写入发布目录 → /assets/{id}/{path} 公开读取。
 func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 	fixture := newStaticHTTPFixture(t)
-	created := fixture.configure(t, `{"source_key":"`+fixture.source.Key+`","publish_root":"blog-assets"}`)
+	created := fixture.configure(t, `{"publish_root":"blog-assets"}`)
 	if created.Code != http.StatusOK {
 		t.Fatalf("configure status=%d body=%s", created.Code, created.Body.String())
 	}
@@ -237,7 +237,7 @@ func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 	}
 
 	// 关闭服务：后续原站请求 404；重新开启恢复。
-	disabled := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/static-assets/config",
+	disabled := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/sources/"+fixture.source.Key+"/static-access/config",
 		`{"enabled":false}`, fixture.cookie, fixture.csrf)
 	if disabled.Code != http.StatusOK {
 		t.Fatalf("disable status=%d body=%s", disabled.Code, disabled.Body.String())
@@ -245,7 +245,7 @@ func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 	if resp := serveTestRequest(t, fixture.handler, http.MethodGet, base+"/posts/cover.png", "", nil, ""); resp.Code != http.StatusNotFound {
 		t.Fatalf("disabled GET status=%d", resp.Code)
 	}
-	enabledResp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/static-assets/config",
+	enabledResp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/sources/"+fixture.source.Key+"/static-access/config",
 		`{"enabled":true}`, fixture.cookie, fixture.csrf)
 	if enabledResp.Code != http.StatusOK {
 		t.Fatalf("enable status=%d", enabledResp.Code)
@@ -258,7 +258,7 @@ func TestStaticAssetsPublicServingLifecycle(t *testing.T) {
 // CORS：public 通配、allowlist 精确匹配 + Vary、none 不加头；预检只开放 GET/HEAD。
 func TestStaticAssetsCORS(t *testing.T) {
 	fixture := newStaticHTTPFixture(t)
-	created := fixture.configure(t, `{"source_key":"`+fixture.source.Key+`","publish_root":"blog-assets"}`)
+	created := fixture.configure(t, `{"publish_root":"blog-assets"}`)
 	if created.Code != http.StatusOK {
 		t.Fatal(created.Body.String())
 	}
@@ -279,7 +279,7 @@ func TestStaticAssetsCORS(t *testing.T) {
 
 	// allowlist：精确匹配才返回 ACAO 并带 Vary。
 	allowlist := `{"cors_mode":"allowlist","allowed_origins":["https://blog.example.net"]}`
-	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/static-assets/config", allowlist, fixture.cookie, fixture.csrf); resp.Code != http.StatusOK {
+	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/sources/"+fixture.source.Key+"/static-access/config", allowlist, fixture.cookie, fixture.csrf); resp.Code != http.StatusOK {
 		t.Fatalf("allowlist config status=%d body=%s", resp.Code, resp.Body.String())
 	}
 	matched := httptest.NewRequest(http.MethodGet, base+"/a.png", nil)
@@ -299,9 +299,12 @@ func TestStaticAssetsCORS(t *testing.T) {
 	if got := foreignRec.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("foreign origin ACAO=%q, want empty", got)
 	}
+	if !strings.Contains(foreignRec.Header().Get("Vary"), "Origin") {
+		t.Fatal("allowlist responses must vary by Origin even when the origin is denied")
+	}
 
 	// none：不加 CORS 头（不等于阻止普通 <img> 嵌入）。
-	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/static-assets/config",
+	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/sources/"+fixture.source.Key+"/static-access/config",
 		`{"cors_mode":"none"}`, fixture.cookie, fixture.csrf); resp.Code != http.StatusOK {
 		t.Fatal(resp.Body.String())
 	}
@@ -314,7 +317,7 @@ func TestStaticAssetsCORS(t *testing.T) {
 	}
 
 	// 预检：只允许 GET/HEAD，不含凭据与写方法。
-	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/static-assets/config",
+	if resp := serveTestRequest(t, fixture.handler, http.MethodPut, "/api/v1/admin/sources/"+fixture.source.Key+"/static-access/config",
 		`{"cors_mode":"public"}`, fixture.cookie, fixture.csrf); resp.Code != http.StatusOK {
 		t.Fatal(resp.Body.String())
 	}
@@ -337,7 +340,7 @@ func TestStaticAssetsCORS(t *testing.T) {
 // AST-11：公开盘关闭/未绑定时静态资源照常工作。
 func TestStaticAssetsIndependentOfPublicDrive(t *testing.T) {
 	fixture := newStaticHTTPFixture(t)
-	created := fixture.configure(t, `{"source_key":"`+fixture.source.Key+`","publish_root":"blog-assets"}`)
+	created := fixture.configure(t, `{"publish_root":"blog-assets"}`)
 	assetID, _ := decodeStaticConfig(t, created)["public_asset_id"].(string)
 	if err := os.WriteFile(filepath.Join(fixture.sourceRoot, "blog-assets", "a.png"), []byte(staticPNG), 0o600); err != nil {
 		t.Fatal(err)
@@ -364,9 +367,9 @@ func TestStaticAssetsIndependentOfPublicDrive(t *testing.T) {
 		t.Fatalf("managed via assets status=%d", resp.Code)
 	}
 
-	// 绑定记录：static_assets 能力已绑定且 enabled。
+	// 静态 HTTP 不再是站点能力。
 	bindings := serveTestRequest(t, fixture.handler, http.MethodGet, "/api/v1/admin/capabilities", "", fixture.cookie, "")
-	if !strings.Contains(bindings.Body.String(), `"capability":"static_assets"`) {
+	if strings.Contains(bindings.Body.String(), `"capability":"static_assets"`) {
 		t.Fatalf("capabilities body=%s", bindings.Body.String())
 	}
 }

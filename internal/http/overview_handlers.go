@@ -1,48 +1,17 @@
 package httpserver
 
 import (
-	"database/sql"
 	"net/http"
+	"os"
 	"strings"
 
-	"github.com/omni-store/omnistore/internal/audit"
 	"github.com/omni-store/omnistore/internal/buildinfo"
+	"github.com/omni-store/omnistore/internal/capabilities"
+	"github.com/omni-store/omnistore/internal/operations"
 )
 
-// 概览数据项
-type overviewUser struct {
-	ID              int64  `json:"id"`
-	Username        string `json:"username"`
-	DisplayName     string `json:"display_name"`
-	Role            string `json:"role"`
-	IsDisabled      bool   `json:"is_disabled"`
-	PermissionCount int    `json:"permission_count"` // -1 表示全部
-	PermissionAll   bool   `json:"permission_all"`
-}
-
-type overviewSource struct {
-	Key           string `json:"key"`
-	Name          string `json:"name"`
-	RootPath      string `json:"root_path"`
-	WebdavEnabled bool   `json:"webdav_enabled"`
-	S3Enabled     bool   `json:"s3_enabled"`
-	IsDisabled    bool   `json:"is_disabled"`
-}
-
-type overviewAudit struct {
-	ID         int64   `json:"id"`
-	Action     string  `json:"action"`
-	Status     string  `json:"status"`
-	ActorName  string  `json:"actor_name"`
-	ActorType  string  `json:"actor_type"`
-	SourceName *string `json:"source_name,omitempty"`
-	CreatedAt  string  `json:"created_at"`
-	HumanTitle string  `json:"title"`
-}
-
+// overviewSystem 是健康快照之外的连接配置。
 type overviewSystem struct {
-	Version      string `json:"version"`
-	DataDir      string `json:"data_dir"`
 	HTTPAddr     string `json:"http_addr"`
 	PublicURL    string `json:"public_url"`
 	S3Enabled    bool   `json:"s3_enabled"`
@@ -51,149 +20,33 @@ type overviewSystem struct {
 }
 
 type overviewResponse struct {
-	SourceCount         int64            `json:"source_count"`
-	UserCount           int64            `json:"user_count"`
-	PublicDriveEnabled  bool             `json:"public_drive_enabled"`
-	AnonymousImageBedOn bool             `json:"anonymous_image_bed_on"`
-	Sources             []overviewSource `json:"sources"`
-	Users               []overviewUser   `json:"users"`
-	RecentAudits        []overviewAudit  `json:"recent_audits"`
-	System              overviewSystem   `json:"system"`
+	System              overviewSystem     `json:"system"`
+	Operations          *operations.Status `json:"operations"`
+	AnonymousImageBedOn bool               `json:"anonymous_image_bed_on"`
 }
 
-// handleAdminOverview 聚合 dashboard 概览数据，减少前端首屏请求。
+// handleAdminOverview 复用运维服务的全量快照，仪表盘只需一个聚合请求。
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
+	status, err := s.operations.GetStatus()
+	if err != nil {
+		WriteError(w, r, CodeInternalError, "加载仪表盘状态失败", nil)
+		return
+	}
 	out := overviewResponse{
-		Sources:      []overviewSource{},
-		Users:        []overviewUser{},
-		RecentAudits: []overviewAudit{},
+		Operations: status,
+		System: overviewSystem{
+			HTTPAddr:     s.cfg.Server.HTTPAddr,
+			PublicURL:    s.cfg.Server.PublicURL,
+			S3Enabled:    s.cfg.Server.S3Enabled,
+			S3Status:     ternary(s.cfg.Server.S3Enabled, "已启用", "未启用"),
+			WebdavStatus: "已启用",
+		},
 	}
-
-	// 1) 统计：存储源 / 用户 / 公开盘状态
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM storage_sources`).Scan(&out.SourceCount); err != nil {
-		WriteError(w, r, CodeInternalError, "查询存储源数量失败", nil)
-		return
-	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&out.UserCount); err != nil {
-		WriteError(w, r, CodeInternalError, "查询用户数量失败", nil)
-		return
-	}
-	if _, err := s.capabilities.ResolveSource("public_drive"); err == nil {
-		out.PublicDriveEnabled = true
-	}
-
-	// 2) 匿名图床：读 system_settings
 	var val string
 	if err := s.db.QueryRow(`SELECT value FROM system_settings WHERE key = 'anonymous_image_bed_enabled'`).Scan(&val); err == nil {
 		out.AnonymousImageBedOn = val == "1" || strings.EqualFold(val, "true")
 	}
-
-	// 3) 存储源列表（限制 4 条与首页表格接近）
-	srcRows, err := s.db.Query(`SELECT key, name, root_path, webdav_enabled, s3_enabled, is_disabled
-  FROM storage_sources ORDER BY id LIMIT 4`)
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
-		return
-	}
-	for srcRows.Next() {
-		var os overviewSource
-		if err := srcRows.Scan(&os.Key, &os.Name, &os.RootPath, &os.WebdavEnabled, &os.S3Enabled, &os.IsDisabled); err != nil {
-			srcRows.Close()
-			WriteError(w, r, CodeInternalError, "查询存储源失败", nil)
-			return
-		}
-		out.Sources = append(out.Sources, os)
-	}
-	srcRows.Close()
-
-	// 4) 用户列表（带权限数）
-	users, err := s.users.List()
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询用户失败", nil)
-		return
-	}
-	permCounts, err := loadPermissionCounts(s.db)
-	if err != nil {
-		WriteError(w, r, CodeInternalError, "查询权限统计失败", nil)
-		return
-	}
-	for _, u := range users {
-		ou := overviewUser{
-			ID: u.ID, Username: u.Username, DisplayName: u.DisplayName,
-			Role: u.Role, IsDisabled: u.IsDisabled,
-			PermissionAll: u.Role == "super_admin",
-		}
-		if u.Role == "super_admin" {
-			ou.PermissionCount = -1
-		} else {
-			ou.PermissionCount = permCounts[u.ID]
-		}
-		out.Users = append(out.Users, ou)
-	}
-
-	// 5) 最近审计日志（4 条，ascending 顺序）
-	if aRows, err := s.audit.Recent(200); err == nil {
-		uname := map[int64]string{}
-		for _, u := range users {
-			uname[u.ID] = u.Username
-		}
-		count := 0
-		for i := len(aRows) - 1; i >= 0 && count < 4; i-- {
-			e := aRows[i]
-			oa := overviewAudit{
-				ID: e.ID, Action: e.Action, Status: e.Status,
-				ActorType: e.ActorType, CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
-				HumanTitle: humanizeAuditAction(e),
-			}
-			if e.StorageSourceName != nil && *e.StorageSourceName != "" {
-				name := *e.StorageSourceName
-				oa.SourceName = &name
-			}
-			if e.ActorType == audit.ActorUser && e.ActorUserID != nil {
-				oa.ActorName = uname[*e.ActorUserID]
-			} else if e.ActorType == audit.ActorAnonymous {
-				oa.ActorName = "匿名"
-			} else {
-				oa.ActorName = "系统"
-			}
-			out.RecentAudits = append(out.RecentAudits, oa)
-			count++
-		}
-	}
-
-	// 6) 系统状态
-	out.System = overviewSystem{
-		Version:      buildinfo.Version,
-		DataDir:      s.cfg.Data.Dir,
-		HTTPAddr:     s.cfg.Server.HTTPAddr,
-		PublicURL:    s.cfg.Server.PublicURL,
-		S3Enabled:    s.cfg.Server.S3Enabled,
-		S3Status:     ternary(s.cfg.Server.S3Enabled, "已启用", "未启用"),
-		WebdavStatus: "已启用",
-	}
-
 	WriteData(w, r, out)
-}
-
-func loadPermissionCounts(db *sql.DB) (map[int64]int, error) {
-	rows, err := db.Query(`SELECT up.user_id, COUNT(DISTINCT ps.storage_source_id)
-  FROM user_access_policies up
-  JOIN access_policy_sources ps ON ps.policy_id = up.policy_id
-  GROUP BY up.user_id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[int64]int{}
-	for rows.Next() {
-		var uid int64
-		var n int
-		if err := rows.Scan(&uid, &n); err != nil {
-			return nil, err
-		}
-		out[uid] = n
-	}
-	return out, rows.Err()
 }
 
 func ternary(b bool, yes, no string) string {
@@ -205,33 +58,53 @@ func ternary(b bool, yes, no string) string {
 
 // --- 公开系统状态（docs/home-1.png 右栏"系统状态"）---
 
-type systemStatusResponse struct {
-	S3 struct {
-		Enabled bool   `json:"enabled"`
-		Status  string `json:"status"`
-		Hint    string `json:"hint"`
-	} `json:"s3"`
-	WebDAV struct {
-		Enabled bool   `json:"enabled"`
-		Status  string `json:"status"`
-		Hint    string `json:"hint"`
-	} `json:"webdav"`
-	FilePreview struct {
-		Enabled bool   `json:"enabled"`
-		Status  string `json:"status"`
-		Hint    string `json:"hint"`
-	} `json:"file_preview"`
-	Anonymous struct {
-		Enabled bool   `json:"enabled"`
-		Status  string `json:"status"`
-		Hint    string `json:"hint"`
-	} `json:"anonymous"`
-	Version      string `json:"version"`
-	PublicURL    string `json:"public_url"`
-	InstanceName string `json:"instance_name"`
+type systemStatusFlag struct {
+	Enabled bool   `json:"enabled"`
+	Status  string `json:"status"`
+	Hint    string `json:"hint"`
 }
 
-// handleSystemStatus 返回系统功能开关，供登录后首页右栏使用。
+type systemStatusResponse struct {
+	S3             systemStatusFlag `json:"s3"`
+	WebDAV         systemStatusFlag `json:"webdav"`
+	FilePreview    systemStatusFlag `json:"file_preview"`
+	Anonymous      systemStatusFlag `json:"anonymous"`
+	PublicDrive    systemStatusFlag `json:"public_drive"`
+	ImageBed       systemStatusFlag `json:"image_bed"`
+	TransferCenter systemStatusFlag `json:"transfer_center"`
+	Version        string           `json:"version"`
+	PublicURL      string           `json:"public_url"`
+	InstanceName   string           `json:"instance_name"`
+}
+
+// siteServiceStatus 描述当前绑定是否可用，状态不泄露源身份、路径或底层错误。
+// 它只反映当前服务入口；已有图床文件与流转任务继续使用各自记录中的源。
+func (s *Server) siteServiceStatus(capability, availableHint string) systemStatusFlag {
+	binding, err := s.capabilities.GetBinding(capability)
+	if err != nil {
+		return systemStatusFlag{Status: "暂不可用", Hint: "站点服务状态暂不可用"}
+	}
+	if binding.StorageSourceID == nil {
+		return systemStatusFlag{Status: "未绑定", Hint: "管理员尚未配置服务存储源"}
+	}
+	if !binding.Enabled {
+		return systemStatusFlag{Status: "已关闭", Hint: "站点服务当前未开启"}
+	}
+	source, err := s.sources.GetByID(*binding.StorageSourceID)
+	if err != nil {
+		return systemStatusFlag{Status: "存储源不可用", Hint: "绑定的存储源暂不可用"}
+	}
+	if source.IsDisabled {
+		return systemStatusFlag{Status: "存储源已禁用", Hint: "绑定的存储源当前已禁用"}
+	}
+	root, err := os.Stat(source.RootPath)
+	if err != nil || !root.IsDir() {
+		return systemStatusFlag{Status: "目录不可用", Hint: "绑定的存储目录暂不可用"}
+	}
+	return systemStatusFlag{Enabled: true, Status: "已启用", Hint: availableHint}
+}
+
+// handleSystemStatus 返回系统功能与站点服务的实际可用状态。
 // 不需要鉴权，只暴露开关与状态描述。
 func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	out := systemStatusResponse{Version: buildinfo.Version, PublicURL: s.cfg.Server.PublicURL,
@@ -252,132 +125,21 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	out.FilePreview.Status = "已启用"
 	out.FilePreview.Hint = "文件预览服务运行正常"
 
-	// 匿名图床：读 system_settings.anonymous_image_bed_enabled
-	var val string
-	if err := s.db.QueryRow(`SELECT value FROM system_settings WHERE key = 'anonymous_image_bed_enabled'`).Scan(&val); err == nil {
-		anonOn := val == "1" || strings.EqualFold(val, "true")
-		out.Anonymous.Enabled = anonOn
-		out.Anonymous.Status = ternary(anonOn, "已启用", "未启用")
+	out.PublicDrive = s.siteServiceStatus(capabilities.CapabilityPublicDrive, "可匿名浏览和下载公开文件")
+	out.ImageBed = s.siteServiceStatus(capabilities.CapabilityImageBed, "登录用户可上传图片")
+	out.TransferCenter = s.siteServiceStatus(capabilities.CapabilityTransferCenter, "访客和登录用户均可创建发件包和收集任务；已有链接按各自授权访问")
+
+	// 匿名上传还依赖图床当前绑定可用，不能把保存的入口开关当作可上传状态。
+	anonymous, err := s.imagebed.GetAnonymousSettings()
+	if err != nil {
+		out.Anonymous = systemStatusFlag{Status: "暂不可用", Hint: "匿名上传状态暂不可用"}
+	} else if !anonymous.Enabled {
+		out.Anonymous = systemStatusFlag{Status: "未启用", Hint: "匿名上传未启用"}
+	} else if !out.ImageBed.Enabled {
+		out.Anonymous = systemStatusFlag{Status: "暂不可用", Hint: "图床服务当前不可用，匿名上传暂不可用"}
 	} else {
-		out.Anonymous.Enabled = false
-		out.Anonymous.Status = "未启用"
+		out.Anonymous = systemStatusFlag{Enabled: true, Status: "已启用", Hint: "可匿名上传图片；已有图片按保留策略提供访问"}
 	}
-	out.Anonymous.Hint = "匿名访问与匿名上传未启用"
 
 	WriteData(w, r, out)
-}
-
-// humanizeAuditAction 把审计日志翻译成短句（仅标题，详细信息看列表）。
-func humanizeAuditAction(e *audit.LogEntry) string {
-	filename := ""
-	if e.RelativePath != nil && *e.RelativePath != "" {
-		p := *e.RelativePath
-		if i := strings.LastIndex(p, "/"); i >= 0 {
-			filename = p[i+1:]
-		} else {
-			filename = p
-		}
-	}
-	switch e.Action {
-	case "create_source":
-		return "新建存储源"
-	case "update_source":
-		return "更新存储源"
-	case "delete_source":
-		return "删除存储源"
-	case "enable_source":
-		return "启用存储源"
-	case "disable_source":
-		return "禁用存储源"
-	case "update_exclude_patterns":
-		return "更新排除规则"
-	case "create_user":
-		return "创建用户"
-	case "delete_user":
-		return "删除用户"
-	case "enable_user":
-		return "启用用户"
-	case "disable_user":
-		return "禁用用户"
-	case "revoke_user_credentials":
-		return "撤销用户全部凭据"
-	case "create_access_policy":
-		return "创建访问策略"
-	case "update_access_policy":
-		return "更新访问策略"
-	case "delete_access_policy":
-		return "删除访问策略"
-	case "image_upload":
-		if filename != "" {
-			return "上传图片 " + filename
-		}
-		return "上传图片"
-	case "image_delete":
-		return "删除图片"
-	case "delete_anonymous_image":
-		return "删除匿名图片"
-	case "upload":
-		if filename != "" {
-			return "上传文件 " + filename
-		}
-		return "上传文件"
-	case "delete":
-		if filename != "" {
-			return "删除文件 " + filename
-		}
-		return "删除文件"
-	case "create_folder":
-		if filename != "" {
-			return "创建文件夹 " + filename
-		}
-		return "创建文件夹"
-	case "rename":
-		return "重命名文件"
-	case "move":
-		return "移动文件"
-	case "create_share":
-		return "创建文件分享"
-	case "revoke_share":
-		return "撤销文件分享"
-	case "share_download":
-		return "通过分享下载文件"
-	case "share_archive_download":
-		return "打包下载分享目录"
-	case "update_branding":
-		return "更新实例品牌"
-	case "change_password":
-		return "修改密码"
-	case "login_success":
-		return "登录成功"
-	case "login_failed":
-		return "登录失败"
-	case "reset_token_webdav":
-		return "重置 WebDAV Token"
-	case "reset_token_image_bed":
-		return "重置图床 Token"
-	case "create_image_bed_token":
-		return "创建图床 Token"
-	case "delete_image_bed_token":
-		return "撤销图床 Token"
-	case "create_s3_credential":
-		return "创建 S3 凭据"
-	case "enable_s3_credential":
-		return "启用 S3 凭据"
-	case "disable_s3_credential":
-		return "禁用 S3 凭据"
-	case "delete_s3_credential":
-		return "撤销 S3 凭据"
-	case "put_object":
-		if filename != "" {
-			return "S3 上传 " + filename
-		}
-		return "S3 上传对象"
-	case "delete_object":
-		if filename != "" {
-			return "S3 删除 " + filename
-		}
-		return "S3 删除对象"
-	default:
-		return e.Action
-	}
 }

@@ -57,6 +57,14 @@ func TestRestoreRoundTrip(t *testing.T) {
 		filepath.Join(base, "source")); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := conn.Exec(`INSERT INTO source_static_access
+ (storage_source_id, enabled, publish_root, public_asset_id, cache_mode, cors_mode, revision, updated_at)
+ VALUES (1, 1, 'media', 'ast-0123456789abcdef0123456789abcdef', 'no-cache', 'allowlist', 4, datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO source_static_origins VALUES (1, 'https://blog.example.test', datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
 	backupPath := exportForRestore(t, cfg, conn)
 	_ = conn.Close()
 
@@ -110,6 +118,17 @@ func TestRestoreRoundTrip(t *testing.T) {
 	var count int
 	if err := restored.QueryRow(`SELECT COUNT(*) FROM users WHERE username = 'restore-user'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("restored user count=%d err=%v", count, err)
+	}
+	var assetID, root, cache, cors, origin string
+	var enabled bool
+	var revision int
+	if err := restored.QueryRow(`SELECT a.public_asset_id, a.publish_root, a.cache_mode, a.cors_mode, a.enabled, a.revision, o.origin
+ FROM source_static_access a JOIN source_static_origins o USING (storage_source_id)`).
+		Scan(&assetID, &root, &cache, &cors, &enabled, &revision, &origin); err != nil {
+		t.Fatal(err)
+	}
+	if assetID != "ast-0123456789abcdef0123456789abcdef" || root != "media" || cache != "no-cache" || cors != "allowlist" || !enabled || revision != 4 || origin != "https://blog.example.test" {
+		t.Fatalf("restored static configuration changed: %s %s %s %s %t %d %s", assetID, root, cache, cors, enabled, revision, origin)
 	}
 }
 
