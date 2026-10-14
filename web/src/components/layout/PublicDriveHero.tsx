@@ -1,19 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAuthStatus } from '../../api/auth'
 import { fetchPublicSummary } from '../../api/public'
-import { IconImage, LogoMark } from '../ui/Icon'
+import { LogoMark } from '../ui/Icon'
+import { PublicNavigation } from './PublicNavigation'
 import * as css from '../../pages/Home.css'
 
 // Shared public-drive masthead and introduction for the index and file-browser routes.
 export function PublicDriveHero() {
   const summary = useQuery({ queryKey: ['public-summary'], queryFn: fetchPublicSummary })
-  const authStatus = useQuery({
-    queryKey: ['auth-status'],
-    queryFn: fetchAuthStatus,
-    retry: false,
-    staleTime: 60_000,
-  })
   const enabled = summary.data?.enabled ?? false
 
   return (
@@ -26,19 +20,7 @@ export function PublicDriveHero() {
             <small>PUBLIC DRIVE</small>
           </span>
         </Link>
-        <div className={css.utilityLinks}>
-          <Link to="/upload" className={css.imageBedLink}>
-            <IconImage size={16} />
-            匿名图床
-          </Link>
-          {authStatus.isPending ? (
-            <span className={css.authPlaceholder} aria-label="正在检查登录状态" />
-          ) : authStatus.data?.authenticated ? (
-            <Link to="/app" className={css.authLink}>进入工作台</Link>
-          ) : (
-            <Link to="/login" className={css.authLink}>管理登录</Link>
-          )}
-        </div>
+        <PublicNavigation />
       </div>
 
       <div className={css.heroBody}>

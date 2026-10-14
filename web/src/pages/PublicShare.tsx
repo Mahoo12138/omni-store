@@ -200,7 +200,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
           <div className={css.viewToggle}>
             <button
               type="button"
-              className={view === 'list' ? css.viewOptionActive : css.viewOption}
+              className={css.viewOption}
               onClick={() => setView('list')}
               aria-pressed={view === 'list'}
             >
@@ -208,7 +208,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
             </button>
             <button
               type="button"
-              className={view === 'gallery' ? css.viewOptionActive : css.viewOption}
+              className={css.viewOption}
               onClick={() => setView('gallery')}
               aria-pressed={view === 'gallery'}
               disabled={galleryImages.length === 0}

@@ -51,11 +51,14 @@ export const header = style({
   flexShrink: 0,
 })
 
+globalStyle(`${header} > div`, { minWidth: 0 })
+
 export const title = style({
   margin: 0,
   fontSize: vars.fontSize.lg,
   fontWeight: 600,
   color: vars.color.text,
+  overflowWrap: 'anywhere',
 })
 
 export const description = style({
@@ -70,6 +73,7 @@ export const close = style({
   justifyContent: 'center',
   width: '28px',
   height: '28px',
+  flexShrink: 0,
   padding: 0,
   border: 'none',
   borderRadius: vars.radius.md,

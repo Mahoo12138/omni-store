@@ -1,74 +1,6 @@
 import { globalStyle, style } from '@vanilla-extract/css'
 import { vars } from '../../styles/theme.css'
-
-// 顶部统计卡：4 个并排
-export const statRow = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  gap: vars.space.md,
-  marginBottom: vars.space.lg,
-  '@media': {
-    'screen and (max-width: 1080px)': {
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-    'screen and (max-width: 480px)': {
-      gridTemplateColumns: 'minmax(0, 1fr)',
-    },
-  },
-})
-
-export const statCard = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.md,
-  backgroundColor: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.lg,
-  padding: vars.space.md,
-})
-
-export const statIcon = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '44px',
-  height: '44px',
-  borderRadius: vars.radius.md,
-  flexShrink: 0,
-})
-
-export const statBody = style({
-  display: 'flex',
-  flexDirection: 'column',
-  minWidth: 0,
-})
-
-export const statLabel = style({
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-})
-
-export const statValue = style({
-  fontSize: vars.fontSize.xl,
-  fontWeight: 700,
-  color: vars.color.text,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  lineHeight: 1.1,
-})
-
-export const statValueText = style({
-  fontSize: vars.fontSize.xl,
-  fontWeight: 700,
-  color: vars.color.text,
-  lineHeight: 1.1,
-})
-
-export const statTrend = style({
-  display: 'inline-flex',
-  color: vars.color.textSecondary,
-})
+import { outlineList, outlineTab } from '../../components/ui/Tabs.css'
 
 // 双列布局：左 = 存储源 + 用户与权限；右 = 系统状态 + 最近审计
 export const grid2 = style({
@@ -673,30 +605,44 @@ globalStyle(`${sectionHeaderAction} > button`, {
 
 // --- 存储源：信息优先的响应式列表 ---
 
+export const sourcesSection = style({ minWidth: 0, display: 'flex', flexDirection: 'column', gap: vars.space.md })
+export const sourcesHeader = style({
+  display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.md,
+})
+
 export const sourceList = style({
   display: 'flex',
   flexDirection: 'column',
+  gap: vars.space.md,
+  containerType: 'inline-size',
+  containerName: 'storage-sources',
 })
 
 export const sourceItem = style({
   display: 'grid',
-  gridTemplateColumns: 'minmax(320px, 1fr) auto auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  gridTemplateAreas: '"identity identity" "meta actions"',
   alignItems: 'center',
   gap: vars.space.md,
-  minWidth: 900,
-  padding: `${vars.space.md} ${vars.space.lg}`,
-  borderBottom: `1px solid ${vars.color.border}`,
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:last-child': { borderBottom: 'none' },
-    '&:hover': { backgroundColor: vars.color.surfaceHover },
+  minWidth: 0,
+  padding: vars.space.lg,
+  border: `1px solid ${vars.color.border}`,
+  backgroundColor: vars.color.surface,
+  borderRadius: vars.radius.md,
+  '@container': {
+    'storage-sources (max-width: 560px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      gridTemplateAreas: '"identity" "meta" "actions"',
+      padding: vars.space.md,
+    },
   },
 })
 
 export const sourceIdentity = style({
+  gridArea: 'identity',
   display: 'grid',
   gridTemplateColumns: '40px minmax(0, 1fr)',
-  alignItems: 'center',
+  alignItems: 'start',
   gap: vars.space.md,
   minWidth: 0,
 })
@@ -713,12 +659,20 @@ export const sourceIcon = style({
 
 export const sourceCopy = style({ minWidth: 0 })
 
+export const sourceHeading = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: vars.space.sm,
+})
+
 export const sourceName = style({
   margin: 0,
   color: vars.color.text,
   fontSize: vars.fontSize.md,
   fontWeight: 600,
   lineHeight: 1.4,
+  overflowWrap: 'anywhere',
 })
 
 export const sourcePath = style({
@@ -728,22 +682,30 @@ export const sourcePath = style({
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   lineHeight: 1.45,
-  whiteSpace: 'nowrap',
+  overflowWrap: 'anywhere',
 })
 
 export const sourceMeta = style({
+  gridArea: 'meta',
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, auto)',
-  alignItems: 'center',
-  gap: vars.space.md,
+  gridTemplateColumns: 'auto minmax(0, 1fr)',
+  alignItems: 'start',
+  gap: vars.space.lg,
+  minWidth: 0,
+  '@container': {
+    'storage-sources (max-width: 420px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      gap: vars.space.md,
+    },
+  },
 })
 
 export const sourceMetaItem = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-start',
-  gap: '5px',
-  minWidth: 52,
+  gap: vars.space.sm,
+  minWidth: 0,
 })
 
 export const sourceMetaLabel = style({
@@ -756,21 +718,107 @@ export const sourceMetaValue = style({
   color: vars.color.text,
   fontSize: vars.fontSize.sm,
   fontWeight: 500,
-  whiteSpace: 'nowrap',
+  overflowWrap: 'anywhere',
 })
 
 export const sourceMetaMuted = style([sourceMetaValue, { color: vars.color.textSecondary, fontWeight: 400 }])
 
 export const sourceActions = style({
+  gridArea: 'actions',
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
   justifyContent: 'flex-end',
   gap: vars.space.xs,
+  '@container': {
+    'storage-sources (max-width: 560px)': {
+      justifyContent: 'flex-start',
+      borderTop: `1px solid ${vars.color.border}`,
+      paddingTop: vars.space.md,
+    },
+  },
 })
 
 globalStyle(`${sourceActions} > button`, {
   flex: '0 0 auto',
 })
+
+export const sourceProtocols = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: vars.space.sm,
+})
+
+export const sourceProtocolTag = style({
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  backgroundColor: vars.color.surfaceHover,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+  lineHeight: 1.4,
+})
+
+// 存储源配置：同一入口下的协议与存储设置。
+export const sourceConfig = style({ minWidth: 0, flexShrink: 0 })
+
+export const sourceConfigTabs = style([outlineList, {
+  display: 'flex',
+  marginBottom: vars.space.lg,
+}])
+
+export const sourceConfigTab = style([outlineTab, {
+  minHeight: 44,
+  fontSize: vars.fontSize.md,
+}])
+
+export const sourceConfigPanel = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.lg,
+  minWidth: 0,
+  selectors: { '&[hidden]': { display: 'none' } },
+})
+
+export const protocolList = style({ display: 'flex', flexDirection: 'column' })
+
+export const protocolRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+  padding: `${vars.space.md} 0`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  selectors: { '&:first-child': { paddingTop: 0 }, '&:last-child': { borderBottom: 0, paddingBottom: 0 } },
+})
+
+export const protocolCopy = style({ display: 'flex', flexDirection: 'column', gap: vars.space.xs, minWidth: 0 })
+export const protocolName = style({ fontSize: vars.fontSize.md, fontWeight: 600, color: vars.color.text })
+export const protocolHint = style({ margin: 0, fontSize: vars.fontSize.sm, lineHeight: 1.6, color: vars.color.textSecondary, overflowWrap: 'anywhere' })
+export const protocolControl = style({ flexShrink: 0 })
+export const protocolCheckbox = style({ width: 20, height: 20, margin: vars.space.sm, accentColor: vars.color.primary, cursor: 'pointer' })
+export const sourceConfigNote = style({ margin: 0, fontSize: vars.fontSize.xs, lineHeight: 1.6, color: vars.color.textSecondary })
+export const sourceConfigTitle = style({ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', overflowWrap: 'anywhere' })
+export const sourceConfigPath = style({ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', fontFamily: vars.font.mono, fontSize: vars.fontSize.xs, lineHeight: 1.6, overflowWrap: 'anywhere' })
+export const sourceQuotaInput = style({ display: 'flex', alignItems: 'center', gap: vars.space.sm })
+
+export const staticAccessStack = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.lg,
+  flexShrink: 0,
+  minWidth: 0,
+  paddingTop: vars.space.lg,
+  borderTop: `1px solid ${vars.color.border}`,
+})
+
+export const staticProtocolSection = style({ display: 'flex', flexDirection: 'column', gap: vars.space.md, minWidth: 0, flexShrink: 0 })
+export const staticProtocolHeader = style({
+  display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.md,
+})
+export const staticProtocolBody = style({ display: 'flex', flexDirection: 'column', gap: vars.space.md, minWidth: 0 })
+export const staticProtocolSettings = style([staticProtocolSection, { borderTop: `1px solid ${vars.color.border}`, paddingTop: vars.space.lg }])
+export const staticProtocolActions = style({ display: 'flex', flexWrap: 'wrap', gap: vars.space.sm })
 
 export const sourceState = style({
   display: 'flex',
@@ -1195,15 +1243,9 @@ export const opsStatGrid = style({
   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: vars.space.md,
   '@media': {
-    'screen and (max-width: 1080px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
+    'screen and (max-width: 1200px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
     'screen and (max-width: 860px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
-})
-
-export const opsMetricList = style({
-  display: 'grid',
-  gap: '4px',
-  marginTop: vars.space.xs,
 })
 
 export const opsMetricRow = style({
@@ -1225,26 +1267,6 @@ export const opsMetricValue = style({
   textAlign: 'right',
   minWidth: 0,
   overflowWrap: 'anywhere',
-})
-
-export const opsCapGrid = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: vars.space.md,
-  '@media': {
-    'screen and (max-width: 720px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
-  },
-})
-
-export const opsCapCard = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.xs,
-  padding: vars.space.md,
-  background: vars.color.surface,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  minWidth: 0,
 })
 
 export const opsCapName = style({
@@ -1289,7 +1311,9 @@ export const opsFailAction = style({
   background: vars.color.surfaceHover,
   borderRadius: vars.radius.sm,
   padding: '2px 8px',
-  whiteSpace: 'nowrap',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  minWidth: 0,
   justifySelf: 'start',
 })
 
@@ -1304,3 +1328,32 @@ export const opsHealthBadge = style({
   alignItems: 'center',
   gap: vars.space.xs,
 })
+
+// 仪表盘：状态与维护在一处，指标独立于状态面板。
+export const dashboardActions = style({
+  display: 'flex', flexWrap: 'wrap', gap: vars.space.sm, flexShrink: 0,
+})
+export const dashboardFacts = style({
+  display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: vars.space.md, margin: 0,
+  '@media': { 'screen and (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' } },
+})
+globalStyle(`${dashboardFacts} > div`, {
+  display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr)', gap: vars.space.sm,
+  fontSize: vars.fontSize.sm, alignItems: 'baseline',
+})
+globalStyle(`${dashboardFacts} dt`, { color: vars.color.textSecondary })
+globalStyle(`${dashboardFacts} dd`, {
+  margin: 0, minWidth: 0, overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums',
+})
+export const dashboardDataDir = style({ gridColumn: '1 / -1' })
+export const dashboardError = style({ color: vars.color.danger, fontSize: vars.fontSize.sm, overflowWrap: 'anywhere' })
+export const dashboardSource = style({ display: 'flex', flexDirection: 'column', gap: vars.space.xs, width: 200, whiteSpace: 'normal', overflowWrap: 'anywhere' })
+export const dashboardSourcePath = style({ color: vars.color.textSecondary, fontFamily: vars.font.mono, fontSize: vars.fontSize.xs, overflowWrap: 'anywhere', whiteSpace: 'normal' })
+export const dashboardSourceStatus = style({ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: vars.space.xs, whiteSpace: 'normal' })
+export const dashboardCapability = style({
+  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: vars.space.md,
+  '@media': { 'screen and (max-width: 640px)': { flexDirection: 'column', gap: vars.space.xs } },
+})
+
+export const dashboardSourceTable = style({ minWidth: 860 })

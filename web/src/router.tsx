@@ -5,6 +5,7 @@ import {
   lazyRouteComponent,
   Outlet,
 } from '@tanstack/react-router'
+import { validateTransferRedirect, validateTransferSearch } from './utils/transfer-workspace'
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -27,6 +28,13 @@ const publicPickupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/pickup/$publicKey',
   component: lazyRouteComponent(() => import('./pages/PublicPickup'), 'PublicPickupPage'),
+})
+
+const publicTransferRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/transfer',
+  component: lazyRouteComponent(() => import('./pages/PublicTransfer'), 'PublicTransferPage'),
+  validateSearch: validateTransferSearch,
 })
 
 const publicCollectRoute = createRoute({
@@ -66,6 +74,9 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: lazyRouteComponent(() => import('./pages/Login'), 'LoginPage'),
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: validateTransferRedirect(search.redirect),
+  }),
 })
 
 const setupRoute = createRoute({
@@ -141,6 +152,7 @@ const transferCenterRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/transfer',
   component: lazyRouteComponent(() => import('./pages/TransferCenter'), 'TransferCenterPage'),
+  validateSearch: validateTransferSearch,
 })
 
 const sharesRoute = createRoute({
@@ -160,6 +172,7 @@ const adminRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
+  publicTransferRoute,
   publicPickupRoute,
   publicCollectRoute,
   anonymousUploadRoute,

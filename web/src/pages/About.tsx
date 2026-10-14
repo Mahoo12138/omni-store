@@ -78,6 +78,7 @@ const sourceEndpoints = [
 const accessEndpoints = [
   { label: '网页', Icon: IconGlobe },
   { label: 'WebDAV', Icon: IconCloud },
+  { label: '文件中转', Icon: IconCloud },
   { label: 'S3', Icon: IconServer },
 ] as const
 
@@ -95,7 +96,7 @@ export function AboutPage() {
   })
 
   return (
-    <PublicShell showHeader={false}>
+    <PublicShell>
       <div className={css.page}>
         <section className={css.hero} aria-labelledby="about-title">
           <div className={css.heroCopy}>
@@ -112,6 +113,7 @@ export function AboutPage() {
               <Link to="/upload" className={css.secondaryAction}>
                 图床入口
               </Link>
+              <Link to="/transfer" search={{ view: 'send' }} className={css.secondaryAction}>文件中转</Link>
             </div>
           </div>
 

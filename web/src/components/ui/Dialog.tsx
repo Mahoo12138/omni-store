@@ -9,8 +9,8 @@ const DialogDepthContext = createContext(0)
 interface DialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  title: string
-  description?: string
+  title: ReactNode
+  description?: ReactNode
   /** 宽弹窗，用于编辑复杂表单（多字段）。 */
   wide?: boolean
   /** 底部按钮区（通常是"取消 / 确认"）。 */

@@ -14,13 +14,14 @@ export interface AdminSource {
   is_disabled: boolean
   webdav_enabled: boolean
   s3_enabled: boolean
+  static_enabled: boolean
   quota_bytes: number
   created_at: string
   updated_at: string
 }
 
 // Site Capability 绑定（2.0）：产品功能归站点，全站单 Source。
-export type SiteCapability = 'public_drive' | 'image_bed' | 'static_assets' | 'transfer_center'
+export type SiteCapability = 'public_drive' | 'image_bed' | 'transfer_center'
 
 export interface CapabilityBinding {
   capability: SiteCapability
@@ -316,6 +317,7 @@ export interface StaticAssetConfig {
   enabled: boolean
   source_key: string
   source_name: string
+  source_disabled: boolean
   publish_root: string
   public_asset_id: string
   public_origin: string
@@ -337,12 +339,11 @@ export interface StaticAssetPreflight {
   warnings: string[]
 }
 
-export async function adminGetStaticConfig(): Promise<StaticAssetConfig> {
-  return apiFetch<StaticAssetConfig>('/api/v1/admin/static-assets/config')
+export async function adminGetStaticConfig(sourceKey: string): Promise<StaticAssetConfig> {
+  return apiFetch<StaticAssetConfig>(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/config`)
 }
 
-export async function adminConfigureStaticAssets(input: {
-  source_key: string
+export async function adminConfigureStaticAssets(sourceKey: string, input: {
   publish_root: string
   cache_mode?: string
   cors_mode?: string
@@ -350,10 +351,10 @@ export async function adminConfigureStaticAssets(input: {
   allowed_origins?: string[]
   confirm_publish_root?: boolean
 }): Promise<StaticAssetConfig> {
-  return apiFetch('/api/v1/admin/static-assets/config', { method: 'POST', body: JSON.stringify(input) })
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/config`, { method: 'POST', body: JSON.stringify(input) })
 }
 
-export async function adminUpdateStaticAssets(input: {
+export async function adminUpdateStaticAssets(sourceKey: string, input: {
   enabled?: boolean
   cache_mode?: string
   cors_mode?: string
@@ -361,10 +362,10 @@ export async function adminUpdateStaticAssets(input: {
   allowed_origins?: string[]
   expected_revision?: number
 }): Promise<StaticAssetConfig> {
-  return apiFetch('/api/v1/admin/static-assets/config', { method: 'PUT', body: JSON.stringify(input) })
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/config`, { method: 'PUT', body: JSON.stringify(input) })
 }
 
-export async function adminRebindStaticAssets(input: {
+export async function adminRebindStaticAssets(sourceKey: string, input: {
   source_key: string
   publish_root: string
   mode: 'reset' | 'relocate'
@@ -372,20 +373,26 @@ export async function adminRebindStaticAssets(input: {
   confirm_relocate?: boolean
   expected_revision?: number
 }): Promise<StaticAssetConfig> {
-  return apiFetch('/api/v1/admin/static-assets/rebind', { method: 'POST', body: JSON.stringify(input) })
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/rebind`, { method: 'POST', body: JSON.stringify(input) })
 }
 
-export async function adminPreflightStaticAssets(input: {
-  source_key: string
+export async function adminPreflightStaticAssets(sourceKey: string, input: {
   publish_root: string
 }): Promise<StaticAssetPreflight> {
-  return apiFetch('/api/v1/admin/static-assets/preflight', { method: 'POST', body: JSON.stringify(input) })
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/preflight`, { method: 'POST', body: JSON.stringify(input) })
 }
 
-// 运维中心（2.0 Epic C）
+export async function adminRemoveStaticConfig(sourceKey: string, revision: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/admin/sources/${encodeURIComponent(sourceKey)}/static-access/config`, {
+    method: 'DELETE', body: JSON.stringify({ expected_revision: revision }),
+  })
+}
+
+// 仪表盘健康快照与维护操作
 export interface OperationsSourceHealth {
   key: string
   name: string
+  root_path: string
   disabled: boolean
   root_accessible: boolean
   usage_bytes: number
@@ -395,6 +402,7 @@ export interface OperationsSourceHealth {
   active_transfers: number
   webdav_enabled: boolean
   s3_enabled: boolean
+  static_enabled: boolean
   root_issue?: string
 }
 
@@ -439,10 +447,6 @@ export interface OperationsStatus {
     error_code: string | null
     created_at: string
   }>
-}
-
-export async function fetchOperationsStatus(): Promise<OperationsStatus> {
-  return apiFetch<OperationsStatus>('/api/v1/admin/operations/status')
 }
 
 export interface IntegrityReport {
@@ -552,52 +556,18 @@ export async function adminExportSystemConfig(): Promise<string> {
   return filename
 }
 
-// 概览 dashboard
+// 仪表盘：连接配置 + 运维服务的唯一健康快照。
 export interface OverviewSystem {
-  version: string
-  data_dir: string
   http_addr: string
   public_url: string
   s3_enabled: boolean
   s3_status: string
   webdav_status: string
 }
-export interface OverviewSource {
-  key: string
-  name: string
-  root_path: string
-  webdav_enabled: boolean
-  s3_enabled: boolean
-  is_disabled: boolean
-}
-export interface OverviewUser {
-  id: number
-  username: string
-  display_name: string
-  role: string
-  is_disabled: boolean
-  permission_count: number // -1 表示全部
-  permission_all: boolean
-}
-export interface OverviewAudit {
-  id: number
-  action: string
-  status: string
-  actor_name: string
-  actor_type: string
-  source_name?: string
-  created_at: string
-  title: string
-}
 export interface AdminOverview {
-  source_count: number
-  user_count: number
-  public_drive_enabled: boolean
   anonymous_image_bed_on: boolean
-  sources: OverviewSource[]
-  users: OverviewUser[]
-  recent_audits: OverviewAudit[]
   system: OverviewSystem
+  operations: OperationsStatus
 }
 export async function fetchAdminOverview(): Promise<AdminOverview> {
   return apiFetch<AdminOverview>('/api/v1/admin/overview')

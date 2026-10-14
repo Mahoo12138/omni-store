@@ -844,7 +844,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             </button>
             <div className={css.viewToggle} role="tablist" aria-label="视图切换">
               <button
-                className={view === 'list' ? css.viewBtnActive : css.viewBtn}
+                className={css.viewBtn}
                 aria-label="列表视图"
                 aria-selected={view === 'list'}
                 role="tab"
@@ -852,9 +852,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               >
                 <IconList size={16} />
               </button>
-              <span className={css.viewDivider} />
               <button
-                className={view === 'grid' ? css.viewBtnActive : css.viewBtn}
+                className={css.viewBtn}
                 aria-label="网格视图"
                 aria-selected={view === 'grid'}
                 role="tab"

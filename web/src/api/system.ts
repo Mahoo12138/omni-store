@@ -13,6 +13,9 @@ export interface SystemStatus {
   webdav: SystemStatusFlag
   file_preview: SystemStatusFlag
   anonymous: SystemStatusFlag
+  public_drive: SystemStatusFlag
+  image_bed: SystemStatusFlag
+  transfer_center: SystemStatusFlag
   version: string
   public_url: string
   instance_name: string

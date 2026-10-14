@@ -1,8 +1,10 @@
 import { globalStyle, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
+import { outlineList, outlineTab } from '../components/ui/Tabs.css'
 
 export const hero = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vars.space.lg, marginBottom: vars.space.lg, padding: `${vars.space.lg} 0`, borderBottom: `1px solid ${vars.color.border}`, '@media': { 'screen and (max-width: 640px)': { alignItems: 'flex-start', flexDirection: 'column' } } })
-export const identity = style({ display: 'flex', alignItems: 'center', gap: vars.space.md, minWidth: 0 })
+export const identity = style({ display: 'flex', alignItems: 'center', gap: vars.space.md, minWidth: 0, maxWidth: '100%' })
+globalStyle(`${identity} > div`, { minWidth: 0 })
 export const icon = style({ width: 54, height: 54, flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: vars.color.primary, background: vars.color.primarySubtle, borderRadius: vars.radius.tile })
 export const title = style({ overflow: 'hidden', margin: 0, color: vars.color.text, fontSize: vars.fontSize.xxl, textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
 export const meta = style({ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 7, color: vars.color.textSecondary, fontSize: vars.fontSize.sm })
@@ -27,9 +29,8 @@ export const pager = style({ display: 'flex', alignItems: 'center', justifyConte
 export const toolbar = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: vars.space.sm, marginBottom: vars.space.md })
 export const toolbarActions = style({ display: 'flex', alignItems: 'center', gap: vars.space.sm, flexWrap: 'wrap' })
 export const zipButton = style({ height: 34, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', color: vars.color.text, background: vars.color.surface, border: `1px solid ${vars.color.border}`, borderRadius: vars.radius.md, fontSize: vars.fontSize.sm, fontWeight: 600, textDecoration: 'none', selectors: { '&:hover': { borderColor: vars.color.borderStrong, background: vars.color.surfaceHover }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 } } })
-export const viewToggle = style({ display: 'inline-flex', gap: 2, background: vars.color.surfaceHover, borderRadius: vars.radius.full, padding: 2 })
-export const viewOption = style({ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', border: 0, borderRadius: vars.radius.full, background: 'transparent', color: vars.color.textSecondary, font: 'inherit', fontSize: vars.fontSize.sm, cursor: 'pointer', selectors: { '&:hover': { color: vars.color.text }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 }, '&:disabled': { opacity: 0.4, cursor: 'not-allowed' } } })
-export const viewOptionActive = style({ background: vars.color.surface, color: vars.color.text, boxShadow: vars.shadow.sm, cursor: 'default' })
+export const viewToggle = outlineList
+export const viewOption = outlineTab
 export const gallery = style({ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: vars.space.sm, marginBottom: vars.space.md })
 export const galleryCell = style({ position: 'relative' })
 export const galleryItem = style({ display: 'block', width: '100%', aspectRatio: '1 / 1', padding: 0, border: 0, background: vars.color.surfaceHover, borderRadius: vars.radius.md, overflow: 'hidden', cursor: 'zoom-in', boxShadow: vars.shadow.sm, selectors: { '&:hover': { boxShadow: vars.shadow.md }, '&:focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 } } })

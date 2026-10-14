@@ -7,8 +7,7 @@ import { expect, test } from '@playwright/test'
 // 生产漂移场景（E2E 与服务同机，可直接操作测试环境磁盘）：
 // 盘外修改文件 → 台账校准收敛；孤儿临时文件 → 清理编排删除；完整性检查通过。
 
-const baseURL = 'http://127.0.0.1:18080'
-const dataRoot = join(process.cwd(), '..', '.testdata')
+const baseURL = process.env.OMNISTORE_E2E_BASE_URL ?? 'http://127.0.0.1:18080'
 
 let adminCookies: string | null = null
 let adminCSRF = ''
@@ -28,7 +27,7 @@ async function adminLogin(page: import('@playwright/test').Page): Promise<{ cook
 
 async function adminAPI(
   page: import('@playwright/test').Page,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   path: string,
   data?: unknown,
 ): Promise<{ status: number; body: any }> {
@@ -55,7 +54,7 @@ async function teamSourceDir(page: import('@playwright/test').Page): Promise<{ k
 }
 
 test('operations status, integrity check and cleanup converge real disk drift', async ({ page }) => {
-  const { cookie } = await adminLogin(page)
+  await adminLogin(page)
   const team = await teamSourceDir(page)
 
   // 1. 生产漂移 A：普通文件在盘外被外部程序修改（台账记录的是旧大小/时间）。
@@ -102,17 +101,21 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   expect(statusBefore.body.data.transfers.draft_sends).toBe(baselineTransfers.draft_sends + 1)
   expect(statusBefore.body.data.transfers.payload_bytes).toBeGreaterThan(0)
   const capabilities = statusBefore.body.data.capabilities.map((item: { capability: string }) => item.capability)
-  for (const capability of ['public_drive', 'image_bed', 'static_assets', 'transfer_center']) {
+  for (const capability of ['public_drive', 'image_bed', 'transfer_center']) {
     expect(capabilities).toContain(capability)
   }
 
-  // 5. UI：运维中心区块渲染 + 完整性检查通过。
+  // 5. 原运维入口转到仪表盘；完整性检查与健康信息只出现一次。
   await page.goto('/login')
   await page.getByLabel('用户名').fill('admin')
   await page.getByLabel('密码').fill('OmniStore-Test-Admin!')
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.goto('/app/admin?section=operations')
-  await expect(page.getByRole('heading', { name: '运维中心' })).toBeVisible()
+  await expect(page).toHaveURL(/section=stats$/)
+  await expect(page.getByRole('heading', { name: '系统状态', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: '设置分组' }).getByRole('button', { name: '运维中心', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '存储源健康', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: '存储源概览', exact: true })).toHaveCount(0)
   // 新布局：quick_check 是统计卡内的独立 Badge。
   await expect(page.getByText('quick_check')).toBeVisible()
   await expect(page.getByText('ok', { exact: true })).toBeVisible()
@@ -121,24 +124,167 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   await page.getByRole('button', { name: '完整性检查' }).click()
   await expect(page.getByText(/通过：integrity ok/)).toBeVisible({ timeout: 10_000 })
 
-  // 6. 收敛漂移：盘外修改经台账校准（updated ≥ 1）。
-  const reconcile = await adminAPI(page, 'POST', `/api/v1/admin/sources/${team.key}/reconcile`)
-  expect(reconcile.status).toBe(200)
-  expect(reconcile.body.data.updated + reconcile.body.data.added).toBeGreaterThanOrEqual(1)
+  // 6. 从统一源表校准台账，校准报告和刷新后的健康数据保持一致。
+  const reconcileResponse = page.waitForResponse((response) => response.url().endsWith(`/sources/${team.key}/reconcile`))
+  const refreshedOverview = page.waitForResponse((response) => response.url().endsWith('/admin/overview'))
+  await page.getByRole('row', { name: /团队文件/ }).getByRole('button', { name: '校准台账', exact: true }).click()
+  const reconcile = await (await reconcileResponse).json()
+  expect(reconcile.data.updated + reconcile.data.added).toBeGreaterThanOrEqual(1)
+  const refreshed = (await (await refreshedOverview).json()).data.operations.sources.find((item: { key: string }) => item.key === team.key)
+  expect(refreshed.ledger_bytes).toBeGreaterThan(teamHealth.ledger_bytes)
+  await expect(page.getByRole('status').filter({ hasText: '团队文件 台账已校准' })).toBeVisible()
 
-  // 7. 清理编排：孤儿临时文件被移除（发送者撤销包后清扫载荷）。
-  const cleanup = await adminAPI(page, 'POST', '/api/v1/admin/operations/cleanup')
-  expect(cleanup.status).toBe(200)
-  expect(cleanup.body.data.transfer_gc.orphan_temp_removed).toBeGreaterThanOrEqual(1)
+  // 7. 运行清理后，报告可见、孤儿临时文件消失，快照重新获取。
+  const cleanupResponse = page.waitForResponse((response) => response.url().endsWith('/operations/cleanup'))
+  const afterCleanup = page.waitForResponse((response) => response.url().endsWith('/admin/overview'))
+  await page.getByRole('button', { name: '运行清理', exact: true }).click()
+  const cleanup = await (await cleanupResponse).json()
+  expect(cleanup.data.transfer_gc.orphan_temp_removed).toBeGreaterThanOrEqual(1)
+  await afterCleanup
+  await expect(page.getByRole('status').filter({ hasText: '本次清理' })).toBeVisible()
   expect(() => readFileSync(tmpFile)).toThrow()
 
   // 撤销活跃包 → 载荷目录删除 → 再次清理显示清扫计数。
   await adminAPI(page, 'DELETE', `/api/v1/transfers/${sendID}`)
-  void baselineTransfers
   const cleanup2 = await adminAPI(page, 'POST', '/api/v1/admin/operations/cleanup')
   expect(cleanup2.body.data.transfer_gc.transfers_swept).toBeGreaterThanOrEqual(1)
   expect(() => readFileSync(managedTmp)).toThrow()
-  void cookie
-  void writeFileSync
-  void baseURL
+})
+
+async function openDashboard(page: import('@playwright/test').Page) {
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('OmniStore-Test-Admin!')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page).toHaveURL(/\/app$/)
+  await page.goto('/app/admin?section=stats')
+}
+
+test('dashboard uses one snapshot and recovers from initial and refresh failures', async ({ page }) => {
+  let requests = 0
+  let legacyRequests = 0
+  let fail = true
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/v1/admin/operations/status') legacyRequests++
+  })
+  await page.route('**/api/v1/admin/overview', async (route) => {
+    requests++
+    if (fail) {
+      await route.fulfill({ status: 503, json: { error: { code: 'INTERNAL_ERROR', message: '测试：状态暂不可用' }, request_id: 'dashboard-test' } })
+    } else {
+      await route.continue()
+    }
+  })
+  await openDashboard(page)
+  await expect(page.getByRole('alert')).toContainText('仪表盘加载失败')
+  await expect(page.getByRole('heading', { name: '数据库', exact: true })).toHaveCount(0)
+  expect(requests).toBe(1)
+  expect(legacyRequests).toBe(0)
+  fail = false
+  await page.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(page.getByText('quick_check', { exact: true })).toBeVisible()
+  expect(requests).toBe(2)
+  const teamRow = page.getByRole('row', { name: /团队文件/ })
+  await expect(teamRow).toBeVisible()
+  fail = true
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('当前显示上次成功获取的数据')
+  await expect(teamRow).toBeVisible()
+  expect(requests).toBe(3)
+  fail = false
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(requests).toBe(4)
+  expect(legacyRequests).toBe(0)
+})
+
+test('dashboard handles empty health data and failed maintenance without false success', async ({ page }) => {
+  let partiallyCleaned = false
+  await page.route('**/api/v1/admin/overview', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.data.operations.storage.thumbnail_cache_bytes = partiallyCleaned ? 128 : 4096
+    body.data.operations.sources = []
+    body.data.operations.recent_failed_audits = []
+    body.data.operations.capabilities[0].source_key = ''
+    body.data.operations.capabilities[0].enabled = true
+    await route.fulfill({ response, json: body })
+  })
+  await page.route('**/api/v1/admin/operations/cleanup', (route) => {
+    partiallyCleaned = true
+    return route.fulfill({
+      status: 500, json: { error: { code: 'INTERNAL_ERROR', message: '测试：清理未完成' }, request_id: 'cleanup-test' },
+    })
+  })
+  await openDashboard(page)
+  await expect(page.getByRole('cell', { name: /还没有存储源/ })).toBeVisible()
+  await expect(page.getByText('近期没有失败记录。', { exact: true })).toBeVisible()
+  await expect(page.getByText('未绑定', { exact: true })).toBeVisible()
+  await expect(page.getByText('4.0 KB', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '运行清理', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('测试：清理未完成')
+  await expect(page.getByRole('status').filter({ hasText: '本次清理' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '运行清理', exact: true })).toBeEnabled()
+  await expect(page.getByText('128 B', { exact: true })).toBeVisible()
+  await expect(page.getByText('4.0 KB', { exact: true })).toHaveCount(0)
+})
+
+test('merged dashboard stays usable across desktop and narrow screens', async ({ page }) => {
+  await openDashboard(page)
+  await expect(page.getByRole('row', { name: /团队文件/ })).toBeVisible()
+  for (const width of [1455, 916, 375, 320]) {
+    await page.setViewportSize({ width, height: 887 })
+    await page.getByRole('heading', { name: '系统状态', exact: true }).scrollIntoViewIfNeeded()
+    await expect(page.getByRole('button', { name: '完整性检查', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '运行清理', exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
+    const region = page.getByRole('region', { name: '存储源健康', exact: true })
+    await expect(region).toHaveCSS('overflow-x', 'auto')
+    if (width <= 916) {
+      await region.scrollIntoViewIfNeeded()
+      expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+      await region.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+      await expect(region.getByRole('button', { name: '校准台账', exact: true }).first()).toBeInViewport()
+    }
+    if (width === 1455 || width === 375) {
+      await page.screenshot({ path: `/tmp/omni-dashboard-${width}.png`, fullPage: true })
+    }
+  }
+})
+
+
+test('dashboard renders all sources and separates disabled, unavailable and protocol states', async ({ page }) => {
+  await page.route('**/api/v1/admin/overview', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    const source = body.data.operations.sources[0]
+    body.data.operations.recent_failed_audits = [{
+      id: 987654, action: 'extension_operation_with_an_unknown_long_name',
+      error_code: '测试：第三方操作失败', created_at: new Date().toISOString(),
+    }]
+    body.data.operations.sources = Array.from({ length: 6 }, (_, i) => ({
+      ...source, key: `dashboard-source-${i}`, name: `健康测试源 ${i + 1}`,
+      root_path: `/very/long/storage/path/${'nested-directory/'.repeat(12)}source-${i}`,
+      disabled: i === 4, root_accessible: i !== 5,
+      root_issue: i === 5 ? '根目录已移走，请恢复目录后刷新。' : '',
+      webdav_enabled: true, s3_enabled: true, static_enabled: i === 0,
+    }))
+    await route.fulfill({ response, json: body })
+  })
+  await openDashboard(page)
+  const region = page.getByRole('region', { name: '存储源健康', exact: true })
+  await expect(region.getByRole('row')).toHaveCount(7)
+  await expect(region.getByRole('row', { name: /健康测试源 1/ })).toContainText('静态 HTTP')
+  const disabled = region.getByRole('row', { name: /健康测试源 5/ })
+  await expect(disabled).toContainText('已禁用')
+  await expect(disabled).toContainText('可访问')
+  await expect(disabled.getByRole('button', { name: '校准台账', exact: true })).toBeEnabled()
+  const unavailable = region.getByRole('row', { name: /健康测试源 6/ })
+  await expect(unavailable).toContainText('不可访问')
+  await expect(unavailable).toContainText('根目录已移走')
+  await expect(unavailable).toContainText('— / —')
+  await expect(unavailable.getByRole('button', { name: '校准台账', exact: true })).toBeDisabled()
+  await expect(page.getByText('extension_operation_with_an_unknown_long_name', { exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 375, height: 887 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
 })

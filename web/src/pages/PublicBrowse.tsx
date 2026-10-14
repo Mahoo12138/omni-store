@@ -93,7 +93,7 @@ export function PublicBrowsePage() {
                 <button
                   role="tab"
                   aria-selected={view === 'list'}
-                  className={view === 'list' ? css.viewToggleBtnActive : css.viewToggleBtn}
+                  className={css.viewToggleBtn}
                   onClick={() => setView('list')}
                   title="列表视图"
                   aria-label="列表视图"
@@ -103,7 +103,7 @@ export function PublicBrowsePage() {
                 <button
                   role="tab"
                   aria-selected={view === 'grid'}
-                  className={view === 'grid' ? css.viewToggleBtnActive : css.viewToggleBtn}
+                  className={css.viewToggleBtn}
                   onClick={() => setView('grid')}
                   title="网格视图"
                   aria-label="网格视图"

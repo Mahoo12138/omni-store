@@ -1,7 +1,27 @@
-import { apiFetch, ApiRequestError } from './client'
+import { apiFetch, ApiRequestError, setCsrfToken } from './client'
 import type { FileListResult } from './sources'
 
 // --- 流转中心（2.0 Phase 4/5/6） ---
+
+export interface TransferIdentity {
+  kind: 'guest' | 'user'
+  owner_key: string
+  csrf_token: string
+  expires_at: string
+  max_expiry_hours: number
+  limits: { max_file_size: number; max_active_bytes: number; max_active_tasks: number } | null
+}
+
+export async function fetchTransferIdentity(): Promise<TransferIdentity> {
+  let identity: TransferIdentity
+  try { identity = await apiFetch('/api/v1/transfer-identity') }
+  catch (error) {
+    if (!(error instanceof ApiRequestError) || error.code !== 'UNAUTHORIZED') throw error
+    identity = await apiFetch('/api/v1/transfer-identity', { method: 'POST', body: '{}' })
+  }
+  setCsrfToken(identity.csrf_token)
+  return identity
+}
 
 export interface TransferSend {
   id: number
@@ -12,6 +32,7 @@ export interface TransferSend {
   title: string
   description: string
   has_password: boolean
+  require_code: boolean
   max_downloads: number | null
   download_count: number
   expires_at: string | null
@@ -38,6 +59,7 @@ export interface TransferCollection {
   title: string
   description: string
   has_password: boolean
+  require_code: boolean
   max_file_size: number | null
   max_total_size: number | null
   require_name: boolean
@@ -79,6 +101,7 @@ export async function createSend(input: {
   expires_in_hours?: number
   max_downloads?: number
   password?: string
+  require_code?: boolean
 }): Promise<{ send: TransferSend; pickup_code: string }> {
   return apiFetch('/api/v1/transfers', { method: 'POST', body: JSON.stringify(input) })
 }
@@ -86,6 +109,10 @@ export async function createSend(input: {
 export async function listMySends(): Promise<TransferSend[]> {
   const data = await apiFetch<{ items: TransferSend[]; total: number }>('/api/v1/transfers')
   return data.items ?? []
+}
+
+export async function getSend(transferID: number): Promise<TransferSend> {
+  return apiFetch(`/api/v1/transfers/${transferID}`)
 }
 
 export async function uploadToSend(
@@ -133,6 +160,7 @@ export async function createCollection(input: {
   description?: string
   expires_in_hours?: number
   password?: string
+  require_code?: boolean
   max_file_size_mb?: number
   max_total_size_mb?: number
   require_name?: boolean
@@ -147,6 +175,10 @@ export async function listMyCollections(): Promise<TransferCollection[]> {
     '/api/v1/transfer-collections',
   )
   return data.items ?? []
+}
+
+export async function getCollection(collectionID: number): Promise<TransferCollection> {
+  return apiFetch(`/api/v1/transfer-collections/${collectionID}`)
 }
 
 export async function listSubmissions(collectionID: number): Promise<TransferSubmission[]> {
@@ -190,6 +222,7 @@ export interface TransferPublicInfo {
   file_count: number
   total_size: number
   has_password: boolean
+  require_code: boolean
   downloads_left: number | null
   expires_at: string | null
 }
@@ -262,6 +295,7 @@ export interface CollectionPublicInfo {
   title: string
   description: string
   has_password: boolean
+  require_code: boolean
   max_file_size: number | null
   require_name: boolean
   require_note: boolean

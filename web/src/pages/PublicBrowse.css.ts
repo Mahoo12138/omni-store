@@ -1,6 +1,7 @@
 import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 import * as ft from '../components/files/FileTable.css'
+import { outlineIconTab, outlineList } from '../components/ui/Tabs.css'
 
 export const readOnlyNotice = style({
   display: 'inline-flex',
@@ -27,45 +28,8 @@ globalStyle(`${browsePanel} > ${ft.tableWrap}`, {
   backgroundColor: 'transparent',
 })
 
-// 视图切换按钮组：列表 / 网格（docs/index.png 右上角）。
-export const viewToggle = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  padding: '2px',
-  backgroundColor: vars.color.surface,
-})
-
-const viewToggleBtnBase = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '30px',
-  height: '28px',
-  background: 'none',
-  border: 'none',
-  borderRadius: vars.radius.sm,
-  color: vars.color.textSecondary,
-  cursor: 'pointer',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { color: vars.color.text },
-  },
-})
-
-export const viewToggleBtn = viewToggleBtnBase
-
-export const viewToggleBtnActive = style([
-  viewToggleBtnBase,
-  {
-    backgroundColor: vars.color.primarySubtle,
-    color: vars.color.primary,
-    selectors: {
-      '&:hover': { color: vars.color.primary },
-    },
-  },
-])
+export const viewToggle = outlineList
+export const viewToggleBtn = outlineIconTab
 
 // 网格视图容器（docs/index.png 切换后的样子）。
 export const grid = style({

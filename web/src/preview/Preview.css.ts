@@ -350,35 +350,6 @@ globalKeyframes('omnistore-preview-spin', {
   to: { transform: 'rotate(360deg)' },
 })
 
-export const viewToggle = style({
-  display: 'inline-flex',
-  gap: 2,
-  background: vars.color.surfaceHover,
-  borderRadius: vars.radius.full,
-  padding: 2,
-})
-
-export const viewOption = style({
-  appearance: 'none',
-  border: 'none',
-  background: 'transparent',
-  borderRadius: vars.radius.full,
-  padding: `${vars.space.xs} ${vars.space.md}`,
-  fontSize: vars.fontSize.sm,
-  cursor: 'pointer',
-  color: vars.color.textSecondary,
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  ':focus-visible': { outline: `2px solid ${vars.color.primary}`, outlineOffset: 2 },
-})
-
-export const viewOptionActive = style({
-  background: vars.color.surface,
-  color: vars.color.text,
-  boxShadow: vars.shadow.sm,
-})
-
 // —— Prism token 配色（浅底，CodeBlock 独立渲染与 Markdown 内代码共用 token 色板） ——
 const prismInk = {
   comment: 'oklch(0.52 0.02 258)',

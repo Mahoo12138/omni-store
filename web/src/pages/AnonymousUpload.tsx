@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ApiRequestError } from '../api/client'
-import { fetchAuthStatus } from '../api/auth'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { PublicShell } from '../components/layout/PublicShell'
+import { PublicNavigation } from '../components/layout/PublicNavigation'
 import {
   IconCheck,
-  IconChevronLeft,
   IconCopy,
   IconExternalLink,
   IconImage,
@@ -178,12 +177,6 @@ export function AnonymousUploadPage() {
     queryFn: fetchAnonymousStatus,
     retry: false,
   })
-  const authStatus = useQuery({
-    queryKey: ['auth-status'],
-    queryFn: fetchAuthStatus,
-    retry: false,
-    staleTime: 60_000,
-  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previewUrlsRef = useRef(new Set<string>())
   const copyTimerRef = useRef<number | undefined>(undefined)
@@ -312,19 +305,7 @@ export function AnonymousUploadPage() {
                 <small>IMAGE BED</small>
               </span>
             </Link>
-            <div className={css.utilityLinks}>
-              <Link to="/" className={css.backLink}>
-                <IconChevronLeft size={16} />
-                公开网盘
-              </Link>
-              {authStatus.isPending ? (
-                <span className={css.authPlaceholder} aria-label="正在检查登录状态" />
-              ) : authStatus.data?.authenticated ? (
-                <Link to="/app" className={css.authLink}>进入工作台</Link>
-              ) : (
-                <Link to="/login" className={css.authLink}>管理登录</Link>
-              )}
-            </div>
+            <PublicNavigation />
           </div>
 
           <div className={css.heroBody}>

@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test'
 // 3. 篡改备份包一个字节 → 恢复拒绝（校验和失败）
 // 4. 运行实例上：源根目录被盘外删除 → 状态显示 root_issue → rebind-root 恢复
 
-const baseURL = 'http://127.0.0.1:18080'
+const baseURL = process.env.OMNISTORE_E2E_BASE_URL ?? 'http://127.0.0.1:18080'
 const projectRoot = join(process.cwd(), '..')
 
 let adminCookies: string | null = null
@@ -58,7 +58,7 @@ test('admin exports backup via UI; backup validates and restores offline', async
   await page.getByLabel('密码').fill('OmniStore-Test-Admin!')
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByRole('link', { name: '流转' })).toBeVisible()
-  await page.goto('/app/admin?section=backup')
+  await page.goto('/app/admin?section=site&tab=general')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: /导出配置包/ }).click()
   const download = await downloadPromise

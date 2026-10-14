@@ -1,5 +1,6 @@
 import { globalStyle, keyframes, style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
+import { outlineIconTab, outlineList } from '../components/ui/Tabs.css'
 
 export const dropSurface = style({
   position: 'relative',
@@ -479,44 +480,8 @@ export const searchInput = style({
   '@media': { 'screen and (max-width: 640px)': { width: '100%', height: 44, fontSize: '16px' } },
 })
 
-export const viewToggle = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  overflow: 'hidden',
-})
-
-export const viewBtn = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '32px',
-  height: '32px',
-  background: 'transparent',
-  border: 'none',
-  color: vars.color.textSecondary,
-  cursor: 'pointer',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { color: vars.color.text },
-  },
-  '@media': { 'screen and (max-width: 640px)': { width: 44, height: 44 } },
-})
-
-export const viewBtnActive = style([
-  viewBtn,
-  {
-    backgroundColor: vars.color.primarySubtle,
-    color: vars.color.primary,
-  },
-])
-
-export const viewDivider = style({
-  width: '1px',
-  height: '16px',
-  backgroundColor: vars.color.border,
-})
+export const viewToggle = outlineList
+export const viewBtn = outlineIconTab
 
 export const iconBtn = style({
   display: 'inline-flex',

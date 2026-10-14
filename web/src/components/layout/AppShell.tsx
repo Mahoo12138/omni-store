@@ -38,8 +38,8 @@ export function AppShell({
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
   useEffect(() => {
-    if (me.isError) navigate({ to: '/login' })
-  }, [me.isError, navigate])
+    if (me.isError && pathname.startsWith('/app')) navigate({ to: '/login', search: pathname === '/app/transfer' ? { redirect: '/app/transfer' } : {} })
+  }, [me.isError, navigate, pathname])
 
   if (me.isPending) {
     return <AppShellLoading />
@@ -53,6 +53,8 @@ export function AppShell({
     clipboard.clear()
     await logout()
     queryClient.removeQueries({ queryKey: ['me'] })
+    queryClient.removeQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('transfer-') })
+    queryClient.setQueryData(['auth-status'], { authenticated: false })
     navigate({ to: '/login' })
   }
 

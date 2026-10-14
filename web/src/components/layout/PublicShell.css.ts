@@ -10,9 +10,11 @@ export const shell = style({
 export const header = style({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
   gap: vars.space.lg,
-  padding: `0 ${vars.space.lg}`,
-  height: '64px',
+  padding: `${vars.space.sm} ${vars.space.lg}`,
+  minHeight: '64px',
   backgroundColor: vars.color.surface,
   borderBottom: `1px solid ${vars.color.border}`,
   position: 'sticky',
@@ -21,6 +23,7 @@ export const header = style({
 })
 
 export const brand = style({
+  minWidth: 0,
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
@@ -32,88 +35,7 @@ export const brand = style({
 
 export const brandName = style({
   color: vars.color.text,
-})
-
-export const nav = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  flex: 1,
-  justifyContent: 'center',
-  alignSelf: 'stretch',
-  '@media': {
-    'screen and (max-width: 640px)': {
-      display: 'none',
-    },
-  },
-})
-
-export const navLink = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-  height: '100%',
-  padding: `0 ${vars.space.md}`,
-  color: vars.color.textSecondary,
-  fontSize: vars.fontSize.md,
-  fontWeight: 500,
-  borderBottom: '2px solid transparent',
-  marginBottom: '-1px',
-  transition: `color ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { color: vars.color.text },
-  },
-})
-
-export const navLinkIcon = style({
-  display: 'inline-flex',
-  marginRight: '2px',
-  color: 'inherit',
-})
-
-export const navLinkActive = style([
-  navLink,
-  {
-    color: vars.color.primary,
-    borderBottomColor: vars.color.primary,
-    selectors: {
-      '&:hover': { color: vars.color.primary },
-    },
-  },
-])
-
-export const headerCta = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '84px',
-  height: '38px',
-  padding: '0 14px',
-  borderRadius: vars.radius.md,
-  backgroundColor: vars.color.primary,
-  color: vars.color.textOnPrimary,
-  fontSize: vars.fontSize.sm,
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { backgroundColor: vars.color.primaryHover },
-    '&:active': { backgroundColor: vars.color.primaryActive, transform: 'translateY(1px)' },
-  },
-  '@media': {
-    'screen and (max-width: 640px)': {
-      minWidth: '72px',
-      padding: '0 12px',
-    },
-  },
-})
-
-export const authPlaceholder = style({
-  width: '84px',
-  height: '38px',
-  borderRadius: vars.radius.md,
-  backgroundColor: vars.color.surfaceHover,
-  flexShrink: 0,
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 })
 
 export const main = style({
@@ -202,7 +124,8 @@ export const headerResponsive = style({
     'screen and (max-width: 640px)': {
       justifyContent: 'space-between',
       gap: vars.space.sm,
-      padding: `0 ${vars.space.md}`,
+      padding: `${vars.space.sm} ${vars.space.md}`,
+      height: 'auto', minHeight: 64, flexWrap: 'wrap',
     },
   },
 })

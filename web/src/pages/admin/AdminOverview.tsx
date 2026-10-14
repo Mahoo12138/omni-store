@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Tabs } from '@base-ui-components/react/tabs'
 import { apiFetch, ApiRequestError } from '../../api/client'
 import {
   adminCreateSource,
@@ -10,30 +11,22 @@ import {
   adminDeletePolicy,
   adminDeleteSource,
   adminDeleteUser,
-  adminExportSystemConfig,
   adminFetchAuditLogs,
-  adminGetAnonymousSettings,
-  adminGetBranding,
   adminGetSource,
-  adminGetImageBedRetention,
-  adminListCapabilities,
   adminListPolicies,
   adminListSources,
   adminListUsers,
   adminPreflightSource,
   adminReconcileSource,
   adminRevokeUserCredentials,
-  adminSetAnonymousSettings,
-  adminSetBranding,
-  adminSetImageBedRetention,
   adminSetSourceDisabled,
-  fetchOperationsStatus,
   runIntegrityCheck,
   runOperationsCleanup,
   type CleanupResult,
   type IntegrityReport,
   adminConfigureStaticAssets,
   adminGetStaticConfig,
+  adminRemoveStaticConfig,
   adminPreflightStaticAssets,
   adminRebindStaticAssets,
   adminUpdateStaticAssets,
@@ -52,7 +45,6 @@ import {
   type AccessPolicy,
   type AccessPolicyInput,
   type AccessPolicyPathRule,
-  type OverviewSystem,
   type SourcePreflight,
 } from '../../api/admin'
 import { fetchMe, type User } from '../../api/auth'
@@ -81,10 +73,8 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
-  IconArrowUp,
   IconChevronRight,
   IconCloud,
-  IconDownload,
   IconGlobe,
   IconImage,
   IconInfo,
@@ -98,6 +88,7 @@ import {
   IconUserPlus,
 } from '../../components/ui/Icon'
 import { AdminLayout, AdminPageHeader } from './AdminLayout'
+import { SiteSettingsSection } from './SiteSettings'
 import { vars } from '../../styles/theme.css'
 import { formatBytes, formatDate } from '../../utils/format'
 import { auditActionLabel, auditActorLabel, auditEntryLabel } from '../../utils/audit'
@@ -114,11 +105,7 @@ type SectionKey =
   | 'policies'
   | 'users'
   | 'audit'
-  | 'backup'
-  | 'image-bed'
-  | 'static-assets'
-  | 'operations'
-  | 'branding'
+  | 'site'
 
 const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'profile', label: '我的', icon: <IconUser size={15} /> },
@@ -200,21 +187,21 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   { key: 'policies', label: '访问策略', icon: <IconShield size={15} /> },
   { key: 'users', label: '用户', icon: <IconUser size={15} /> },
   { key: 'audit', label: '审计日志', icon: <IconActivity size={15} /> },
-  { key: 'backup', label: '配置导出', icon: <IconDownload size={15} /> },
-  { key: 'branding', label: '品牌信息', icon: <IconGlobe size={15} /> },
-  { key: 'image-bed', label: '匿名图床', icon: <IconImage size={15} /> },
-  { key: 'static-assets', label: '静态资源', icon: <IconGlobe size={15} /> },
-  { key: 'operations', label: '运维中心', icon: <IconActivity size={15} /> },
+  { key: 'site', label: '站点配置', icon: <IconGlobe size={15} /> },
 ]
 
 export function AdminOverviewPage() {
-  const search = useSearch({ strict: false }) as { section?: string }
+  const search = useSearch({ strict: false }) as { section?: string; tab?: string }
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const isAdmin = me.data?.role === 'super_admin'
   const availableNav = isAdmin ? baseNav.concat(adminNav) : baseNav
   const settingsNavRef = useRef<HTMLElement>(null)
-  const section: SectionKey = (availableNav.find((n) => n.key === search.section)?.key ??
+  const legacySiteTabs: Record<string, 'services' | 'general'> = { backup: 'general', branding: 'general', 'image-bed': 'services' }
+  const legacySiteTab = legacySiteTabs[search.section ?? '']
+  const requestedSection = search.section === 'operations' ? 'stats' : legacySiteTab ? 'site' : search.section
+  const siteTab = search.tab === 'general' || legacySiteTab === 'general' ? 'general' : 'services'
+  const section: SectionKey = (availableNav.find((n) => n.key === requestedSection)?.key ??
     'profile') as SectionKey
 
   useEffect(() => {
@@ -222,6 +209,15 @@ export function AdminOverviewPage() {
       ?.querySelector<HTMLElement>('[aria-current="page"]')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [section])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    if (search.section === 'operations') {
+      void navigate({ to: '/app/admin', search: { section: 'stats' }, replace: true })
+    } else if (legacySiteTab) {
+      void navigate({ to: '/app/admin', search: { section: 'site', tab: legacySiteTab }, replace: true })
+    }
+  }, [isAdmin, search.section, legacySiteTab, navigate])
 
   function setSection(k: SectionKey) {
     navigate({ to: '/app/admin', search: { section: k } })
@@ -272,16 +268,12 @@ export function AdminOverviewPage() {
         <div className={css.settingsContent}>
           {section === 'profile' && <ProfileSection />}
           {section === 'preferences' && <PreferencesSection />}
-          {section === 'stats' && <StatsSection />}
+          {section === 'stats' && <DashboardSection />}
           {section === 'sources' && <SourcesSection />}
           {section === 'policies' && <PoliciesSection />}
           {section === 'users' && <UsersSection />}
           {section === 'audit' && <AuditSection />}
-          {section === 'backup' && <BackupSection />}
-          {section === 'image-bed' && <ImageBedSection />}
-          {section === 'static-assets' && <StaticAssetsSection />}
-          {section === 'operations' && <OperationsSection />}
-          {section === 'branding' && <BrandingSection />}
+          {section === 'site' && <SiteSettingsSection tab={siteTab} onTabChange={(tab) => { void navigate({ to: '/app/admin', search: { section: 'site', tab }, replace: true }) }} />}
         </div>
       </div>
 
@@ -1168,231 +1160,10 @@ function PreferencesSection() {
 
 // --- 系统配置包导出 ---
 
-function BackupSection() {
-  const [message, setMessage] = useState('')
-  const exportMutation = useMutation({
-    mutationFn: adminExportSystemConfig,
-    onSuccess: (filename) => setMessage(`已生成并下载 ${filename}`),
-    onError: (error) => setMessage(error instanceof ApiRequestError ? error.message : '导出失败，请稍后重试'),
-  })
-
-  return (
-    <section className={css.section}>
-      <div className={css.sectionHeader}>
-        <h2 className={css.sectionTitle}>导出系统配置包</h2>
-        <p className={css.sectionHint}>生成当前实例的可迁移配置快照，用于人工备份或故障恢复。</p>
-      </div>
-      <div className={css.sectionBody}>
-        <div className={css.exportSummary}>
-          <span className={css.exportIcon}><IconDownload size={22} /></span>
-          <div className={css.exportCopy}>
-            <strong>数据库、配置与密钥材料</strong>
-            <span className={css.exportCopySecondary}>包含 SQLite 一致性快照、生效配置、恢复说明，以及 keys 目录中的普通文件。</span>
-          </div>
-          <div className={css.exportAction}>
-            <Button
-              onClick={() => {
-                setMessage('')
-                exportMutation.mutate()
-              }}
-              disabled={exportMutation.isPending}
-            >
-              <IconDownload size={16} />
-              {exportMutation.isPending ? '正在生成…' : '导出配置包'}
-            </Button>
-          </div>
-        </div>
-        <div className={css.exportNotice} role="note">
-          <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
-          <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
-        </div>
-        {message ? (
-          <p className={exportMutation.isError ? css.exportMessageError : css.exportMessage} role="status">
-            {message}
-          </p>
-        ) : null}
-      </div>
-    </section>
-  )
-}
-
-// --- 统计（原 AdminOverview 内容精简：4 卡 + 存储源/用户概览 + 系统状态 + 最近审计）---
-
-function StatsSection() {
-  const overview = useQuery({
-    queryKey: ['admin-overview'],
-    queryFn: fetchAdminOverview,
-    refetchInterval: 30_000,
-  })
-  const o = overview.data
-  const sys: OverviewSystem | undefined = o?.system
-
-  return (
-    <>
-      <div className={css.statRow}>
-        <StatCard
-          label="存储源"
-          value={o?.source_count ?? '—'}
-          iconBg={vars.color.tileBlueBg}
-          iconFg={vars.color.tileBlueFg}
-        >
-          <IconServer size={22} />
-        </StatCard>
-        <StatCard
-          label="用户"
-          value={o?.user_count ?? '—'}
-          iconBg={vars.color.tileGreenBg}
-          iconFg={vars.color.tileGreenFg}
-        >
-          <IconUser size={22} />
-        </StatCard>
-        <StatCard
-          label="公开盘"
-          value={o?.public_drive_enabled ? '已开启' : '未开启'}
-          valueIsText
-          iconBg={vars.color.tileAmberBg}
-          iconFg={vars.color.tileAmberFg}
-        >
-          <IconGlobe size={22} />
-        </StatCard>
-        <StatCard
-          label="匿名图床"
-          value={o?.anonymous_image_bed_on ? '已开启' : '未开启'}
-          valueIsText
-          iconBg={vars.color.tilePurpleBg}
-          iconFg={vars.color.tilePurpleFg}
-        >
-          <IconImage size={22} />
-        </StatCard>
-      </div>
-
-      <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>系统状态</h2>
-        </div>
-        <div className={css.sectionBody}>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>运行版本</span>
-            <span className={css.kvValue}>{sys?.version ?? '—'}</span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>数据目录</span>
-            <span className={css.kvValue}>{sys?.data_dir ?? '—'}</span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>主服务端口</span>
-            <span className={css.kvValue}>{portOf(sys?.http_addr) ?? '—'}</span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>S3 状态</span>
-            <span className={css.kvValue}>
-              <span className={css.statusDot} style={{ background: o?.system.s3_enabled ? vars.color.success : vars.color.textSecondary }} />
-              {sys?.s3_status ?? '—'}
-            </span>
-          </div>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>WebDAV 状态</span>
-            <span className={css.kvValue}>
-              <span className={css.statusDot} style={{ background: vars.color.success }} />
-              {sys?.webdav_status ?? '—'}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 id="source-overview-title" className={css.sectionTitle}>存储源概览</h2>
-          <p className={css.sectionHint}>
-            共 {o?.sources.length ?? 0} 个存储源，详细配置请见"存储源"。
-          </p>
-        </div>
-        <HorizontalDataRegion name="存储源概览" labelledBy="source-overview-title">
-          <table className={css.compactTable}>
-            <thead>
-              <tr>
-                <th className={css.compactTh}>名称</th>
-                <th className={css.compactTh}>真实路径</th>
-                <th className={css.compactTh}>协议</th>
-                <th className={css.compactTh}>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {o?.sources.length === 0 && (
-                <tr>
-                  <td colSpan={4} className={css.compactTd} style={{ color: vars.color.textSecondary }}>
-                    还没有存储源。
-                  </td>
-                </tr>
-              )}
-              {o?.sources.map((s) => (
-                <tr key={s.key} className={css.compactTr}>
-                  <td className={css.compactTd} style={{ fontWeight: 500 }}>{s.name}</td>
-                  <td className={css.compactTd} style={{ color: vars.color.textSecondary, fontFamily: vars.font.mono }}>
-                    {s.root_path}
-                  </td>
-                  <td className={css.compactTd}>
-                    {[
-                      s.webdav_enabled ? 'WebDAV' : null,
-                      s.s3_enabled ? 'S3' : null,
-                    ].filter(Boolean).join(' / ') || '—'}
-                  </td>
-                  <td className={css.compactTd}>
-                    <Badge color={s.is_disabled ? 'gray' : 'green'}>
-                      {s.is_disabled ? '已禁用' : '正常'}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </HorizontalDataRegion>
-      </section>
-    </>
-  )
-}
-
 function portOf(addr?: string): string | undefined {
   if (!addr) return undefined
   const i = addr.lastIndexOf(':')
   return i >= 0 ? addr.slice(i + 1) : addr
-}
-
-function StatCard({
-  label,
-  value,
-  valueIsText,
-  iconBg,
-  iconFg,
-  children,
-}: {
-  label: string
-  value: number | string
-  valueIsText?: boolean
-  iconBg: string
-  iconFg: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className={css.statCard}>
-      <span className={css.statIcon} style={{ background: iconBg, color: iconFg }}>
-        {children}
-      </span>
-      <div className={css.statBody}>
-        <span className={css.statLabel}>{label}</span>
-        {valueIsText ? (
-          <span className={css.statValueText}>{value}</span>
-        ) : (
-          <span className={css.statValue}>
-            {value}
-            <span className={css.statTrend} aria-hidden="true">
-              <IconArrowUp size={14} />
-            </span>
-          </span>
-        )}
-      </div>
-    </div>
-  )
 }
 
 // --- 存储源（原 AdminSources）---
@@ -1418,8 +1189,8 @@ function SourcesSection() {
 
   return (
     <>
-      <section className={css.section}>
-        <header className={css.sectionHeaderWithAction}>
+      <section className={css.sourcesSection}>
+        <header className={css.sourcesHeader}>
           <div className={css.sectionHeaderCopy}>
             <h2 id="storage-sources-title" className={css.sectionTitle}>存储源</h2>
             <p className={css.sectionHint}>
@@ -1432,7 +1203,7 @@ function SourcesSection() {
             </Button>
           </div>
         </header>
-        <HorizontalDataRegion name="存储源" labelledBy="storage-sources-title" busy={sources.isPending}>
+        <div role="region" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
           <div className={css.sourceList} role="list" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
             {sources.isPending ? (
               <div className={css.sourceState} role="status">正在加载存储源…</div>
@@ -1449,33 +1220,32 @@ function SourcesSection() {
                 <div className={css.sourceIdentity}>
                   <span className={css.sourceIcon} aria-hidden="true"><IconServer size={18} /></span>
                   <div className={css.sourceCopy}>
-                    <h3 className={css.sourceName}>{s.name}</h3>
+                    <div className={css.sourceHeading}>
+                      <h3 className={css.sourceName}>{s.name}</h3>
+                      <Badge color={s.is_disabled ? 'gray' : 'green'}>{s.is_disabled ? '已禁用' : '正常'}</Badge>
+                    </div>
                     <code className={css.sourcePath} title={s.root_path}>{s.root_path}</code>
                   </div>
                 </div>
                 <div className={css.sourceMeta} aria-label={`${s.name} 状态信息`}>
                   <div className={css.sourceMetaItem}>
-                    <span className={css.sourceMetaLabel}>状态</span>
-                      <Badge color={s.is_disabled ? 'gray' : 'green'}>
-                        {s.is_disabled ? '已禁用' : '正常'}
-                      </Badge>
-                  </div>
-                  <div className={css.sourceMetaItem}>
                     <span className={css.sourceMetaLabel}>配额</span>
                     <span className={css.sourceMetaValue}>{s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}</span>
                   </div>
                   <div className={css.sourceMetaItem}>
-                    <span className={css.sourceMetaLabel}>协议</span>
-                    <span className={css.sourceMetaValue}>
+                    <span className={css.sourceMetaLabel}>访问协议</span>
+                    <div className={css.sourceProtocols}>
                       {[
                         s.webdav_enabled ? 'WebDAV' : null,
                         s.s3_enabled ? 'S3' : null,
-                      ].filter(Boolean).join(' / ') || '—'}
-                    </span>
+                        s.static_enabled ? '静态 HTTP' : null,
+                      ].filter(Boolean).map((protocol) => <span key={protocol} className={css.sourceProtocolTag}>{protocol}</span>)}
+                      {!s.webdav_enabled && !s.s3_enabled && !s.static_enabled && <span className={css.sourceMetaMuted}>均未启用</span>}
+                    </div>
                   </div>
                 </div>
                 <div className={css.sourceActions} aria-label={`${s.name} 操作`}>
-                  <Button variant="ghost" onClick={() => setEditId(s.key)} aria-label={`配置存储源 ${s.name}`}>
+                  <Button variant="secondary" onClick={() => setEditId(s.key)} aria-label={`配置存储源 ${s.name}`}>
                     配置
                   </Button>
                   <Button
@@ -1499,7 +1269,7 @@ function SourcesSection() {
               </div>
             )}
           </div>
-        </HorizontalDataRegion>
+        </div>
       </section>
 
       {/* 新建存储源 弹窗 */}
@@ -1736,7 +1506,7 @@ function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
   )
 }
 
-// --- 编辑存储源 弹窗（协议开关 + 排除规则；产品功能开关在 Site Capability 设置）---
+// --- 编辑存储源：访问协议与存储设置 ---
 
 function EditSourceDialog({
   sourceKey,
@@ -1752,6 +1522,7 @@ function EditSourceDialog({
   const [webdavOn, setWebdavOn] = useState<boolean | null>(null)
   const [s3On, setS3On] = useState<boolean | null>(null)
   const [quotaGiB, setQuotaGiB] = useState<string | null>(null)
+  const [staticExpanded, setStaticExpanded] = useState(false)
   const [msg, setMsg] = useState('')
 
   // 打开弹窗时，把当前值同步到本地 state
@@ -1828,8 +1599,8 @@ function EditSourceDialog({
     <DialogWrap
       open
       onOpenChange={(o) => { if (!o) onClose() }}
-      title={`配置：${src.name}`}
-      description={`真实路径：${src.root_path}`}
+      title={<span className={css.sourceConfigTitle} title={`配置：${src.name}`}>配置：{src.name}</span>}
+      description={<code className={css.sourceConfigPath} title={src.root_path}>{src.root_path}</code>}
       wide
       footer={
         <>
@@ -1843,84 +1614,96 @@ function EditSourceDialog({
         </>
       }
     >
-      <Field label="访问协议" hint="修改后随底部按钮统一保存；产品功能（公开盘、图床等）在「站点服务」设置">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label className={fieldCss.checkboxRow}>
-            <input
-              type="checkbox"
-              className={fieldCss.checkbox}
-              checked={webdavEnabled}
+      <Tabs.Root defaultValue="protocols" className={css.sourceConfig}>
+        <Tabs.List className={css.sourceConfigTabs} aria-label="存储源配置">
+          <Tabs.Tab className={css.sourceConfigTab} value="protocols">访问协议</Tabs.Tab>
+          <Tabs.Tab className={css.sourceConfigTab} value="storage">存储设置</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="protocols" className={css.sourceConfigPanel} keepMounted>
+          <div className={css.protocolList}>
+            <label className={css.protocolRow}>
+              <span className={css.protocolCopy}>
+                <span className={css.protocolName}>WebDAV</span>
+                <span className={css.protocolHint}>凭据访问 · 通过客户端挂载此存储源。</span>
+              </span>
+              <input type="checkbox" className={css.protocolCheckbox} aria-label="启用 WebDAV" checked={webdavEnabled}
+                onChange={(event) => { setWebdavOn(event.target.checked); setMsg('') }} />
+            </label>
+            <label className={css.protocolRow}>
+              <span className={css.protocolCopy}>
+                <span className={css.protocolName}>S3</span>
+                <span className={css.protocolHint}>凭据访问 · 作为 Path-style Bucket 连接 CLI 或 SDK。</span>
+              </span>
+              <input type="checkbox" className={css.protocolCheckbox} aria-label="启用 S3" checked={s3Enabled}
+                onChange={(event) => { setS3On(event.target.checked); setMsg('') }} />
+            </label>
+            <div className={css.protocolRow}>
+              <div className={css.protocolCopy}>
+                <span className={css.protocolName}>静态 HTTP</span>
+                <p className={css.protocolHint}>公开访问 · 按固定地址匿名读取指定目录的图片和视频。</p>
+              </div>
+              <div className={css.protocolControl}>
+                <Button variant="secondary" aria-label={staticExpanded ? '收起静态 HTTP' : '配置静态 HTTP'}
+                  aria-expanded={staticExpanded} aria-controls={`static-access-${sourceKey}`}
+                  onClick={() => setStaticExpanded((expanded) => !expanded)}>
+                  {staticExpanded ? '收起' : '配置'}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <p className={css.sourceConfigNote}>WebDAV、S3 与存储设置随底部按钮统一保存。静态 HTTP 在展开区域单独保存。</p>
+          <div id={`static-access-${sourceKey}`} hidden={!staticExpanded}>
+            <div className={css.staticAccessStack}><StaticAssetsSection sourceKey={sourceKey} /></div>
+          </div>
+        </Tabs.Panel>
+        <Tabs.Panel value="storage" className={css.sourceConfigPanel} keepMounted>
+          <Field
+            label="存储源硬配额"
+            hint={`当前已使用 ${formatBytes(detail.data.quota.usage_bytes)}；填 0 表示不限制。配额不会删除已有文件。`}
+          >
+            <div className={css.sourceQuotaInput}>
+              <Input
+                type="number"
+                min="0"
+                step="0.001"
+                value={quotaValue}
+                onChange={(event) => {
+                  setQuotaGiB(event.target.value)
+                  setMsg('')
+                }}
+                aria-label="存储源配额 GiB"
+              />
+              <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>GiB</span>
+            </div>
+          </Field>
+
+          <Field
+            label="排除规则（每行一条 glob）"
+            hint="匹配的文件不会出现在文件列表中，例如 *.tmp 或 .git/*"
+          >
+            <textarea
+              className={fieldCss.textarea}
+              aria-label="排除规则"
+              value={patternsValue}
               onChange={(e) => {
-                setWebdavOn(e.target.checked)
+                setPatterns(e.target.value)
                 setMsg('')
               }}
             />
-            启用 WebDAV（该存储源可作为 WebDAV 挂载点）
-          </label>
-          <label className={fieldCss.checkboxRow}>
-            <input
-              type="checkbox"
-              className={fieldCss.checkbox}
-              checked={s3Enabled}
-              onChange={(e) => {
-                setS3On(e.target.checked)
-                setMsg('')
-              }}
-            />
-            启用 S3（该存储源可作为 Path-style Bucket）
-          </label>
-        </div>
-      </Field>
-
-      <Field
-        label="存储源硬配额"
-        hint={`当前已使用 ${formatBytes(detail.data.quota.usage_bytes)}；填 0 表示不限制。配额不会删除已有文件。`}
-      >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Input
-            type="number"
-            min="0"
-            step="0.001"
-            value={quotaValue}
-            onChange={(event) => {
-              setQuotaGiB(event.target.value)
-              setMsg('')
-            }}
-            aria-label="存储源配额 GiB"
-          />
-          <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>GiB</span>
-        </div>
-      </Field>
-
-      <Field
-        label="文件台账"
-        hint={isDirty
-          ? '请先保存当前配置，再扫描并校准台账。'
-          : `当前台账用量 ${formatBytes(detail.data.ledger_usage_bytes)}。校准会扫描真实目录，新发现文件标记为未归属。`}
-      >
-        <Button
-          variant="secondary"
-          disabled={isDirty || reconcileMut.isPending || updateMut.isPending}
-          onClick={() => reconcileMut.mutate()}
-        >
-          {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
-        </Button>
-      </Field>
-
-      <Field
-        label="排除规则（每行一条 glob）"
-        hint="匹配的文件不会出现在文件列表中，例如 *.tmp 或 .git/*"
-      >
-        <textarea
-          className={fieldCss.textarea}
-          value={patternsValue}
-          onChange={(e) => {
-            setPatterns(e.target.value)
-            setMsg('')
-          }}
-        />
-      </Field>
-
+          </Field>
+          <Field
+            label="文件台账"
+            hint={isDirty
+              ? '请先保存当前配置，再扫描并校准台账。'
+              : `当前台账用量 ${formatBytes(detail.data.ledger_usage_bytes)}。校准会扫描真实目录，新发现文件标记为未归属。`}
+          >
+            <Button variant="secondary" aria-label="扫描并校准台账" disabled={isDirty || reconcileMut.isPending || updateMut.isPending}
+              onClick={() => reconcileMut.mutate()}>
+              {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
+            </Button>
+          </Field>
+        </Tabs.Panel>
+      </Tabs.Root>
       {msg && (
         <div
           style={{
@@ -2846,219 +2629,6 @@ function AuditSection() {
   )
 }
 
-// --- 匿名图床（原 AdminSettings 的匿名图床 + 运行信息）---
-
-function ImageBedSection() {
-  const settings = useQuery({ queryKey: ['admin-anon-settings'], queryFn: adminGetAnonymousSettings })
-  const capabilitiesQuery = useQuery({ queryKey: ['admin-capabilities'], queryFn: adminListCapabilities })
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => apiFetch<{ status: string; version: string }>('/api/v1/health'),
-  })
-  const anonStatus = useQuery({ queryKey: ['anon-status'], queryFn: () => apiFetch<{ max_file_size_mb: number; enabled: boolean }>('/api/v1/image-bed/anonymous-status') })
-
-  const [editOpen, setEditOpen] = useState(false)
-  const [msg, setMsg] = useState('')
-
-  if (!settings.isSuccess) {
-    return (
-      <section className={css.section}>
-        <div className={css.sectionBody}>
-          <span className={css.kvLabel}>加载中…</span>
-        </div>
-      </section>
-    )
-  }
-
-  return (
-    <>
-      <section className={css.section}>
-        <header className={css.sectionHeaderWithAction}>
-          <div className={css.sectionHeaderCopy}>
-            <h2 id="anonymous-image-bed-title" className={css.sectionTitle}>匿名公共图床</h2>
-            <p className={css.sectionHint}>
-              默认关闭。开启后任何人无需登录即可通过 /upload 上传图片
-              （单张最大 {anonStatus.data?.max_file_size_mb ?? '-'}MB，按 IP 限流）。
-            </p>
-          </div>
-          <div className={css.sectionHeaderAction}>
-            <Button onClick={() => setEditOpen(true)}>
-              {settings.data.enabled ? '调整' : '开启'}
-            </Button>
-          </div>
-        </header>
-        <div className={css.sectionBody}>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>当前状态</span>
-            <span className={css.kvValue}>
-              {settings.data.enabled ? (
-                <>
-                  <Badge color="green">已开启</Badge>
-                  <span style={{ marginLeft: 8, color: vars.color.textSecondary }}>
-                    图床目标：{capabilitiesQuery.data?.find((b) => b.capability === 'image_bed')?.source_name ?? '未绑定'}
-                  </span>
-                </>
-              ) : (
-                <Badge color="gray">未开启</Badge>
-              )}
-            </span>
-          </div>
-          {msg && <span className={css.kvLabel}>{msg}</span>}
-        </div>
-      </section>
-
-      <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>运行信息</h2>
-        </div>
-        <div className={css.sectionBody}>
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>版本</span>
-            <span className={css.kvValue}>{health.data?.version ?? '-'}</span>
-          </div>
-          <span className={css.kvLabel}>
-            基础设施配置（监听地址、public_url、上传限制等）由 config.yaml 和 OMNISTORE_* 环境变量管理，修改后需重启服务。
-          </span>
-        </div>
-      </section>
-
-      {/* 匿名图床配置 弹窗 */}
-      <AnonymousImageBedDialog
-        open={editOpen}
-        onOpenChange={(o) => { setEditOpen(o); if (!o) setMsg('') }}
-        enabled={settings.data.enabled}
-        sourceKey={settings.data.key}
-      />
-    </>
-  )
-}
-
-function AnonymousImageBedDialog({
-  open,
-  onOpenChange,
-  enabled,
-  sourceKey,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  enabled: boolean
-  sourceKey: string
-}) {
-  const queryClient = useQueryClient()
-  const retention = useQuery({
-    queryKey: ['admin-image-bed-retention'],
-    queryFn: adminGetImageBedRetention,
-    enabled: open,
-  })
-  const [turnOn, setTurnOn] = useState(enabled)
-  const [userDays, setUserDays] = useState('0')
-  const [anonymousDays, setAnonymousDays] = useState('0')
-  const [err, setErr] = useState('')
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const parsedUser = Number(userDays)
-      const parsedAnonymous = Number(anonymousDays)
-      if (!Number.isInteger(parsedUser) || parsedUser < 0 || !Number.isInteger(parsedAnonymous) || parsedAnonymous < 0) {
-        throw new Error('保留天数必须是非负整数')
-      }
-      await adminSetAnonymousSettings({ enabled: turnOn })
-      await adminSetImageBedRetention({
-        user_retention_days: parsedUser,
-        anonymous_retention_days: parsedAnonymous,
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-anon-settings'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-image-bed-retention'] })
-      onOpenChange(false)
-    },
-    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '保存失败'),
-  })
-
-  useEffect(() => {
-    if (open) {
-      setTurnOn(enabled)
-      setUserDays(String(retention.data?.user_retention_days ?? 0))
-      setAnonymousDays(String(retention.data?.anonymous_retention_days ?? 0))
-      setErr('')
-    }
-  }, [open, enabled, retention.data])
-
-  function onSubmit() {
-    if (turnOn && !sourceKey) {
-      setErr('请先在「站点服务」中为图床绑定存储源')
-      return
-    }
-    mutation.mutate()
-  }
-
-  return (
-    <DialogWrap
-      open={open}
-      onOpenChange={onOpenChange}
-      title={enabled ? '调整匿名图床' : '开启匿名图床'}
-      description="任何人通过 /upload 即可上传（按 IP 限流）。"
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={onSubmit} disabled={mutation.isPending}>
-            {mutation.isPending ? '保存中…' : enabled ? '保存' : '开启'}
-          </Button>
-        </>
-      }
-    >
-      <Field label="启用" required>
-        <label className={fieldCss.checkboxRow}>
-          <input
-            type="checkbox"
-            className={fieldCss.checkbox}
-            checked={turnOn}
-            onChange={(e) => setTurnOn(e.target.checked)}
-          />
-          允许匿名访问 /upload
-        </label>
-      </Field>
-      <Field label="图床目标" hint="上传目标由「站点服务」中图床能力的绑定存储源决定">
-        <span className={css.kvValue} style={{ fontFamily: vars.font.mono }}>
-          {sourceKey || '未绑定（请先在站点服务中绑定）'}
-        </span>
-      </Field>
-      <Field label="保留策略（天）" hint="0 表示不自动过期；达到保留期后图片直链与缩略图停止提供，历史记录保留供清理。">
-        <div style={{ display: 'flex', gap: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-            登录用户
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={userDays}
-              onChange={(event) => setUserDays(event.target.value)}
-              aria-label="登录用户图片保留天数"
-            />
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-            匿名上传
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={anonymousDays}
-              onChange={(event) => setAnonymousDays(event.target.value)}
-              aria-label="匿名图片保留天数"
-            />
-          </label>
-        </div>
-      </Field>
-      {err && (
-        <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>
-          {err}
-        </div>
-      )}
-    </DialogWrap>
-  )
-}
-
 // --- 页脚：版本号 + git commit（仿 docs/settings-layout.png 左下角）---
 
 function VersionFooter() {
@@ -3080,82 +2650,7 @@ function VersionFooter() {
   return <div className={css.settingsFooter}>{lines.join('\n')}</div>
 }
 
-// --- 品牌信息（1.2.0）：实例名称，用于公开页/分享页品牌展示 ---
-
-function BrandingSection() {
-  const queryClient = useQueryClient()
-  const branding = useQuery({ queryKey: ['admin-branding'], queryFn: adminGetBranding })
-  const [name, setName] = useState('')
-  const [editing, setEditing] = useState(false)
-  const [msg, setMsg] = useState('')
-
-  const save = useMutation({
-    mutationFn: () => adminSetBranding(name),
-    onSuccess: async () => {
-      setEditing(false)
-      setMsg('')
-      await queryClient.invalidateQueries({ queryKey: ['admin-branding'] })
-      await queryClient.invalidateQueries({ queryKey: ['system-status'] })
-    },
-    onError: (error) => {
-      setMsg(error instanceof ApiRequestError ? error.message : '保存失败，请重试。')
-    },
-  })
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    if (name.trim().length > 64) {
-      setMsg('实例名称不能超过 64 个字符。')
-      return
-    }
-    save.mutate()
-  }
-
-  const currentName = branding.data?.instance_name ?? 'OmniStore'
-
-  return (
-    <section className={css.section}>
-      <header className={css.sectionHeaderWithAction}>
-        <div className={css.sectionHeaderCopy}>
-          <h2 id="branding-title" className={css.sectionTitle}>品牌信息</h2>
-          <p className={css.sectionHint}>
-            实例名称显示在公开页与分享页顶部及页脚；清空保存可恢复默认名称 OmniStore。
-          </p>
-        </div>
-        <div className={css.sectionHeaderAction}>
-          <Button
-            onClick={() => {
-              setName(currentName)
-              setEditing((open) => !open)
-              setMsg('')
-            }}
-          >
-            {editing ? '取消' : '修改名称'}
-          </Button>
-        </div>
-      </header>
-      <div className={css.sectionBody}>
-        {editing ? (
-          <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-            <Field label="实例名称" required error={msg} hint="1-64 个字符，展示于公开侧页面。">
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
-            </Field>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="submit" disabled={save.isPending}>{save.isPending ? '保存中…' : '保存'}</Button>
-            </div>
-          </form>
-        ) : (
-          <div className={css.kvRow}>
-            <span className={css.kvLabel}>实例名称</span>
-            <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-// --- 静态资源托管（2.0 AST）：单发布空间 + 固定公开标识 ---
+// --- 存储源静态 HTTP：按源独立配置 + 固定公开标识 ---
 
 const staticCacheModeLabels: Record<string, string> = {
   short: '短缓存（默认，5 分钟）',
@@ -3169,92 +2664,85 @@ const staticCorsModeLabels: Record<string, string> = {
   none: '不添加 CORS 头',
 }
 
-function StaticAssetsSection() {
-  const config = useQuery({ queryKey: ['static-assets-config'], queryFn: adminGetStaticConfig })
+function StaticAssetsSection({ sourceKey }: { sourceKey: string }) {
+  const config = useQuery({ queryKey: ['static-assets-config', sourceKey], queryFn: () => adminGetStaticConfig(sourceKey) })
   if (config.isPending) {
     return (
-      <section className={css.section}>
-        <div className={css.sectionBody}><span className={css.kvLabel}>加载中…</span></div>
+      <section className={css.staticProtocolSection}>
+        <div className={css.staticProtocolBody}><span className={css.kvLabel}>加载中…</span></div>
       </section>
     )
   }
+  if (config.isError) return <p role="alert">{config.error.message}</p>
   const data = config.data
   if (!data?.public_asset_id) {
-    return <StaticAssetsConfigureForm />
+    return <StaticAssetsConfigureForm sourceKey={sourceKey} />
   }
-  return <StaticAssetsConfiguredView config={data} />
+  return <StaticAssetsConfiguredView key={`${sourceKey}:${data.revision}`} config={data} />
 }
 
-function StaticAssetsConfigureForm() {
+function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
   const queryClient = useQueryClient()
-  const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
-  const [sourceKey, setSourceKey] = useState('')
   const [publishRoot, setPublishRoot] = useState('blog-assets')
+  const [confirmRoot, setConfirmRoot] = useState(false)
   const [preflight, setPreflight] = useState<StaticAssetPreflight | null>(null)
   const [err, setErr] = useState('')
 
   const preflightMut = useMutation({
-    mutationFn: () => adminPreflightStaticAssets({ source_key: sourceKey, publish_root: publishRoot }),
+    mutationFn: () => adminPreflightStaticAssets(sourceKey, { publish_root: publishRoot.trim() }),
     onSuccess: (result) => { setPreflight(result); setErr('') },
     onError: (e) => { setErr(e instanceof ApiRequestError ? e.message : '预检失败'); setPreflight(null) },
   })
   const configureMut = useMutation({
-    mutationFn: () => adminConfigureStaticAssets({
-      source_key: sourceKey,
+    mutationFn: () => adminConfigureStaticAssets(sourceKey, {
       publish_root: publishRoot.trim(),
-      confirm_publish_root: publishRoot.trim() === '',
+      confirm_publish_root: confirmRoot,
     }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
-      await queryClient.invalidateQueries({ queryKey: ['admin-capabilities'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['static-assets-config', sourceKey] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
+      ])
     },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '配置失败'),
   })
 
-  const usableSources = sources.data?.filter((source) => !source.is_disabled) ?? []
   return (
-    <section className={css.section}>
-      <header className={css.sectionHeaderWithAction}>
+    <section className={css.staticProtocolSection}>
+      <header className={css.staticProtocolHeader}>
         <div className={css.sectionHeaderCopy}>
-          <h2 className={css.sectionTitle}>静态资源托管</h2>
+          <h3 className={css.sectionTitle}>发布范围</h3>
           <p className={css.sectionHint}>
             把一个普通目录按固定地址公开读取，用于博客图片、视频等长期资源。
             启用后发布目录内的受支持文件将公开读取，无需登录；不提供目录列表不等于保密。
           </p>
         </div>
       </header>
-      <div className={css.sectionBody}>
-        <Field label="发布存储源" required>
-          <Select
-            value={usableSources.some((source) => source.key === sourceKey)
-              ? String(usableSources.findIndex((source) => source.key === sourceKey))
-              : ''}
-            onValueChange={(index) => setSourceKey(usableSources[Number(index)]?.key ?? '')}
-            options={usableSources.map((source, index) => ({ value: String(index), label: source.name }))}
-            placeholder="选择存储源…"
-            ariaLabel="静态资源发布存储源"
-          />
-        </Field>
+      <div className={css.staticProtocolBody}>
         <Field
           label="发布目录（源内相对路径）"
           hint={publishRoot.trim() === '' ? '留空表示发布整个存储源根目录，必须显式确认。' : '例如 blog-assets；托管命名空间与排除规则永远不公开。'}
         >
           <Input
             value={publishRoot}
-            onChange={(event) => { setPublishRoot(event.target.value); setErr('') }}
+            onChange={(event) => { setPublishRoot(event.target.value); setErr(''); setPreflight(null); setConfirmRoot(false) }}
             placeholder="blog-assets"
             aria-label="静态资源发布目录"
           />
         </Field>
-        <div style={{ display: 'flex', gap: 8 }}>
+        {publishRoot.trim() === '' && <label className={fieldCss.checkboxRow}>
+          <input type="checkbox" className={fieldCss.checkbox} checked={confirmRoot} onChange={(event) => setConfirmRoot(event.target.checked)} />
+          我确认公开此存储源根目录内的受支持媒体文件
+        </label>}
+        <div className={css.staticProtocolActions}>
           <Button variant="secondary" disabled={!sourceKey || preflightMut.isPending} onClick={() => preflightMut.mutate()}>
             {preflightMut.isPending ? '预检中…' : '预检发布目录'}
           </Button>
-          <Button disabled={!sourceKey || configureMut.isPending} onClick={() => configureMut.mutate()}>
+          <Button disabled={!preflight?.root_exists || preflight.publish_root !== publishRoot.trim() || configureMut.isPending || (publishRoot.trim() === '' && !confirmRoot)} onClick={() => configureMut.mutate()}>
             {configureMut.isPending ? '保存中…' : '创建发布空间'}
           </Button>
         </div>
-        {preflight && (
+        {preflight && preflight.publish_root === publishRoot.trim() && (
           <div className={css.sourcePreview}>
             <p>样例条目：{preflight.sample_entries.length > 0 ? preflight.sample_entries.join('、') : '（目录为空）'}</p>
             <p>公开类型：{preflight.supported_types.join('、')}</p>
@@ -3270,6 +2758,7 @@ function StaticAssetsConfigureForm() {
 function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
   const queryClient = useQueryClient()
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
+  const sourceKey = config.source_key
   const [enabled, setEnabled] = useState(config.enabled)
   const [cacheMode, setCacheMode] = useState(config.cache_mode)
   const [corsMode, setCorsMode] = useState(config.cors_mode)
@@ -3281,7 +2770,7 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
   const [copied, setCopied] = useState(false)
 
   const saveMut = useMutation({
-    mutationFn: () => adminUpdateStaticAssets({
+    mutationFn: () => adminUpdateStaticAssets(sourceKey, {
       enabled,
       cache_mode: cacheMode,
       cors_mode: corsMode,
@@ -3291,9 +2780,23 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
     }),
     onSuccess: async () => {
       setMsg('配置已保存；新响应按新策略执行。')
-      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['static-assets-config'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
+      ])
     },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '保存失败'),
+  })
+
+  const removeMut = useMutation({
+    mutationFn: () => adminRemoveStaticConfig(sourceKey, config.revision),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['static-assets-config', sourceKey] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
+      ])
+    },
+    onError: (error) => setErr(error instanceof ApiRequestError ? error.message : '移除失败'),
   })
 
   async function copyBaseURL() {
@@ -3304,31 +2807,33 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
 
   return (
     <>
-      <section className={css.section}>
-        <header className={css.sectionHeaderWithAction}>
+      <section className={css.staticProtocolSection}>
+        <header className={css.staticProtocolHeader}>
           <div className={css.sectionHeaderCopy}>
-            <h2 className={css.sectionTitle}>静态资源托管</h2>
+            <h3 className={css.sectionTitle}>发布空间</h3>
             <p className={css.sectionHint}>
-              发布空间：{config.source_name} / {config.publish_root || '（存储源根目录）'}
+              发布目录：{config.publish_root || '（存储源根目录）'}
             </p>
           </div>
           <div className={css.sectionHeaderAction}>
             <Button variant="secondary" onClick={() => setRebindOpen(true)}>更换发布空间</Button>
           </div>
         </header>
-        <div className={css.sectionBody}>
+        <div className={css.staticProtocolBody}>
           <div className={css.kvRow}>
             <span className={css.kvLabel}>状态</span>
             <span className={css.kvValue}>
-              {config.enabled ? <Badge color="green">公开读取中</Badge> : <Badge color="gray">已关闭（原站 404）</Badge>}
+              {config.source_disabled
+                ? <Badge color="gray">源已禁用（原站 404）</Badge>
+                : config.enabled ? <Badge color="green">公开读取中</Badge> : <Badge color="gray">已关闭（原站 404）</Badge>}
             </span>
           </div>
           <div className={css.kvRow}>
             <span className={css.kvLabel}>baseUrl</span>
-            <span className={css.kvValue} style={{ fontFamily: vars.font.mono, wordBreak: 'break-all' }}>
-              {config.base_url}
-            </span>
-            <Button variant="ghost" onClick={() => void copyBaseURL()}>{copied ? '已复制' : '复制'}</Button>
+            <div className={css.kvValue} style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+              <span>{config.base_url}</span>
+              <Button variant="ghost" onClick={() => void copyBaseURL()}>{copied ? '已复制' : '复制'}</Button>
+            </div>
           </div>
           <div className={css.kvRow}>
             <span className={css.kvLabel}>公开类型</span>
@@ -3337,11 +2842,11 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
         </div>
       </section>
 
-      <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>缓存与跨域</h2>
+      <section className={css.staticProtocolSettings}>
+        <div className={css.staticProtocolHeader}>
+          <h3 className={css.sectionTitle}>缓存与跨域</h3>
         </div>
-        <div className={css.sectionBody}>
+        <div className={css.staticProtocolBody}>
           <Field label="启用" hint="关闭后原站公开读取返回 404；无法收回已分发到浏览器/CDN 的缓存。">
             <label className={fieldCss.checkboxRow}>
               <input type="checkbox" className={fieldCss.checkbox} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
@@ -3374,12 +2879,15 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
           </Field>
           {corsMode === 'allowlist' && (
             <Field label="允许的 Origin 白名单（每行一个完整 origin）" hint="精确匹配，不支持任意后缀。">
-              <textarea className={fieldCss.textarea} value={allowedOrigins} onChange={(event) => setAllowedOrigins(event.target.value)} />
+              <textarea aria-label="静态 HTTP Origin 白名单" className={fieldCss.textarea} value={allowedOrigins} onChange={(event) => setAllowedOrigins(event.target.value)} />
             </Field>
           )}
           <Button disabled={saveMut.isPending} onClick={() => { setMsg(''); setErr(''); saveMut.mutate() }}>
-            {saveMut.isPending ? '保存中…' : '保存设置'}
+            {saveMut.isPending ? '保存中…' : '保存静态 HTTP'}
           </Button>
+          {!config.enabled && <Button variant="dangerGhost" disabled={removeMut.isPending} onClick={() => {
+            if (window.confirm('撤销此源的静态公开地址？已有 URL 将失效，磁盘文件会保留。')) removeMut.mutate()
+          }}>移除静态访问配置</Button>}
           {msg && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.textSecondary }}>{msg}</div>}
           {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
         </div>
@@ -3411,21 +2919,24 @@ function StaticAssetsRebindDialog({
   const [sourceKey, setSourceKey] = useState(config.source_key)
   const [publishRoot, setPublishRoot] = useState(config.publish_root)
   const [confirmRelocate, setConfirmRelocate] = useState(false)
+  const [confirmRoot, setConfirmRoot] = useState(false)
   const [err, setErr] = useState('')
 
   const usable = sources.filter((source) => !source.is_disabled)
   const mutation = useMutation({
-    mutationFn: () => adminRebindStaticAssets({
+    mutationFn: () => adminRebindStaticAssets(config.source_key, {
       source_key: sourceKey,
       publish_root: publishRoot.trim(),
       mode,
-      confirm_publish_root: publishRoot.trim() === '',
+      confirm_publish_root: confirmRoot,
       confirm_relocate: mode === 'relocate' ? confirmRelocate : undefined,
       expected_revision: config.revision,
     }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['static-assets-config'] })
-      await queryClient.invalidateQueries({ queryKey: ['admin-capabilities'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['static-assets-config'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
+      ])
       onOpenChange(false)
     },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '重绑失败'),
@@ -3437,6 +2948,7 @@ function StaticAssetsRebindDialog({
       setSourceKey(config.source_key)
       setPublishRoot(config.publish_root)
       setConfirmRelocate(false)
+      setConfirmRoot(false)
       setErr('')
     }
   }, [open, config.source_key, config.publish_root])
@@ -3450,7 +2962,7 @@ function StaticAssetsRebindDialog({
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button disabled={mutation.isPending || (mode === 'relocate' && !confirmRelocate)} onClick={() => mutation.mutate()}>
+          <Button disabled={mutation.isPending || (mode === 'relocate' && !confirmRelocate) || (publishRoot.trim() === '' && !confirmRoot)} onClick={() => mutation.mutate()}>
             {mutation.isPending ? '执行中…' : '确认重绑'}
           </Button>
         </>
@@ -3472,14 +2984,18 @@ function StaticAssetsRebindDialog({
           value={usable.some((source) => source.key === sourceKey)
             ? String(usable.findIndex((source) => source.key === sourceKey))
             : ''}
-          onValueChange={(index) => setSourceKey(usable[Number(index)]?.key ?? '')}
+          onValueChange={(index) => { setSourceKey(usable[Number(index)]?.key ?? ''); setConfirmRoot(false) }}
           options={usable.map((source, index) => ({ value: String(index), label: source.name }))}
           ariaLabel="重绑目标存储源"
         />
       </Field>
       <Field label="新发布目录" hint="留空表示存储源根目录（需在下一步确认）。">
-        <Input value={publishRoot} onChange={(event) => setPublishRoot(event.target.value)} aria-label="重绑目标发布目录" />
+        <Input value={publishRoot} onChange={(event) => { setPublishRoot(event.target.value); setConfirmRoot(false) }} aria-label="重绑目标发布目录" />
       </Field>
+      {publishRoot.trim() === '' && <label className={fieldCss.checkboxRow}>
+        <input type="checkbox" className={fieldCss.checkbox} checked={confirmRoot} onChange={(event) => setConfirmRoot(event.target.checked)} />
+        我确认公开目标存储源根目录内的受支持媒体文件
+      </label>}
       {mode === 'relocate' && (
         <Field label="迁移确认" required hint="勾选表示你已确认同一批内容已迁移/复制到新位置并核验，旧相对路径将继续有效。">
           <label className={fieldCss.checkboxRow}>
@@ -3498,149 +3014,122 @@ function StaticAssetsRebindDialog({
   )
 }
 
-// --- 运维中心（2.0 Epic C）：健康聚合 + 完整性检查 + 清理编排 ---
+// --- 仪表盘：统一健康快照、维护操作与反馈 ---
 
 const operationCapabilityLabels: Record<string, string> = {
   public_drive: '公开网盘',
   image_bed: '快速图床',
-  static_assets: '静态资源',
   transfer_center: '流转中心',
 }
 
-// 失败记录时间：今天只显示时刻，更早的带日期，避免整行被长日期占据。
 function formatAuditTime(iso: string): string {
   const date = new Date(iso)
   const now = new Date()
-  const sameDay = date.toDateString() === now.toDateString()
-  return sameDay
+  return date.toDateString() === now.toDateString()
     ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : date.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' +
       date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function OperationsSection() {
-  const status = useQuery({ queryKey: ['operations-status'], queryFn: fetchOperationsStatus, refetchInterval: 30_000 })
+function DashboardSection() {
+  const overview = useQuery({
+    queryKey: ['admin-overview'], queryFn: fetchAdminOverview, refetchInterval: 30_000, retry: false,
+  })
   const queryClient = useQueryClient()
   const [integrity, setIntegrity] = useState<IntegrityReport | null>(null)
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin-overview'] })
 
   const integrityMut = useMutation({
     mutationFn: runIntegrityCheck,
-    onSuccess: (report) => { setIntegrity(report); setErr('') },
+    onMutate: () => { setErr(''); setIntegrity(null) },
+    onSuccess: async (report) => { setIntegrity(report); await refresh() },
     onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '完整性检查失败'),
   })
   const cleanupMut = useMutation({
     mutationFn: runOperationsCleanup,
-    onSuccess: async (result) => {
-      setCleanup(result)
-      setErr('')
-      await queryClient.invalidateQueries({ queryKey: ['operations-status'] })
+    onMutate: () => { setErr(''); setCleanup(null) },
+    onSuccess: async (result) => { setCleanup(result); await refresh() },
+    onError: async (e) => {
+      setErr(e instanceof ApiRequestError ? e.message : '清理失败')
+      // 清理可能已经部分完成，失败后也重新读取实际状态。
+      await refresh()
     },
-    onError: (e) => setErr(e instanceof ApiRequestError ? e.message : '清理失败'),
   })
+  const reconcileMut = useMutation({
+    mutationFn: ({ key }: { key: string; name: string }) => adminReconcileSource(key),
+    onMutate: () => { setErr(''); setMsg('') },
+    onSuccess: async (result, source) => {
+      setMsg(`${source.name} 台账已校准：新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
+      await Promise.all([
+        refresh(),
+        queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-source', source.key] }),
+      ])
+    },
+    onError: async (e) => {
+      setErr(e instanceof ApiRequestError ? e.message : '校准失败')
+      await refresh()
+    },
+  })
+  const maintenancePending = integrityMut.isPending || cleanupMut.isPending || reconcileMut.isPending
 
-  if (status.isPending) {
+  if (!overview.data) {
     return (
-      <section className={css.section}>
-        <div className={css.sectionBody}><span className={css.kvLabel}>加载中…</span></div>
+      <section className={css.section} aria-busy={overview.isPending}>
+        <div className={css.sectionHeader}><h2 className={css.sectionTitle}>系统状态</h2></div>
+        <div className={css.sectionBody}>
+          {overview.isPending ? <span role="status" className={css.kvLabel}>正在加载仪表盘…</span> : (
+            <>
+              <div role="alert">仪表盘加载失败：{overview.error?.message || '无法获取系统状态'}</div>
+              <Button variant="secondary" onClick={() => void overview.refetch()}>重试</Button>
+            </>
+          )}
+        </div>
       </section>
     )
   }
-  const data = status.data
+  const data = overview.data.operations
+  const sys = overview.data.system
   return (
     <>
       <section className={css.section}>
         <header className={css.sectionHeaderWithAction}>
           <div className={css.sectionHeaderCopy}>
-            <h2 className={css.sectionTitle}>运维中心</h2>
+            <h2 className={css.sectionTitle}>系统状态</h2>
             <p className={css.sectionHint}>
-              版本 {data?.version} · 数据目录 {data?.data_dir}
-              {` `}· 状态生成于 {data ? new Date(data.generated_at).toLocaleTimeString() : '—'}（30 秒自动刷新）
+              更新于 {new Date(data.generated_at).toLocaleTimeString()} · 每 30 秒自动刷新
             </p>
           </div>
-          <div className={css.sectionHeaderAction} style={{ display: 'flex', gap: 8 }}>
-            <Button variant="secondary" disabled={integrityMut.isPending} onClick={() => integrityMut.mutate()}>
+          <div className={css.dashboardActions}>
+            <Button variant="ghost" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
+              {overview.isFetching ? '刷新中…' : '刷新'}
+            </Button>
+            <Button variant="secondary" disabled={maintenancePending} onClick={() => integrityMut.mutate()}>
               {integrityMut.isPending ? '检查中…' : '完整性检查'}
             </Button>
-            <Button disabled={cleanupMut.isPending} onClick={() => cleanupMut.mutate()}>
+            <Button disabled={maintenancePending} onClick={() => cleanupMut.mutate()}>
               {cleanupMut.isPending ? '清理中…' : '运行清理'}
             </Button>
           </div>
         </header>
         <div className={css.sectionBody}>
-          <div className={css.opsStatGrid}>
-            <div className={css.statCard}>
-              <span className={css.statIcon} style={{ background: vars.color.tileBlueBg, color: vars.color.tileBlueFg }}>
-                <IconServer size={22} />
-              </span>
-              <div className={css.statBody}>
-                <span className={css.statLabel}>数据库</span>
-                <span className={css.statValue}>{formatBytes(data?.database.size_bytes ?? 0)}</span>
-                <div className={css.opsMetricList}>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>WAL</span>
-                    <span className={css.opsMetricValue}>{formatBytes(data?.database.wal_bytes ?? 0)}</span>
-                  </div>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>quick_check</span>
-                    <span className={css.opsMetricValue}>
-                      {(data?.database.quick_check ?? '') === 'ok'
-                        ? <Badge color="green">ok</Badge>
-                        : <Badge color="red">{data?.database.quick_check}</Badge>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className={css.statCard}>
-              <span className={css.statIcon} style={{ background: vars.color.tileAmberBg, color: vars.color.tileAmberFg }}>
-                <IconTrash size={22} />
-              </span>
-              <div className={css.statBody}>
-                <span className={css.statLabel}>缓存与垃圾</span>
-                <span className={css.statValue}>{formatBytes(data?.storage.thumbnail_cache_bytes ?? 0)}</span>
-                <div className={css.opsMetricList}>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>回收站</span>
-                    <span className={css.opsMetricValue}>{data?.storage.trash_entries ?? 0} 项 · {formatBytes(data?.storage.trash_bytes ?? 0)}</span>
-                  </div>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>Multipart</span>
-                    <span className={css.opsMetricValue}>{data?.storage.multipart_uploads ?? 0}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className={css.statCard}>
-              <span className={css.statIcon} style={{ background: vars.color.tilePurpleBg, color: vars.color.tilePurpleFg }}>
-                <IconCloud size={22} />
-              </span>
-              <div className={css.statBody}>
-                <span className={css.statLabel}>流转负载</span>
-                <span className={css.statValue}>{formatBytes(data?.transfers.payload_bytes ?? 0)}</span>
-                <div className={css.opsMetricList}>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>发件包</span>
-                    <span className={css.opsMetricValue}>活跃 {data?.transfers.active_sends ?? 0} · 草稿 {data?.transfers.draft_sends ?? 0}</span>
-                  </div>
-                  <div className={css.opsMetricRow}>
-                    <span className={css.opsMetricLabel}>收集</span>
-                    <span className={css.opsMetricValue}>{data?.transfers.active_collections ?? 0}</span>
-                  </div>
-                  {data && data.transfers.active_quota_bytes > 0 ? (
-                    <div className={css.opsMetricRow}>
-                      <span className={css.opsMetricLabel}>活跃配额</span>
-                      <span className={css.opsMetricValue}>{formatBytes(data.transfers.active_quota_bytes)}</span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
+          {overview.isError ? (
+            <div role="alert" className={css.dashboardError}>状态刷新失败：{overview.error.message}。当前显示上次成功获取的数据，请点击刷新重试。</div>
+          ) : null}
+          <dl className={css.dashboardFacts}>
+            <div><dt>运行版本</dt><dd>{data.version}</dd></div>
+            <div><dt>主服务端口</dt><dd>{portOf(sys.http_addr)}</dd></div>
+            <div><dt>存储源</dt><dd>{data.sources.length} 个</dd></div>
+            <div><dt>用户</dt><dd>{data.database.table_rows.users ?? '—'} 个</dd></div>
+            <div><dt>S3 状态</dt><dd>{sys.s3_status}</dd></div>
+            <div><dt>WebDAV 状态</dt><dd>{sys.webdav_status}</dd></div>
+            <div className={css.dashboardDataDir}><dt>数据目录</dt><dd>{data.data_dir}</dd></div>
+          </dl>
           {integrity ? (
-            <div className={css.kvRow}>
+            <div className={css.kvRow} role="status">
               <span className={css.kvLabel}>完整性检查</span>
               <span className={css.kvValue}>
                 {integrity.ok
@@ -3650,7 +3139,7 @@ function OperationsSection() {
             </div>
           ) : null}
           {cleanup ? (
-            <div className={css.kvRow}>
+            <div className={css.kvRow} role="status">
               <span className={css.kvLabel}>本次清理</span>
               <span className={css.kvValue}>
                 锁 {cleanup.webdav_locks} · 会话 {cleanup.sessions} · Multipart {cleanup.multipart_uploads}+
@@ -3661,60 +3150,85 @@ function OperationsSection() {
               </span>
             </div>
           ) : null}
-          {err ? <div role="alert" style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div> : null}
+          {err ? <div role="alert" className={css.dashboardError}>{err}</div> : null}
         </div>
       </section>
 
+      <div className={css.opsStatGrid}>
+        <section className={css.section}>
+          <div className={css.sectionHeader}><h2 className={css.sectionTitle}>数据库</h2></div>
+          <div className={css.sectionBody}>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>大小</span><span className={css.opsMetricValue}>{formatBytes(data.database.size_bytes)}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>WAL</span><span className={css.opsMetricValue}>{formatBytes(data.database.wal_bytes)}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>quick_check</span><span className={css.opsMetricValue}><Badge color={data.database.quick_check === 'ok' ? 'green' : 'red'}>{data.database.quick_check}</Badge></span></div>
+          </div>
+        </section>
+        <section className={css.section}>
+          <div className={css.sectionHeader}><h2 className={css.sectionTitle}>缓存与回收站</h2></div>
+          <div className={css.sectionBody}>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>缩略图</span><span className={css.opsMetricValue}>{formatBytes(data.storage.thumbnail_cache_bytes)}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>回收站</span><span className={css.opsMetricValue}>{data.storage.trash_entries} 项 · {formatBytes(data.storage.trash_bytes)}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>Multipart</span><span className={css.opsMetricValue}>{data.storage.multipart_uploads}</span></div>
+          </div>
+        </section>
+        <section className={css.section}>
+          <div className={css.sectionHeader}><h2 className={css.sectionTitle}>流转负载</h2></div>
+          <div className={css.sectionBody}>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>载荷</span><span className={css.opsMetricValue}>{formatBytes(data.transfers.payload_bytes)}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>发件包</span><span className={css.opsMetricValue}>活跃 {data.transfers.active_sends} · 草稿 {data.transfers.draft_sends}</span></div>
+            <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>收集</span><span className={css.opsMetricValue}>{data.transfers.active_collections}</span></div>
+            {data.transfers.active_quota_bytes > 0 ? <div className={css.opsMetricRow}><span className={css.opsMetricLabel}>活跃配额</span><span className={css.opsMetricValue}>{formatBytes(data.transfers.active_quota_bytes)}</span></div> : null}
+          </div>
+        </section>
+      </div>
+
       <section className={css.section}>
         <div className={css.sectionHeader}>
-          <h2 id="operations-sources-title" className={css.sectionTitle}>存储源健康</h2>
+          <h2 id="dashboard-sources-title" className={css.sectionTitle}>存储源健康</h2>
+          <p className={css.sectionHint}>真实目录、协议和用量统一查看；配置请前往“存储源”。</p>
         </div>
-        <HorizontalDataRegion name="存储源健康" labelledBy="operations-sources-title" busy={status.isFetching}>
-          <table className={css.compactTable}>
-            <thead>
-              <tr>
-                <th className={css.compactTh}>源</th>
-                <th className={css.compactTh}>根目录</th>
-                <th className={css.compactTh}>物理 / 台账</th>
-                <th className={css.compactTh}>回收站</th>
-                <th className={css.compactTh}>活跃流转</th>
-                <th className={css.compactTh}>协议</th>
-                <th className={css.compactTh}>操作</th>
-              </tr>
-            </thead>
+        <HorizontalDataRegion name="存储源健康" labelledBy="dashboard-sources-title" busy={overview.isFetching}>
+          <table className={`${css.compactTable} ${css.dashboardSourceTable}`}>
+            <thead><tr>
+              <th className={css.compactTh}>存储源 / 真实路径</th>
+              <th className={css.compactTh}>状态</th>
+              <th className={css.compactTh}>物理 / 台账</th>
+              <th className={css.compactTh}>回收站</th>
+              <th className={css.compactTh}>活跃流转</th>
+              <th className={css.compactTh}>协议</th>
+              <th className={css.compactTh}>操作</th>
+            </tr></thead>
             <tbody>
-              {data?.sources.map((source) => (
+              {data.sources.length === 0 ? <tr><td colSpan={7} className={css.compactTd}>还没有存储源，请前往“存储源”添加。</td></tr> : null}
+              {data.sources.map((source) => (
                 <tr key={source.key} className={css.compactTr}>
-                  <td className={css.compactTd} style={{ fontWeight: 500 }}>{source.name}</td>
                   <td className={css.compactTd}>
-                    {source.root_accessible
-                      ? <Badge color="green">可访问</Badge>
-                      : <Badge color="red">{source.root_issue || '不可访问'}</Badge>}
+                    <div className={css.dashboardSource}><strong>{source.name}</strong><span className={css.dashboardSourcePath}>{source.root_path}</span></div>
                   </td>
                   <td className={css.compactTd}>
-                    {formatBytes(source.usage_bytes)} / {formatBytes(source.ledger_bytes)}
+                    <div className={css.dashboardSourceStatus}>
+                      {source.disabled ? <Badge color="gray">已禁用</Badge> : null}
+                      <Badge color={source.root_accessible ? 'green' : 'red'}>{source.root_accessible ? '可访问' : '不可访问'}</Badge>
+                      {source.root_issue ? <span className={css.dashboardError}>{source.root_issue}</span> : null}
+                    </div>
+                  </td>
+                  <td className={css.compactTd}>
+                    <div className={css.dashboardSourceStatus}>
+                      <span>{source.root_accessible ? `${formatBytes(source.usage_bytes)} / ${formatBytes(source.ledger_bytes)}` : '— / —'}</span>
+                      <span className={css.kvLabel}>配额 {source.quota_bytes > 0 ? formatBytes(source.quota_bytes) : '不限'}</span>
+                    </div>
                   </td>
                   <td className={css.compactTd}>{source.trash_count} 项</td>
                   <td className={css.compactTd}>{source.active_transfers}</td>
                   <td className={css.compactTd}>
-                    {[source.webdav_enabled ? 'WebDAV' : null, source.s3_enabled ? 'S3' : null].filter(Boolean).join(' / ') || '—'}
+                    <div className={css.dashboardSourceStatus}>
+                      {[source.webdav_enabled ? 'WebDAV' : null, source.s3_enabled ? 'S3' : null, source.static_enabled ? '静态 HTTP' : null].filter(Boolean).map((protocol) => <span key={protocol}>{protocol}</span>)}
+                      {!source.webdav_enabled && !source.s3_enabled && !source.static_enabled ? '—' : null}
+                    </div>
                   </td>
                   <td className={css.compactTd}>
-                    <Button
-                      variant="ghost"
-                      onClick={async () => {
-                        setErr('')
-                        try {
-                          const { adminReconcileSource } = await import('../../api/admin')
-                          const result = await adminReconcileSource(source.key)
-                          setMsg(`${source.name} 台账已校准：新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
-                          await queryClient.invalidateQueries({ queryKey: ['operations-status'] })
-                        } catch (e) {
-                          setErr(e instanceof ApiRequestError ? e.message : '校准失败')
-                        }
-                      }}
-                    >
-                      校准台账
+                    <Button variant="ghost" disabled={maintenancePending || !source.root_accessible} onClick={() => reconcileMut.mutate({ key: source.key, name: source.name })}>
+                      {reconcileMut.isPending && reconcileMut.variables.key === source.key ? '校准中…' : '校准台账'}
                     </Button>
                   </td>
                 </tr>
@@ -3722,51 +3236,38 @@ function OperationsSection() {
             </tbody>
           </table>
         </HorizontalDataRegion>
-        {msg ? <div style={{ fontSize: vars.fontSize.sm, color: vars.color.textSecondary, padding: vars.space.sm }}>{msg}</div> : null}
+        {msg ? <div role="status" className={css.sectionBody}>{msg}</div> : null}
       </section>
 
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>站点能力健康</h2>
-        </div>
+        <div className={css.sectionHeader}><h2 className={css.sectionTitle}>站点能力健康</h2></div>
         <div className={css.sectionBody}>
-          <div className={css.opsCapGrid}>
-            {data?.capabilities.map((capability) => (
-              <div className={css.opsCapCard} key={capability.capability}>
-                <div className={css.opsHealthBadge}>
-                  <span className={css.opsCapName}>
-                    {operationCapabilityLabels[capability.capability] ?? capability.capability}
-                  </span>
-                  {capability.enabled && !capability.source_disabled ? (
-                    <Badge color="green">正常</Badge>
-                  ) : capability.source_disabled ? (
-                    <Badge color="red">源已禁用</Badge>
-                  ) : capability.enabled ? (
-                    <Badge color="gray">未绑定</Badge>
-                  ) : (
-                    <Badge color="gray">已关闭</Badge>
-                  )}
-                </div>
-                <span className={css.opsFailReason}>{capability.detail}</span>
+          {data.capabilities.map((capability) => (
+            <div className={css.dashboardCapability} key={capability.capability}>
+              <div className={css.opsHealthBadge}>
+                <span className={css.opsCapName}>{operationCapabilityLabels[capability.capability] ?? capability.capability}</span>
+                {!capability.source_key ? <Badge color="gray">未绑定</Badge>
+                  : capability.source_disabled ? <Badge color="red">源已禁用</Badge>
+                  : capability.enabled ? <Badge color="green">正常</Badge>
+                  : <Badge color="gray">已关闭</Badge>}
               </div>
-            ))}
-          </div>
+              <span className={css.opsFailReason}>
+                {capability.detail}{capability.capability === 'image_bed' ? ` · 匿名上传${overview.data.anonymous_image_bed_on ? '已开启' : '已关闭'}` : ''}
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
       <section className={css.section}>
-        <div className={css.sectionHeader}>
-          <h2 className={css.sectionTitle}>最近失败操作</h2>
-        </div>
+        <div className={css.sectionHeader}><h2 className={css.sectionTitle}>最近失败操作</h2></div>
         <div className={css.sectionBody}>
-          {data && data.recent_failed_audits.length === 0 ? (
-            <span className={css.kvLabel}>近期没有失败记录。</span>
-          ) : null}
+          {data.recent_failed_audits.length === 0 ? <span className={css.kvLabel}>近期没有失败记录。</span> : null}
           <div className={css.opsFailList}>
-            {data?.recent_failed_audits.map((entry) => (
+            {data.recent_failed_audits.map((entry) => (
               <div className={css.opsFailRow} key={entry.id}>
                 <span className={css.opsFailTime}>{formatAuditTime(entry.created_at)}</span>
-                <span className={css.opsFailAction}>{entry.action}</span>
+                <span className={css.opsFailAction}>{auditActionLabel(entry.action) ?? entry.action}</span>
                 <span className={css.opsFailReason}>{entry.error_code || '未知原因'}</span>
               </div>
             ))}

@@ -70,11 +70,11 @@ function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
       <h1 className={css.noTargetTitle}>图床尚未开启</h1>
       <p className={css.noTargetHint}>
         {isAdmin
-          ? '在系统设置的「站点服务」中为图床绑定存储源并开启后，即可在这里上传和管理图片。'
+          ? '在系统设置的「站点配置 → 站点服务」中为图床绑定存储源并开启后，即可在这里上传和管理图片。'
           : '图床能力未开启或未绑定存储源，请联系管理员。'}
       </p>
       {isAdmin ? (
-        <Link to="/app/admin" search={{ section: 'sources' }} className={css.primaryLink}>
+        <Link to="/app/admin" search={{ section: 'site', tab: 'services' }} className={css.primaryLink}>
           前往系统设置 <IconChevronRight size={15} />
         </Link>
       ) : null}
@@ -355,7 +355,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
               <Stat label="本月上传" value={`${stats.month} 张`} />
               <Stat label="当前页图片体积" value={formatBytes(stats.bytes)} />
             </dl>
-            <Link to="/app/admin" search={{ section: 'sources' }} className={css.settingsLink} onClick={() => setInfoOpen(false)}>
+            <Link to="/app/admin" search={{ section: 'site', tab: 'services' }} className={css.settingsLink} onClick={() => setInfoOpen(false)}>
               <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
             </Link>
           </div>

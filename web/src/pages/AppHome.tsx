@@ -243,8 +243,10 @@ function SystemStatusPanel({
 }) {
   const flags: Array<{ label: string; value: SystemStatusFlag | undefined }> = [
     { label: 'WebDAV', value: data?.webdav },
-    { label: '图床服务', value: data?.file_preview },
-    { label: '匿名访问', value: data?.anonymous },
+    { label: '公开网盘', value: data?.public_drive },
+    { label: '图床服务', value: data?.image_bed },
+    { label: '匿名上传', value: data?.anonymous },
+    { label: '文件中转', value: data?.transfer_center },
   ]
   const allEnabled = flags.every(({ value }) => value?.enabled)
   return (

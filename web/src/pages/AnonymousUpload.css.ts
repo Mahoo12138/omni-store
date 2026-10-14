@@ -64,6 +64,7 @@ export const masthead = style({
   position: 'relative',
   zIndex: 1,
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: vars.space.lg,
@@ -106,57 +107,6 @@ globalStyle(`${brand} small`, {
   fontWeight: 650,
   lineHeight: 1.2,
   letterSpacing: '0.14em',
-})
-
-export const utilityLinks = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  flexWrap: 'wrap',
-})
-
-export const backLink = style({
-  minHeight: 38,
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: vars.space.sm,
-  padding: `0 ${vars.space.md}`,
-  border: `1px solid color-mix(in oklch, ${vars.color.surface} 16%, transparent)`,
-  borderRadius: vars.radius.md,
-  background: `color-mix(in oklch, ${vars.color.surface} 6%, transparent)`,
-  color: vars.color.surface,
-  fontSize: vars.fontSize.sm,
-  fontWeight: 600,
-  transition: `background-color ${vars.motion.fast} ${vars.motion.ease}, border-color ${vars.motion.fast} ${vars.motion.ease}, transform ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': {
-      borderColor: `color-mix(in oklch, ${vars.color.surface} 30%, transparent)`,
-      background: `color-mix(in oklch, ${vars.color.surface} 11%, transparent)`,
-    },
-    '&:active': { transform: 'translateX(-1px)' },
-  },
-})
-
-export const authLink = style({
-  minHeight: 38,
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: `0 ${vars.space.sm}`,
-  color: vars.color.surface,
-  fontSize: vars.fontSize.sm,
-  fontWeight: 600,
-  opacity: 0.72,
-  transition: `opacity ${vars.motion.fast} ${vars.motion.ease}`,
-  selectors: {
-    '&:hover': { opacity: 1 },
-  },
-})
-
-export const authPlaceholder = style({
-  width: 72,
-  height: 14,
-  borderRadius: vars.radius.sm,
-  background: `color-mix(in oklch, ${vars.color.surface} 12%, transparent)`,
 })
 
 export const heroBody = style({

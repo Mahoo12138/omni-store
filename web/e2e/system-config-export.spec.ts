@@ -12,7 +12,7 @@ test('seeded public demo and administrator config export are usable', async ({ p
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page).toHaveURL(/\/app$/)
 
-  await page.goto('/app/admin?section=backup')
+  await page.goto('/app/admin?section=site&tab=general')
   await expect(page.getByRole('heading', { name: '导出系统配置包' })).toBeVisible()
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出配置包', exact: true }).click()

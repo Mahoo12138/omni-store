@@ -1,22 +1,14 @@
 import type { ReactNode } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAuthStatus } from '../../api/auth'
 import { fetchSystemStatus } from '../../api/system'
-import { IconHome, IconInfo, LogoMark } from '../ui/Icon'
+import { IconHome, LogoMark } from '../ui/Icon'
+import { PublicNavigation } from './PublicNavigation'
 import * as css from './PublicShell.css'
 
-// 公开侧布局（docs/index.png）：顶栏 = 品牌 / 中央导航 / 登录入口。
+// 公开侧布局：品牌与共享导航；独立 hero 也复用同一套导航。
 // 品牌名来自实例品牌设置（1.2.0），未配置时回退 OmniStore。
 export function PublicShell({ children, showHeader = true }: { children: ReactNode; showHeader?: boolean }) {
-  const { pathname } = useLocation()
-  const authStatus = useQuery({
-    queryKey: ['auth-status'],
-    queryFn: fetchAuthStatus,
-    retry: false,
-    staleTime: 60_000,
-    enabled: showHeader,
-  })
   const systemStatus = useQuery({
     queryKey: ['system-status'],
     queryFn: fetchSystemStatus,
@@ -24,9 +16,6 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
     staleTime: 5 * 60_000,
   })
   const instanceName = systemStatus.data?.instance_name?.trim() || 'OmniStore'
-  const isDisk = pathname === '/' || pathname.startsWith('/public')
-  const isUpload = pathname.startsWith('/upload')
-  const isAbout = pathname.startsWith('/about')
 
   return (
     <div className={css.shell}>
@@ -36,33 +25,11 @@ export function PublicShell({ children, showHeader = true }: { children: ReactNo
             <LogoMark size={30} />
             <span className={css.brandName}>{instanceName}</span>
           </Link>
-          <nav className={css.nav} aria-label="主导航">
-            <Link to="/" className={isDisk ? css.navLinkActive : css.navLink}>
-              公开网盘
-            </Link>
-            <Link to="/upload" className={isUpload ? css.navLinkActive : css.navLink}>
-              图床入口
-            </Link>
-            <Link to="/about" className={isAbout ? css.navLinkActive : css.navLink}>
-              <IconInfo size={14} className={css.navLinkIcon} />
-              关于我们
-            </Link>
-          </nav>
-          {authStatus.isPending ? (
-            <span className={css.authPlaceholder} aria-label="正在检查登录状态" />
-          ) : authStatus.data?.authenticated ? (
-            <Link to="/app" className={css.headerCta}>
-              进入工作台
-            </Link>
-          ) : (
-            <Link to="/login" className={css.headerCta}>
-              登录
-            </Link>
-          )}
+          <PublicNavigation tone="light" />
         </header>
       )}
       <main className={css.main}>{children}</main>
-      <footer className={css.footer}>{instanceName} · 自部署存储中心</footer>
+      <footer className={css.footer}>{instanceName} · 自部署存储中心 · <Link to="/about">关于我们</Link></footer>
     </div>
   )
 }

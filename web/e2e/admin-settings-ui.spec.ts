@@ -35,31 +35,53 @@ test('storage source settings stay clear and usable on desktop and mobile', asyn
   await expect(page.getByRole('button', { name: '新建存储源', exact: true })).toBeVisible()
   await expect(page.getByRole('listitem', { name: '存储源 公开演示资料' })).toBeVisible()
   await expect(page.getByRole('listitem', { name: '存储源 团队文件' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /配置静态 HTTP/ })).toHaveCount(0)
+  await page.screenshot({ path: '/tmp/omni-sources-desktop.png' })
 
   await page.getByRole('button', { name: '配置存储源 团队文件' }).click()
   const settingsDialog = page.getByRole('dialog', { name: '配置：团队文件' })
   await expect(settingsDialog).toBeVisible()
+  await page.screenshot({ path: '/tmp/omni-protocols-desktop.png' })
   await expect(settingsDialog.getByRole('button', { name: '保存配额' })).toHaveCount(0)
   await expect(settingsDialog.getByRole('button', { name: '保存路径' })).toHaveCount(0)
   await expect(settingsDialog.getByRole('button', { name: '保存排除规则' })).toHaveCount(0)
 
+  const webdavInput = settingsDialog.getByRole('checkbox', { name: '启用 WebDAV', exact: true })
+  const originalWebdav = await webdavInput.isChecked()
+  await settingsDialog.getByRole('tab', { name: '存储设置', exact: true }).click()
   const quotaInput = settingsDialog.getByLabel('存储源配额 GiB')
-  const patternsInput = settingsDialog.locator('textarea')
+  const patternsInput = settingsDialog.getByLabel('排除规则', { exact: true })
   const originalQuota = await quotaInput.inputValue()
   const originalPatterns = await patternsInput.inputValue()
   const changedQuota = String(Number(originalQuota) + 0.001)
   const changedPatterns = `${originalPatterns}\n**/*.omnistore-e2e`
   const saveSettings = settingsDialog.getByRole('button', { name: '保存设置' })
   await expect(saveSettings).toBeDisabled()
+  await page.screenshot({ path: '/tmp/omni-storage-desktop.png' })
 
+  await quotaInput.fill('-1')
+  await expect(saveSettings).toBeDisabled()
   await quotaInput.fill(changedQuota)
   await patternsInput.fill(changedPatterns)
   await expect(saveSettings).toBeEnabled()
+  await expect(settingsDialog.getByRole('button', { name: '扫描并校准台账' })).toBeDisabled()
+  await settingsDialog.getByRole('tab', { name: '访问协议', exact: true }).click()
+  await webdavInput.setChecked(!originalWebdav)
+  await settingsDialog.getByRole('tab', { name: '存储设置', exact: true }).click()
+  await expect(quotaInput).toHaveValue(changedQuota)
   await saveSettings.click()
   await expect(settingsDialog).toBeHidden()
 
   await page.getByRole('button', { name: '配置存储源 团队文件' }).click()
   await expect(settingsDialog).toBeVisible()
+  await expect(webdavInput).toBeChecked({ checked: !originalWebdav })
+  await webdavInput.setChecked(originalWebdav)
+  // Tabs supplies the native arrow-key path as well as pointer navigation.
+  await settingsDialog.getByRole('tab', { name: '访问协议', exact: true }).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(settingsDialog.getByRole('tab', { name: '存储设置', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(settingsDialog.getByRole('tabpanel', { name: '存储设置', exact: true })).toBeVisible()
   await expect(quotaInput).toHaveValue(changedQuota)
   await expect(patternsInput).toHaveValue(changedPatterns)
 
@@ -77,10 +99,73 @@ test('storage source settings stay clear and usable on desktop and mobile', asyn
     document.documentElement.scrollWidth > document.documentElement.clientWidth
   ))
   expect(hasHorizontalOverflow).toBe(false)
+  const sourceRegion = page.getByRole('region', { name: '存储源', exact: true })
+  expect(await sourceRegion.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: '/tmp/omni-sources-mobile.png' })
+  await page.getByRole('button', { name: '配置存储源 团队文件' }).click()
+  await expect(settingsDialog).toBeVisible()
+  await page.screenshot({ path: '/tmp/omni-protocols-mobile.png' })
+  await settingsDialog.getByRole('tab', { name: '存储设置', exact: true }).click()
+  await expect(quotaInput).toBeVisible()
+  await page.screenshot({ path: '/tmp/omni-storage-mobile.png' })
+  await settingsDialog.getByRole('button', { name: '关闭弹窗' }).click()
 
   await page.getByRole('button', { name: '新建存储源', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '新建存储源' })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
+})
+
+test('source cards and configuration reflow with long names and paths', async ({ page }) => {
+  await loginAsAdmin(page)
+  const longName = `跨团队共享资料与长期公开媒体-${'公开演示资料'.repeat(8)}`
+  const longPath = `/srv/${'团队共享资料及国际化名称/'.repeat(12)}${'very-long-unbroken-directory-name'.repeat(8)}`
+  await page.route('**/api/v1/admin/sources', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.data.items[0] = { ...body.data.items[0], name: longName, root_path: longPath, static_enabled: true }
+    body.data.items[1] = { ...body.data.items[1], is_disabled: true, webdav_enabled: false, s3_enabled: false, static_enabled: false }
+    await route.fulfill({ response, json: body })
+  })
+  await page.route('**/api/v1/admin/sources/*', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.data.source = { ...body.data.source, name: longName, root_path: longPath }
+    await route.fulfill({ response, json: body })
+  })
+  await page.goto('/app/admin?section=sources')
+  const card = page.getByRole('listitem', { name: `存储源 ${longName}`, exact: true })
+  const region = page.getByRole('region', { name: '存储源', exact: true })
+  await expect(card).toContainText('静态 HTTP')
+  await expect(region).toContainText('均未启用')
+  for (const width of [1455, 1119, 893, 727, 375, 320]) {
+    await page.setViewportSize({ width, height: 887 })
+    await expect(card).toBeVisible()
+    const bounds = await card.evaluate((element) => {
+      const cardRect = element.getBoundingClientRect()
+      const path = element.querySelector('code')!.getBoundingClientRect()
+      const heading = element.querySelector('h3')!.getBoundingClientRect()
+      const configure = element.querySelector('button')!.getBoundingClientRect()
+      return { fits: element.scrollWidth <= element.clientWidth, pathRight: path.right, pathLeft: path.left,
+        cardRight: cardRect.right, cardLeft: cardRect.left, headingBottom: heading.bottom, pathTop: path.top,
+        configureTop: configure.top, pathBottom: path.bottom }
+    })
+    expect(bounds.fits).toBe(true)
+    expect(bounds.pathRight).toBeLessThanOrEqual(bounds.cardRight)
+    expect(bounds.pathLeft).toBeGreaterThanOrEqual(bounds.cardLeft)
+    expect(bounds.pathTop).toBeGreaterThanOrEqual(bounds.headingBottom)
+    expect(bounds.configureTop).toBeGreaterThanOrEqual(bounds.pathBottom)
+    expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    await card.getByRole('button', { name: `配置存储源 ${longName}`, exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: `配置：${longName}`, exact: true })
+    await expect(dialog).toBeVisible()
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const contentArea = dialog.getByRole('tabpanel', { name: '访问协议', exact: true })
+    await expect(contentArea.getByRole('button', { name: '配置静态 HTTP', exact: true })).toBeInViewport()
+    await expect(dialog.getByRole('button', { name: '关闭弹窗' })).toBeInViewport()
+    if ([1455, 320].includes(width)) await page.screenshot({ path: `/tmp/omni-source-long-${width}.png` })
+    await dialog.getByRole('button', { name: '关闭弹窗' }).click()
+  }
 })
 
 test('primary settings actions belong to their module headers', async ({ page }) => {
@@ -120,14 +205,14 @@ test('primary settings actions belong to their module headers', async ({ page })
     await page.getByRole('button', { name: '取消', exact: true }).click()
   }
 
-  await page.goto('/app/admin?section=image-bed')
+  await page.goto('/app/admin?section=site')
   const imageBedHeader = page.locator('header').filter({
-    has: page.getByRole('heading', { name: '匿名公共图床', exact: true }),
+    has: page.getByRole('heading', { name: '快速图床', exact: true }),
   })
-  const imageBedAction = imageBedHeader.getByRole('button', { name: /开启|调整/ })
+  const imageBedAction = imageBedHeader.getByRole('button', { name: '配置', exact: true })
   await expect(imageBedAction).toBeVisible()
   await imageBedAction.click()
-  await expect(page.getByRole('dialog', { name: /匿名图床/ })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: '配置：快速图床', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
 
   await page.setViewportSize({ width: 375, height: 812 })
@@ -258,8 +343,7 @@ test('admin data regions scroll locally without squeezing narrow layouts', async
   await page.setViewportSize({ width: 893, height: 880 })
 
   const dataRegions = [
-    { section: 'stats', name: '存储源概览' },
-    { section: 'sources', name: '存储源' },
+    { section: 'stats', name: '存储源健康' },
     { section: 'policies', name: '访问策略' },
     { section: 'users', name: '用户' },
     { section: 'audit', name: '审计日志' },
@@ -315,8 +399,7 @@ test('every admin section remains readable and keeps its active navigation visib
     { key: 'policies', nav: '访问策略', heading: '访问策略' },
     { key: 'users', nav: '用户', heading: '用户' },
     { key: 'audit', nav: '审计日志', heading: '审计日志' },
-    { key: 'backup', nav: '配置导出', heading: '导出系统配置包' },
-    { key: 'image-bed', nav: '匿名图床', heading: '匿名公共图床' },
+    { key: 'site', nav: '站点配置', heading: '站点配置' },
   ] as const
 
   for (const viewport of [
@@ -367,8 +450,8 @@ test('every admin section remains readable and keeps its active navigation visib
   await expect(page.getByRole('dialog', { name: '修改显示名' })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
 
-  await page.goto('/app/admin?section=image-bed')
-  await page.getByRole('button', { name: /开启|调整/ }).click()
-  await expect(page.getByRole('dialog', { name: /匿名图床/ })).toBeVisible()
+  await page.goto('/app/admin?section=site')
+  await page.getByRole('article', { name: '站点服务 快速图床', exact: true }).getByRole('button', { name: '配置', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '配置：快速图床', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
 })

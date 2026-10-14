@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import { ApiRequestError } from '../api/client'
@@ -8,9 +8,11 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { LogoMark } from '../components/ui/Icon'
 import * as css from './AuthForm.css'
+import { validateTransferSearch } from '../utils/transfer-workspace'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const search = useSearch({ from: '/login' })
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -23,8 +25,13 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const user = await login(username, password)
+      queryClient.removeQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('transfer-') })
       queryClient.setQueryData(['me'], user)
-      navigate({ to: '/app' })
+      queryClient.setQueryData(['auth-status'], { authenticated: true })
+      if (search.redirect) {
+        const redirect = new URL(search.redirect, window.location.origin)
+        await navigate({ to: redirect.pathname === '/transfer' ? '/transfer' : '/app/transfer', search: validateTransferSearch(Object.fromEntries(redirect.searchParams)) })
+      } else await navigate({ to: '/app' })
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '登录失败，请稍后重试')
     } finally {
