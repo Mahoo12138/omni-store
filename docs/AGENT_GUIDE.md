@@ -1,82 +1,119 @@
-# Agent 开发规则
+# Agent 开发规则 — 2.0
 
-本文档是 Agent 修改 OmniStore 时的最小约束。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
 ## 1. 开始任务前
 
-先读取：
+按顺序：
 
-1. `PRODUCT.md`
-2. `ROADMAP.md` / 当前版本 roadmap
-3. 与改动最相关的 feature/design 文档
-4. `ARCHITECTURE.md`
-5. 涉及安全时读取 `SECURITY.md`
-6. 涉及数据库时读取 migration + `DATA_MODEL.md`
+1. `STATUS.md`
+2. `ROADMAP.md`
+3. `IMPLEMENTATION_PLAN.md`
+4. `TASKS.md`
+5. `PRODUCT.md`
+6. `ARCHITECTURE.md`
+7. 对应 feature/design
+8. 涉及 DB 时看全部 migrations
 
-## 2. 基本原则
+## 2. 当前最高优先级
 
-- 优先修改已有代码，不机械重写模块。
-- 不为未来需求提前引入抽象。
-- 不引入未经讨论的依赖。
-- 不改变 Storage Source = 本地目录的核心模型。
-- 不引入 Redis/PostgreSQL/队列/微服务。
-- 不把 roadmap 中未来能力当成当前事实。
-- 不为了“代码更漂亮”破坏 Crash Recovery、quota、锁或兼容性。
-- 单次任务只解决明确范围。
+2.0 可以破坏兼容，但不能破坏数据。
 
-## 3. 数据库
+允许：
 
-- 已发布 migration 不修改。
-- 新表/列/索引用新的 SemVer migration。
-- migration 是 Schema 最终事实。
-- 同步更新 `DATA_MODEL.md`。
-
-## 4. 文件写操作
-
-增加新的最终写入入口时必须回答：
-
-- Policy 怎么检查？
-- Path 怎么规范化？
-- Exclude 怎么处理？
-- Symlink 怎么处理？
-- Reserved namespace 怎么处理？
-- WebDAV lock 怎么处理？
-- Source quota 怎么处理？
-- User quota 怎么处理？
-- file_records 怎么更新？
-- 崩溃发生在哪些阶段？
-- 启动恢复如何处理？
-
-如果这些问题未回答，不应直接增加“简单写文件”路径。
-
-## 5. 前端
-
-- 复用 UI 基础组件。
-- 服务端状态用 TanStack Query。
-- 不引入多套 CSS / UI 系统。
-- 状态必须覆盖 loading / empty / error / disabled / focus-visible。
-- 移动端不能隐藏核心任务能力。
-
-## 6. 安全
+- 删除旧字段；
+- 重构 API；
+- 重构设置 UI；
+- 删除旧 public mount model；
+- 删除旧 image source selection。
 
 禁止：
 
-- 日志输出明文 Token、密码、S3 Secret；
-- 无条件信任代理头；
-- 拼接真实文件路径；
-- 根据内部临时文件名删除来源不明文件；
-- 为测试绕过权限或安全路径；
-- 通过前端隐藏代替后端授权。
+- 修改已发布 migration；
+- 自动删除真实用户文件；
+- 为兼容旧逻辑长期维持双轨架构；
+- 猜测 legacy multi-source 应该绑定哪个 Site Capability。
 
-## 7. 完成任务后
+## 3. Scope Rule
 
-至少说明：
+任何新增能力先判断：
 
-1. 修改文件；
-2. 设计原因；
-3. 执行测试；
-4. 是否影响 migration/API/security；
-5. 文档是否同步；
-6. 剩余风险。
+```text
+Site
+Source Protocol
+Resource
+```
 
-发布相关任务必须运行统一 Release Gate。
+不允许随意给 `storage_sources` 增加产品功能开关。
+
+## 4. Transfer Rule
+
+Transfer 必须是独立 Domain：
+
+```text
+internal/transfers
+```
+
+不要塞进：
+
+```text
+internal/shares
+internal/files
+```
+
+可以复用 files 的低层安全写 primitive，但不能混淆业务状态。
+
+## 5. Service Namespace
+
+Generic API 不允许访问：
+
+```text
+.omnistore
+```
+
+任何绕过都视为安全 bug。
+
+## 6. Tests
+
+不要只测 happy path。
+
+必须包含：
+
+- concurrent upload；
+- duplicate code；
+- expired transfer；
+- quota race；
+- source rebind；
+- source delete；
+- anonymous collect abuse；
+- Range preview；
+- crash between FS and DB；
+- GC vs active operation；
+- upgrade migration。
+
+## 7. 每次完成任务报告
+
+说明：
+
+1. files changed；
+2. schema/API behavior；
+3. destructive changes；
+4. tests；
+5. migration compatibility；
+6. remaining risks；
+7. next task。
+
+## 8. 本次确认的不可回退边界
+
+- Site 服务共三项：public_drive、image_bed、transfer_center。静态 HTTP 是 Source Protocol，各源独立配置与启停，不能重新做成站点单例。
+- 博客图片/视频放普通目录；`.omnistore/` 只放系统托管原件（图床/Transfer）。SQLite/keys 留在系统数据目录。
+- 公开盘关闭、无 Share、无 image 记录时，静态发布依然应工作。
+- 静态写入走普通路径 Policy；快速图床/Transfer 的授权不得扩展到普通目录。
+- 通用内部路径返回真实 404，并处理递归/编码/SPA fallback；不可只在 UI 隐藏。
+- 固定路径缓存不默认一年 immutable；CORS 只开公开读取，不开整个后台。
+- 未知同名目录不接管、不删除；普通 Reconcile 不误删图床 scope 台账。
+- static ID 重绑由 reset/relocate 决定，不能直接以新根覆盖旧映射。
+
+实现事实以代码/测试为准，目标行为以本次确认规范为准。发现旧代码与目标不同，应实施重构或报告阻塞；不能把目标文档改回旧行为来制造“实现一致”。
+
+阅读新任务时优先看 [静态功能](features/static-assets.md)、[托管路径](design/managed-namespace.md)、[HTTP](design/public-content-http.md) 和 [测试](TESTING.md)。未经代码验证的项目事实要标识，不编造通过率。

@@ -1,179 +1,193 @@
-# 身份、权限与存储安全
+# 2.0 安全模型
 
-本文档记录 OmniStore 当前安全边界。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## 1. 身份与 Session
+## 1. 基础安全
 
-Web 登录使用服务端 Session。
+继续保留：
 
-要求：
+- bcrypt；
+- server-side session；
+- stable per-session CSRF；
+- login limiter；
+- trusted proxy；
+- password/session revoke；
+- Token/Credential revoke；
+- same-origin active content isolation；
+- symlink protection；
+- path locking；
+- journal-first crash recovery。
 
-- 密码使用 bcrypt；
-- 不存在用户名也执行等价成本的密码校验，降低枚举时序差异；
-- 登录防爆破同时按 IP 和精确用户名限流；
-- 成功登录重置对应失败窗口；
-- Session 使用独立随机标识；
-- CSRF Token 按 Session 稳定派生，多标签页不会因为 `/auth/me` 轮换失效；
-- 修改密码撤销其他 Web Session；
-- CLI 紧急重置可撤销全部 Session。
+## 2. Scope 与权限
 
-## 2. 首个管理员初始化
+### Resource
 
-首次启动使用一次性 Bootstrap Credential。
+普通文件操作必须经过 Policy。
 
-要求：
+### Public Drive
 
-- 初始化接口只在系统没有用户时开放；
-- 首用户插入必须原子；
-- 并发初始化最多一个成功；
-- 完成后初始化入口永久关闭；
-- Bootstrap 凭据不能成为日常管理员密码或长期 Token。
+匿名只读由 Site Capability 直接授权，不依赖匿名用户 Policy。
 
-## 3. Token 与凭据
+### Image Bed
 
-### WebDAV
+登录用户使用 Site Capability 上传，不要求其拥有 backing Source 的普通 File Manager 权限。
 
-使用用户名 + 独立 WebDAV Token 的 Basic Auth。
+匿名上传只有管理员开启时可用。
 
-### 图床
+### Transfer
 
-每用户可以持有多个命名 Token，数据库仅保存 hash，支持独立撤销。
+登录用户创建 Send/Collect 不要求其拥有 backing Source 普通 Policy。
 
-### S3
+Transfer Service 只允许访问自己持有的 internal namespace。
 
-Access Key ID 可以明文保存；Secret Access Key 使用实例 master key 做 AES-256-GCM 可恢复加密，只在创建时展示。
+## 3. `.omnistore`
 
-管理员恢复操作必须允许一键撤销账号相关 WebDAV、图床、S3 和 Session 凭据。
+这是 2.0 系统保留 namespace。
 
-## 4. Policy
+所有 generic path API 必须隔离；直接读取/浏览命中时返回 404，不能只隐藏列表：
 
-普通用户有效权限由绑定的多个 Policy 合并。
+```text
+.omnistore
+```
 
-规则：
+包括：
 
-- Source 级默认权限；
-- 子路径规则按最长路径前缀命中；
-- 多 Policy 取最高有效权限；
-- 权限至少区分只读/读写；
-- REST、WebDAV、S3、登录用户图床使用统一路径权限语义。
+- File REST；
+- Public Drive；
+- Share creation；
+- WebDAV；
+- S3；
+- Search；
+- Favorite/Recent；
+- generic Copy/Move target。
 
-权限不是路径安全的替代品，即使管理员也不能绕过不安全路径解析。
+业务模块只能通过内部 Service API 访问。
 
-## 5. 路径安全
+Source physical quota仍统计。
 
-所有外部输入必须转换为 Storage Source 内相对路径。
+## 4. Pickup Code
+
+取件码不是强认证密码。
+
+设计：
+
+- 6～8 位易输入短码；
+- 数据库不明文保存；
+- 使用实例 secret/master key 做 HMAC/digest 后索引；
+- 输入后计算 digest 查找；
+- 全局唯一或有效期内唯一；
+- IP Rate Limit；
+- 连续失败退避；
+- 审计失败；
+- 过期后不可定位。
+
+真正需要保护时使用可选 Password。
+
+## 5. Public Key
+
+Send / Collect 公共链接使用高熵随机 key。
+
+至少 128-bit 随机性。
+
+不能由数据库 ID、时间或 Pickup Code 推导。
+
+## 6. Password
+
+Transfer 可选 Password：
+
+- bcrypt hash；
+- 解锁后短期 HttpOnly cookie；
+- password error 不能泄露其他敏感信息。
+
+## 7. Collect Upload-only
+
+匿名提交者：
+
+允许：
+
+```text
+create submission
+upload files to own in-progress submission
+finalize own submission
+```
 
 禁止：
 
-- 绝对路径；
-- `..` 跳出 Source；
-- 路径分隔符混淆；
-- 访问 Source 根之外；
-- 通过 symlink 逃逸；
-- 用户创建系统保留命名空间。
-
-系统保留前缀：
-
 ```text
-.omnistore-upload-
-.omnistore-copy-
+list submissions
+read submitted files
+overwrite others
+delete others
+discover owner Source
+generic filesystem operations
 ```
 
-用户列表、S3 对象列表等枚举入口隐藏整个保留命名空间；物理用量统计仍计算真实存在的普通文件。
+Submission 上传 API 不接受服务器真实路径。
 
-## 6. Symlink
+## 8. Transfer Path
 
-OmniStore 不把 symlink 当普通用户文件继续跟随。
+relative path：
 
-路径检查和最终打开/写入之间必须尽量缩短 TOCTOU 窗口，并通过安全路径解析限制逃逸。
+- 非绝对；
+- 无 `..`；
+- 逐 segment 校验；
+- 不允许 reserved namespace 注入；
+- 保留目录结构；
+- 不允许 symlink；
+- 不允许特殊设备/Socket。
 
-公开入口尤其不能借 symlink 暴露 Source 之外数据。
+## 9. Abuse Limits
 
-## 7. 排除规则
+Collect 必须有：
 
-Storage Source 可以配置全局排除路径。
+- request rate limit；
+- concurrent upload limit；
+- max file size；
+- max submission size；
+- max collection size；
+- optional extension/MIME allow list；
+- expiry。
 
-排除规则作用于：
+不能只依赖 Source quota 防滥用。
 
-- 私有 REST；
-- 公开网盘；
-- WebDAV；
-- S3；
-- 图床；
-- 扫描、索引和 Reconcile。
+## 10. Active Content
 
-排除不等于“文件不存在”，也不减少 Storage Source 的真实物理占用。
+Preview、Share、Transfer 收件页面统一复用安全 Content Header。
 
-## 8. 同源主动内容
+HTML/SVG/XML/JS 等主动内容不能获得同源脚本执行能力。
 
-公开网盘和分享的 raw 内容必须防止同源 XSS。
+Markdown 不渲染 raw HTML。
 
-HTML、SVG、XML、JavaScript 等主动内容默认强制下载；公开原始内容设置 `nosniff` 与受限 CSP。
+## 11. Protocol
 
-图片、视频等允许 inline 的内容必须根据确定的 MIME 和安全策略返回。
+WebDAV/S3 不能看到 `.omnistore`。
 
-`1.2.0` 的统一预览沿用同一模型：私有与分享侧的 inline 预览端点复用同一套 `setUserContentHeaders`（嗅探 MIME、`nosniff`、受限 CSP、主动内容强制附件），预览渲染器不引入新的绕过路径；Markdown 以不渲染原始 HTML 的方式输出，SVG 仅以图片语义（`<img>`）渲染。
+即使用户拥有 Source 根 read/write Policy，也不代表拥有 Service Namespace 权限。
 
-## 9. 上传
+## 12. Deletion
 
-普通上传：
+Site Capability Rebind/Disable 不删除任何真实 payload。
 
-- 有单文件大小限制；
-- 先写同目录内部临时文件；
-- journal-first；
-- 写完 fsync；
-- 再执行原子安装；
-- 覆盖时保留旧目标备份直到数据库提交；
-- 不允许半写最终路径。
+Transfer GC 只删除由 transfer DB record + 明确路径共同证明归属的 payload。
 
-没有对应 journal 的“长得像临时文件”的文件不允许自动删除。
+不得扫描目录后按命名模式直接删除未知文件。
 
-## 10. 配额
+## 13. 静态资源发布与后台授权隔离
 
-Storage Source quota 是物理硬配额；用户 quota 是所有权配额。
+静态协议仅发布普通目录的明确范围。公开 GET/HEAD 依赖该源静态协议的显式发布授权，普通写入依赖用户 Source/子路径 Policy；快速图床上传授权不能升级为任意目录写权限。
 
-必须覆盖所有最终写入口：
+公开资源配置由管理员确认。publish_root 不允许在 `.omnistore/` 中、不允许根外或软链接逃逸。发布目录包含草稿/密钥时，不列目录不能保护它们；UI 必须警告，默认媒体 allowlist 也不是替管理员分类资料。
 
-- REST；
-- WebDAV；
-- S3 PUT；
-- Multipart complete；
-- 图床；
-- 复制；
-- 移动目标；
-- 回收站恢复。
+public_asset_id 是公开定位符，不是访问令牌。不可通过 Origin/Referer 或未列目录向用户承诺私有性。公开静态响应不得设置管理 Cookie 或开放凭据式跨域。
 
-系统保留文件、staging 和宿主机直接创建的普通文件仍计入真实物理使用量。
+## 14. 404 与递归边界
 
-## 11. 回收站
+`.omnistore` 完整路径段对普通读取、浏览返回真实 404，包含 query/path/Destination/S3 key/编码路径；站点直接路径在 SPA fallback 前阻断。身份鉴权仍先按各协议执行。
 
-网页普通删除进入系统数据目录中的回收站；WebDAV/S3/图床协议删除保持其明确的永久删除语义。
+包括管理员在内的普通文件接口不能用 override 跳过；Share ZIP、父目录复制/删除、全局搜索的间接访问同样隔离。S3 响应用协议格式，不往 S3 HEAD 塞 REST JSON。完整矩阵见 [托管路径](design/managed-namespace.md)。
 
-恢复时重新校验：
+## 15. 静态媒体与匿名保留
 
-- Policy；
-- exclude；
-- symlink；
-- WebDAV lock；
-- Source quota；
-- 目标冲突。
+静态端点仅提供已验证允许类型，不为托管博客资源解除 HTML/JS/SVG 等主动内容限制。安全 header、CORS、CORP、缓存策略按 [公开 HTTP](design/public-content-http.md) 逐路由配置，禁止为了博客图片开放整个后台 API。
 
-## 12. 代理与客户端 IP
-
-只有配置为可信代理的上游才允许影响真实客户端 IP 解析。
-
-不得无条件信任来自公网请求的 `X-Forwarded-For` / `X-Real-IP`。
-
-## 13. 审计
-
-安全相关操作必须可审计，包括：
-
-- 登录成功/失败/限流；
-- 用户和权限变更；
-- Token/Credential 创建、禁用、撤销；
-- 文件写操作；
-- 分享创建/撤销；
-- Storage Source 管理；
-- 恢复和维护动作。
-
-日志禁止记录密码、明文 Token、Secret Access Key 等敏感值。
+图床匿名保留期独立于 Transfer，修改策略不静默提前删除历史图片。所有过期清理仍需对象记录和可恢复删除步骤，不能将博客发布目录纳入 GC。隐藏文件仍计入源物理用量。

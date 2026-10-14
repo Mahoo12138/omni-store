@@ -1,126 +1,92 @@
-# 发布流程
+# 2.0 发布流程
 
-OmniStore 使用 SemVer。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## 1. 开发版本
+## 1. Version
 
-主分支开发构建可以使用：
-
-```text
-1.x.y-dev+sha.<commit>
-```
-
-正式产物必须由版本 Tag 触发。
-
-## 2. RC
-
-功能冻结后：
+开发构建：
 
 ```text
-v1.1.0-rc.1
-v1.1.0-rc.2
-...
+2.0.0-dev+sha.<commit>
 ```
 
-RC 阶段：
+RC：
 
-- 不继续扩大 Feature Scope；
-- 只接受 release blocker；
-- 安全修复；
-- 兼容性修复；
-- 测试稳定性；
-- 发布配置修正；
-- 必要文档修正。
+```text
+v2.0.0-rc.1
+```
 
-## 3. 发布门禁
+Stable：
 
-统一执行：
+```text
+v2.0.0
+```
+
+## 2. 2.0 特殊升级验收
+
+除统一 Release Gate 外必须有：
+
+### Upgrade Matrix
+
+```text
+1.1.0/1.1.1 schema
+    -> 2.0.0
+```
+
+验证：
+
+- 用户；
+- Source；
+- Policy；
+- file_records；
+- images；
+- shares；
+- WebDAV credentials；
+- S3 credentials；
+- recent/favorites；
+- Preview/Share 现有功能。
+
+### Breaking Config
+
+升级后明确提示管理员：
+
+- Public Drive binding；
+- Image Bed binding；
+- Transfer binding；
+- S3 Source switches。
+
+不得静默把多个 legacy public/image source 任意选一个。
+
+## 3. RC Freeze
+
+进入 RC：
+
+- 不新增 Transfer Feature；
+- 只修 blocker/security/migration/compatibility/test；
+- 不再次调整核心 Scope。
+
+## 4. Gate
 
 ```bash
 ./scripts/verify-release.sh
-```
-
-门禁包括：
-
-- Release metadata / migration；
-- Frontend test；
-- Production build；
-- Go format；
-- vet；
-- Go tests；
-- statement coverage；
-- critical package coverage；
-- race detector；
-- Browser E2E；
-- release binary；
-- Linux amd64/arm64 cross-build；
-- Compose config（环境支持时）；
-- repository diff check。
-
-## 4. Crash Recovery
-
-重要版本在 RC 阶段额外执行：
-
-```bash
 OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh
 ```
 
-用于真实进程级 SIGKILL 验证。
+## 5. Real Acceptance
 
-## 5. Tag
+- fresh install；
+- upgrade install；
+- Public Drive；
+- Image Bed；
+- Transfer Send；
+- Transfer Collect；
+- WebDAV；
+- S3；
+- Backup/Restore；
+- real client matrix。
 
-发布 Tag：
+## 6. 本次扩展的 2.0 发布门禁
 
-```bash
-git tag -a v1.1.0-rc.1 -m "OmniStore v1.1.0-rc.1"
-git push origin v1.1.0-rc.1
-```
+必须完成 [ACCEPTANCE](ACCEPTANCE.md) 的 AS/NS/IMG 场景，特别是整个发布目录不会被默认公开、内部命名空间全入口 404、旧 `/i/` 不被重绑破坏、static reset/relocate 不误映射、客户端缓存失效边界与 CORS。
 
-稳定版：
-
-```bash
-git tag -a v1.1.0 -m "OmniStore v1.1.0"
-git push origin v1.1.0
-```
-
-## 6. CI 产物
-
-Version Tag 触发：
-
-- release gate；
-- Docker amd64/arm64；
-- Linux amd64/arm64 archive；
-- checksum；
-- GitHub Release。
-
-带 `-rc.N` 的版本标记为 prerelease。
-
-稳定版本才允许更新 `latest` Docker tag。
-
-## 7. Migration Freeze
-
-发布稳定版本后，对应 migration 成为冻结历史。
-
-例如：
-
-```text
-v1.0.0.sql
-```
-
-不能因为 1.1 开发方便直接修改。
-
-## 8. 发布后检查
-
-至少验证：
-
-- 二进制 version 输出；
-- Docker pull/run；
-- 全新安装；
-- 现有数据升级；
-- 登录；
-- Source；
-- 基础文件 CRUD；
-- 关键协议入口；
-- 备份/恢复（版本涉及时）。
-
-发现 blocker 发布 patch 或下一 RC，不回写已发布 Tag。
+升级说明明确：快速图床和静态目录不是同一数据模型；未配置源默认不提供静态 HTTP，v2.0.1 迁移保留已有发布 ID 和启停状态；不自动搬迁旧图片；普通文件写权限不因协议启用扩大。若未完成上述门禁，不能把文档包的链接检查结果当作 RC 测试结果。

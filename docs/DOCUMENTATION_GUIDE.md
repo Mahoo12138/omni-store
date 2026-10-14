@@ -1,118 +1,61 @@
-# 文档维护规范
+# 文档维护规则
 
-OmniStore 的文档是长期开发记忆，不是发布后无人维护的说明书。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## 1. 文档类型
+2.0 删除无价值历史文档，不再保存旧 Roadmap 快照。
 
-### 当前事实
-
-长期放在 `docs/` 根和 `features/`：
-
-- `PRODUCT.md`
-- `ARCHITECTURE.md`
-- `SECURITY.md`
-- `DATA_MODEL.md`
-- `API.md`
-- `DESIGN_SYSTEM.md`
-- `DEVELOPMENT.md`
-- `RELEASING.md`
-- `AGENT_GUIDE.md`
-- `features/*.md`
-
-这些文档应描述“现在系统是什么”。
-
-### 版本计划
-
-放在：
+## 当前文档职责
 
 ```text
-docs/roadmap/
+PRODUCT
+    产品长期边界
+
+STATUS
+    现在做到哪里
+
+ROADMAP
+    2.0 做什么
+
+IMPLEMENTATION_PLAN
+    编码顺序
+
+TASKS
+    可执行清单
+
+ARCHITECTURE / SECURITY / DATA_MODEL / API
+    技术契约
+
+features/
+    用户可见业务行为
+
+design/
+    关键实现设计
 ```
 
-只描述某版本准备交付什么，以及验收边界。
+## 删除规则
 
-### 功能设计
+完成且已经被 current docs 吸收的：
 
-放在：
+- old roadmap；
+- old acceptance；
+- old migration explanation；
+- archive；
 
-```text
-docs/design/
-```
+可以删除。
 
-描述尚未实现或正在实现的具体设计。
+Git 历史已经承担历史追溯职责。
 
-设计完成上线后，可以继续保留其中仍有解释价值的架构部分；过期计划必须标记或归档。
+## 更新触发
 
-### 历史
+- schema -> DATA_MODEL
+- endpoint -> API
+- security -> SECURITY
+- product semantics -> feature
+- architecture -> ARCHITECTURE/design
+- scope -> ROADMAP/TASKS
 
-放在：
+## 当前包的目标与事实
 
-```text
-docs/archive/
-```
+正文中未明确标为当前基线的 2.0 能力都是目标规范；STATUS 记录固定检查 SHA，TASKS 和 ACCEPTANCE 保持待执行。新决策不得只追加尾注却保留正文相反描述。
 
-历史路线、RC checklist、已经结束的阶段状态不能继续占据当前路线入口。
-
-## 2. 事实优先级
-
-1. migration / code / tests；
-2. 已发布行为；
-3. current docs；
-4. accepted product constraints；
-5. roadmap / design；
-6. archive。
-
-## 3. 更新触发
-
-| 改动 | 必须检查 |
-| --- | --- |
-| Database | migration + DATA_MODEL |
-| REST API | API |
-| Path/Auth/Policy | SECURITY |
-| File semantics | features/private-drive |
-| WebDAV | features/webdav |
-| S3 | features/s3 |
-| Image Bed | features/image-bed |
-| Share | features/sharing |
-| UI foundation | DESIGN_SYSTEM |
-| Version scope | ROADMAP + roadmap/version |
-| Build/release | DEVELOPMENT + RELEASING |
-
-## 4. Roadmap 规则
-
-Roadmap 不写具体实现代码。
-
-每个版本至少包含：
-
-- Goal；
-- Scope；
-- Out of Scope；
-- Dependency；
-- Acceptance；
-- Status。
-
-不要用“以后可能做”弱化永久 Non-goals；永久边界统一在 `PRODUCT.md`。
-
-## 5. Design 规则
-
-Design 文档回答：
-
-- Problem；
-- Goals；
-- Non-goals；
-- User flow；
-- API/Model；
-- State machine；
-- Security / consistency；
-- Failure handling；
-- Acceptance。
-
-尚未实现的 Design 顶部必须明确标注“Planned / Draft”，避免 Agent 当作现状。
-
-## 6. 归档
-
-版本稳定后：
-
-- 当前行为继续留在 feature/current docs；
-- 版本开发过程、阶段清单、旧 scope 进入 `archive/<version>/`；
-- 根 `ROADMAP.md` 只保留未来路线和当前版本。
+本次分工：PRODUCT 维护作用域与文件归属；static-assets 两篇分别管用户语义与实现；managed-namespace 管路径和 404；public-content-http 管 header/cache/CORS。代码完成时同步 API/schema/测试，不生成另一套含糊“私有图床”文档。

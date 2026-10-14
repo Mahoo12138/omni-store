@@ -1,148 +1,122 @@
-# 开发指南
+# 2.0 开发指南
 
-## 1. 环境
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-- Go：以 `go.mod` 为准。
-- Node.js：以 `.node-version` / CI 为准。
-- pnpm：通过 Corepack。
-- 前端：React + Vite。
-- 数据库：SQLite。
+## 1. 基线
 
-## 2. 本地启动
-
-```bash
-corepack enable
-
-cd web
-pnpm install --frozen-lockfile
-pnpm run build
-cd ..
-
-go build -o omnistore ./cmd/omnistore
-./omnistore server
-```
-
-开发时也可以分别启动前端和后端；以仓库实际脚本为准。
-
-## 3. 测试环境
-
-仓库提供隔离测试/演示环境：
-
-```bash
-./scripts/test-env.sh run
-```
-
-使用 `config.test.yaml` 与 `.testdata/`，避免开发测试污染真实实例。
-
-E2E 测试使用隔离种子环境，不依赖开发者已有数据状态：Playwright 启动时以
-`test-env.sh clean run` 重建 `.testdata`，从干净种子状态跑完整套件。手动调试时
-如需同样效果，可执行 `./scripts/test-env.sh clean run`。
-
-## 4. 配置
-
-优先级：
-
-```text
-defaults < YAML < environment
-```
-
-示例配置以根目录：
-
-```text
-config.example.yaml
-```
-
-为准。
-
-Docker 中应明确挂载：
-
-- `/data`：OmniStore 系统数据；
-- `/mnt/sources/*`：真实 Storage Source。
-
-Docker named volume 或宿主机 bind mount 的属主、读写权限和排查方式见[常见问题](FAQ.md)。
-
-## 5. 数据库迁移
-
-规则：
-
-1. 已发布 migration 不能重写。
-2. 新结构使用新的 `vMAJOR.MINOR.PATCH.sql`。
-3. 修改模型同时更新 `DATA_MODEL.md`。
-4. migration 失败必须阻止继续以未知结构启动。
-
-## 6. 前端开发
-
-前端 UI 应优先复用：
-
-```text
-web/src/components/ui/*
-```
-
-避免在业务页重复实现 Button/Input/Dialog/Table/Toast 等基础组件。
-
-状态管理优先：
-
-- TanStack Query：服务端状态；
-- 组件本地 state：短生命周期 UI 状态。
-
-未经明确需求不引入新的全局状态库。
-
-## 7. 文件功能开发
-
-修改文件操作前先检查：
-
-- `SECURITY.md`
-- `features/private-drive.md`
-- path lock；
-- quota；
-- file_records；
-- recovery journal；
-- WebDAV persistent locks。
-
-不要只让 REST 路径“能工作”，同时破坏 WebDAV/S3/图床的一致性。
-
-## 8. 测试最低要求
-
-后端：
+开始 2.0 前：
 
 ```bash
 go test ./...
 go test -race ./...
-go vet ./...
-```
-
-前端：
-
-```bash
 cd web
 pnpm test
 pnpm run build
 pnpm exec playwright test
 ```
 
-发布前统一运行：
+确保不是在红色 baseline 上做结构重构。
 
-```bash
-./scripts/verify-release.sh
+## 2. Migration
+
+禁止修改：
+
+```text
+v1.0.0.sql
+v1.1.0.sql
+v1.1.1.sql
 ```
 
-Crash Recovery 独立验收：
+初始 2.0 schema 保存在：
 
-```bash
-OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh
+```text
+migrations/v2.0.0.sql
 ```
 
-具体 RC 验收轮次由版本计划决定。
+后续变更新增更高 SemVer 迁移；静态 HTTP 重构使用 `v2.0.1.sql`，不得修改已应用文件。
 
-## 9. 文档
+Migration 必须同时测试：
 
-完成影响产品行为的改动时同时检查：
+- fresh DB；
+- 1.1.x upgrade DB。
 
+## 3. Breaking Change 策略
+
+2.0 不保留旧/新两套业务模型。
+
+正确：
+
+```text
+migration
+-> service
+-> API
+-> frontend
+-> tests
+-> docs
+```
+
+不正确：
+
+```text
+旧 public mount + 新 public drive binding 长期并存
+```
+
+## 4. File/Service Write
+
+新增 Transfer 写入前必须设计：
+
+- path；
+- reserved namespace；
+- quota；
+- lock；
+- journal；
+- DB commit boundary；
+- startup recovery；
+- cleanup；
+- GC。
+
+禁止直接 `os.WriteFile` 作为业务完成方案。
+
+## 5. E2E
+
+Playwright 使用 clean test seed。
+
+2.0 seed 必须提供：
+
+- General Source；
+- Public Source；
+- Image Source；
+- Transfer Source；
+- WebDAV/S3 enabled variants；
+- admin/user；
+- transfer fixtures。
+
+## 6. Crash Test
+
+扩展 crashcheck：
+
+- Send upload；
+- Send finalize；
+- Collect submission upload；
+- Collect finalize；
+- Save to Files；
+- Transfer GC。
+
+## 7. 文档同步
+
+完成一阶段后更新：
+
+- STATUS；
+- TASKS；
 - API；
-- Security；
-- Data Model；
-- feature spec；
-- roadmap/design；
-- Changelog。
+- DATA_MODEL；
+- feature/design；
+- CHANGELOG。
 
-如果代码和规划冲突，应更新规划，而不是让文档继续宣称未实现状态。
+## 8. 静态资源实施补充
+
+新设计仍沿用现有 UI/路由/样式栈，不引入静态站点生成器或媒体转码服务。按 `NS → binding/schema → quick image-bed → static-assets → integration` 顺序实现，详见 [测试设计](TESTING.md)。
+
+开发时用两个本地 origin 验证博客嵌入；最终再经生产相同反向代理配置测试。公开域名配置不自动申请证书，不在资源 origin 暴露管理员 API。所有内部路由在 SPA fallback 前拒绝。
+
+只更新文档不能标记实现完成；需要运行代码测试后更新 STATUS/TASKS。包中的 SQL 仅是结构契约片段，不要直接当全量 migration 执行。

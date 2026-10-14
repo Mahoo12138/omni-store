@@ -1,80 +1,62 @@
-# Upload Task System Design
+# Upload Task System — Current Baseline
 
-状态：1.1 已实现
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## Problem
+状态：Implemented in 1.1 / Reuse in 2.0
 
-当前文件管理器的上传更接近“一个请求 = 一个文件”。多文件和目录上传需要统一的任务状态、进度、并发、失败重试和取消体验。
+2.0 不重新实现上传任务管理器。
 
-## Goals
-
-统一管理：
+当前能力：
 
 ```text
-单文件上传 ─┐
-多文件上传 ─┼─→ Upload Task Manager
-文件夹上传 ─┘
+single file
+multi-file
+folder upload
+relative_path
+worker concurrency
+progress
+retry
+cancel
+conflict policy
 ```
 
-## Task Model
+## Reuse
 
-建议前端模型：
+Transfer Send/Collect 前端上传必须复用现有 Upload Task Manager 的任务/进度/Worker 概念。
+
+可以为 Transfer 增加新的 adapter：
 
 ```text
-UploadTask
-- id
-- sourceKey
-- targetPath
-- kind: file | files | directory
-- conflictPolicy
-- status
-- totalFiles
-- completedFiles
-- failedFiles
-- skippedFiles
-- totalBytes
-- uploadedBytes
-- items[]
+Upload Task Manager
+├── File API Adapter
+├── Image Bed Adapter
+└── Transfer Adapter
 ```
 
-Item：
+不要复制一份新的队列实现。
+
+## Backend
+
+普通 Folder Upload 已采用：
 
 ```text
-queued
-uploading
-succeeded
-failed
-skipped
-cancelled
+target root + relative_path
 ```
 
-## Worker Pool
+Transfer Adapter 同样提供 `relative_path`，但目标由 Transfer Service 内部映射到 `.omnistore`，客户端不能指定内部真实路径。
 
-限制并发，例如 3～6 个请求，不一次对数百文件并发。
+## Non-goals
 
-每个 File 独立调用后端上传 API，因此：
+2.0 Transfer 不因为复用上传 UI 就自动获得：
 
-- 已成功项无需重复；
-- 失败项可独立重试；
-- 后端现有单文件 Crash Recovery 可以复用。
+- 断点续传；
+- chunk resumable upload；
+- 浏览器刷新后继续任务。
 
-## Progress
+这些需要独立需求。
 
-总进度优先按 Bytes；同时显示：
+## 三类上传目的地
 
-```text
-137 / 420 files
-256 MB / 786 MB
-```
+任务调度 UI 可复用，但上传授权适配器必须区分：普通文件（含博客静态目录，路径 Policy）、快速图床（服务授权，系统分配图片 ID）、Transfer（任务/提交授权，托管路径）。不要因为它们共用队列，就向客户端暴露内部 Source/路径或统一为 generic upload 的 internal bypass。
 
-## Pause
-
-若第一阶段的网络请求不能真正恢复 offset，“暂停”只能停止派发新任务，并允许当前请求结束/取消。
-
-不能把这种暂停宣传为“断点续传”。
-
-## Persistence
-
-1.1 第一版可以只维护页面/会话级任务，不承诺浏览器刷新后继续。
-
-持久上传任务与断点续传不应顺手扩大 Scope。
+静态目录上传保留 relative_path；图床不允许借 relative_path 越出托管范围。匿名图床不接收目录批量视频。暂停调度不等于跨浏览器刷新续传；进度和取消语义继续遵循已有任务契约。

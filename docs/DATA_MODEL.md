@@ -1,229 +1,315 @@
-# 数据模型
+# 2.0 数据模型
 
-本文档解释 SQLite 业务模型和生命周期。**迁移文件是最终事实来源。**
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-稳定迁移按：
+本文 SQL 是 2.0 目标结构片段，不是可以对生产库直接执行的完整迁移；Agent 必须结合固定基线实现 `v2.0.0.sql`。代码/迁移记录描述实现事实，本文描述待实现目标。
 
-```text
-migrations/vMAJOR.MINOR.PATCH.sql
-```
-
-命名。`v1.0.0.sql` 是首个稳定版本冻结基线；已记录的 migration 永久跳过，后续结构变化只能新增更高版本。
-
-## 1. Schema Migration
-
-`schema_migrations`
-
-- `version`：SemVer 迁移版本；
-- `applied_at`：应用时间。
-
-## 2. 用户与凭据
-
-### users
-
-核心字段：
-
-- 内部整数 ID；
-- `user_public_id`：不可变公开随机标识；
-- `username`；
-- `display_name`；
-- `password_hash`；
-- `role`；
-- `is_disabled`；
-- timestamps。
-
-角色：
+已发布：
 
 ```text
-super_admin
-user
+v1.0.0.sql
+v1.1.0.sql
+v1.1.1.sql
 ```
 
-### sessions
-
-保存 Web Session、CSRF hash、过期时间、UA 与 IP。
-
-### user_tokens
-
-目前主要承载 WebDAV Token，数据库只保存 hash。
-
-### image_bed_tokens
-
-每个用户可以持有多个命名图床 Token。
-
-### s3_credentials
-
-- `access_key_id` 为外部定位 ID；
-- Secret Key 使用 master key 加密；
-- 支持禁用、撤销、最后使用时间。
-
-## 3. Storage Source
-
-### storage_sources
-
-主要字段：
-
-- `id`：内部外键；
-- `key`：系统生成的不透明 `src-*` key；
-- `name`；
-- `description`；
-- `root_path`；
-- `is_disabled`；
-- 公开挂载配置；
-- WebDAV / image-bed 开关；
-- `quota_bytes`；
-- timestamps。
-
-`quota_bytes=0` 表示不限。
-
-### storage_source_exclude_patterns
-
-保存 Source 全局排除规则。
-
-### public_mount_redirects
-
-保存公开挂载路径改名后的历史别名，用于 308 重定向。
-
-## 4. Policy
-
-Policy 模型用于复用权限配置。
-
-概念包括：
-
-- Policy；
-- User ↔ Policy 绑定；
-- Policy ↔ Storage Source 规则；
-- Source 级默认权限；
-- 子路径权限规则。
-
-有效权限由全部绑定 Policy 合并，子路径使用最长前缀并在多策略间取最高权限。
-
-## 5. 文件台账
-
-`file_records` 不是虚拟文件树，而是对真实文件的系统视图。
-
-保存：
-
-- Storage Source；
-- relative path；
-- active / trash 等状态；
-- 文件大小、mtime；
-- 所有者；
-- 写入主体元数据。
-
-用途：
-
-- 用户用量；
-- 所有权；
-- 搜索索引；
-- 生命周期联动；
-- 外部文件 Reconcile。
-
-宿主机外部已有文件扫描进入时可以标记为 `unowned`，不能因为“某用户有权限”就猜测所有者。
-
-## 6. Search
-
-active 文件台账建立 FTS5 trigram 索引。
-
-搜索结果仍必须二次经过：
-
-- Source 状态；
-- 用户权限；
-- exclude；
-- 文件状态。
-
-## 7. Share
-
-分享模型保存：
-
-- 随机 share key；
-- Source + relative path；
-- 创建者；
-- 密码 hash（可选）；
-- 过期时间（可选）；
-- 最大下载次数（可选）；
-- 当前计数；
-- 撤销状态；
-- timestamps。
-
-移动/回收/删除必须和有效分享生命周期联动，不能留下指向错误文件的静态路径。
-
-## 8. Image Bed
-
-图片记录保存：
-
-- image ID；
-- owner（匿名可以为空或使用明确匿名主体语义）；
-- Storage Source；
-- relative path；
-- extension/MIME；
-- size；
-- timestamps；
-- trash linkage。
-
-图片公开 URL 使用稳定 image ID，不直接暴露真实 root path。
-
-## 9. Trash
-
-回收站真实 payload 位于系统数据目录，而不是 Source 内的隐藏目录。
-
-SQLite 保存：
-
-- `trash_key`；
-- Source；
-- 原 relative path；
-- 删除者；
-- 元数据；
-- 时间；
-- operation state。
-
-永久清理后释放用户配额；恢复时重新建立 active 台账。
-
-## 10. S3 Multipart
-
-关键表：
-
-- `s3_multipart_uploads`
-- `s3_multipart_parts`
-- `s3_object_etags`
-
-真实 Part 位于：
+2.0 新增：
 
 ```text
-{data.dir}/tmp/multipart/{upload_id}/
+v2.0.0.sql
 ```
 
-Multipart ETag 只在对应物理对象 size + mtime 仍匹配时有效；S3 之外修改对象后应失效/重建相关记录。
+## 1. storage_sources
 
-## 11. Audit
+2.0 目标字段：
 
-审计保存：
+```text
+id
+key
+name
+description
+root_path
+is_disabled
+webdav_enabled
+s3_enabled
+quota_bytes
+created_at
+updated_at
+```
 
-- actor；
-- entry type；
-- action；
-- Source；
-- path / target path；
-- IP；
-- User-Agent；
-- success/failed；
-- error code；
-- timestamp。
+删除：
 
-用户删除时审计历史可以保留，但用户外键必须安全处理。
+```text
+public_read_enabled
+public_mount_path
+image_bed_enabled
+```
 
-## 12. Operation Journal
+建议新 Source：
 
-关键崩溃恢复日志主要位于系统 operation 目录，而不是把每个阶段都扩大成业务表。
+```text
+webdav_enabled = false
+s3_enabled = false
+```
 
-操作日志必须包含足够信息区分：
+协议默认显式开启。
 
-- planned；
-- prepared；
-- filesystem ready；
-- database ready；
-- cleanup pending；
+## 2. site_capability_bindings
 
-具体阶段取决于不同操作。
+```sql
+CREATE TABLE site_capability_bindings (
+  capability TEXT PRIMARY KEY,
+  storage_source_id INTEGER,
+  is_enabled BOOLEAN NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE RESTRICT,
+  CHECK(capability IN ('public_drive', 'image_bed', 'transfer_center')),
+  CHECK(is_enabled = 0 OR storage_source_id IS NOT NULL)
+);
+```
 
-恢复器以 SQLite 提交边界、摘要和明确 journal 所有权判断完成或回滚。
+一个 capability 一行。
+
+## 3. 删除历史模型
+
+2.0 删除：
+
+```text
+public_mount_redirects
+user_preferences.default_image_bed_storage_source_id
+```
+
+如果 `user_preferences` 没有其他有效字段，可以整体删除。
+
+## 4. images
+
+保留现有：
+
+```text
+storage_source_id
+relative_path
+```
+
+旧图片不迁移物理文件。
+
+2.0 新上传统一使用当前 Image Bed binding，并写入：
+
+```text
+.omnistore/image-bed/...
+```
+
+images 仍可对应 legacy path。新图床台账标记 `resource_scope=image_bed`；已存在普通路径旧图不自动移动或改归属，不能把所有登录用户图片推断成博客静态资源。
+
+## 5. transfers
+
+建议：
+
+```sql
+CREATE TABLE transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_key TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL CHECK(kind IN ('send','collect')),
+  owner_user_id INTEGER NOT NULL,
+  storage_source_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  pickup_code_digest BLOB NOT NULL UNIQUE,
+  password_hash TEXT,
+  expires_at DATETIME NOT NULL,
+  max_downloads INTEGER NOT NULL DEFAULT 0,
+  download_count INTEGER NOT NULL DEFAULT 0,
+  max_total_bytes INTEGER NOT NULL DEFAULT 0,
+  max_file_bytes INTEGER NOT NULL DEFAULT 0,
+  max_submission_bytes INTEGER NOT NULL DEFAULT 0,
+  allowed_extensions_json TEXT,
+  require_submitter_name BOOLEAN NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  closed_at DATETIME,
+  FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE RESTRICT
+);
+```
+
+状态按 kind 由 Service 校验。
+
+Send：
+
+```text
+draft
+active
+expired
+revoked
+```
+
+Collect：
+
+```text
+active
+closed
+expired
+revoked
+```
+
+`storage_source_id` 是创建时 snapshot；管理员之后 Rebind 不改变已有 Transfer。
+
+## 6. transfer_submissions
+
+```sql
+CREATE TABLE transfer_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_key TEXT NOT NULL UNIQUE,
+  transfer_id INTEGER NOT NULL,
+  submitter_name TEXT,
+  note TEXT,
+  file_count INTEGER NOT NULL DEFAULT 0,
+  total_size INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','submitted','discarded')),
+  created_at DATETIME NOT NULL,
+  submitted_at DATETIME,
+  FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE
+);
+```
+
+外部提交者不能通过 submission key 枚举或读取其他 Submission。
+
+## 7. transfer_files
+
+```sql
+CREATE TABLE transfer_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id INTEGER NOT NULL,
+  submission_id INTEGER,
+  relative_path TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mime_type TEXT,
+  sha256 TEXT,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(transfer_id) REFERENCES transfers(id) ON DELETE CASCADE,
+  FOREIGN KEY(submission_id) REFERENCES transfer_submissions(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX idx_transfer_files_scope_path
+ON transfer_files(
+  transfer_id,
+  COALESCE(submission_id, 0),
+  relative_path
+);
+```
+
+使用 expression unique index 是因为 SQLite 的普通 UNIQUE 会把多个 `NULL` 视为不同值；Send 的 `submission_id IS NULL` 时也必须禁止同一路径重复。
+
+Send：`submission_id IS NULL`。
+
+Collect：必须属于同一 Transfer 的 Submission；该交叉一致性由 Service 在事务内校验。
+
+## 8. transfer_access_sessions
+
+密码解锁使用短期 HttpOnly Session。
+
+保存随机 token hash，不保存明文。
+
+Public preview 不计入“下载次数”；只有用户明确触发 attachment/ZIP 下载时才原子增加 `download_count`。媒体 Range 预览不会因为多个 Range 请求重复扣次数。
+
+## 9. Transfer Quota
+
+Transfer 临时字节不进入普通 `file_records` 和 User Quota。
+
+Transfer Service 计算：
+
+- per transfer max；
+- per user active total；
+- site active total；
+- collection max；
+- submission max。
+
+Source physical quota仍从真实文件系统统计。
+
+## 10. file_records
+
+普通网盘、静态资源原件与需要计费的图床文件继续使用，但必须分开 `resource_scope`。静态资源是普通文件，不另建一行副本；图床 images 与 file_records 不重复累加用量。
+
+Transfer payload 不进入普通 Search/Recent/Favorite。
+
+Collect 的 `Save to Files` 执行后，目标副本进入普通 `file_records`。
+
+## 11. system_settings
+
+继续保存：
+
+- instance name；
+- Transfer defaults/limits；
+- anonymous image-bed setting；
+- 其他小型实例设置。
+
+Capability -> Source 关系不得塞进 JSON/system_settings，使用外键表。
+
+## 12. 按源静态 HTTP 配置
+
+`source_static_access` 每个源至多一行，替代全站静态 binding 和单例 settings。各源独立维护公开身份、版本、缓存和 CORS 策略。
+
+```sql
+CREATE TABLE source_static_access (
+  storage_source_id INTEGER PRIMARY KEY REFERENCES storage_sources(id) ON DELETE RESTRICT,
+  enabled BOOLEAN NOT NULL DEFAULT 0,
+  publish_root TEXT NOT NULL,
+  public_asset_id TEXT NOT NULL UNIQUE,
+  public_origin TEXT NOT NULL DEFAULT '',
+  cache_mode TEXT NOT NULL DEFAULT 'short' CHECK(cache_mode IN ('short', 'no-cache', 'long')),
+  cors_mode TEXT NOT NULL DEFAULT 'public' CHECK(cors_mode IN ('none', 'public', 'allowlist')),
+  revision INTEGER NOT NULL DEFAULT 1,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE source_static_origins (
+  storage_source_id INTEGER NOT NULL REFERENCES source_static_access(storage_source_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  origin TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (storage_source_id, origin)
+);
+
+```
+
+v2.0.1 保留已有公开 ID、路径、origin、版本和启停状态，不移动文件。白名单外键随跨源 relocate 迁移；已有配置的目标源不能被覆盖。移除配置必须先关闭协议，只撤销公开身份，不删除文件；源有静态配置时禁止删除。
+
+无需逐文件发布记录，公开读取使用普通源路径，不依赖 images 台账或 Reconcile。
+
+## 13. 普通台账 / 图床台账隔离
+
+目标 migration 增加：
+
+```sql
+ALTER TABLE file_records ADD COLUMN resource_scope TEXT NOT NULL DEFAULT 'file'
+  CHECK(resource_scope IN ('file', 'image_bed'));
+
+CREATE INDEX idx_file_records_scope_source
+  ON file_records(resource_scope, storage_source_id, record_status);
+```
+
+同步修改所有 FTS 触发器和初始重建查询，只纳入 `resource_scope='file' AND record_status='active'` 的允许路径；对旧保留路径也过滤。普通 Reconcile 的 upsert 和 missing 删除同样限定 file scope。用户配额可以聚合 file 和 image_bed，但不能再重复加 images.size。
+
+新图床原件写入 image_bed scope。旧 images 若仍位于普通目录，其 legacy file 行保持原访问语义，重构时单独标识来源，不执行路径猜测搬迁。Transfer 不进入此表。
+
+## 14. 匿名图片保留期
+
+```sql
+ALTER TABLE images ADD COLUMN expires_at DATETIME;
+CREATE INDEX idx_images_expiry ON images(expires_at)
+  WHERE expires_at IS NOT NULL;
+```
+
+旧图 expires_at 保持 NULL。匿名保留天数是站点设置，创建新图时固化绝对 expires_at；改变默认值不追溯修改历史记录。只有图床服务按明确图记录撤下/清理，不把静态目录加入 TTL 清理任务。
+
+## 15. 托管根登记
+
+```sql
+CREATE TABLE source_managed_roots (
+  storage_source_id INTEGER PRIMARY KEY,
+  ownership_nonce TEXT NOT NULL UNIQUE,
+  namespace_version INTEGER NOT NULL DEFAULT 1 CHECK(namespace_version = 1),
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(storage_source_id) REFERENCES storage_sources(id) ON DELETE RESTRICT
+);
+```
+
+使用实例持久标识、数据库登记与磁盘 marker 配对。该登记不是图片/Transfer payload 的删除清单；GC 仍需具体对象及日志证明归属。备份/恢复保留登记，找不到匹配时报告 blocked，不自动接管目录。

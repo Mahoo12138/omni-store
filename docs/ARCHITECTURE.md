@@ -1,236 +1,243 @@
 # 系统架构
 
-本文档记录 OmniStore 当前长期有效的技术架构和关键约束。版本计划不在此维护。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## 1. 技术栈
-
-### 后端
-
-- Go
-- 模块化单体
-- SQLite
-- `database/sql` + 原生 SQL + Repository
-- `modernc.org/sqlite`（pure Go，便于无 CGO 单二进制）
-- SemVer migration：`migrations/vMAJOR.MINOR.PATCH.sql`
-- 前端静态产物通过 `go:embed` 嵌入
-
-不引入：
-
-- ORM 作为核心数据层
-- Redis
-- 外部数据库依赖
-- 消息队列
-- 微服务
-- 分布式锁
-
-### 前端
-
-- React
-- TanStack Router
-- TanStack Query
-- vanilla-extract
-- Base UI
-- Vite
-
-项目维护自己的轻量 UI 组件层，颜色、间距、圆角、阴影、字体和交互状态统一由 Design Token 管理。
-
-## 2. 部署模型
-
-生产目标：
+## 1. 长期技术模型
 
 ```text
-Linux amd64
-Linux arm64
+Go modular monolith
++ SQLite
++ Local filesystem
++ embedded React
 ```
 
-推荐：
+不增加 Redis、PostgreSQL、消息队列、微服务或分布式锁。
+
+## 2. Storage Source
 
 ```text
-Docker Compose
+Storage Source = Local Real Directory
 ```
 
-同时提供单二进制运行方式。
+每个 Source：
 
-架构明确是：
+- internal integer ID；
+- immutable random `storage_key`；
+- name；
+- root path；
+- quota；
+- exclude；
+- disabled；
+- WebDAV switch；
+- S3 switch；
+- 静态 HTTP 配置（匿名只读、发布根、公开 ID、缓存/CORS）。
+
+`storage_key` 是外部稳定协议 ID。
+
+示例：
 
 ```text
-一个 OmniStore 进程
-+ 一个 SQLite 数据库
-+ 多个本地 Storage Source
+src-a4d83f29c701be42
 ```
 
-不允许多个 OmniStore 实例同时管理同一物理目录。
+满足 S3 Path-style bucket 字符要求，也可安全作为 WebDAV path segment。
 
-## 3. Storage Source
+Source 改名不能改变 key。
 
-核心模型：
+## 3. Capability Scope
 
 ```text
-Storage Source = 本地真实目录
+OmniStore
+├── Site Capabilities
+│   ├── Public Drive -> Source A
+│   ├── Image Bed -> Source B
+│   └── Transfer Center -> Source C
+│
+├── Source Protocols
+│   ├── Source A: WebDAV / S3 / Static HTTP + publish_root
+│   ├── Source B: WebDAV / S3 / Static HTTP + publish_root
+│   └── Source C: WebDAV / S3 / Static HTTP + publish_root
+│
+└── Resource Capabilities
+    ├── Preview
+    ├── Share
+    ├── Copy
+    ├── Move
+    └── Trash
 ```
 
-`storage_sources.id` 只用于内部数据库外键；外部 REST/WebDAV/S3 使用系统生成的不透明 `storage_key`。
+一个 Source 可以同时承担多个 Site Capability。
 
-用户界面优先展示名称，不要求用户理解 key。
+## 4. Service-managed Namespace
 
-Docker 中后台填写的是容器内路径，例如：
+Site Capability 需要在绑定 Source 内保存内部数据时使用：
 
 ```text
-/mnt/sources/photos
+.omnistore/
 ```
 
-而不是宿主机路径。
-
-## 4. 系统数据目录
-
-推荐：
+建议：
 
 ```text
-/data
-├── omnistore.db
-├── keys/
-├── trash/
-├── cache/
-├── tmp/
-└── operations/
+.omnistore/
+├── image-bed/
+└── transfer/
+    ├── send/
+    └── collect/
 ```
 
-原则：
+规则：
 
-- 系统数据和用户真实存储源分离；
-- 数据目录及敏感子目录收紧为 `0700`；
-- SQLite 文件按 `0600` 管理；
-- 拒绝把文件系统根、工作目录、用户 home 或 symlink 路径作为专用数据目录；
-- 临时数据、缓存和 operation journal 的所有权必须明确。
+- 用户不能通过普通文件 API 创建/读取该 namespace；
+- File Manager 隐藏，直接读取/浏览返回 404；
+- Public Drive 隐藏；
+- WebDAV 隐藏/拒绝；
+- S3 隐藏/拒绝；
+- Search 不索引；
+- Generic Reconcile 不把它当普通用户文件；
+- Source 物理 quota 必须统计这些真实字节；
+- 功能模块自己维护业务记录；
+- 不能按文件名猜测所有权并删除。
 
-## 5. 配置
+图床/Transfer 初始化托管根时，发现未知 `.omnistore/` 必须阻止接管并提示人工处理。公开盘/静态资源不创建托管根，只隔离并告警，不因普通发布目录旁存在未知内部目录就擅自改动它。完整规则见 [托管命名空间](design/managed-namespace.md)。
 
-优先级：
+## 5. Site Capability Binding
+
+SQLite 保存：
 
 ```text
-程序默认值 < YAML < 环境变量
+capability
+enabled
+storage_source_id
+updated_at
 ```
 
-YAML 负责可读的持久配置，环境变量负责容器部署与敏感覆盖。
-
-基础设施配置默认不依赖 Web UI 动态修改。
-
-## 6. 数据原则
-
-真实文件系统是内容事实源；SQLite 保存系统语义：
-
-- 用户、Session；
-- Token/Credential；
-- Storage Source 配置；
-- Policy；
-- 文件台账；
-- 分享；
-- 图床记录；
-- Multipart 状态；
-- 回收站元数据；
-- 审计；
-- migration 状态。
-
-`file_records` 是所有权、索引和校准视图，不取代真实文件系统。
-
-## 7. 权限模型
-
-访问流程：
+Capability：
 
 ```text
-Authentication
-    ↓
-Source availability
-    ↓
-Policy / path permission
-    ↓
-Path normalization
-    ↓
-Reserved namespace
-    ↓
-Exclude rules
-    ↓
-Symlink / filesystem safety
-    ↓
-Persistent WebDAV lock
-    ↓
-Quota
-    ↓
-Filesystem operation
+public_drive
+image_bed
+transfer_center
 ```
 
-管理员具有系统管理能力，但文件入口仍应经过路径安全和数据生命周期规则。
+删除 Source 前必须解除当前绑定，并处理所有历史图床、Transfer、回收站与未完成恢复日志引用；仅 Disable 不清除外键关系，也不授权删除。
 
-## 8. 并发与锁
+Rebind 语义：
 
-OmniStore 采用单实例锁模型。
+- Public Drive：管理员确认后切换当前公开根。
+- Image Bed：只影响新上传；旧 images 继续按记录中的 source 读取。
+- Transfer Center：只影响新建 Transfer；已有 Transfer 快照自己的 source。
 
-包括：
+静态 HTTP 在源协议配置中独立维护。source/publish_root 变更必须走 reset/relocate，不允许静默让旧 URL 指向另一批内容；跨源迁移不能覆盖目标源已有静态配置。
 
-- 存储源拓扑读写锁；
-- 请求级路径锁；
-- 祖先/后代范围冲突判断；
-- 跨来源操作的来源锁；
-- 持久 WebDAV LOCK/UNLOCK；
-- quota 写入协调。
+## 6. Protocol Layer
 
-兄弟路径应尽量保持并发，冲突范围不得扩大到整个实例。
+### WebDAV
 
-## 9. 写操作与 Crash Recovery
+按 Source 独立开启。
 
-写入原则：
+请求必须同时满足：
 
-> 先记录足够恢复的操作意图，再执行会改变用户数据的不可逆步骤。
+- Source enabled；
+- `webdav_enabled=true`；
+- credential valid；
+- user Policy；
+- path/exclude/symlink；
+- quota；
+- lock。
 
-普通上传、覆盖、复制、移动、回收站、图床、Multipart 等关键操作都使用 operation journal/阶段状态。
+### S3
 
-恢复器在监听端口之前运行：
+S3 listener 可以仍由实例配置决定是否监听。
 
-- 未提交操作回滚；
-- 已数据库提交但清理未完成的操作继续完成；
-- 摘要、状态或文件布局存在歧义时阻止启动并保留现场。
-
-禁止依赖“文件名长得像临时文件”来判断内部所有权。
-
-## 10. 缓存
-
-缓存必须可重建。
-
-缩略图等缓存：
-
-- 不属于用户真实文件；
-- 可根据原文件 size + mtime 等信息失效；
-- 可被清理；
-- 不作为备份恢复的必要组成。
-
-## 11. 后端模块
-
-建议职责边界：
+Bucket：
 
 ```text
-internal/auth
-internal/backup
-internal/db
-internal/files
-internal/http
-internal/imagebed
-internal/s3api
-internal/security
-internal/shares
-internal/sources
-internal/users
+bucket = storage_key
 ```
 
-HTTP Handler 负责协议、参数、认证上下文和响应转换；业务一致性尽量位于 Service；Repository 只负责持久化。
+实际对象路径：
 
-## 12. 架构变更原则
+```text
+/{storage_key}/{object_key}
+```
 
-任何可能改变下面假设的需求都必须先更新架构文档并单独讨论：
+只有 `s3_enabled=true` 且用户有权限的 Source 才进入 ListBuckets/对象操作。
 
-- Storage Source 不再是本地目录；
-- 多实例同时写；
-- SQLite 不再是唯一系统数据库；
-- 文件不再直接存在真实目录；
-- 写操作无法继续使用现有恢复模型。
+## 7. File Write Pipeline
 
-当前长期产品 Non-goals 已明确不会引入这些变化。
+通用 durable write：
+
+```text
+Auth / Capability
+→ Normalize
+→ Reserved namespace
+→ Exclude
+→ Symlink safety
+→ Lock
+→ Quota
+→ planned journal
+→ temp + fsync
+→ prepared
+→ publish
+→ DB transaction
+→ database-ready
+→ cleanup
+```
+
+Transfer service writes 可以复用底层 crash-safe primitives，但不能伪装成普通用户 `file_records`。
+
+## 8. Transfer Storage
+
+Transfer Center 绑定的 Source 是**物理承载空间**。
+
+Transfer 自己记录：
+
+- owner；
+- source snapshot；
+- relative payload path；
+- file metadata；
+- status；
+- quotas；
+- expiry。
+
+普通 User Quota 不计算 Transfer 临时 payload；Transfer 有独立 active quota。
+
+Source physical quota始终计算。
+
+## 9. Backup
+
+System backup：
+
+- DB；
+- config；
+- keys；
+- capability bindings；
+- transfer metadata。
+
+不打包：
+
+- Storage Source 内容；
+- Transfer payload；
+- cache/tmp。
+
+Restore 后通过 Source Rebind 重新建立 root path。
+
+## 10. 静态发布不是托管存储
+
+`internal/staticassets`（建议模块名）负责发布配置、范围解析、公开媒体读取和发布身份，不负责创建第二套文件树。图片/视频原件仍在普通目录；写入由现有 files / WebDAV / S3 管线完成。
+
+读取路径：发布快照 → 普通文件安全读取 → 公开 HTTP 响应。其访问授权不同于登录下载，但路径边界、文件锁、类型隔离必须共用；不能直接暴露 `http.FileServer(Source.root)`。
+
+一个源同时绑定三项 Site 服务并开启静态 HTTP 时，公开盘与静态资源只读取普通文件；图床与 Transfer 经各自记录访问内部内容。普通协议开启也不能绕过 `.omnistore/`。Source 计量覆盖所有实际字节，静态发布不再收取一份“托管副本”配额。
+
+## 11. Reconcile 的作用域
+
+`file_records.resource_scope` 分为 `file` 和 `image_bed`。普通扫描只校准 file scope；不把内部图片行删除为 missing，也不把 Transfer 导入 file scope。普通搜索 FTS 仅索引 file scope active 行；查询时仍做路径过滤。图片历史和用量使用专用作用域，不能依赖普通文件搜索。内部作用域只能由受信任 Service 写入。
+
+## 12. 相关目标契约
+
+- [能力与文件管理归属](design/capability-scope.md)
+- [静态发布](design/static-assets.md)
+- [路径隔离](design/managed-namespace.md)
+- [公开 HTTP](design/public-content-http.md)

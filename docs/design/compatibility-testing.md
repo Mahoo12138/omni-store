@@ -1,69 +1,72 @@
-# Compatibility Testing Design
+# Compatibility Test Matrix
 
-状态：Planned / Continuous
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-## Goal
+2.0 必须维护真实客户端表。
 
-用真实客户端行为而不是“协议覆盖百分比”驱动兼容性。
+## WebDAV
 
-## Matrix
-
-### WebDAV
+客户端：
 
 - Windows Explorer
-- macOS Finder
+- Finder
 - rclone
 - Cyberduck
 - WinSCP
 - RaiDrive
 - Mountain Duck
 
-场景：
+测试：
 
-- connect/auth；
+- auth；
 - list；
 - mkdir；
-- upload/overwrite；
-- download/range；
-- move/rename；
+- upload；
+- overwrite；
+- range；
+- move；
 - delete；
-- LOCK/UNLOCK；
-- Unicode/path edge cases。
+- LOCK；
+- Unicode。
 
-### S3
+## S3
 
 - AWS CLI
-- rclone S3
+- rclone
 - s3cmd
-- MinIO Client
+- mc
 
-场景：
+测试：
 
 - list buckets；
 - list objects；
-- GET/HEAD；
-- PUT；
-- delete；
-- presigned；
-- Multipart；
+- put/get/head/delete；
+- presign；
+- multipart；
 - overwrite；
-- Unicode/key edge cases。
+- Unicode keys。
 
-### PicGo
+## PicGo
 
-- token auth；
-- image upload；
-- returned URL；
-- error behavior。
+- token；
+- upload；
+- returned URL。
 
-## Bug Policy
+## Rule
 
-发现真实客户端失败时：
+真实失败：
 
-1. 保存最小复现；
-2. 判断是 OmniStore bug、未支持能力还是客户端扩展行为；
-3. 只补必要兼容；
-4. 固化自动测试；
-5. 更新 compatibility matrix。
+```text
+minimal repro
+-> classify
+-> minimal fix
+-> automated regression
+```
 
-不为了单个客户端绕过路径安全、权限或写入一致性。
+绝不为了客户端兼容绕过 Security/Quota/Recovery。
+
+## 静态博客兼容性矩阵
+
+新增普通浏览器与第二 origin 博客测试，不把已列客户端名当成已通过结果。必须记录版本和实际操作：文件夹上传保留相对路径，WebDAV/S3 更新后博客直链读取，图片嵌入，视频 seek，CORS fetch/Canvas，禁用公开盘但静态服务继续工作。
+
+检查同一 Source 下 `.omnistore/` 不经 WebDAV/S3/public/raw/ZIP 泄漏。实际 reverse proxy 不允许旁路直读物理目录。PicGo 仍验证快速图床随机 ID 返回，不把它当作已实现的路径型博客部署工具。

@@ -1,56 +1,41 @@
-# 文件与目录分享
+# 文件分享
 
-## 1. 定位
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-Share 用于把某个私有文件/目录通过随机链接向外提供访问。
+Share 是 Resource Capability。
 
-与公开挂载不同，Share 支持独立生命周期。
+语义：
 
-## 2. 当前能力
+```text
+Existing File/Directory
+-> Share
+```
 
-支持：
+不是 Transfer。
 
-- 文件；
-- 目录；
-- 随机 Share Key；
-- 可选密码；
-- 可选过期时间；
-- 可选最大下载次数；
-- 管理列表；
-- 撤销；
-- 审计；
-- 与移动/回收/删除生命周期联动。
+保留：
 
-## 3. 安全
+- password；
+- expiry；
+- download limit；
+- revoke；
+- Preview；
+- Directory Gallery；
+- Stream ZIP；
+- QR；
+- expired/exhausted status。
 
-- 密码只保存 hash；
-- Share Key 使用不可预测随机值；
-- 访问每次校验状态；
-- 过期/撤销后立即失效；
-- 主动内容不允许通过同源 inline 形成 XSS；
-- 不暴露真实 root path。
+2.0 不把 Share 合并进 Transfer。
 
-## 4. 文件生命周期
+区别：
 
-文件移动时，分享应跟随系统记录的目标更新，而不是永久绑定旧字符串路径。
+```text
+Share    = 已有资源增加访问入口
+Transfer = 创建一次独立临时交付
+```
 
-进入回收站时分享暂时不可用；恢复后根据已确认的生命周期语义恢复；永久删除后分享失效。
+## 与静态发布的关系
 
-## 5. Share 2.0（1.2.0）
+Share 不是博客静态资源的必经步骤。静态服务基于一个发布根长期按路径读取，不为每个文件创建 Share，不消耗 Share 下载额度，也不继承其密码/有效期。
 
-`1.2.0` 在不改变 Share 安全模型的前提下升级访问页（见 [`design/share-preview-system.md`](../design/share-preview-system.md)）：
-
-- 文件分享按统一 Preview 类型直接预览（图片/PDF/文本族/音视频），不支持则仅下载；
-- 目录分享提供 列表 / 画廊 两种视图，画廊展示图片并可进入与文件管理器相同的预览弹层；
-- 目录打包下载使用流式 ZIP（`GET /share/{key}/archive`），直接写入响应，不在磁盘生成中间包，并消耗 1 次下载次数；
-- 打包过程继续受 exclude 规则、保留名称、symlink 安全与子树读锁约束；
-- 公开信息接口区分"不存在（404）"与"已过期 / 次数用完（410，`SHARE_EXPIRED` / `SHARE_EXHAUSTED`）"，内容接口仍统一折叠为 404，不泄露内部细节；
-- 分享管理页提供分享链接二维码；
-- 公开页品牌名来自实例品牌设置（`system_settings.instance_name`，管理员后台可改，缺省 OmniStore）。
-
-分享页与文件管理器共用统一 Preview Resolver 与渲染器（`web/src/preview/`），不单独实现第二套预览器。
-
-相关设计：
-
-- [`design/preview-resolver.md`](../design/preview-resolver.md)
-- [`design/share-preview-system.md`](../design/share-preview-system.md)
+Share 指向普通文件时继续沿用文件生命周期；指向 `.omnistore/` 的直接 Share 创建拒绝，目录打包不能递归带出内部服务文件。随机图片 ID 和 Transfer 任务应通过各自业务入口访问。

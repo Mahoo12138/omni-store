@@ -1,80 +1,187 @@
-# OmniStore 1.x 路线图
+# OmniStore 2.0 Roadmap
 
-本文档描述 `1.0.0` 之后的长期版本路线。
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-旧的 `1.0.0 / V1 / V2` 路线已经完成并归档到 [`archive/1.0/ROADMAP.md`](archive/1.0/ROADMAP.md)。
+状态：Planned / Active Design
 
-## 1. 规划原则
+## 目标
 
-OmniStore 后续不再采用“一个版本承载所有下一阶段 Epic”的方式。
+2.0 不是简单增加一个 Transfer 页面，而是把 OmniStore 的功能边界重新统一。
 
-定义：
+核心原则：
 
-```text
-Epic = 长期产品方向
-Version = 一次有明确主题、可以独立交付的版本
-Feature = Version 内可实现、可验收的能力
-```
+> 产品功能归站点，访问协议归存储源，文件操作归资源。
 
-一个 Epic 可以跨多个版本；一个版本也不需要等待所有长期目标完成。
+## Epic A — Capability Scope Refactor
 
-版本发布后再进入下一主题，避免再次形成无限膨胀的大版本。
+### Site Capability
 
-## 2. 版本路线
+全站单例：
 
-| 版本 | 主题 | 目标 |
-| --- | --- | --- |
-| `1.1.0` | File Experience | 提升文件管理、上传和日常网盘体验 |
-| `1.2.0` | Preview & Sharing | 建立统一预览，并升级分享浏览体验 |
-| `1.3.0` | Operation Center | 提升系统状态可见性和管理员维护能力 |
-| `1.4.0` | Backup & Recovery | 完成系统数据备份、新实例恢复和存储源重新绑定 |
-| `1.5.0` | Compatibility | 以真实 WebDAV/S3/PicGo 客户端驱动兼容性完善 |
+- Public Drive；
+- Image Bed；
+- Transfer Center。
 
-详细范围见 [`roadmap/README.md`](roadmap/README.md)。
-
-## 3. 依赖关系
+每个能力：
 
 ```text
-1.1 Upload Task Manager
-        │
-        ├── Folder Upload
-        ├── Multi File Upload
-        └── Drag & Drop
-
-1.2 Preview Resolver
-        │
-        ├── File Explorer Preview
-        └── Share 2.0
-
-1.4 Backup Format
-        │
-        └── Restore → Source Rebind → Reconcile
+enabled
+storage_source_id
 ```
 
-兼容性修复可以在每个版本中随真实问题持续进入 patch；`1.5.0` 的意义是进行一次系统化兼容矩阵收口，而不是此前禁止修兼容问题。
+由管理员统一配置。
 
-## 4. 不进入路线图的方向
+### Source Protocol
 
-长期 Non-goals 见 [`PRODUCT.md`](PRODUCT.md)，包括：
+每个 Storage Source：
 
-- 远程 Storage Source；
-- 同步盘；
-- CAS/Chunk/去重/版本存储；
-- 集群、多节点；
-- Redis/PostgreSQL/消息队列；
-- 插件系统；
-- Office 在线编辑；
-- 服务端复杂媒体转码。
+```text
+WebDAV enabled
+S3 enabled
+Static HTTP: enabled + publish_root + public_asset_id
+```
 
-## 5. 版本完成标准
+随机 `storage_key`：
 
-每个 Minor Version 至少满足：
+- WebDAV 路径稳定 ID；
+- S3 Path-style Bucket 名。
 
-1. 版本 Scope 已冻结。
-2. Feature 有明确验收标准。
-3. 迁移只新增，不修改历史 migration。
-4. 对应 API / feature / design 文档与实现一致。
-5. `scripts/verify-release.sh` 全绿。
-6. 必要的真实客户端/恢复/崩溃测试完成。
-7. 进入 `vX.Y.Z-rc.N` 后只修 blocker、兼容和测试稳定性问题。
-8. RC 稳定后发布 `vX.Y.Z`。
+### Breaking Changes
+
+移除：
+
+- `storage_sources.public_read_enabled`
+- `storage_sources.public_mount_path`
+- `storage_sources.image_bed_enabled`
+- `public_mount_redirects`
+- 用户选择 Image Bed Source 的产品模型。
+
+Public Drive 改成：
+
+```text
+/public/*
+    ->
+Site.PublicDrive.Source
+```
+
+不再存在多 Source public mount。
+
+## Epic B — Transfer Center
+
+一个完整产品中心：
+
+```text
+Transfer Center
+├── Send
+├── Collect
+└── History
+```
+
+### Send
+
+- 本地文件/文件夹直接上传；
+- 可从已有 OmniStore 文件复制进 Transfer；
+- 保持目录结构；
+- 标题和说明；
+- 高熵公开链接；
+- 短取件码；
+- 可选密码；
+- QR Code；
+- 有效期；
+- 下载次数；
+- 文件列表与 Preview；
+- 单文件下载；
+- 全部 ZIP；
+- 主动撤销；
+- 自动过期 GC。
+
+### Collect
+
+- 创建收集任务；
+- 标题/说明；
+- 高熵链接；
+- 短收件码；
+- 可选密码；
+- 有效期；
+- 类型/单文件/总量限制；
+- 可要求提交者姓名和备注；
+- 匿名 upload-only；
+- Submission Inbox；
+- Preview；
+- 下载；
+- Save to Files；
+- Close / Expire。
+
+## Epic C — Operation Center
+
+- Dashboard；
+- Source Health；
+- Site Capability Health；
+- Database status；
+- Quota / Trash / Cache / Multipart；
+- Transfer active usage；
+- Recent failed audit；
+- Reconcile；
+- Cleanup；
+- SQLite integrity check。
+
+## Epic D — Backup & Recovery
+
+- 稳定 Backup Format；
+- 导出 SQLite 一致性快照；
+- 配置/keys；
+- Restore；
+- Source Rebind；
+- Site Capability Rebind；
+- Reconcile；
+- Restore Report；
+- 兼容旧备份格式。
+
+不打包真实 Storage Source 文件。
+
+## Epic E — Compatibility
+
+WebDAV：
+
+- Windows Explorer；
+- macOS Finder；
+- rclone；
+- Cyberduck；
+- WinSCP；
+- RaiDrive；
+- Mountain Duck。
+
+S3：
+
+- AWS CLI；
+- rclone S3；
+- s3cmd；
+- MinIO Client。
+
+Image Bed：
+
+- PicGo。
+
+## 2.0 完成条件
+
+- `v2.0.0.sql` 升级链可从 1.1.x 实例安全迁移；
+- Site Capability / Source Protocol 旧模型彻底删除，不保留双轨代码；
+- Transfer Send/Collect 完整闭环；
+- Operation Center 可用于实际维护；
+- Backup -> Fresh Instance -> Rebind -> Reconcile 可复现；
+- 兼容矩阵形成测试；
+- Release Gate 全绿；
+- Crash Recovery 增加 Transfer 关键写路径；
+- RC 之后只修 blocker。
+
+## Epic F — 快速图床与静态资源托管分工（2.0 必交付）
+
+- 图床：匿名/登录上传受支持图片，随机 ID 直链，系统托管，独立保留策略。
+- 静态资源：按源独立的匿名只读 HTTP 配置 + 普通发布目录，图片/视频按 baseUrl + relativePath 读取。
+- 不依赖公开盘、多源公开 mount、Share 或 images 表；没有匿名静态写入。
+- `.omnistore/` 全协议路径隔离和真实 404；源物理用量照常统计。
+- 固定路径覆盖、改名、删除、缓存失效边界可解释；ID 的 reset/relocate 不误指向内容。
+- 默认短缓存，严格限定公开读取 CORS，与管理 API 分离。
+- 未实现的新服务不标成已交付；原有已完成上传和 Preview/Share 能力保留为基线。
+
+依赖关系和实施时点以 [实施顺序](IMPLEMENTATION_PLAN.md) 的补充为准。Site 服务为公开盘、图床、Transfer；静态 HTTP 属于 Source Protocol，各自生命周期独立。

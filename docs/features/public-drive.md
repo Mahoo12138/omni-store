@@ -1,49 +1,56 @@
-# 公开网盘
+# Public Drive — 2.0
 
-## 1. 定位
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-公开网盘用于匿名只读浏览管理员明确公开的 Storage Source 挂载。
+## 定位
 
-公开能力默认不意味着所有 Source 可匿名访问。
+全站唯一长期匿名只读文件空间。
 
-## 2. 虚拟挂载
+## Binding
 
-Storage Source 可以配置：
+Admin：
+
+```text
+Public Drive
+enabled
+Storage Source
+```
+
+最多一个 Source。
+
+## Route
+
+```text
+/public/*
+```
+
+直接映射绑定 Source 的根。
+
+## Breaking
+
+删除：
 
 - `public_read_enabled`
 - `public_mount_path`
+- multiple public mounts
+- public mount redirect alias
 
-公开网盘以挂载路径组织，而不是暴露真实 root path。
+## Safety
 
-## 3. 重定向
+必须：
 
-公开挂载路径修改后，可以保留旧别名并使用 `308 Permanent Redirect` 指向当前路径。
+- hide `.omnistore`；
+- exclude；
+- symlink safety；
+- active content isolation；
+- no write。
 
-重定向需要保留子路径与 query。
+Public Drive binding 不影响登录用户普通 Policy。
 
-关闭公开访问/禁用 Source 后，旧别名不能继续绕过状态提供访问。
+## 与静态资源托管的区别
 
-## 4. 浏览
+公开网盘是可浏览的长期公开文件空间；[静态资源托管](static-assets.md) 是按源配置的静态 HTTP 协议，不提供目录列表。Site 公开盘与静态 HTTP 配置互相独立，静态资源不需要公开网盘开启或 public mount。
 
-匿名访问：
+可以绑定同一个源，但公开网盘若公开了包含 blog-assets 的普通目录，该目录仍会经公开网盘被浏览。后台必须提示这种额外暴露；不能拿静态端点“不列目录”的规则推断全站不列目录。
 
-- 只能读取；
-- 经过 exclude；
-- 不跟随不安全 symlink；
-- 隐藏 OmniStore 保留命名空间；
-- 不展示真实磁盘路径；
-- 不允许通过公开入口触发写操作。
-
-## 5. Raw
-
-公开 raw 文件支持流式读取和 Range。
-
-缓存采用短期公开缓存；主动内容按安全策略强制下载，避免同源 XSS。
-
-## 6. 与分享区别
-
-公开挂载适合持续公开的目录入口。
-
-Share 适合随机链接、密码、过期、下载次数和撤销。
-
-二者不要合并成同一种配置。
+`.omnistore/` 在所有入口都隔离，直接读/浏览返回真实 404；公开盘不能为了同源共享而公开内部图床或 Transfer 数据。

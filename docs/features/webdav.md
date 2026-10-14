@@ -1,76 +1,35 @@
-# WebDAV
+# WebDAV — 2.0
 
-## 1. 认证
+> 修订：2026-09-29 / R2。2.0 目标规范；未标为基线的内容不代表已实现。
 
-使用：
+WebDAV 是 Source Protocol Capability。
+
+每个 Source：
 
 ```text
-username + WebDAV Token
+webdav_enabled
 ```
 
-Basic Auth。
+Endpoint 的 Source 标识使用 immutable `storage_key`。
 
-不使用网页登录密码直接作为 WebDAV 长期凭据。
+要求：
 
-## 2. 当前方法
-
-核心支持：
-
-- OPTIONS
-- PROPFIND
-- GET
-- HEAD
-- PUT
-- MKCOL
-- DELETE
-- MOVE
-- LOCK
-- UNLOCK
-
-未实现的方法必须返回明确协议状态，不伪装成功。
-
-## 3. 路径
-
-WebDAV 映射到用户有权限的 Storage Source 和相对路径。
-
-所有写入仍经过：
-
+- user credential；
 - Policy；
 - exclude；
-- path safety；
 - symlink；
 - quota；
 - persistent lock；
-- recovery pipeline。
+- recovery。
 
-## 4. LOCK / UNLOCK
+`.omnistore` 永远不可见。
 
-支持 RFC 4918 独占写锁相关核心语义：
+Source rename 不改变 WebDAV path。
 
-- Depth 0 / infinity；
-- refresh；
-- lock-null resource；
-- timeout cleanup；
-- active lock discovery；
-- 全入口写保护。
+DELETE 仍是协议永久删除，不进入网页 Trash。
 
-REST/S3/图床写操作也不能穿透 WebDAV 持久锁。
+## 普通静态目录与内部目录
 
-## 5. DELETE
+静态发布目录是普通文件路径：协议开启且凭据/Policy 允许时可以上传、覆盖、移动，静态 URL 随之按普通路径语义变化；协议客户端不需要 image_id。
 
-WebDAV DELETE 是协议级永久删除，不进入网页回收站。
-
-## 6. COPY
-
-当前不把 REST Copy 能力伪装为完整 WebDAV COPY；不支持时返回明确 `501`。
-
-## 7. 兼容性
-
-长期不以“实现全部 WebDAV RFC”作为目标。
-
-真实客户端矩阵见：
-
-```text
-roadmap/1.5.0-compatibility.md
-design/compatibility-testing.md
-```
+`.omnistore/` 是系统托管范围，拥有 Source 根读写权限也不能访问。通用读取/浏览按 404 处理，协议层保持各自响应格式与认证行为。列表不含内部项；Copy/Move/DELETE/Multipart 不得间接修改内部数据。静态资源服务开启不自动开启本协议，也不授予匿名 S3/WebDAV 写入。
