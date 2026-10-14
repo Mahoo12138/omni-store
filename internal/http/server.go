@@ -53,6 +53,7 @@ type Server struct {
 	operations              *operations.Service
 	transferUnlockLimiter   *keyedRateLimiter
 	collectionSubmitLimiter *keyedRateLimiter
+	transferGuestLimiter    *keyedRateLimiter
 	audit                   *audit.Logger
 	proxy                   *security.ProxyResolver
 	s3Keys                  *s3api.Credentials
@@ -95,8 +96,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
 	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.transfers = transfers.NewService(dbConn, s.sources, s.capabilities, s.files, cfg.Data.Dir, cfg.Security.MasterKey)
+	s.transfers.SetGuestMaxFileSize(cfg.Upload.MaxFileSizeMB * 1024 * 1024)
 	s.transferUnlockLimiter = newKeyedRateLimiter(60, time.Hour)
 	s.collectionSubmitLimiter = newKeyedRateLimiter(120, time.Hour)
+	s.transferGuestLimiter = newKeyedRateLimiter(60, time.Hour)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
 	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
@@ -262,19 +265,23 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("PUT /api/v1/admin/capabilities/{capability}", s.requireAdmin(s.handleAdminUpdateCapability))
 
 	// 流转中心（2.0 Phase 4）：所有者 API
-	mux.HandleFunc("POST /api/v1/transfers", s.requireAuth(s.handleCreateTransfer))
-	mux.HandleFunc("GET /api/v1/transfers", s.requireAuth(s.handleListMyTransfers))
-	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/upload", s.requireAuth(s.handleTransferUpload))
+	mux.HandleFunc("GET /api/v1/transfer-identity", s.handleTransferIdentity)
+	mux.HandleFunc("POST /api/v1/transfer-identity", s.handleTransferIdentity)
+	mux.HandleFunc("POST /api/v1/transfers", s.requireTransferOwner(s.handleCreateTransfer))
+	mux.HandleFunc("GET /api/v1/transfers", s.requireTransferOwner(s.handleListMyTransfers))
+	mux.HandleFunc("GET /api/v1/transfers/{transferID}", s.requireTransferOwner(s.handleGetMyTransfer))
+	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/upload", s.requireTransferOwner(s.handleTransferUpload))
 	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/from-store", s.requireAuth(s.handleTransferStoreCopy))
-	mux.HandleFunc("GET /api/v1/transfers/{transferID}/files", s.requireAuth(s.handleTransferFileList))
-	mux.HandleFunc("POST /api/v1/transfers/{transferID}/finalize", s.requireAuth(s.handleFinalizeTransfer))
-	mux.HandleFunc("DELETE /api/v1/transfers/{transferID}", s.requireAuth(s.handleRevokeTransfer))
-	mux.HandleFunc("POST /api/v1/transfer-collections", s.requireAuth(s.handleCreateCollection))
-	mux.HandleFunc("GET /api/v1/transfer-collections", s.requireAuth(s.handleListMyCollections))
-	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions", s.requireAuth(s.handleCollectionInbox))
-	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/files/{fileID}/download", s.requireAuth(s.handleSubmissionDownload))
+	mux.HandleFunc("GET /api/v1/transfers/{transferID}/files", s.requireTransferOwner(s.handleTransferFileList))
+	mux.HandleFunc("POST /api/v1/transfers/{transferID}/finalize", s.requireTransferOwner(s.handleFinalizeTransfer))
+	mux.HandleFunc("DELETE /api/v1/transfers/{transferID}", s.requireTransferOwner(s.handleRevokeTransfer))
+	mux.HandleFunc("POST /api/v1/transfer-collections", s.requireTransferOwner(s.handleCreateCollection))
+	mux.HandleFunc("GET /api/v1/transfer-collections", s.requireTransferOwner(s.handleListMyCollections))
+	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}", s.requireTransferOwner(s.handleGetMyCollection))
+	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions", s.requireTransferOwner(s.handleCollectionInbox))
+	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/files/{fileID}/download", s.requireTransferOwner(s.handleSubmissionDownload))
 	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/save-to-files", s.requireAuth(s.handleSubmissionSaveToFiles))
-	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/close", s.requireAuth(s.handleCloseCollection))
+	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/close", s.requireTransferOwner(s.handleCloseCollection))
 	mux.HandleFunc("GET /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminGetTransferSettings))
 	mux.HandleFunc("PUT /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminSetTransferSettings))
 

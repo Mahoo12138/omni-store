@@ -27,6 +27,7 @@ type Collection struct {
 	Title        string     `json:"title"`
 	Description  string     `json:"description"`
 	HasPassword  bool       `json:"has_password"`
+	RequireCode  bool       `json:"require_code"`
 	MaxFileSize  *int64     `json:"max_file_size"`
 	MaxTotalSize *int64     `json:"max_total_size"`
 	RequireName  bool       `json:"require_name"`
@@ -42,13 +43,14 @@ type Collection struct {
 
 type collectionRow struct {
 	collection   Collection
+	owner        Owner
 	passwordHash string
 	codeHash     string
 	sourceID     int64
 }
 
-const collectionColumns = `c.id, c.public_key, c.owner_user_id, c.storage_source_id, s.key, s.name,
-  c.title, c.description, c.password_hash IS NOT NULL, c.max_file_size, c.max_total_size,
+const collectionColumns = `c.id, c.public_key, c.owner_user_id, c.owner_guest_id, c.storage_source_id, s.key, s.name,
+  c.title, c.description, c.password_hash IS NOT NULL, c.require_code, c.max_file_size, c.max_total_size,
   c.require_name, c.require_note, c.allowed_exts, c.expires_at, c.status,
   c.total_files, c.total_size, c.created_at, c.closed_at`
 
@@ -56,10 +58,12 @@ func scanCollection(row interface{ Scan(...any) error }) (*collectionRow, error)
 	var out collectionRow
 	var passwordHash, codeHash, allowedExts string
 	var sourceID int64
+	var ownerUserID, ownerGuestID sql.NullInt64
 	var expires, closed sql.NullTime
-	err := row.Scan(&out.collection.ID, &out.collection.PublicKey, &out.collection.OwnerUserID,
+	err := row.Scan(&out.collection.ID, &out.collection.PublicKey, &ownerUserID, &ownerGuestID,
 		&sourceID, &out.collection.SourceKey, &out.collection.SourceName,
 		&out.collection.Title, &out.collection.Description, &out.collection.HasPassword,
+		&out.collection.RequireCode,
 		&out.collection.MaxFileSize, &out.collection.MaxTotalSize,
 		&out.collection.RequireName, &out.collection.RequireNote, &allowedExts,
 		&expires, &out.collection.Status, &out.collection.TotalFiles, &out.collection.TotalSize,
@@ -75,6 +79,8 @@ func scanCollection(row interface{ Scan(...any) error }) (*collectionRow, error)
 	out.passwordHash = passwordHash
 	out.codeHash = codeHash
 	out.sourceID = sourceID
+	out.collection.OwnerUserID = ownerUserID.Int64
+	out.owner = Owner{UserID: ownerUserID.Int64, GuestID: ownerGuestID.Int64}
 	if allowedExts != "" {
 		out.collection.AllowedExts = strings.Split(allowedExts, ",")
 	} else {
@@ -118,10 +124,13 @@ func scanSubmission(row interface{ Scan(...any) error }) (*Submission, error) {
 // CreateCollectionInput 是创建收集任务的输入。
 type CreateCollectionInput struct {
 	OwnerUserID    int64
+	OwnerGuestID   int64
 	Title          string
 	Description    string
 	ExpiresInHours *int64
 	Password       string
+	// RequireCode：nil 保留原来的收件码要求；false 允许直接通过分享链接提交。
+	RequireCode    *bool
 	MaxFileSizeMB  *int64
 	MaxTotalSizeMB *int64
 	RequireName    bool
@@ -129,7 +138,7 @@ type CreateCollectionInput struct {
 	AllowedExts    []string
 }
 
-// CreateCollection 创建收集任务，返回记录与一次性展示的明文收件码。
+// CreateCollection 创建收集任务；要求收件码时返回一次性展示的明文码。
 func (s *Service) CreateCollection(in CreateCollectionInput) (*Collection, string, error) {
 	src, err := s.capabilities.ResolveSource("transfer_center")
 	if err != nil {
@@ -148,7 +157,8 @@ func (s *Service) CreateCollection(in CreateCollectionInput) (*Collection, strin
 	if err != nil {
 		return nil, "", err
 	}
-	expiresAt, err := computeExpiry(in.ExpiresInHours, settings.DefaultExpiryHours)
+	owner := Owner{UserID: in.OwnerUserID, GuestID: in.OwnerGuestID}
+	expiresAt, err := s.computeOwnerExpiry(in.ExpiresInHours, settings.DefaultExpiryHours, owner)
 	if err != nil {
 		return nil, "", err
 	}
@@ -160,7 +170,12 @@ func (s *Service) CreateCollection(in CreateCollectionInput) (*Collection, strin
 		}
 	}
 	publicKey := auth.NewRandomToken("tc-", 12)
-	code := generatePickupCode()
+	requireCode := in.RequireCode == nil || *in.RequireCode
+	code, codeHash := "", ""
+	if requireCode {
+		code = generatePickupCode()
+		codeHash = s.codeDigest(code)
+	}
 	now := time.Now().UTC()
 	passwordHash := ""
 	if strings.TrimSpace(in.Password) != "" {
@@ -170,19 +185,31 @@ func (s *Service) CreateCollection(in CreateCollectionInput) (*Collection, strin
 		}
 		passwordHash = hash
 	}
-	result, err := s.db.Exec(`INSERT INTO transfer_collections
-  (public_key, owner_user_id, storage_source_id, title, description, code_hash, password_hash,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback()
+	if err := checkOwnerCreate(tx, owner); err != nil {
+		return nil, "", err
+	}
+	userID, guestID := owner.sqlValues()
+	result, err := tx.Exec(`INSERT INTO transfer_collections
+  (public_key, owner_user_id, owner_guest_id, storage_source_id, title, description, code_hash, password_hash, require_code,
    max_file_size, max_total_size, require_name, require_note, allowed_exts, expires_at, status,
    created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
-		publicKey, in.OwnerUserID, src.ID, in.Title, in.Description, s.codeDigest(code),
-		nullableString(passwordHash), mbToBytes(in.MaxFileSizeMB), mbToBytes(in.MaxTotalSizeMB),
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+		publicKey, userID, guestID, src.ID, in.Title, in.Description, codeHash,
+		nullableString(passwordHash), requireCode, mbToBytes(in.MaxFileSizeMB), mbToBytes(in.MaxTotalSizeMB),
 		in.RequireName, in.RequireNote, strings.Join(exts, ","), nullableTime(expiresAt), now, now)
 	if err != nil {
 		return nil, "", err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
+		return nil, "", err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, "", err
 	}
 	row, err := s.getCollectionByID(id)
@@ -215,11 +242,19 @@ func (s *Service) getCollectionByKey(publicKey string) (*collectionRow, error) {
 
 // ListCollectionsByOwner 返回用户创建的收集任务。
 func (s *Service) ListCollectionsByOwner(ownerUserID int64) ([]*Collection, error) {
+	return s.ListCollectionsForOwner(Owner{UserID: ownerUserID})
+}
+
+func (s *Service) ListCollectionsForOwner(owner Owner) ([]*Collection, error) {
+	if err := s.validateOwner(owner); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(`SELECT `+collectionColumns+`,
   COALESCE(c.password_hash, ''), c.code_hash
   FROM transfer_collections c
   JOIN storage_sources s ON s.id = c.storage_source_id
-  WHERE c.owner_user_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT 200`, ownerUserID)
+  WHERE (? > 0 AND c.owner_user_id = ?) OR (? > 0 AND c.owner_guest_id = ?)
+  ORDER BY c.created_at DESC, c.id DESC LIMIT 200`, owner.UserID, owner.UserID, owner.GuestID, owner.GuestID)
 	if err != nil {
 		return nil, err
 	}
@@ -235,20 +270,40 @@ func (s *Service) ListCollectionsByOwner(ownerUserID int64) ([]*Collection, erro
 	return out, rows.Err()
 }
 
-func (s *Service) loadOwnCollection(collectionID, ownerUserID int64) (*collectionRow, error) {
+func (s *Service) loadOwnCollection(collectionID int64, owner Owner) (*collectionRow, error) {
+	if err := s.validateOwner(owner); err != nil {
+		return nil, err
+	}
 	row, err := s.getCollectionByID(collectionID)
 	if err != nil {
 		return nil, err
 	}
-	if row.collection.OwnerUserID != ownerUserID {
+	if row.owner != owner {
 		return nil, ErrNotFound
 	}
 	return row, nil
 }
 
+// GetCollection 返回所有者的收集任务详情，包括已关闭和过期的历史任务。
+func (s *Service) GetCollection(collectionID, ownerUserID int64) (*Collection, error) {
+	return s.GetCollectionForOwner(collectionID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) GetCollectionForOwner(collectionID int64, owner Owner) (*Collection, error) {
+	row, err := s.loadOwnCollection(collectionID, owner)
+	if err != nil {
+		return nil, err
+	}
+	return &row.collection, nil
+}
+
 // CloseCollection 关闭收集任务：后续提交拒绝，已有提交保留可下载。
 func (s *Service) CloseCollection(collectionID, ownerUserID int64) error {
-	row, err := s.loadOwnCollection(collectionID, ownerUserID)
+	return s.CloseCollectionForOwner(collectionID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) CloseCollectionForOwner(collectionID int64, owner Owner) error {
+	row, err := s.loadOwnCollection(collectionID, owner)
 	if err != nil {
 		return err
 	}
@@ -269,6 +324,7 @@ type CollectionPublicInfo struct {
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
 	HasPassword bool       `json:"has_password"`
+	RequireCode bool       `json:"require_code"`
 	MaxFileSize *int64     `json:"max_file_size"`
 	RequireName bool       `json:"require_name"`
 	RequireNote bool       `json:"require_note"`
@@ -290,6 +346,7 @@ func (s *Service) LookupCollection(publicKey string) (*CollectionPublicInfo, err
 		Title:       row.collection.Title,
 		Description: row.collection.Description,
 		HasPassword: row.collection.HasPassword,
+		RequireCode: row.collection.RequireCode,
 		MaxFileSize: row.collection.MaxFileSize,
 		RequireName: row.collection.RequireName,
 		RequireNote: row.collection.RequireNote,
@@ -314,7 +371,7 @@ func checkCollectionReceivable(collection *Collection) error {
 	return nil
 }
 
-// UnlockCollection 校验收件码与可选密码，签发提交会话。
+// UnlockCollection 按任务设置校验收件码与密码，签发提交会话。
 func (s *Service) UnlockCollection(publicKey, code, password string) (string, time.Time, error) {
 	row, err := s.getCollectionByKey(publicKey)
 	if err != nil {
@@ -323,7 +380,7 @@ func (s *Service) UnlockCollection(publicKey, code, password string) (string, ti
 	if err := checkCollectionReceivable(&row.collection); err != nil {
 		return "", time.Time{}, err
 	}
-	if !s.verifyCode(row.codeHash, code) {
+	if row.collection.RequireCode && !s.verifyCode(row.codeHash, code) {
 		return "", time.Time{}, ErrPickupCode
 	}
 	if row.passwordHash != "" && !auth.VerifyPassword(row.passwordHash, password) {
@@ -368,6 +425,15 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 	if err != nil {
 		return nil, err
 	}
+	if row.owner.GuestID != 0 {
+		remaining, err := s.guestQuotaRemaining(row.owner.GuestID)
+		if err != nil {
+			return nil, err
+		}
+		if !totalLimited || remaining < totalCap {
+			totalCap, totalLimited = remaining, true
+		}
+	}
 
 	now := time.Now().UTC()
 	result, err := s.db.Exec(`INSERT INTO transfer_submissions
@@ -380,7 +446,12 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 	if err != nil {
 		return nil, err
 	}
+	var tx *sql.Tx
 	rollback := func(err error) (*Submission, error) {
+		// 单连接 SQLite：先归还事务连接，才能执行提交行与载荷清理。
+		if tx != nil {
+			_ = tx.Rollback()
+		}
 		_, _ = s.db.Exec(`DELETE FROM transfer_submissions WHERE id = ?`, submissionID)
 		_ = s.files.DeleteManaged(src, collectPayloadRel(row.collection.PublicKey, submissionID, ""), ManagedScopeDir)
 		return nil, err
@@ -405,6 +476,7 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 		mime string
 	}
 	staged := make([]stagedFile, 0, len(incoming))
+	seenPaths := make(map[string]bool, len(incoming))
 	for _, item := range incoming {
 		relPath, err := security.NormalizeRelPath(item.RelativePath)
 		if err != nil || relPath == "" {
@@ -413,6 +485,10 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 		if err := security.ValidateUserRelPath(relPath); err != nil {
 			return rollback(fmt.Errorf("%w: %v", files.ErrInvalid, err))
 		}
+		if seenPaths[relPath] {
+			return rollback(files.ErrAlreadyExists)
+		}
+		seenPaths[relPath] = true
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(relPath), "."))
 		if len(row.collection.AllowedExts) > 0 {
 			allowed := false
@@ -432,6 +508,9 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 			fileCap = *row.collection.MaxFileSize
 			fileLimited = true
 		}
+		if row.owner.GuestID != 0 && (!fileLimited || s.guestMaxFileSize < fileCap) {
+			fileCap, fileLimited = s.guestMaxFileSize, true
+		}
 		// 限额截断：写满上限 +1 字节判定超限。
 		reader := item.Body
 		if fileLimited {
@@ -440,7 +519,8 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 		finalRel := collectPayloadRel(row.collection.PublicKey, submissionID, relPath)
 		size, err := s.files.WriteManagedFile(src, finalRel, ManagedScopeDir, reader, fileCap, fileLimited)
 		if errors.Is(err, files.ErrQuotaExceeded) {
-			if row.collection.MaxFileSize != nil && fileCap == *row.collection.MaxFileSize {
+			if (row.collection.MaxFileSize != nil && fileCap == *row.collection.MaxFileSize) ||
+				(row.owner.GuestID != 0 && fileCap == s.guestMaxFileSize) {
 				return rollback(ErrFileSizeExceeded)
 			}
 			return rollback(ErrTotalSizeExceeded)
@@ -455,11 +535,14 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 		return rollback(fmt.Errorf("%w: 提交为空", files.ErrInvalid))
 	}
 
-	tx, err := s.db.Begin()
+	tx, err = s.db.Begin()
 	if err != nil {
 		return rollback(err)
 	}
 	defer tx.Rollback()
+	if err := checkTransferWrite(tx, row.owner.GuestID, written); err != nil {
+		return rollback(err)
+	}
 	for _, file := range staged {
 		if _, err := tx.Exec(`INSERT INTO transfer_submission_files
   (submission_id, relative_path, size, ext, mime_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -471,10 +554,27 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 		len(staged), written, submissionID); err != nil {
 		return rollback(err)
 	}
-	if _, err := tx.Exec(`UPDATE transfer_collections
-  SET total_files = total_files + ?, total_size = total_size + ?, updated_at = ? WHERE id = ?`,
-		len(staged), written, now, row.collection.ID); err != nil {
+	committedAt := time.Now().UTC()
+	result, err = tx.Exec(`UPDATE transfer_collections
+  SET total_files = total_files + ?, total_size = total_size + ?, updated_at = ?
+  WHERE id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)
+    AND (max_total_size IS NULL OR total_size <= max_total_size - ?)`,
+		len(staged), written, committedAt, row.collection.ID, committedAt, written)
+	if err != nil {
 		return rollback(err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return rollback(err)
+	} else if affected == 0 {
+		_ = tx.Rollback()
+		current, err := s.getCollectionByID(row.collection.ID)
+		if err != nil {
+			return rollback(err)
+		}
+		if err := checkCollectionReceivable(&current.collection); err != nil {
+			return rollback(err)
+		}
+		return rollback(ErrTotalSizeExceeded)
 	}
 	if err := tx.Commit(); err != nil {
 		return rollback(err)
@@ -522,7 +622,11 @@ func collectPayloadRel(publicKey string, submissionID int64, logicalRel string) 
 
 // ListSubmissions 返回收集任务的收件箱（含文件清单）。
 func (s *Service) ListSubmissions(collectionID, ownerUserID int64) ([]*Submission, error) {
-	if _, err := s.loadOwnCollection(collectionID, ownerUserID); err != nil {
+	return s.ListSubmissionsForOwner(collectionID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) ListSubmissionsForOwner(collectionID int64, owner Owner) ([]*Submission, error) {
+	if _, err := s.loadOwnCollection(collectionID, owner); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.Query(`SELECT `+submissionColumns+` FROM transfer_submissions
@@ -575,7 +679,11 @@ func (s *Service) ListSubmissions(collectionID, ownerUserID int64) ([]*Submissio
 
 // OpenSubmissionFile 供收件箱预览/下载：按台账打开提交文件。
 func (s *Service) OpenSubmissionFile(collectionID, ownerUserID, submissionID, fileID int64) (*models.StorageSource, string, *os.File, os.FileInfo, func(), error) {
-	if _, err := s.loadOwnCollection(collectionID, ownerUserID); err != nil {
+	return s.OpenSubmissionFileForOwner(collectionID, Owner{UserID: ownerUserID}, submissionID, fileID)
+}
+
+func (s *Service) OpenSubmissionFileForOwner(collectionID int64, owner Owner, submissionID, fileID int64) (*models.StorageSource, string, *os.File, os.FileInfo, func(), error) {
+	if _, err := s.loadOwnCollection(collectionID, owner); err != nil {
 		return nil, "", nil, nil, nil, err
 	}
 	var publicKey string
@@ -610,7 +718,7 @@ func (s *Service) OpenSubmissionFile(collectionID, ownerUserID, submissionID, fi
 // SaveSubmissionToFiles 把提交文件复制到有写权限的普通目录（复制而非搬移）。
 // 目标目录策略授权由 HTTP 层完成；同名文件拒绝覆盖。
 func (s *Service) SaveSubmissionToFiles(collectionID, ownerUserID, submissionID int64, targetSourceKey, targetDir string) ([]string, error) {
-	if _, err := s.loadOwnCollection(collectionID, ownerUserID); err != nil {
+	if _, err := s.loadOwnCollection(collectionID, Owner{UserID: ownerUserID}); err != nil {
 		return nil, err
 	}
 	targetSrc, err := s.sources.Get(targetSourceKey)
@@ -621,7 +729,7 @@ func (s *Service) SaveSubmissionToFiles(collectionID, ownerUserID, submissionID 
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", files.ErrInvalid, err)
 	}
-	_, src, _, _, unlockAll, err := s.openSubmissionPayload(collectionID, ownerUserID, submissionID)
+	publicKey, src, _, _, unlockAll, err := s.openSubmissionPayload(collectionID, ownerUserID, submissionID)
 	if err != nil {
 		return nil, err
 	}
@@ -644,7 +752,7 @@ func (s *Service) SaveSubmissionToFiles(collectionID, ownerUserID, submissionID 
 		if dir == "." {
 			dir = ""
 		}
-		f, info, unlock, err := s.files.OpenManagedForRead(src, collectPayloadRel(publicKeyOf(collectionID, submissionID, s.db), submissionID, file.RelativePath), ManagedScopeDir)
+		f, info, unlock, err := s.files.OpenManagedForRead(src, collectPayloadRel(publicKey, submissionID, file.RelativePath), ManagedScopeDir)
 		if err != nil {
 			return saved, ErrNotFound
 		}
@@ -657,14 +765,6 @@ func (s *Service) SaveSubmissionToFiles(collectionID, ownerUserID, submissionID 
 		saved = append(saved, target)
 	}
 	return saved, nil
-}
-
-func publicKeyOf(collectionID, submissionID int64, db *sql.DB) string {
-	var publicKey string
-	_ = db.QueryRow(`SELECT c.public_key FROM transfer_submissions sub
-  JOIN transfer_collections c ON c.id = sub.collection_id WHERE sub.id = ?`, submissionID).Scan(&publicKey)
-	_ = collectionID
-	return publicKey
 }
 
 func submissionFileList(db *sql.DB, submissionID int64) []SubmissionFile {
@@ -687,7 +787,7 @@ func submissionFileList(db *sql.DB, submissionID int64) []SubmissionFile {
 
 // openSubmissionPayload 打开提交目录并返回源与聚合解锁（复制流程用）。
 func (s *Service) openSubmissionPayload(collectionID, ownerUserID, submissionID int64) (string, *models.StorageSource, string, int64, func(), error) {
-	if _, err := s.loadOwnCollection(collectionID, ownerUserID); err != nil {
+	if _, err := s.loadOwnCollection(collectionID, Owner{UserID: ownerUserID}); err != nil {
 		return "", nil, "", 0, nil, err
 	}
 	row, err := s.getCollectionByID(collectionID)
@@ -701,8 +801,8 @@ func (s *Service) openSubmissionPayload(collectionID, ownerUserID, submissionID 
 	var publicKey string
 	var totalSize int64
 	err = s.db.QueryRow(`SELECT c.public_key, sub.total_size FROM transfer_submissions sub
-  JOIN transfer_collections c ON c.id = sub.collection_id WHERE sub.id = ?`,
-		submissionID).Scan(&publicKey, &totalSize)
+  JOIN transfer_collections c ON c.id = sub.collection_id WHERE sub.id = ? AND sub.collection_id = ?`,
+		submissionID, collectionID).Scan(&publicKey, &totalSize)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil, "", 0, nil, ErrNotFound
 	}

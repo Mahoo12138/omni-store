@@ -349,6 +349,10 @@ func (s *Service) deletePayloadDir(storageSourceID int64, managedRel string) err
 		}
 		return err
 	}
+	// 先验证托管根归属，不能把未知或外来根下的“载荷不存在”视为可忽略。
+	if err := s.managedRoots.Ensure(src); err != nil {
+		return err
+	}
 	if err := s.files.DeleteManaged(src, managedRel, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
 		return err
 	}

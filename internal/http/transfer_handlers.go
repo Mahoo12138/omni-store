@@ -63,36 +63,37 @@ func bearerToken(r *http.Request) string {
 // --- 所有者：发件包 ---
 
 func (s *Server) handleCreateTransfer(w http.ResponseWriter, r *http.Request) {
+	if !s.allowTransferOwnerCreate(w, r) {
+		return
+	}
 	var req struct {
 		Title          string `json:"title"`
 		Description    string `json:"description"`
 		ExpiresInHours *int64 `json:"expires_in_hours"`
 		MaxDownloads   *int64 `json:"max_downloads"`
 		Password       string `json:"password"`
+		RequireCode    *bool  `json:"require_code"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	user := CurrentUser(r.Context())
+	owner := currentTransferOwner(r)
 	send, pickupCode, err := s.transfers.CreateSend(transfers.CreateSendInput{
-		OwnerUserID: user.ID, Title: req.Title, Description: req.Description,
+		OwnerUserID: owner.UserID, OwnerGuestID: owner.GuestID, Title: req.Title, Description: req.Description,
 		ExpiresInHours: req.ExpiresInHours, MaxDownloads: req.MaxDownloads, Password: req.Password,
+		RequireCode: req.RequireCode,
 	})
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "transfer_create", Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "transfer_create", "")
 	// 取件码只在此响应中出现一次。
 	WriteData(w, r, map[string]any{"send": send, "pickup_code": pickupCode})
 }
 
 func (s *Server) handleListMyTransfers(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
-	items, err := s.transfers.ListSendsByOwner(user.ID)
+	items, err := s.transfers.ListSendsForOwner(currentTransferOwner(r))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -100,52 +101,56 @@ func (s *Server) handleListMyTransfers(w http.ResponseWriter, r *http.Request) {
 	WriteData(w, r, ListData{Items: items, Total: int64(len(items))})
 }
 
+func (s *Server) handleGetMyTransfer(w http.ResponseWriter, r *http.Request) {
+	ids, ok := parseTransferPathIDs(w, r, "transferID")
+	if !ok {
+		return
+	}
+	send, err := s.transfers.GetSendForOwner(ids[0], currentTransferOwner(r))
+	if err != nil {
+		writeTransferError(w, r, err)
+		return
+	}
+	WriteData(w, r, send)
+}
+
 func (s *Server) handleFinalizeTransfer(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("transferID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
 		return
 	}
-	send, err := s.transfers.FinalizeSend(id, user.ID)
+	send, err := s.transfers.FinalizeSendForOwner(id, currentTransferOwner(r))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "transfer_finalize", Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "transfer_finalize", "")
 	WriteData(w, r, send)
 }
 
 func (s *Server) handleRevokeTransfer(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("transferID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
 		return
 	}
-	if err := s.transfers.RevokeSend(id, user.ID); err != nil {
+	if err := s.transfers.RevokeSendForOwner(id, currentTransferOwner(r)); err != nil {
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "transfer_revoke", Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "transfer_revoke", "")
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
 // handleTransferFileList 返回自己发件包的文件清单（草稿编辑/历史详情）。
 func (s *Server) handleTransferFileList(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("transferID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
 		return
 	}
-	files, err := s.transfers.ListOwnSendFiles(id, user.ID)
+	files, err := s.transfers.ListOwnSendFilesForOwner(id, currentTransferOwner(r))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -204,7 +209,6 @@ func (s *Server) handleTransferStoreCopy(w http.ResponseWriter, r *http.Request)
 
 // handleTransferUpload 直传一个文件进草稿（multipart，含 relative_path）。
 func (s *Server) handleTransferUpload(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("transferID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
@@ -238,26 +242,27 @@ func (s *Server) handleTransferUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 	_ = header
-	created, err := s.transfers.AddSendUpload(id, user.ID, relativePath, file)
+	created, err := s.transfers.AddSendUploadForOwner(id, currentTransferOwner(r), relativePath, file)
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "transfer_upload", RelativePath: relativePath, Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "transfer_upload", relativePath)
 	WriteData(w, r, created)
 }
 
 // --- 所有者：收集任务 ---
 
 func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) {
+	if !s.allowTransferOwnerCreate(w, r) {
+		return
+	}
 	var req struct {
 		Title          string   `json:"title"`
 		Description    string   `json:"description"`
 		ExpiresInHours *int64   `json:"expires_in_hours"`
 		Password       string   `json:"password"`
+		RequireCode    *bool    `json:"require_code"`
 		MaxFileSizeMB  *int64   `json:"max_file_size_mb"`
 		MaxTotalSizeMB *int64   `json:"max_total_size_mb"`
 		RequireName    bool     `json:"require_name"`
@@ -267,10 +272,11 @@ func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	user := CurrentUser(r.Context())
+	owner := currentTransferOwner(r)
 	collection, code, err := s.transfers.CreateCollection(transfers.CreateCollectionInput{
-		OwnerUserID: user.ID, Title: req.Title, Description: req.Description,
+		OwnerUserID: owner.UserID, OwnerGuestID: owner.GuestID, Title: req.Title, Description: req.Description,
 		ExpiresInHours: req.ExpiresInHours, Password: req.Password,
+		RequireCode:   req.RequireCode,
 		MaxFileSizeMB: req.MaxFileSizeMB, MaxTotalSizeMB: req.MaxTotalSizeMB,
 		RequireName: req.RequireName, RequireNote: req.RequireNote, AllowedExts: req.AllowedExts,
 	})
@@ -278,16 +284,12 @@ func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) 
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "collection_create", Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "collection_create", "")
 	WriteData(w, r, map[string]any{"collection": collection, "code": code})
 }
 
 func (s *Server) handleListMyCollections(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
-	items, err := s.transfers.ListCollectionsByOwner(user.ID)
+	items, err := s.transfers.ListCollectionsForOwner(currentTransferOwner(r))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -295,32 +297,40 @@ func (s *Server) handleListMyCollections(w http.ResponseWriter, r *http.Request)
 	WriteData(w, r, ListData{Items: items, Total: int64(len(items))})
 }
 
+func (s *Server) handleGetMyCollection(w http.ResponseWriter, r *http.Request) {
+	ids, ok := parseTransferPathIDs(w, r, "collectionID")
+	if !ok {
+		return
+	}
+	collection, err := s.transfers.GetCollectionForOwner(ids[0], currentTransferOwner(r))
+	if err != nil {
+		writeTransferError(w, r, err)
+		return
+	}
+	WriteData(w, r, collection)
+}
+
 func (s *Server) handleCloseCollection(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("collectionID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
 		return
 	}
-	if err := s.transfers.CloseCollection(id, user.ID); err != nil {
+	if err := s.transfers.CloseCollectionForOwner(id, currentTransferOwner(r)); err != nil {
 		writeTransferError(w, r, err)
 		return
 	}
-	s.audit.Log(audit.Entry{
-		ActorType: audit.ActorUser, ActorUserID: &user.ID, EntryType: audit.EntryTransfer,
-		Action: "collection_close", Status: audit.StatusSuccess,
-	})
+	s.auditTransferOwner(r, "collection_close", "")
 	WriteData(w, r, map[string]any{"ok": true})
 }
 
 func (s *Server) handleCollectionInbox(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	id, err := strconv.ParseInt(r.PathValue("collectionID"), 10, 64)
 	if err != nil {
 		WriteError(w, r, CodeValidationError, "任务 ID 非法", nil)
 		return
 	}
-	items, err := s.transfers.ListSubmissions(id, user.ID)
+	items, err := s.transfers.ListSubmissionsForOwner(id, currentTransferOwner(r))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -329,12 +339,11 @@ func (s *Server) handleCollectionInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSubmissionDownload(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
 	ids, ok := parseTransferPathIDs(w, r, "collectionID", "submissionID", "fileID")
 	if !ok {
 		return
 	}
-	_, relativePath, f, info, unlock, err := s.transfers.OpenSubmissionFile(ids[0], user.ID, ids[1], ids[2])
+	_, relativePath, f, info, unlock, err := s.transfers.OpenSubmissionFileForOwner(ids[0], currentTransferOwner(r), ids[1], ids[2])
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -614,7 +623,7 @@ func (s *Server) handlePublicCollectionSubmit(w http.ResponseWriter, r *http.Req
 	publicKey := r.PathValue("publicKey")
 	token := bearerToken(r)
 	if token == "" {
-		WriteError(w, r, CodeUnauthorized, "请先使用收件码解锁", nil)
+		WriteError(w, r, CodeUnauthorized, "请先验证收集任务访问权限", nil)
 		return
 	}
 	if err := r.ParseMultipartForm(s.cfg.Upload.MaxFileSizeMB*1024*1024 + 1024*1024); err != nil {

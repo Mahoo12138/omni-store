@@ -78,13 +78,14 @@ type capabilitiesLookup interface {
 
 // Service 提供流转中心能力。
 type Service struct {
-	db           *sql.DB
-	sources      *sources.Service
-	capabilities capabilitiesLookup
-	files        *files.Service
-	managedRoots *managedroot.Service
-	masterKey    []byte
-	dataDir      string
+	db               *sql.DB
+	sources          *sources.Service
+	capabilities     capabilitiesLookup
+	files            *files.Service
+	managedRoots     *managedroot.Service
+	masterKey        []byte
+	dataDir          string
+	guestMaxFileSize int64
 }
 
 // NewService 创建流转中心服务。masterKey 用于取件码/收件码的 HMAC 摘要；
@@ -92,9 +93,10 @@ type Service struct {
 func NewService(db *sql.DB, sources *sources.Service, capSvc capabilitiesLookup, fileSvc *files.Service, dataDir, masterKey string) *Service {
 	return &Service{
 		db: db, sources: sources, capabilities: capSvc, files: fileSvc,
-		managedRoots: managedroot.NewService(db),
-		masterKey:    []byte(masterKey),
-		dataDir:      dataDir,
+		managedRoots:     managedroot.NewService(db),
+		masterKey:        []byte(masterKey),
+		dataDir:          dataDir,
+		guestMaxFileSize: GuestActiveQuotaBytes,
 	}
 }
 
@@ -188,6 +190,7 @@ type Send struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	HasPassword   bool       `json:"has_password"`
+	RequireCode   bool       `json:"require_code"`
 	MaxDownloads  *int64     `json:"max_downloads"`
 	DownloadCount int64      `json:"download_count"`
 	ExpiresAt     *time.Time `json:"expires_at"`
@@ -201,23 +204,25 @@ type Send struct {
 
 type sendRow struct {
 	send         Send
+	owner        Owner
 	passwordHash string
 	pickupHash   string
 	sourceID     int64
 }
 
-const sendColumns = `t.id, t.public_key, t.owner_user_id, t.storage_source_id, s.key, s.name,
-  t.title, t.description, t.password_hash IS NOT NULL, t.max_downloads, t.download_count,
+const sendColumns = `t.id, t.public_key, t.owner_user_id, t.owner_guest_id, t.storage_source_id, s.key, s.name,
+  t.title, t.description, t.password_hash IS NOT NULL, t.require_code, t.max_downloads, t.download_count,
   t.expires_at, t.status, t.total_files, t.total_size, t.created_at, t.finalized_at, t.revoked_at`
 
 func scanSend(row interface{ Scan(...any) error }) (*sendRow, error) {
 	var out sendRow
 	var passwordHash, pickupHash string
 	var sourceID int64
+	var ownerUserID, ownerGuestID sql.NullInt64
 	var expires, finalized, revoked sql.NullTime
-	err := row.Scan(&out.send.ID, &out.send.PublicKey, &out.send.OwnerUserID, &sourceID,
+	err := row.Scan(&out.send.ID, &out.send.PublicKey, &ownerUserID, &ownerGuestID, &sourceID,
 		&out.send.SourceKey, &out.send.SourceName, &out.send.Title, &out.send.Description,
-		&out.send.HasPassword, &out.send.MaxDownloads, &out.send.DownloadCount,
+		&out.send.HasPassword, &out.send.RequireCode, &out.send.MaxDownloads, &out.send.DownloadCount,
 		&expires, &out.send.Status, &out.send.TotalFiles, &out.send.TotalSize,
 		&out.send.CreatedAt, &finalized, &revoked, &passwordHash, &pickupHash)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -232,6 +237,8 @@ func scanSend(row interface{ Scan(...any) error }) (*sendRow, error) {
 	out.passwordHash = passwordHash
 	out.pickupHash = pickupHash
 	out.sourceID = sourceID
+	out.send.OwnerUserID = ownerUserID.Int64
+	out.owner = Owner{UserID: ownerUserID.Int64, GuestID: ownerGuestID.Int64}
 	return &out, nil
 }
 
@@ -264,16 +271,19 @@ func scanSendFile(row interface{ Scan(...any) error }) (*SendFile, error) {
 
 // CreateSendInput 是创建发件包草稿的输入。
 type CreateSendInput struct {
-	OwnerUserID int64
-	Title       string
-	Description string
+	OwnerUserID  int64
+	OwnerGuestID int64
+	Title        string
+	Description  string
 	// ExpiresInHours：nil 用全局默认；0 永不过期；>0 小时。
 	ExpiresInHours *int64
 	MaxDownloads   *int64
 	Password       string
+	// RequireCode：nil 保留原来的取件码要求；false 允许直接通过分享链接访问。
+	RequireCode *bool
 }
 
-// CreateSend 创建发件包草稿，返回记录与一次性展示的明文取件码。
+// CreateSend 创建发件包草稿；要求取件码时返回一次性展示的明文码。
 func (s *Service) CreateSend(in CreateSendInput) (*Send, string, error) {
 	src, err := s.capabilities.ResolveSource("transfer_center")
 	if err != nil {
@@ -289,12 +299,18 @@ func (s *Service) CreateSend(in CreateSendInput) (*Send, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	expiresAt, err := computeExpiry(in.ExpiresInHours, settings.DefaultExpiryHours)
+	owner := Owner{UserID: in.OwnerUserID, GuestID: in.OwnerGuestID}
+	expiresAt, err := s.computeOwnerExpiry(in.ExpiresInHours, settings.DefaultExpiryHours, owner)
 	if err != nil {
 		return nil, "", err
 	}
 	publicKey := auth.NewRandomToken("tr-", 12)
-	pickupCode := generatePickupCode()
+	requireCode := in.RequireCode == nil || *in.RequireCode
+	pickupCode, pickupHash := "", ""
+	if requireCode {
+		pickupCode = generatePickupCode()
+		pickupHash = s.codeDigest(pickupCode)
+	}
 	now := time.Now().UTC()
 	passwordHash := ""
 	if strings.TrimSpace(in.Password) != "" {
@@ -304,17 +320,29 @@ func (s *Service) CreateSend(in CreateSendInput) (*Send, string, error) {
 		}
 		passwordHash = hash
 	}
-	result, err := s.db.Exec(`INSERT INTO transfers
-  (public_key, owner_user_id, storage_source_id, title, description, pickup_code_hash, password_hash,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback()
+	if err := checkOwnerCreate(tx, owner); err != nil {
+		return nil, "", err
+	}
+	userID, guestID := owner.sqlValues()
+	result, err := tx.Exec(`INSERT INTO transfers
+  (public_key, owner_user_id, owner_guest_id, storage_source_id, title, description, pickup_code_hash, password_hash, require_code,
    max_downloads, expires_at, status, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
-		publicKey, in.OwnerUserID, src.ID, in.Title, in.Description,
-		s.codeDigest(pickupCode), nullableString(passwordHash), in.MaxDownloads, nullableTime(expiresAt), now, now)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+		publicKey, userID, guestID, src.ID, in.Title, in.Description,
+		pickupHash, nullableString(passwordHash), requireCode, in.MaxDownloads, nullableTime(expiresAt), now, now)
 	if err != nil {
 		return nil, "", err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
+		return nil, "", err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, "", err
 	}
 	send, err := s.getSendByID(id)
@@ -353,9 +381,26 @@ func (s *Service) getSendByKey(publicKey string) (*sendRow, error) {
   WHERE t.public_key = ?`, publicKey))
 }
 
+// GetSend 返回所有者的任务详情，包括不可公开访问的草稿和历史任务。
+func (s *Service) GetSend(transferID, ownerUserID int64) (*Send, error) {
+	return s.GetSendForOwner(transferID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) GetSendForOwner(transferID int64, owner Owner) (*Send, error) {
+	row, err := s.loadOwnSend(transferID, owner)
+	if err != nil {
+		return nil, err
+	}
+	return &row.send, nil
+}
+
 // ListOwnSendFiles 返回自己发件包的文件清单（草稿编辑与历史详情使用）。
 func (s *Service) ListOwnSendFiles(transferID, ownerUserID int64) ([]*SendFile, error) {
-	row, err := s.loadOwnSend(transferID, ownerUserID)
+	return s.ListOwnSendFilesForOwner(transferID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) ListOwnSendFilesForOwner(transferID int64, owner Owner) ([]*SendFile, error) {
+	row, err := s.loadOwnSend(transferID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -393,11 +438,19 @@ func (s *Service) SourceActiveTaskCount(storageSourceID int64) (int64, error) {
 
 // ListSendsByOwner 返回用户创建的发件包（历史）。
 func (s *Service) ListSendsByOwner(ownerUserID int64) ([]*Send, error) {
+	return s.ListSendsForOwner(Owner{UserID: ownerUserID})
+}
+
+func (s *Service) ListSendsForOwner(owner Owner) ([]*Send, error) {
+	if err := s.validateOwner(owner); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(`SELECT `+sendColumns+`,
   COALESCE(t.password_hash, ''), t.pickup_code_hash
   FROM transfers t
   JOIN storage_sources s ON s.id = t.storage_source_id
-  WHERE t.owner_user_id = ? ORDER BY t.created_at DESC, t.id DESC LIMIT 200`, ownerUserID)
+  WHERE (? > 0 AND t.owner_user_id = ?) OR (? > 0 AND t.owner_guest_id = ?)
+  ORDER BY t.created_at DESC, t.id DESC LIMIT 200`, owner.UserID, owner.UserID, owner.GuestID, owner.GuestID)
 	if err != nil {
 		return nil, err
 	}
@@ -413,12 +466,15 @@ func (s *Service) ListSendsByOwner(ownerUserID int64) ([]*Send, error) {
 	return out, rows.Err()
 }
 
-func (s *Service) loadOwnSend(transferID, ownerUserID int64) (*sendRow, error) {
+func (s *Service) loadOwnSend(transferID int64, owner Owner) (*sendRow, error) {
+	if err := s.validateOwner(owner); err != nil {
+		return nil, err
+	}
 	row, err := s.getSendByID(transferID)
 	if err != nil {
 		return nil, err
 	}
-	if row.send.OwnerUserID != ownerUserID {
+	if row.owner != owner {
 		return nil, ErrNotFound
 	}
 	return row, nil
@@ -426,7 +482,11 @@ func (s *Service) loadOwnSend(transferID, ownerUserID int64) (*sendRow, error) {
 
 // AddSendUpload 把一段上传数据作为草稿文件写入（保留相对路径结构）。
 func (s *Service) AddSendUpload(transferID, ownerUserID int64, relativePath string, body io.Reader) (*SendFile, error) {
-	row, err := s.loadOwnSend(transferID, ownerUserID)
+	return s.AddSendUploadForOwner(transferID, Owner{UserID: ownerUserID}, relativePath, body)
+}
+
+func (s *Service) AddSendUploadForOwner(transferID int64, owner Owner, relativePath string, body io.Reader) (*SendFile, error) {
+	row, err := s.loadOwnSend(transferID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +510,7 @@ func (s *Service) AddSendUpload(transferID, ownerUserID int64, relativePath stri
 // AddSendFilesFromStore 把已有普通文件/目录复制进草稿，保留目录结构。
 // 调用方（HTTP 层）必须先完成用户对 source_key + path 的读取授权。
 func (s *Service) AddSendFilesFromStore(transferID, ownerUserID int64, sourceKey, path string) ([]*SendFile, error) {
-	row, err := s.loadOwnSend(transferID, ownerUserID)
+	row, err := s.loadOwnSend(transferID, Owner{UserID: ownerUserID})
 	if err != nil {
 		return nil, err
 	}
@@ -521,6 +581,11 @@ func hasSendFileConflict(db *sql.DB, transferID int64, relPath string) bool {
 // writeSendFile 执行带日志的单文件写入：journal → 配额 → 托管原子写 → 台账事务。
 func (s *Service) writeSendFile(row *sendRow, src *models.StorageSource, relPath string, body io.Reader) (*SendFile, error) {
 	finalRel := sendPayloadRel(row.send.PublicKey, relPath)
+	unlockFile := s.files.Locks().Lock("transfer-write:" + src.Key + ":" + finalRel)
+	defer unlockFile()
+	if hasSendFileConflict(s.db, row.send.ID, relPath) {
+		return nil, files.ErrAlreadyExists
+	}
 	op := s.newUploadOperation("send-file", src.ID, row.send.ID, 0, finalRel)
 	if err := s.writeUploadOperation(op); err != nil {
 		return nil, fmt.Errorf("记录流转上传日志失败: %w", err)
@@ -528,6 +593,7 @@ func (s *Service) writeSendFile(row *sendRow, src *models.StorageSource, relPath
 	keepJournal := true
 	defer func() {
 		if keepJournal {
+			_ = s.files.DeleteManaged(src, finalRel, ManagedScopeDir)
 			_ = s.removeUploadOperation(op.OperationID)
 		}
 	}()
@@ -545,13 +611,22 @@ func (s *Service) writeSendFile(row *sendRow, src *models.StorageSource, relPath
 		return nil, err
 	}
 	defer tx.Rollback()
+	if err := checkTransferWrite(tx, row.owner.GuestID, file.size); err != nil {
+		return nil, err
+	}
 	if _, err := tx.Exec(`INSERT INTO transfer_files (transfer_id, relative_path, size, ext, mime_type, created_at)
   VALUES (?, ?, ?, ?, ?, ?)`, row.send.ID, relPath, file.size, ext, mimeType, now); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`UPDATE transfers SET total_files = total_files + 1, total_size = total_size + ?, updated_at = ?
-  WHERE id = ?`, file.size, now, row.send.ID); err != nil {
+	result, err := tx.Exec(`UPDATE transfers SET total_files = total_files + 1, total_size = total_size + ?, updated_at = ?
+  WHERE id = ? AND status = 'draft' AND (expires_at IS NULL OR expires_at > ?)`, file.size, now, row.send.ID, now)
+	if err != nil {
 		return nil, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return nil, err
+	} else if affected == 0 {
+		return nil, ErrNotDraft
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -581,6 +656,18 @@ func (s *Service) writeWithQuota(row *sendRow, src *models.StorageSource, finalR
 		maxBytes = activeRemaining
 		limited = true
 	}
+	if row.owner.GuestID != 0 {
+		remaining, err := s.guestQuotaRemaining(row.owner.GuestID)
+		if err != nil {
+			return writtenFile{}, err
+		}
+		if remaining > s.guestMaxFileSize {
+			remaining = s.guestMaxFileSize
+		}
+		if !limited || remaining < maxBytes {
+			maxBytes, limited = remaining, true
+		}
+	}
 	written, err := s.files.WriteManagedFile(src, finalRel, ManagedScopeDir, body, maxBytes, limited)
 	if err != nil {
 		return writtenFile{}, err
@@ -590,10 +677,18 @@ func (s *Service) writeWithQuota(row *sendRow, src *models.StorageSource, finalR
 
 // FinalizeSend 把草稿定稿为 active；至少需要一个文件。
 func (s *Service) FinalizeSend(transferID, ownerUserID int64) (*Send, error) {
-	row, err := s.loadOwnSend(transferID, ownerUserID)
+	return s.FinalizeSendForOwner(transferID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) FinalizeSendForOwner(transferID int64, owner Owner) (*Send, error) {
+	row, err := s.loadOwnSend(transferID, owner)
 	if err != nil {
 		return nil, err
 	}
+	return s.finalizeLoadedSend(row)
+}
+
+func (s *Service) finalizeLoadedSend(row *sendRow) (*Send, error) {
 	if row.send.Status != "draft" {
 		return nil, ErrNotDraft
 	}
@@ -601,20 +696,39 @@ func (s *Service) FinalizeSend(transferID, ownerUserID int64) (*Send, error) {
 		return nil, ErrNoFiles
 	}
 	now := time.Now().UTC()
-	if _, err := s.db.Exec(`UPDATE transfers SET status = 'active', finalized_at = ?, updated_at = ? WHERE id = ?`,
-		now, now, row.send.ID); err != nil {
+	if row.send.ExpiresAt != nil && !now.Before(*row.send.ExpiresAt) {
+		return nil, ErrExpired
+	}
+	result, err := s.db.Exec(`UPDATE transfers SET status = 'active', finalized_at = ?, updated_at = ?
+  WHERE id = ? AND status = 'draft' AND (expires_at IS NULL OR expires_at > ?)`,
+		now, now, row.send.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
 		return nil, err
 	}
 	updated, err := s.getSendByID(row.send.ID)
 	if err != nil {
 		return nil, err
 	}
+	if affected == 0 {
+		if updated.send.Status == "draft" && updated.send.ExpiresAt != nil && !now.Before(*updated.send.ExpiresAt) {
+			return nil, ErrExpired
+		}
+		return nil, ErrNotDraft
+	}
 	return &updated.send, nil
 }
 
 // RevokeSend 主动撤销：立即删除载荷，台账保留为历史。
 func (s *Service) RevokeSend(transferID, ownerUserID int64) error {
-	row, err := s.loadOwnSend(transferID, ownerUserID)
+	return s.RevokeSendForOwner(transferID, Owner{UserID: ownerUserID})
+}
+
+func (s *Service) RevokeSendForOwner(transferID int64, owner Owner) error {
+	row, err := s.loadOwnSend(transferID, owner)
 	if err != nil {
 		return err
 	}
@@ -632,11 +746,7 @@ func (s *Service) RevokeSend(transferID, ownerUserID int64) error {
 
 // deleteSendPayload 删除整个发件包载荷目录。
 func (s *Service) deleteSendPayload(row *sendRow) error {
-	src, err := s.sources.GetByID(row.sourceID)
-	if err != nil {
-		return err
-	}
-	return s.files.DeleteManaged(src, sendPayloadRel(row.send.PublicKey, ""), ManagedScopeDir)
+	return s.deletePayloadDir(row.sourceID, sendPayloadRel(row.send.PublicKey, ""))
 }
 
 // --- 公开读取（Send） ---
@@ -649,6 +759,7 @@ type SendPublicInfo struct {
 	FileCount     int64      `json:"file_count"`
 	TotalSize     int64      `json:"total_size"`
 	HasPassword   bool       `json:"has_password"`
+	RequireCode   bool       `json:"require_code"`
 	DownloadsLeft *int64     `json:"downloads_left"`
 	ExpiresAt     *time.Time `json:"expires_at"`
 }
@@ -669,6 +780,7 @@ func (s *Service) LookupSend(publicKey string) (*SendPublicInfo, error) {
 		FileCount:   row.send.TotalFiles,
 		TotalSize:   row.send.TotalSize,
 		HasPassword: row.send.HasPassword,
+		RequireCode: row.send.RequireCode,
 		ExpiresAt:   row.send.ExpiresAt,
 	}
 	if row.send.MaxDownloads != nil {
@@ -693,7 +805,7 @@ func checkSendActive(send *Send) error {
 	return nil
 }
 
-// UnlockSend 校验取件码与可选密码，签发公开访问会话。
+// UnlockSend 按任务设置校验取件码与密码，签发公开访问会话。
 func (s *Service) UnlockSend(publicKey, pickupCode, password string) (string, time.Time, error) {
 	row, err := s.getSendByKey(publicKey)
 	if err != nil {
@@ -702,7 +814,7 @@ func (s *Service) UnlockSend(publicKey, pickupCode, password string) (string, ti
 	if err := checkSendActive(&row.send); err != nil {
 		return "", time.Time{}, err
 	}
-	if !s.verifyCode(row.pickupHash, pickupCode) {
+	if row.send.RequireCode && !s.verifyCode(row.pickupHash, pickupCode) {
 		return "", time.Time{}, ErrPickupCode
 	}
 	if row.passwordHash != "" && !auth.VerifyPassword(row.passwordHash, password) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/omni-store/omnistore/internal/db"
@@ -56,6 +57,67 @@ func TestEnsureInitializesRootMarkerAndRegistration(t *testing.T) {
 	// 重复调用幂等，且登记与标识一致。
 	if err := service.Ensure(src); err != nil {
 		t.Fatalf("second Ensure: %v", err)
+	}
+}
+
+func TestEnsureConcurrentServicesInitializeSameColdRoot(t *testing.T) {
+	service, src, root := newManagedRootEnv(t)
+	const workers = 64
+	const serviceCount = 8
+	services := make([]*Service, serviceCount)
+	for i := range services {
+		// Image bed and transfers construct separate managedroot services for one DB.
+		services[i] = NewService(service.db)
+	}
+	start := make(chan struct{})
+	errorsFound := make(chan error, workers)
+	var ready, finished sync.WaitGroup
+	ready.Add(workers)
+	finished.Add(workers)
+	for i := range workers {
+		go func() {
+			defer finished.Done()
+			ready.Done()
+			<-start
+			if err := services[i%serviceCount].Ensure(src); err != nil {
+				errorsFound <- err
+			}
+		}()
+	}
+	ready.Wait()
+	close(start)
+	finished.Wait()
+	close(errorsFound)
+	for err := range errorsFound {
+		t.Errorf("concurrent Ensure: %v", err)
+	}
+	if t.Failed() {
+		return
+	}
+
+	managedRoot := filepath.Join(root, security.ManagedNamespaceSegment)
+	marker, err := readMarker(managedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registration, err := service.loadRegistration(src.ID)
+	if err != nil || registration == nil {
+		t.Fatalf("registration=%+v err=%v", registration, err)
+	}
+	if marker.StorageSourceID != src.ID || marker.Nonce != registration.nonce || marker.InstanceID != registration.instanceID {
+		t.Fatalf("marker=%+v registration=%+v", marker, registration)
+	}
+	var count int
+	if err := service.db.QueryRow(`SELECT COUNT(*) FROM managed_root_registrations WHERE storage_source_id = ?`, src.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("registration count=%d err=%v", count, err)
+	}
+	entries, err := os.ReadDir(managedRoot)
+	if err != nil || len(entries) != 1 || entries[0].Name() != markerFileName {
+		t.Fatalf("managed root entries=%v err=%v", entries, err)
+	}
+	info, err := os.Lstat(filepath.Join(managedRoot, markerFileName))
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("marker info=%v err=%v", info, err)
 	}
 }
 

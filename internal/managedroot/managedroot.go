@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/locks"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 )
@@ -26,6 +27,10 @@ const (
 )
 
 var (
+	// 图床和中转各自创建 Service；同一物理根的初始化必须在进程内共享锁，
+	// 覆盖目录/标识发布和数据库登记，避免读到尚未写完的标识。
+	rootLocks = locks.NewManager()
+
 	// ErrUnknownRoot 表示存在无法核验的同名 .omnistore 目录：
 	// 不接管、不修改、不删除，需要管理员确认后处理。
 	ErrUnknownRoot = errors.New("发现未知 .omnistore 目录：不能接管或删除，请人工确认后处理")
@@ -98,6 +103,13 @@ func (s *Service) Ensure(src *models.StorageSource) error {
 	if err != nil {
 		return err
 	}
+	unlock := rootLocks.Lock(root)
+	defer unlock()
+	return s.ensureLocked(src, root)
+}
+
+// ensureLocked 在调用方持有物理根初始化锁时执行核验；内部重查不重复加锁。
+func (s *Service) ensureLocked(src *models.StorageSource, root string) error {
 	info, statErr := os.Lstat(root)
 	reg, err := s.loadRegistration(src.ID)
 	if err != nil {
@@ -155,8 +167,8 @@ func (s *Service) initialize(src *models.StorageSource, root string) error {
 	handle, err := os.OpenFile(markerPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			// 并发初始化竞争：赢家已写入标识，按已有登记重新核验。
-			return s.Ensure(src)
+			// 标识已存在：仍须核验完整内容和登记，不覆盖未知标识。
+			return s.ensureLocked(src, root)
 		}
 		return fmt.Errorf("写入托管根标识失败: %w", err)
 	}
@@ -177,7 +189,7 @@ func (s *Service) initialize(src *models.StorageSource, root string) error {
 		src.ID, nonce, instanceID, time.Now().UTC()); err != nil {
 		return err
 	}
-	return s.Ensure(src)
+	return s.ensureLocked(src, root)
 }
 
 // adoptOrReject 处理"标识文件存在但登记缺失"的崩溃间隙。
