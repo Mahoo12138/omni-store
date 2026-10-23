@@ -211,6 +211,19 @@ Collect：必须属于同一 Transfer 的 Submission；该交叉一致性由 Ser
 
 Public preview 不计入“下载次数”；只有用户明确触发 attachment/ZIP 下载时才原子增加 `download_count`。媒体 Range 预览不会因为多个 Range 请求重复扣次数。
 
+`transfer_download_claims`（`v2.0.0`）记录已计数的（访问会话, 任务, 目标）：
+
+```sql
+id INTEGER PRIMARY KEY AUTOINCREMENT
+session_id INTEGER NOT NULL REFERENCES transfer_access_sessions(id) ON DELETE CASCADE
+transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE
+target TEXT NOT NULL          -- 'file:<id>' 或 'archive'
+created_at DATETIME NOT NULL
+UNIQUE(session_id, transfer_id, target)
+```
+
+同一会话对同一目标的 Range 续传、失败重试与并发重复请求先命中声明，不再增加 `download_count`；不同目标或新会话仍各自占名额。声明写入与条件 UPDATE 在同一事务中，名额用完时回滚声明。
+
 ## 9. Transfer Quota
 
 Transfer 临时字节不进入普通 `file_records` 和 User Quota。

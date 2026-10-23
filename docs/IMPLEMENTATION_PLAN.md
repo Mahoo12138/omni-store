@@ -8,7 +8,7 @@
 
 现有代码已包含 Capability/Source Protocol、Send/Collect、Operation、Backup 的主要服务与 UI，迁移链已收敛到 `v2.0.0.sql`（2.0 增量迁移在发布前合并）；不要因下方原始阶段清单而重复创建迁移或回退这些实现。具体事实与验证边界见 [STATUS](STATUS.md)。
 
-本轮补齐 Phase 4–6 的写入中断恢复和 GC 一致性，扩展 Phase 10 的 Transfer crashcheck，并完成 Phase 9 的 Chromium 双 origin 静态媒体子集。尚未进入 RC：继续补真实协议客户端矩阵、MP4/其他浏览器/代理、访客实际配额压测，以及 Transfer 预览和下载会话计数目标。所有未实测项保持待验收。
+本轮补齐 Phase 4–6 的写入中断恢复和 GC 一致性，扩展 Phase 10 的 Transfer crashcheck，完成 Phase 9 的 Chromium 双 origin 静态媒体子集，并闭环下载名额按访问会话与目标去重的计数语义。尚未进入 RC：继续补真实协议客户端矩阵、MP4/其他浏览器/代理、访客实际配额压测，以及 Transfer 预览目标。所有未实测项保持待验收。
 
 ## Phase 0 — Baseline
 
