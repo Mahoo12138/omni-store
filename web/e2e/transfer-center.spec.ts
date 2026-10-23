@@ -282,7 +282,7 @@ test.describe(() => {
     expect(limited).toBe(3)
   })
 
-  test('collect: constraints, anonymous abuse protection and owner inbox', async ({ page }) => {
+  test('collect: constraints, anonymous abuse protection and owner inbox', async ({ page, playwright, baseURL }) => {
     const session = await login(page)
     const api = page.request
 
@@ -376,6 +376,39 @@ test.describe(() => {
     expect((await api.post(`/api/v1/transfer-collections/${collectionID}/close`, { headers: authHeaders(session, true) })).ok()).toBeTruthy()
     const closed = await api.get(`/api/v1/public/transfer-collections/${publicKey}`)
     expect(closed.status()).toBe(409)
+
+    // Closing only stops collection. Real maintenance must keep received
+    // payloads, their quota usage and the owner's download/save workflows.
+    const admin = await playwright.request.newContext({ baseURL })
+    try {
+      const loginResponse = await admin.post('/api/v1/auth/login', {
+        data: { username: 'admin', password: 'OmniStore-Test-Admin!' },
+      })
+      expect(loginResponse.status()).toBe(200)
+      const adminCSRF = (await loginResponse.json()).data.csrf_token
+      const before = (await (await admin.get('/api/v1/admin/operations/status')).json()).data.transfers.payload_bytes
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const cleanup = await admin.post('/api/v1/admin/operations/cleanup', { headers: { 'X-CSRF-Token': adminCSRF } })
+        expect(cleanup.status()).toBe(200)
+      }
+      const after = (await (await admin.get('/api/v1/admin/operations/status')).json()).data.transfers.payload_bytes
+      expect(after).toBe(before)
+      const fileID = inboxData.items[0].files[0].id
+      const retained = await api.get(`/api/v1/transfer-collections/${collectionID}/submissions/${submission.id}/files/${fileID}/download`, {
+        headers: authHeaders(session),
+      })
+      expect(retained.status()).toBe(200)
+      expect(await retained.text()).toBe('WEEK1-作业')
+      const retainedDirectory = `after-close-${collectionID}`
+      const retainedCopy = await api.post(`/api/v1/transfer-collections/${collectionID}/submissions/${submission.id}/save-to-files`, {
+        headers: authHeaders(session, true), data: { source_key: copySource, path: retainedDirectory },
+      })
+      expect(retainedCopy.status()).toBe(200)
+      copiedDirectories.push({ sourceKey: copySource, path: retainedDirectory })
+      expect((await retainedCopy.json()).data.saved).toEqual([`${retainedDirectory}/作业/第一周.pdf`])
+    } finally {
+      await admin.dispose()
+    }
   })
 
   test('same source serves transfer while public drive and image bed stay isolated', async ({ page }) => {

@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test'
 
 // 2.0 Phase 7 运维中心 E2E。
 // 生产漂移场景（E2E 与服务同机，可直接操作测试环境磁盘）：
-// 盘外修改文件 → 台账校准收敛；孤儿临时文件 → 清理编排删除；完整性检查通过。
+// 盘外修改文件 → 台账校准收敛；未知临时文件保留、已撤销任务载荷清理；完整性检查通过。
 
 const baseURL = process.env.OMNISTORE_E2E_BASE_URL ?? 'http://127.0.0.1:18080'
 
@@ -82,7 +82,8 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   })
   expect(upload.status()).toBe(200)
 
-  // 3. 生产漂移 B：在合法托管根内残留孤儿临时文件（模拟上传中断，mtime 拨到 2 小时前）。
+  // 3. 生产漂移 B：托管根里出现无台账、无日志的未知目录。
+  // 文件名和年龄不能证明归属；清理必须保留它，而非猜测为中断上传。
   const managedTmp = join(team.dir, '.omnistore', 'transfer', 'send', 'tr-orphanleftover')
   mkdirSync(managedTmp, { recursive: true })
   const tmpFile = join(managedTmp, '.omnistore-upload-orphan1234.tmp')
@@ -134,21 +135,24 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   expect(refreshed.ledger_bytes).toBeGreaterThan(teamHealth.ledger_bytes)
   await expect(page.getByRole('status').filter({ hasText: '团队文件 台账已校准' })).toBeVisible()
 
-  // 7. 运行清理后，报告可见、孤儿临时文件消失，快照重新获取。
+  // 7. 运行清理后，报告可见、未知文件保持原字节，快照重新获取。
   const cleanupResponse = page.waitForResponse((response) => response.url().endsWith('/operations/cleanup'))
   const afterCleanup = page.waitForResponse((response) => response.url().endsWith('/admin/overview'))
   await page.getByRole('button', { name: '运行清理', exact: true }).click()
   const cleanup = await (await cleanupResponse).json()
-  expect(cleanup.data.transfer_gc.orphan_temp_removed).toBeGreaterThanOrEqual(1)
+  expect(cleanup.data.transfer_gc.orphan_temp_removed).toBe(0)
+  expect(cleanup.data.transfer_gc.orphan_dirs_removed).toBe(0)
   await afterCleanup
   await expect(page.getByRole('status').filter({ hasText: '本次清理' })).toBeVisible()
-  expect(() => readFileSync(tmpFile)).toThrow()
+  expect(readFileSync(tmpFile, 'utf-8')).toBe('partial upload')
 
   // 撤销活跃包 → 载荷目录删除 → 再次清理显示清扫计数。
   await adminAPI(page, 'DELETE', `/api/v1/transfers/${sendID}`)
   const cleanup2 = await adminAPI(page, 'POST', '/api/v1/admin/operations/cleanup')
   expect(cleanup2.body.data.transfer_gc.transfers_swept).toBeGreaterThanOrEqual(1)
-  expect(() => readFileSync(managedTmp)).toThrow()
+  const ownedPayload = join(team.dir, '.omnistore', 'transfer', 'send', created.body.data.send.public_key, 'observed.bin')
+  expect(() => readFileSync(ownedPayload)).toThrow()
+  expect(readFileSync(tmpFile, 'utf-8')).toBe('partial upload')
 })
 
 async function openDashboard(page: import('@playwright/test').Page) {
