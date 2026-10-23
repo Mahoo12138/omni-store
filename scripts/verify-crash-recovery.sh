@@ -14,4 +14,5 @@ go build -o "$BUILD_DIR/crashcheck" ./cmd/crashcheck
 "$BUILD_DIR/crashcheck" \
   --server "$BUILD_DIR/omnistore" \
   --seed "$BUILD_DIR/testenv" \
-  --rounds "${OMNISTORE_CRASH_ROUNDS:-3}"
+  --rounds "${OMNISTORE_CRASH_ROUNDS:-3}" \
+  --scenario "${OMNISTORE_CRASH_SCENARIO:-}"

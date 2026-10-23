@@ -47,6 +47,7 @@ type scenario struct {
 	ready      func(*fixture) bool
 	prepare    func(*fixture) error
 	request    func(*fixture) (*http.Request, error)
+	settle     func(*fixture) error
 	verify     func(*fixture) error
 }
 
@@ -71,6 +72,7 @@ type fixture struct {
 	protocol   protocolCredentials
 	partETag   string
 	uploadID   string
+	transfer   transferFixture
 }
 
 type protocolCredentials struct {
@@ -98,6 +100,7 @@ func main() {
 	serverBin := flag.String("server", "", "path to the omnistore binary")
 	seedBin := flag.String("seed", "", "path to the testenv binary")
 	rounds := flag.Int("rounds", 3, "random SIGKILL rounds per scenario")
+	filter := flag.String("scenario", "", "run scenarios whose name contains this string")
 	flag.Parse()
 	if *serverBin == "" || *seedBin == "" || *rounds < 1 {
 		fatal(errors.New("--server, --seed and positive --rounds are required"))
@@ -106,6 +109,9 @@ func main() {
 	scenarios := crashScenarios()
 	completed := 0
 	for _, item := range scenarios {
+		if !strings.Contains(item.name, *filter) {
+			continue
+		}
 		for round := 1; round <= *rounds; round++ {
 			if err := runScenario(item, round, *serverBin, *seedBin); err != nil {
 				fatal(fmt.Errorf("%s round %d: %w", item.name, round, err))
@@ -113,6 +119,9 @@ func main() {
 			completed++
 			fmt.Printf("ok  %-22s round %d/%d\n", item.name, round, *rounds)
 		}
+	}
+	if completed == 0 {
+		fatal(fmt.Errorf("no scenarios match %q", *filter))
 	}
 	fmt.Printf("crash recovery acceptance passed: %d SIGKILL rounds\n", completed)
 }
@@ -172,12 +181,14 @@ func runScenario(item scenario, round int, serverBin, seedBin string) error {
 	journalPath := filepath.Join(f.dataDir, item.journalDir)
 	deadline := time.Now().Add(3 * time.Second)
 	requestFinished := false
+	operationObserved := false
 	for time.Now().Before(deadline) {
 		operationReady := directoryHasEntries(journalPath)
 		if item.ready != nil {
 			operationReady = item.ready(f)
 		}
 		if operationReady {
+			operationObserved = true
 			break
 		}
 		select {
@@ -191,9 +202,17 @@ func runScenario(item scenario, round int, serverBin, seedBin string) error {
 			time.Sleep(time.Millisecond)
 		}
 	}
+	if !operationObserved && !requestFinished {
+		return errors.New("operation did not reach an observable crash boundary or complete before timeout")
+	}
 	// Kill after a random interval once the operation journal is visible. Fast
 	// operations may already be committed; that is a valid post-commit endpoint.
-	time.Sleep(time.Duration(rand.IntN(16)) * time.Millisecond)
+	delay := time.Duration(rand.IntN(16)) * time.Millisecond
+	if round == 1 {
+		// Always sample the earliest observable boundary before random rounds.
+		delay = 0
+	}
+	time.Sleep(delay)
 	if !requestFinished {
 		select {
 		case requestErr := <-done:
@@ -207,6 +226,14 @@ func runScenario(item scenario, round int, serverBin, seedBin string) error {
 	if err := f.kill(); err != nil {
 		return err
 	}
+	evidence, _ := json.MarshalIndent(map[string]any{
+		"scenario": item.name, "round": round, "kill_delay_ms": delay.Milliseconds(),
+		"request_completed_before_kill": requestFinished,
+		"operation_boundary_observed":   operationObserved,
+	}, "", "  ")
+	if err := os.WriteFile(filepath.Join(f.root, "crash.json"), evidence, 0o600); err != nil {
+		return err
+	}
 	cancelRequest()
 	if !requestFinished {
 		select {
@@ -217,6 +244,11 @@ func runScenario(item scenario, round int, serverBin, seedBin string) error {
 	}
 	if err := f.start(); err != nil {
 		return fmt.Errorf("restart and recover: %w", err)
+	}
+	if item.settle != nil {
+		if err := item.settle(f); err != nil {
+			return err
+		}
 	}
 	if err := auditFixture(f); err != nil {
 		return err
@@ -273,7 +305,7 @@ log:
 		return err
 	}
 	seed := exec.Command(f.seedBin, "seed", "--config", f.configPath, "--fixtures", f.sourcesDir)
-	seed.Env = append(os.Environ(), "OMNISTORE_MASTER_KEY=01234567890123456789012345678901")
+	seed.Env = fixtureEnvironment(os.Environ())
 	if output, err := seed.CombinedOutput(); err != nil {
 		return fmt.Errorf("seed: %w: %s", err, output)
 	}
@@ -326,7 +358,8 @@ func seedScenarioFiles(f *fixture, name string) error {
 		return seedTree(f.teamRoot, "subject")
 	case "restore", "permanent delete":
 		return seedTree(f.teamRoot, "subject")
-	case "multipart complete", "image upload":
+	case "multipart complete", "image upload", "transfer send upload", "transfer send finalize",
+		"transfer collect submit", "transfer save to files", "transfer GC":
 		return nil
 	default:
 		return fmt.Errorf("unknown scenario %q", name)
@@ -335,7 +368,7 @@ func seedScenarioFiles(f *fixture, name string) error {
 
 func (f *fixture) start() error {
 	cmd := exec.Command(f.serverBin, "server", "--config", f.configPath)
-	cmd.Env = append(os.Environ(), "OMNISTORE_MASTER_KEY=01234567890123456789012345678901")
+	cmd.Env = fixtureEnvironment(os.Environ())
 	logFile, err := os.OpenFile(filepath.Join(f.root, "server.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
@@ -372,6 +405,18 @@ func (f *fixture) kill() error {
 	_ = f.server.Wait()
 	f.server = nil
 	return err
+}
+
+// Deployment overrides must never redirect a destructive fixture to an
+// existing instance, database, source directory, or listening address.
+func fixtureEnvironment(environ []string) []string {
+	result := make([]string, 0, len(environ)+1)
+	for _, entry := range environ {
+		if !strings.HasPrefix(entry, "OMNISTORE_") {
+			result = append(result, entry)
+		}
+	}
+	return append(result, "OMNISTORE_MASTER_KEY=01234567890123456789012345678901")
 }
 
 func (f *fixture) stop() {
@@ -446,7 +491,7 @@ func (f *fixture) apiRequest(method, path string, body io.Reader, contentType st
 }
 
 func crashScenarios() []scenario {
-	return []scenario{
+	return append([]scenario{
 		{name: "overwrite upload", journalDir: "operations/file-uploads", ready: uploadTempVisible, request: requestOverwrite, verify: verifyOverwrite},
 		{name: "directory copy", journalDir: "operations/copies", request: requestCopy, verify: verifyCopy},
 		{name: "cross-source move", journalDir: "operations/transfers", request: requestCrossMove, verify: verifyCrossMove},
@@ -456,7 +501,7 @@ func crashScenarios() []scenario {
 		{name: "permanent delete", journalDir: "trash/.operations", prepare: prepareTrash, request: requestPurge, verify: verifyPurge},
 		{name: "multipart complete", journalDir: "operations/s3-multipart-completions", prepare: prepareMultipart, request: requestMultipartComplete, verify: verifyMultipart},
 		{name: "image upload", journalDir: "operations/image-uploads", ready: uploadTempVisible, request: requestImageUpload, verify: verifyImageUpload},
-	}
+	}, transferCrashScenarios()...)
 }
 
 func uploadTempVisible(f *fixture) bool {
@@ -761,7 +806,7 @@ func auditFixture(f *fixture) error {
 	}
 	for _, dir := range []string{
 		"operations/copies", "operations/file-uploads", "operations/image-uploads", "operations/paths",
-		"operations/s3-multipart-completions", "operations/s3-multipart-parts", "operations/transfers", "trash/.operations",
+		"operations/s3-multipart-completions", "operations/s3-multipart-parts", "operations/transfers", "operations/transfer-uploads", "trash/.operations",
 	} {
 		if directoryHasEntries(filepath.Join(f.dataDir, dir)) {
 			return fmt.Errorf("recovery journal remains in %s", dir)
