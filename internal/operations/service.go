@@ -206,10 +206,11 @@ func (s *Service) fillSources(status *Status) error {
 		}
 		_ = s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(size), 0) FROM trash_entries
   WHERE storage_source_id = ?`, src.ID).Scan(&health.TrashCount, new(int64))
-		_ = s.db.QueryRow(`SELECT COUNT(*) FROM transfers
-  WHERE storage_source_id = ? AND status IN ('draft', 'active')`, src.ID).Scan(&health.ActiveTransfers)
-		_ = s.db.QueryRow(`SELECT COUNT(*) FROM transfer_collections
-  WHERE storage_source_id = ? AND status = 'active'`, src.ID).Scan(new(int64))
+		activeTransfers, err := s.transfers.SourceActiveTaskCount(src.ID)
+		if err != nil {
+			return err
+		}
+		health.ActiveTransfers = activeTransfers
 		status.Sources = append(status.Sources, health)
 	}
 	return nil
@@ -261,6 +262,11 @@ func (s *Service) fillTransfers(status *Status) error {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfer_collections WHERE status = 'active'`).Scan(&usage.ActiveCollections); err != nil {
 		return err
 	}
+	var collectionBytes int64
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status IN ('active', 'closed')`).Scan(&collectionBytes); err != nil {
+		return err
+	}
+	usage.PayloadBytes += collectionBytes
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfer_access_sessions WHERE expires_at > ?`,
 		time.Now().UTC()).Scan(&usage.Sessions); err != nil {
 		return err

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
+	"github.com/omni-store/omnistore/internal/managedroot"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/security"
 )
@@ -344,6 +345,78 @@ func pathOperationTargetExists(absPath string, isDir bool) (bool, error) {
 	return true, nil
 }
 
+// guardPendingManagedPathWrite prevents a failed delete/move from retaining
+// authority over a new payload written before the next startup recovery.
+// Completed deletes are safe to reuse: recovery only removes their journals.
+func (s *Service) guardPendingManagedPathWrite(sourceID int64, relPaths ...string) error {
+	entries, err := os.ReadDir(s.pathOperationsDir())
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("路径操作日志 %s 不能是符号链接", entry.Name())
+		}
+		op, err := s.readPathOperation(filepath.Join(s.pathOperationsDir(), entry.Name()))
+		if errors.Is(err, fs.ErrNotExist) {
+			// A concurrent, successful operation may have removed its journal.
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("读取路径操作日志 %s 失败: %w", entry.Name(), err)
+		}
+		if entry.Name() != op.OperationID+".json" {
+			return fmt.Errorf("路径操作日志 %s 名称不匹配", entry.Name())
+		}
+		if op.StorageSourceID != sourceID {
+			continue
+		}
+		if op.Kind == pathOperationDelete {
+			committed, err := uploadMarkerExists(s.pathDatabaseReadyPath(op.OperationID))
+			if err != nil {
+				return err
+			}
+			if committed {
+				continue
+			}
+		}
+		for _, target := range relPaths {
+			for _, pending := range []string{op.FromRelativePath, op.ToRelativePath} {
+				if pending != "" && (target == pending || strings.HasPrefix(target, pending+"/") || strings.HasPrefix(pending, target+"/")) {
+					return fmt.Errorf("托管路径 %s 与尚未恢复的路径操作 %s 冲突", target, op.OperationID)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) verifyManagedDeleteRecovery(src *models.StorageSource, rel string) error {
+	managed := false
+	for index, segment := range strings.Split(rel, "/") {
+		if !security.IsManagedNamespaceName(segment) {
+			continue
+		}
+		if index != 0 || segment != security.ManagedNamespaceSegment {
+			return fmt.Errorf("拒绝恢复嵌套或非规范托管路径 %s", rel)
+		}
+		managed = true
+	}
+	if !managed {
+		return nil
+	}
+	if rel == security.ManagedNamespaceSegment {
+		return fmt.Errorf("拒绝通过路径恢复删除托管根")
+	}
+	return managedroot.NewService(s.db).Ensure(src)
+}
+
 // RecoverPathOperations 在监听服务前回滚未提交移动并完成永久删除。
 func (s *Service) RecoverPathOperations() (PathRecoveryResult, error) {
 	result := PathRecoveryResult{}
@@ -381,6 +454,19 @@ func (s *Service) RecoverPathOperations() (PathRecoveryResult, error) {
 		if entry.Name() != op.OperationID+".json" {
 			return result, fmt.Errorf("路径操作日志 %s 名称不匹配", entry.Name())
 		}
+		databaseReady, err := uploadMarkerExists(s.pathDatabaseReadyPath(op.OperationID))
+		if err != nil {
+			return result, err
+		}
+		if op.Kind == pathOperationDelete && databaseReady {
+			// The delete is committed. Its old path may now belong to a new
+			// object; replaying either filesystem or metadata deletion is unsafe.
+			if err := s.removePathOperation(op.OperationID); err != nil {
+				return result, err
+			}
+			result.CompletedDeletes++
+			continue
+		}
 		src, err := s.sources.GetByID(op.StorageSourceID)
 		if err != nil {
 			return result, fmt.Errorf("路径操作 %s 的存储源不存在: %w", op.OperationID, err)
@@ -390,6 +476,9 @@ func (s *Service) RecoverPathOperations() (PathRecoveryResult, error) {
 			return result, err
 		}
 		if op.Kind == pathOperationDelete {
+			if err := s.verifyManagedDeleteRecovery(src, op.FromRelativePath); err != nil {
+				return result, fmt.Errorf("校验内部删除归属失败: %w", err)
+			}
 			if err := os.RemoveAll(fromAbs); err != nil {
 				return result, err
 			}
@@ -399,6 +488,9 @@ func (s *Service) RecoverPathOperations() (PathRecoveryResult, error) {
 			if err := s.deletePathMetadata(src.ID, op.FromRelativePath, op.IsDirectory); err != nil {
 				return result, err
 			}
+			if err := s.markPathDatabaseReady(op.OperationID); err != nil {
+				return result, err
+			}
 			if err := s.removePathOperation(op.OperationID); err != nil {
 				return result, err
 			}
@@ -406,10 +498,6 @@ func (s *Service) RecoverPathOperations() (PathRecoveryResult, error) {
 			continue
 		}
 		toAbs, err := security.ResolveInSource(src.RootPath, op.ToRelativePath)
-		if err != nil {
-			return result, err
-		}
-		databaseReady, err := uploadMarkerExists(s.pathDatabaseReadyPath(op.OperationID))
 		if err != nil {
 			return result, err
 		}

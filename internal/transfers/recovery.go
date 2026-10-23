@@ -2,6 +2,7 @@ package transfers
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/omni-store/omnistore/internal/auth"
 	"github.com/omni-store/omnistore/internal/files"
@@ -23,10 +23,12 @@ import (
 type uploadOperation struct {
 	Version         int    `json:"version"`
 	OperationID     string `json:"operation_id"`
-	Kind            string `json:"kind"` // send-file | submission-file
+	Kind            string `json:"kind"` // send-file | submission-file (legacy) | submission-batch
 	StorageSourceID int64  `json:"storage_source_id"`
 	TransferID      int64  `json:"transfer_id"`
 	SubmissionID    int64  `json:"submission_id"`
+	CollectionID    int64  `json:"collection_id,omitempty"`
+	TempRelPath     string `json:"temp_rel_path,omitempty"`
 	FinalRelPath    string `json:"final_rel_path"` // 托管命名空间内的物理相对路径
 }
 
@@ -84,8 +86,11 @@ func (s *Service) writeUploadOperation(op uploadOperation) error {
 	if err := os.Link(tempPath, target); err != nil {
 		return fmt.Errorf("提交流转上传日志失败: %w", err)
 	}
+	if err := os.Remove(tempPath); err != nil {
+		return err
+	}
 	keepTemp = false
-	return os.Remove(tempPath)
+	return syncUploadDirectory(dir)
 }
 
 func (s *Service) removeUploadOperation(operationID string) error {
@@ -93,7 +98,19 @@ func (s *Service) removeUploadOperation(operationID string) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	return nil
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return syncUploadDirectory(s.uploadOperationsDir())
+}
+
+func syncUploadDirectory(dir string) error {
+	handle, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	return handle.Sync()
 }
 
 func decodeUploadOperation(handle io.Reader) (uploadOperation, error) {
@@ -103,52 +120,122 @@ func decodeUploadOperation(handle io.Reader) (uploadOperation, error) {
 	if err := decoder.Decode(&op); err != nil {
 		return op, err
 	}
-	if op.Version != uploadOperationVersion || op.OperationID == "" || op.StorageSourceID == 0 || op.FinalRelPath == "" {
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return op, fmt.Errorf("流转上传日志包含多余数据")
+	}
+	token, err := hex.DecodeString(strings.TrimPrefix(op.OperationID, "tup-"))
+	if op.Version != uploadOperationVersion || !strings.HasPrefix(op.OperationID, "tup-") || err != nil || len(token) != 12 || op.StorageSourceID <= 0 {
 		return op, fmt.Errorf("流转上传日志字段不完整")
+	}
+	normalized, err := security.NormalizeRelPath(op.FinalRelPath)
+	if err != nil || normalized == "" || normalized != op.FinalRelPath {
+		return op, fmt.Errorf("流转上传日志路径非法")
 	}
 	return op, nil
 }
 
-// committedUpload 判断台账是否已包含该文件。
+// committedUpload 同时证明源/任务/路径归属，任何不一致均保留日志并阻止恢复。
+// Collect 的预插提交行不是提交凭证；文件清单与批次统计须在同一事务完成。
 func (s *Service) committedUpload(op uploadOperation) (bool, error) {
-	var one int
-	var err error
+	if op.TempRelPath != "" {
+		normalized, err := security.NormalizeRelPath(op.TempRelPath)
+		name := filepath.Base(filepath.FromSlash(op.TempRelPath))
+		token, tokenErr := hex.DecodeString(strings.TrimSuffix(strings.TrimPrefix(name, ".omnistore-upload-"), ".tmp"))
+		if op.Kind != "send-file" || err != nil || normalized != op.TempRelPath ||
+			!strings.HasPrefix(name, ".omnistore-upload-") || !strings.HasSuffix(name, ".tmp") || tokenErr != nil || len(token) != 8 ||
+			filepath.Dir(op.TempRelPath) != filepath.Dir(op.FinalRelPath) {
+			return false, fmt.Errorf("流转上传临时路径非法")
+		}
+	}
+	var publicKey string
+	var sourceID int64
 	switch op.Kind {
 	case "send-file":
-		err = s.db.QueryRow(`SELECT 1 FROM transfer_files WHERE transfer_id = ? AND relative_path = ?`,
-			op.TransferID, managedToLogicalSend(op.FinalRelPath)).Scan(&one)
+		if op.TransferID <= 0 || op.SubmissionID != 0 || op.CollectionID != 0 {
+			return false, fmt.Errorf("非法发送上传身份")
+		}
+		if err := s.db.QueryRow(`SELECT public_key, storage_source_id FROM transfers WHERE id = ?`, op.TransferID).Scan(&publicKey, &sourceID); err != nil {
+			return false, err
+		}
+		prefix := sendPayloadRel(publicKey, "") + "/"
+		if sourceID != op.StorageSourceID || !strings.HasPrefix(op.FinalRelPath, prefix) {
+			return false, fmt.Errorf("发送上传源或路径与任务不一致")
+		}
+		rel := strings.TrimPrefix(op.FinalRelPath, prefix)
+		if rel == "" || security.ValidateUserRelPath(rel) != nil {
+			return false, fmt.Errorf("发送上传文件路径非法")
+		}
+		var one int
+		err := s.db.QueryRow(`SELECT 1 FROM transfer_files WHERE transfer_id = ? AND relative_path = ?`, op.TransferID, rel).Scan(&one)
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
-	case "submission-file":
-		// 台账行与提交台账在同一事务提交；提交台账存在即已提交。
-		err = s.db.QueryRow(`SELECT 1 FROM transfer_submissions WHERE id = ?`, op.SubmissionID).Scan(&one)
+		return err == nil, err
+	case "submission-batch", "submission-file":
+		if op.SubmissionID <= 0 || op.TransferID != 0 {
+			return false, fmt.Errorf("非法收集上传身份")
+		}
+		collectionID := op.CollectionID
+		if op.Kind == "submission-file" && collectionID == 0 {
+			if err := s.db.QueryRow(`SELECT collection_id FROM transfer_submissions WHERE id = ?`, op.SubmissionID).Scan(&collectionID); err != nil {
+				return false, err
+			}
+		}
+		if err := s.db.QueryRow(`SELECT public_key, storage_source_id FROM transfer_collections WHERE id = ?`, collectionID).Scan(&publicKey, &sourceID); err != nil {
+			return false, err
+		}
+		batchRel := collectPayloadRel(publicKey, op.SubmissionID, "")
+		if sourceID != op.StorageSourceID || (op.Kind == "submission-batch" && op.FinalRelPath != batchRel) ||
+			(op.Kind == "submission-file" && !strings.HasPrefix(op.FinalRelPath, batchRel+"/")) {
+			return false, fmt.Errorf("收集上传源或路径与任务不一致")
+		}
+		var actualCollectionID, fileCount, totalSize, ledgerCount, ledgerSize int64
+		err := s.db.QueryRow(`SELECT sub.collection_id, sub.file_count, sub.total_size,
+  (SELECT COUNT(*) FROM transfer_submission_files WHERE submission_id = sub.id),
+  (SELECT COALESCE(SUM(size), 0) FROM transfer_submission_files WHERE submission_id = sub.id)
+  FROM transfer_submissions sub WHERE sub.id = ?`, op.SubmissionID).Scan(&actualCollectionID, &fileCount, &totalSize, &ledgerCount, &ledgerSize)
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
+		if err != nil {
+			return false, err
+		}
+		if actualCollectionID != collectionID || fileCount != ledgerCount || totalSize != ledgerSize {
+			return false, fmt.Errorf("收集上传提交与文件台账不一致")
+		}
+		if op.Kind == "submission-file" {
+			var one int
+			err := s.db.QueryRow(`SELECT 1 FROM transfer_submission_files WHERE submission_id = ? AND relative_path = ?`, op.SubmissionID, strings.TrimPrefix(op.FinalRelPath, batchRel+"/")).Scan(&one)
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return err == nil, err
+		}
+		return fileCount > 0, nil
 	default:
 		return false, fmt.Errorf("流转上传日志类型非法: %s", op.Kind)
 	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
-// managedToLogicalSend 由物理路径反推发件包内逻辑路径。
-func managedToLogicalSend(finalRel string) string {
-	marker := "/" + sendDir + "/"
-	index := strings.Index(finalRel, marker)
-	if index < 0 {
-		return finalRel
+// rollbackUpload 先删未提交载荷，成功后才删空占位行；清理失败保留日志以供重试。
+func (s *Service) rollbackUpload(op uploadOperation, src *models.StorageSource) error {
+	if err := s.managedRoots.Ensure(src); err != nil {
+		return err
 	}
-	rest := finalRel[index+len(marker):]
-	// 去掉 public_key 段。
-	parts := strings.SplitN(rest, "/", 2)
-	if len(parts) == 2 {
-		return parts[1]
+	if op.TempRelPath != "" {
+		if err := s.files.DeleteManaged(src, op.TempRelPath, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
+			return err
+		}
 	}
-	return rest
+	if err := s.files.DeleteManaged(src, op.FinalRelPath, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
+		return err
+	}
+	if op.Kind == "submission-batch" {
+		_, err := s.db.Exec(`DELETE FROM transfer_submissions WHERE id = ? AND collection_id = ? AND file_count = 0
+  AND NOT EXISTS (SELECT 1 FROM transfer_submission_files WHERE submission_id = ?)`, op.SubmissionID, op.CollectionID, op.SubmissionID)
+		return err
+	}
+	return nil
 }
 
 // RecoverUploadOperations 在监听前收敛中断上传：
@@ -157,10 +244,7 @@ func managedToLogicalSend(finalRel string) string {
 func (s *Service) RecoverUploadOperations() (int, error) {
 	dir := s.uploadOperationsDir()
 	entries, err := os.ReadDir(dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return 0, nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return 0, err
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
@@ -187,6 +271,9 @@ func (s *Service) RecoverUploadOperations() (int, error) {
 		if closeErr != nil {
 			return recovered, closeErr
 		}
+		if entry.Name() != op.OperationID+".json" {
+			return recovered, fmt.Errorf("流转上传日志名称与操作 ID 不一致")
+		}
 		committed, err := s.committedUpload(op)
 		if err != nil {
 			return recovered, fmt.Errorf("校验流转上传 %s 失败: %w", op.OperationID, err)
@@ -195,72 +282,99 @@ func (s *Service) RecoverUploadOperations() (int, error) {
 		if err != nil {
 			return recovered, fmt.Errorf("流转上传 %s 的存储源缺失", op.OperationID)
 		}
+		if err := s.managedRoots.Ensure(src); err != nil {
+			return recovered, fmt.Errorf("校验流转上传 %s 的托管根失败: %w", op.OperationID, err)
+		}
 		if committed {
+			if op.TempRelPath != "" {
+				if err := s.files.DeleteManaged(src, op.TempRelPath, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
+					return recovered, err
+				}
+			}
 			recovered++
-		} else if err := s.files.DeleteManaged(src, op.FinalRelPath, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
+		} else if err := s.rollbackUpload(op, src); err != nil {
 			return recovered, fmt.Errorf("清理未提交流转文件 %s 失败: %w", op.FinalRelPath, err)
 		}
 		if err := s.removeUploadOperation(op.OperationID); err != nil {
 			return recovered, err
 		}
 	}
+	if err := s.recoverEmptySubmissions(); err != nil {
+		return recovered, err
+	}
 	return recovered, nil
 }
 
-// managedRootAbs 解析源根上的托管根绝对路径。
-func managedRootAbs(src *models.StorageSource) (string, error) {
-	return security.ResolveInSource(src.RootPath, security.ManagedNamespaceSegment)
+// recoverEmptySubmissions 仅在启动恢复期间调用，覆盖预插提交行后、日志落盘前的中断窗口。
+// 监听前没有活跃上传，因此不使用运行时 GC 的延迟阈值。DB 关联和托管根共同证明删除归属。
+func (s *Service) recoverEmptySubmissions() error {
+	rows, err := s.db.Query(`SELECT sub.id, c.id, c.public_key, c.storage_source_id
+  FROM transfer_submissions sub JOIN transfer_collections c ON c.id = sub.collection_id
+  WHERE sub.file_count = 0 AND sub.total_size = 0
+    AND NOT EXISTS (SELECT 1 FROM transfer_submission_files f WHERE f.submission_id = sub.id)`)
+	if err != nil {
+		return err
+	}
+	var pending []uploadOperation
+	for rows.Next() {
+		var submissionID, collectionID, sourceID int64
+		var publicKey string
+		if err := rows.Scan(&submissionID, &collectionID, &publicKey, &sourceID); err != nil {
+			rows.Close()
+			return err
+		}
+		op := s.newUploadOperation("submission-batch", sourceID, 0, submissionID, collectPayloadRel(publicKey, submissionID, ""))
+		op.CollectionID = collectionID
+		pending = append(pending, op)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, op := range pending {
+		src, err := s.sources.GetByID(op.StorageSourceID)
+		if err != nil {
+			return err
+		}
+		if err := s.rollbackUpload(op, src); err != nil {
+			return fmt.Errorf("恢复空收集批次 %d 失败: %w", op.SubmissionID, err)
+		}
+	}
+	return nil
 }
 
-// sweepOrphanTempFiles 清理托管目录内残留的临时上传文件（崩溃或写入中断）。
-func (s *Service) sweepOrphanTempFiles(now time.Time) (int, error) {
-	removed := 0
-	rows, err := s.db.Query(`SELECT id FROM storage_sources`)
+// pendingUploadOperations 为运行时 GC 提供仍需保留的恢复证据。
+// 不恢复或删除日志：日志可能属于正在接收数据的活跃请求。
+func (s *Service) pendingUploadOperations() ([]uploadOperation, error) {
+	entries, err := os.ReadDir(s.uploadOperationsDir())
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	defer rows.Close()
-	var sourceIDs []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return removed, err
-		}
-		sourceIDs = append(sourceIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		return removed, err
-	}
-	for _, id := range sourceIDs {
-		src, err := s.sources.GetByID(id)
-		if err != nil {
+	var operations []uploadOperation
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		base, err := managedRootAbs(src)
+		handle, err := os.Open(filepath.Join(s.uploadOperationsDir(), entry.Name()))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // 活跃请求刚刚清理了自己的日志。
+		}
 		if err != nil {
-			continue
+			return nil, err
 		}
-		transferDir := filepath.Join(base, ManagedScopeDir)
-		err = filepath.WalkDir(transferDir, func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				if errors.Is(walkErr, fs.ErrNotExist) {
-					return nil
-				}
-				return walkErr
-			}
-			if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".omnistore-upload-") && strings.HasSuffix(entry.Name(), ".tmp") {
-				info, err := entry.Info()
-				if err == nil && now.Sub(info.ModTime()) > orphanDirAfter {
-					if err := os.Remove(path); err == nil {
-						removed++
-					}
-				}
-			}
-			return nil
-		})
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return removed, err
+		op, decodeErr := decodeUploadOperation(handle)
+		closeErr := handle.Close()
+		if decodeErr != nil || closeErr != nil {
+			return nil, errors.Join(decodeErr, closeErr)
 		}
+		if entry.Name() != op.OperationID+".json" {
+			return nil, fmt.Errorf("流转上传日志名称与操作 ID 不一致")
+		}
+		operations = append(operations, op)
 	}
-	return removed, nil
+	return operations, nil
 }

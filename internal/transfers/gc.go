@@ -3,9 +3,6 @@ package transfers
 import (
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,6 +27,7 @@ type GCResult struct {
 // RunGC 执行过期/撤销载荷回收、孤儿清理与会话清理。
 // 只处理自己的台账与托管目录；普通文件与 .omnistore 之外的路径绝不触碰。
 func (s *Service) RunGC(now time.Time) (*GCResult, error) {
+	now = now.UTC()
 	result := &GCResult{}
 	if err := s.expireTransfers(now, result); err != nil {
 		return nil, err
@@ -46,14 +44,8 @@ func (s *Service) RunGC(now time.Time) (*GCResult, error) {
 	if err := s.removeEmptySubmissions(now, result); err != nil {
 		return nil, err
 	}
-	if err := s.sweepOrphanCollectDirs(now, result); err != nil {
-		return nil, err
-	}
-	removed, err := s.sweepOrphanTempFiles(now)
-	if err != nil {
-		return nil, err
-	}
-	result.OrphanTempRemoved = removed
+	// 无日志的旧临时文件/未知目录无法证明归属，保留供运维核查；
+	// 精确上传残留由启动恢复处理，不能在运行时猜测删除活跃上传。
 	if err := s.removeExpiredSessions(now, result); err != nil {
 		return nil, err
 	}
@@ -99,7 +91,7 @@ func (s *Service) expireTransfers(now time.Time, result *GCResult) error {
 
 func (s *Service) expireCollections(now time.Time, result *GCResult) error {
 	rows, err := s.db.Query(`SELECT id, public_key, storage_source_id FROM transfer_collections
-  WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= ?`, now)
+  WHERE status IN ('active', 'closed') AND expires_at IS NOT NULL AND expires_at <= ?`, now)
 	if err != nil {
 		return err
 	}
@@ -150,14 +142,43 @@ func (s *Service) removeStaleDrafts(now time.Time, result *GCResult) error {
 	}
 	rows.Close()
 	for _, ref := range refs {
-		if err := s.deletePayloadDir(ref.storageSourceID, sendPayloadRel(ref.publicKey, "")); err != nil {
-			return fmt.Errorf("清理超时草稿 %s 失败: %w", ref.publicKey, err)
-		}
-		if _, err := s.db.Exec(`DELETE FROM transfers WHERE id = ? AND status = 'draft'`, ref.id); err != nil {
+		if err := s.removeStaleDraft(ref, now, result); err != nil {
 			return err
 		}
-		result.DraftsRemoved++
 	}
+	return nil
+}
+
+func transferDraftLockKey(id int64) string {
+	return fmt.Sprintf("transfer-draft:%d", id)
+}
+
+func (s *Service) removeStaleDraft(ref payloadRef, now time.Time, result *GCResult) error {
+	unlock := s.files.Locks().Lock(transferDraftLockKey(ref.id))
+	defer unlock()
+	operations, err := s.pendingUploadOperations()
+	if err != nil {
+		return err
+	}
+	for _, op := range operations {
+		if op.TransferID == ref.id {
+			return nil // 日志清理失败时保留证明其归属的任务台账，等待启动恢复。
+		}
+	}
+	var stale int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfers WHERE id = ? AND status = 'draft' AND updated_at < ?`, ref.id, now.Add(-draftStaleAfter)).Scan(&stale); err != nil {
+		return err
+	}
+	if stale == 0 {
+		return nil
+	}
+	if err := s.deletePayloadDir(ref.storageSourceID, sendPayloadRel(ref.publicKey, "")); err != nil {
+		return fmt.Errorf("清理超时草稿 %s 失败: %w", ref.publicKey, err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM transfers WHERE id = ? AND status = 'draft'`, ref.id); err != nil {
+		return err
+	}
+	result.DraftsRemoved++
 	return nil
 }
 
@@ -186,7 +207,7 @@ func (s *Service) sweepLeftoverPayloads(result *GCResult) error {
 	}
 	transferRows.Close()
 
-	collectionRows, err := s.db.Query(`SELECT id, public_key, storage_source_id FROM transfer_collections WHERE status IN ('closed', 'revoked', 'expired')`)
+	collectionRows, err := s.db.Query(`SELECT id, public_key, storage_source_id FROM transfer_collections WHERE status IN ('revoked', 'expired')`)
 	if err != nil {
 		return err
 	}
@@ -214,6 +235,9 @@ func (s *Service) sweepLeftoverPayloads(result *GCResult) error {
 			src = loaded
 			seenSources[target.sourceID] = src
 		}
+		if err := s.managedRoots.Ensure(src); err != nil {
+			return err
+		}
 		if err := s.files.DeleteManaged(src, target.rel, ManagedScopeDir); err != nil && !errors.Is(err, files.ErrNotFound) {
 			return fmt.Errorf("清理残留载荷 %s 失败: %w", target.publicKey, err)
 		}
@@ -231,7 +255,7 @@ func (s *Service) removeEmptySubmissions(now time.Time, result *GCResult) error 
 	rows, err := s.db.Query(`SELECT sub.id, c.public_key, c.storage_source_id
   FROM transfer_submissions sub
   JOIN transfer_collections c ON c.id = sub.collection_id
-  WHERE sub.created_at < ?
+  WHERE sub.created_at < ? AND sub.file_count = 0 AND sub.total_size = 0
     AND NOT EXISTS (SELECT 1 FROM transfer_submission_files f WHERE f.submission_id = sub.id)`,
 		now.Add(-orphanDirAfter))
 	if err != nil {
@@ -250,7 +274,25 @@ func (s *Service) removeEmptySubmissions(now time.Time, result *GCResult) error 
 		return err
 	}
 	rows.Close()
+	operations, err := s.pendingUploadOperations()
+	if err != nil {
+		return err
+	}
+	pending := make(map[int64]bool, len(operations))
+	for _, op := range operations {
+		pending[op.SubmissionID] = true
+	}
 	for _, ref := range refs {
+		if pending[ref.id] {
+			continue
+		}
+		var committedFiles int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfer_submission_files WHERE submission_id = ?`, ref.id).Scan(&committedFiles); err != nil {
+			return err
+		}
+		if committedFiles > 0 {
+			continue
+		}
 		if err := s.deletePayloadDir(ref.storageSourceID, collectPayloadRel(ref.publicKey, ref.id, "")); err != nil {
 			return err
 		}
@@ -258,74 +300,6 @@ func (s *Service) removeEmptySubmissions(now time.Time, result *GCResult) error 
 			return err
 		}
 		result.EmptySubmissions++
-	}
-	return nil
-}
-
-// sweepOrphanCollectDirs 删除没有对应提交台账的收集目录（提交写入中断的残余）。
-func (s *Service) sweepOrphanCollectDirs(now time.Time, result *GCResult) error {
-	rows, err := s.db.Query(`SELECT c.public_key, c.storage_source_id FROM transfer_collections c`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	type collectionSource struct {
-		publicKey string
-		sourceID  int64
-	}
-	var collections []collectionSource
-	for rows.Next() {
-		var item collectionSource
-		if err := rows.Scan(&item.publicKey, &item.sourceID); err != nil {
-			return err
-		}
-		collections = append(collections, item)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
-	for _, item := range collections {
-		src, err := s.sources.GetByID(item.sourceID)
-		if err != nil {
-			continue
-		}
-		collectRoot, err := managedRootAbs(src)
-		if err != nil {
-			continue
-		}
-		collectDirAbs := filepath.Join(collectRoot, ManagedScopeDir, collectDir, item.publicKey)
-		entries, err := os.ReadDir(collectDirAbs)
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			return err
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			var submissionID int64
-			if _, err := fmt.Sscanf(entry.Name(), "%d", &submissionID); err != nil || submissionID <= 0 {
-				// 非数字目录名不是提交载荷，不触碰。
-				continue
-			}
-			// 有台账文件的提交不是孤儿；空提交行由 removeEmptySubmissions 处理。
-			var one int
-			err := s.db.QueryRow(`SELECT 1 FROM transfer_submission_files WHERE submission_id = ?`,
-				submissionID).Scan(&one)
-			if err == nil {
-				continue
-			}
-			info, infoErr := entry.Info()
-			if infoErr != nil || now.Sub(info.ModTime()) <= orphanDirAfter {
-				continue
-			}
-			if err := os.RemoveAll(filepath.Join(collectDirAbs, entry.Name())); err == nil {
-				result.OrphanDirsRemoved++
-			}
-		}
 	}
 	return nil
 }

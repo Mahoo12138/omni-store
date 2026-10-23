@@ -193,7 +193,7 @@ func (s *Service) guestQuotaRemaining(guestID int64) (int64, error) {
 	var usage int64
 	if err := s.db.QueryRow(`SELECT
   (SELECT COALESCE(SUM(total_size), 0) FROM transfers WHERE owner_guest_id = ? AND status IN ('draft', 'active')) +
-  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE owner_guest_id = ? AND status = 'active')`, guestID, guestID).Scan(&usage); err != nil {
+  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE owner_guest_id = ? AND status IN ('active', 'closed'))`, guestID, guestID).Scan(&usage); err != nil {
 		return 0, err
 	}
 	remaining := GuestActiveQuotaBytes - usage
@@ -208,7 +208,7 @@ func checkTransferWrite(tx *sql.Tx, guestID, written int64) error {
 	var limit, usage int64
 	if err := tx.QueryRow(`SELECT COALESCE((SELECT CAST(value AS INTEGER) FROM system_settings WHERE key = ?), 0),
   (SELECT COALESCE(SUM(total_size), 0) FROM transfers WHERE status IN ('draft', 'active')) +
-  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status = 'active')`, SettingActiveQuotaBytes).Scan(&limit, &usage); err != nil {
+  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status IN ('active', 'closed'))`, SettingActiveQuotaBytes).Scan(&limit, &usage); err != nil {
 		return err
 	}
 	if limit > 0 && written > limit-usage {
@@ -223,7 +223,7 @@ func checkTransferWrite(tx *sql.Tx, guestID, written int64) error {
 	}
 	if err := tx.QueryRow(`SELECT
   (SELECT COALESCE(SUM(total_size), 0) FROM transfers WHERE owner_guest_id = ? AND status IN ('draft', 'active')) +
-  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE owner_guest_id = ? AND status = 'active')`, guestID, guestID).Scan(&usage); err != nil {
+  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE owner_guest_id = ? AND status IN ('active', 'closed'))`, guestID, guestID).Scan(&usage); err != nil {
 		return err
 	}
 	if written > GuestActiveQuotaBytes-usage {

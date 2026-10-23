@@ -168,7 +168,7 @@ func (s *Service) activeQuotaRemaining() (int64, bool, error) {
 	var live int64
 	if err := s.db.QueryRow(`SELECT
   (SELECT COALESCE(SUM(total_size), 0) FROM transfers WHERE status IN ('draft', 'active')) +
-  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status = 'active')`).Scan(&live); err != nil {
+  (SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status IN ('active', 'closed'))`).Scan(&live); err != nil {
 		return 0, false, err
 	}
 	remaining := settings.ActiveQuotaBytes - live
@@ -431,7 +431,7 @@ func (s *Service) SourceActiveTaskCount(storageSourceID int64) (int64, error) {
 	var count int64
 	err := s.db.QueryRow(`SELECT
   (SELECT COUNT(*) FROM transfers WHERE storage_source_id = ? AND status IN ('draft', 'active')) +
-  (SELECT COUNT(*) FROM transfer_collections WHERE storage_source_id = ? AND status = 'active')`,
+  (SELECT COUNT(*) FROM transfer_collections WHERE storage_source_id = ? AND status IN ('active', 'closed'))`,
 		storageSourceID, storageSourceID).Scan(&count)
 	return count, err
 }
@@ -580,6 +580,18 @@ func hasSendFileConflict(db *sql.DB, transferID int64, relPath string) bool {
 
 // writeSendFile 执行带日志的单文件写入：journal → 配额 → 托管原子写 → 台账事务。
 func (s *Service) writeSendFile(row *sendRow, src *models.StorageSource, relPath string, body io.Reader) (*SendFile, error) {
+	unlockDraft := s.files.Locks().RLock(transferDraftLockKey(row.send.ID))
+	defer unlockDraft()
+	current, err := s.getSendByID(row.send.ID)
+	if err != nil {
+		return nil, err
+	}
+	if current.send.Status != "draft" {
+		return nil, ErrNotDraft
+	}
+	if err := s.managedRoots.Ensure(src); err != nil {
+		return nil, err
+	}
 	finalRel := sendPayloadRel(row.send.PublicKey, relPath)
 	unlockFile := s.files.Locks().Lock("transfer-write:" + src.Key + ":" + finalRel)
 	defer unlockFile()
@@ -587,18 +599,24 @@ func (s *Service) writeSendFile(row *sendRow, src *models.StorageSource, relPath
 		return nil, files.ErrAlreadyExists
 	}
 	op := s.newUploadOperation("send-file", src.ID, row.send.ID, 0, finalRel)
+	op.TempRelPath = filepath.ToSlash(filepath.Join(filepath.Dir(finalRel), ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp"))
 	if err := s.writeUploadOperation(op); err != nil {
 		return nil, fmt.Errorf("记录流转上传日志失败: %w", err)
 	}
 	keepJournal := true
 	defer func() {
 		if keepJournal {
-			_ = s.files.DeleteManaged(src, finalRel, ManagedScopeDir)
-			_ = s.removeUploadOperation(op.OperationID)
+			committed, cleanupErr := s.committedUpload(op)
+			if cleanupErr == nil && !committed {
+				cleanupErr = s.rollbackUpload(op, src)
+			}
+			if cleanupErr == nil {
+				_ = s.removeUploadOperation(op.OperationID)
+			}
 		}
 	}()
 
-	file, err := s.writeWithQuota(row, src, finalRel, body)
+	file, err := s.writeWithQuota(row, src, finalRel, op.TempRelPath, body)
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +659,7 @@ type writtenFile struct {
 }
 
 // writeWithQuota 合成两级上限：源物理配额与流转中心活跃配额。
-func (s *Service) writeWithQuota(row *sendRow, src *models.StorageSource, finalRel string, body io.Reader) (writtenFile, error) {
+func (s *Service) writeWithQuota(row *sendRow, src *models.StorageSource, finalRel, tempRel string, body io.Reader) (writtenFile, error) {
 	quotaGuard, err := s.files.BeginQuotaWrite(src, "")
 	if err != nil {
 		return writtenFile{}, err
@@ -668,7 +686,7 @@ func (s *Service) writeWithQuota(row *sendRow, src *models.StorageSource, finalR
 			maxBytes, limited = remaining, true
 		}
 	}
-	written, err := s.files.WriteManagedFile(src, finalRel, ManagedScopeDir, body, maxBytes, limited)
+	written, err := s.files.WriteManagedFileWithTemp(src, finalRel, tempRel, ManagedScopeDir, body, maxBytes, limited)
 	if err != nil {
 		return writtenFile{}, err
 	}
@@ -681,6 +699,8 @@ func (s *Service) FinalizeSend(transferID, ownerUserID int64) (*Send, error) {
 }
 
 func (s *Service) FinalizeSendForOwner(transferID int64, owner Owner) (*Send, error) {
+	unlockDraft := s.files.Locks().Lock(transferDraftLockKey(transferID))
+	defer unlockDraft()
 	row, err := s.loadOwnSend(transferID, owner)
 	if err != nil {
 		return nil, err

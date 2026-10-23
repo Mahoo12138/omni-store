@@ -396,8 +396,8 @@ type IncomingSubmissionFile struct {
 }
 
 // SubmitToCollection 处理一次匿名提交：
-// 校验约束 → 预插提交行 → 逐文件写入托管目录（限额截断）→ 单事务提交文件台账与总量。
-// 中断会留下无台账提交行/目录，由 GC 在 orphanDirAfter 后清理。
+// 校验约束 → 预插提交行 → 持久化批次日志 → 逐文件写入 → 单事务提交文件台账与总量。
+// 中断恢复按日志证明批次归属，提交前删除整个批次，提交后保留载荷并清理日志。
 func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, note string, incoming []IncomingSubmissionFile) (*Submission, error) {
 	row, err := s.getCollectionByKey(publicKey)
 	if err != nil {
@@ -417,6 +417,10 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 	}
 	src, err := s.sources.GetByID(row.sourceID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.managedRoots.Ensure(src); err != nil {
 		return nil, err
 	}
 
@@ -446,15 +450,25 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 	if err != nil {
 		return nil, err
 	}
+	op := s.newUploadOperation("submission-batch", src.ID, 0, submissionID, collectPayloadRel(row.collection.PublicKey, submissionID, ""))
+	op.CollectionID = row.collection.ID
 	var tx *sql.Tx
-	rollback := func(err error) (*Submission, error) {
+	rollback := func(cause error) (*Submission, error) {
 		// 单连接 SQLite：先归还事务连接，才能执行提交行与载荷清理。
 		if tx != nil {
 			_ = tx.Rollback()
 		}
-		_, _ = s.db.Exec(`DELETE FROM transfer_submissions WHERE id = ?`, submissionID)
-		_ = s.files.DeleteManaged(src, collectPayloadRel(row.collection.PublicKey, submissionID, ""), ManagedScopeDir)
-		return nil, err
+		committed, cleanupErr := s.committedUpload(op)
+		if cleanupErr == nil && !committed {
+			cleanupErr = s.rollbackUpload(op, src)
+		}
+		if cleanupErr == nil {
+			cleanupErr = s.removeUploadOperation(op.OperationID)
+		}
+		return nil, errors.Join(cause, cleanupErr)
+	}
+	if err := s.writeUploadOperation(op); err != nil {
+		return rollback(fmt.Errorf("记录收集上传日志失败: %w", err))
 	}
 
 	quotaGuard, err := s.files.BeginQuotaWrite(src, "")
@@ -579,6 +593,8 @@ func (s *Service) SubmitToCollection(publicKey, sessionToken, submitterName, not
 	if err := tx.Commit(); err != nil {
 		return rollback(err)
 	}
+	// 提交已经完成；日志清理失败不能再回滚载荷，下次启动只清理日志。
+	_ = s.removeUploadOperation(op.OperationID)
 	return &Submission{
 		ID: submissionID, CollectionID: row.collection.ID,
 		SubmitterName: submitterName, Note: note,
@@ -630,7 +646,7 @@ func (s *Service) ListSubmissionsForOwner(collectionID int64, owner Owner) ([]*S
 		return nil, err
 	}
 	rows, err := s.db.Query(`SELECT `+submissionColumns+` FROM transfer_submissions
-  WHERE collection_id = ? ORDER BY created_at DESC, id DESC LIMIT 500`, collectionID)
+  WHERE collection_id = ? AND file_count > 0 ORDER BY created_at DESC, id DESC LIMIT 500`, collectionID)
 	if err != nil {
 		return nil, err
 	}

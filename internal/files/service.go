@@ -1331,15 +1331,37 @@ func (s *Service) move(src *models.StorageSource, fromRel, toRel string, lockTok
 // 目录 fsync。不写 file_records 台账，崩溃一致性由调用方的业务日志负责。
 // limited 为 true 时超过 maxBytes 返回 ErrQuotaExceeded 并清理临时文件。
 func (s *Service) WriteManagedFile(src *models.StorageSource, relInput, scopeDir string, body io.Reader, maxBytes int64, limited bool) (int64, error) {
-	_, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	relPath, _, err := s.prepareManaged(src, relInput, scopeDir)
 	if err != nil {
+		return 0, err
+	}
+	tempRel := path.Join(path.Dir(relPath), ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
+	return s.WriteManagedFileWithTemp(src, relPath, tempRel, scopeDir, body, maxBytes, limited)
+}
+
+// WriteManagedFileWithTemp 允许服务先把精确临时路径写入业务恢复日志，再开始写入。
+// 临时文件必须与目标同目录、属于同一托管 scope，且使用内部上传临时名称。
+// 所有路径校验先于 mkdir；已存在的临时文件通过 O_EXCL 拒绝，不会被接管或清除。
+// 调用方仍负责托管根所有权、锁、配额以及最终文件与业务台账的提交/回滚。
+func (s *Service) WriteManagedFileWithTemp(src *models.StorageSource, relInput, tempRelInput, scopeDir string, body io.Reader, maxBytes int64, limited bool) (int64, error) {
+	relPath, absPath, err := s.prepareManaged(src, relInput, scopeDir)
+	if err != nil {
+		return 0, err
+	}
+	tempRel, tmpPath, err := s.prepareManaged(src, tempRelInput, scopeDir)
+	if err != nil {
+		return 0, err
+	}
+	if path.Dir(tempRel) != path.Dir(relPath) || tempRel == relPath || !uploadTempName.MatchString(path.Base(tempRel)) {
+		return 0, fmt.Errorf("%w: 托管临时文件必须使用同目录的内部上传路径", ErrInvalid)
+	}
+	if err := s.guardPendingManagedPathWrite(src.ID, relPath, tempRel); err != nil {
 		return 0, err
 	}
 	parentAbs := filepath.Dir(absPath)
 	if err := os.MkdirAll(parentAbs, 0o755); err != nil {
 		return 0, fmt.Errorf("创建托管目录失败: %w", err)
 	}
-	tmpPath := filepath.Join(parentAbs, ".omnistore-upload-"+auth.NewRandomToken("", 8)+".tmp")
 	written, _, _, err := writeUploadTempAt(tmpPath, body, maxBytes, limited)
 	if err != nil {
 		return 0, err
