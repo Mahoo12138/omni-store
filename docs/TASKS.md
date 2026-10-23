@@ -4,6 +4,8 @@
 
 本文件是编码清单。状态以代码和测试为准。
 
+2026-10-18 状态说明：早期未勾选项尚未逐项重做验收，不等同于代码完全不存在；请先读 [STATUS](STATUS.md) 中的实现记录。下方完整产品目标继续保留，本轮仅更新有直接证据的恢复与兼容子集。
+
 ## P0 — Breaking Architecture
 
 - [ ] 创建 `migrations/v2.0.0.sql`
@@ -66,7 +68,7 @@
 - [ ] expiry/status state machine
 - [ ] audit
 - [ ] GC
-- [ ] crash recovery
+- [x] crash recovery：批次提交边界、精确临时路径、托管归属与重复恢复（2026-10-18）
 
 ## P0 — Send
 
@@ -152,9 +154,9 @@
 
 - [ ] clean migration from 1.1.x
 - [ ] fresh install
-- [ ] E2E
-- [ ] race
-- [ ] crashcheck
+- [x] E2E：现有 Chromium 套件 67 项通过（2026-10-18）；完整产品/客户端目标仍按各条目验收
+- [x] race：`go test -race -count=1 ./...`（2026-10-18）
+- [x] crashcheck：十四条路径各十轮，140 次真实 SIGKILL 恢复（2026-10-18）
 - [ ] backup restore
 - [ ] real client matrix
 - [ ] `v2.0.0-rc.1`
@@ -193,6 +195,7 @@
 - [x] AST-11 关闭公开盘但静态资源可用，同源复用不公开内部内容
 - [x] AST-12 备份含配置/发布ID但不含原件，恢复后显式核验才公开
 - [ ] AST-13 双 origin 浏览器图片/视频/Canvas/fetch 与非法类型端到端验收
+  - 已完成 Chromium 图片/Canvas/fetch/WebM 播放与 seek、非法类型和启停；MP4、其他浏览器与生产代理/CDN 未验收，见 [实测矩阵](design/compatibility-testing.md)。
 
 NS/IMG/AST 任务全部属于 2.0，不挤掉 Send + Collect、Operation Center、Backup/Restore 和协议兼容的既定范围。以下 checklist 是待执行清单，不是本次已通过的产品测试结果。
 
@@ -206,3 +209,12 @@ NS/IMG/AST 任务全部属于 2.0，不挤掉 Send + Collect、Operation Center�
 - [x] GT-06 公开入口 `/transfer` 与工作台 `/app/transfer` 共用界面，详情地址可直达与刷新
 - [x] GT-07 后台「站点配置」页集中管理站点服务绑定、实例信息与配置备份
 - [ ] GT-08 访客任务的真实配额压测与跨设备恢复预期文档化
+
+## 2026-10-18 — 可靠性加固
+
+- [x] Collect 批次日志先于文件写入；部分写入失败、提交前/后中断、空占位行与重复恢复回归
+- [x] Send 精确临时路径恢复；同路径并发上传、定稿/草稿 GC 协调
+- [x] GC 与活动/待恢复上传交错；未知路径保留；错误源/托管根/日志拒绝破坏性恢复
+- [x] 已完成删除不重放到同名新文件；未完成删除阻止托管路径复用
+- [x] 关闭收集任务后下载/保存与配额保留；到期回收和普通目录副本独立
+- [x] 浏览器门禁使用独立临时数据、动态端口、失败留证据与中断进程清理

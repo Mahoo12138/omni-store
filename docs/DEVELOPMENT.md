@@ -12,10 +12,20 @@ go test -race ./...
 cd web
 pnpm test
 pnpm run build
-pnpm exec playwright test
+cd ..
+node scripts/verify-browser.mjs
 ```
 
 确保不是在红色 baseline 上做结构重构。
+
+浏览器验收要求 Node.js 24+。`verify-browser.mjs` 构建当前 Go 服务，创建独立临时数据目录与动态 HTTP/S3 端口，生成新种子并运行 Playwright；不复用 18080 上的开发实例，也不清空 `.testdata/`。先构建前端，保证 Go 嵌入当前产物。脚本清除继承的 `OMNISTORE_*` 部署环境变量，避免种子写入错误目录；测试结束关闭自身服务，成功删除临时环境，失败/中断保留日志、数据和 Playwright 证据并打印路径。
+
+可转发 Playwright 的选择参数，例如：
+
+```bash
+node scripts/verify-browser.mjs static-browser-compatibility.spec.ts
+node scripts/verify-browser.mjs transfer-center.spec.ts transfer-collect-ui.spec.ts
+```
 
 ## 2. Migration
 
@@ -101,6 +111,14 @@ Playwright 使用 clean test seed。
 - Collect finalize；
 - Save to Files；
 - Transfer GC。
+
+`scripts/verify-crash-recovery.sh` 已覆盖以上五类进程场景；Collect 的提交与 finalize 属于同一次批次事务。按场景名子串筛选可缩短修复循环：
+
+```bash
+OMNISTORE_CRASH_SCENARIO=transfer OMNISTORE_CRASH_ROUNDS=3 ./scripts/verify-crash-recovery.sh
+```
+
+筛选不替代发布前的完整 10 轮。失败保留独立 fixture、数据库、日志与 `crash.json`；检查最终文件字节、业务台账、批次/任务汇总和普通保存副本，不只检查服务能重启。
 
 ## 7. 文档同步
 

@@ -41,3 +41,12 @@ Given 静态服务绑定 blog-assets，公开盘关闭；When 通过普通文件
 ## 8. 最低交付证据
 
 固定测试源文件的 hash 验证其不被不相关维护改动；并发测试不靠 sleep 猜测完成；crashcheck 测 FS/DB 交界，普通 HTTP 覆盖真实状态与头。记录真实客户端名称/版本、系统、操作、结果和例外，未测试项标记 not-tested。
+
+## 9. 2.0 可靠性检查入口（2026-10-18）
+
+- `internal/transfers/recovery_batch_test.go`：收集占位/日志/部分写入/提交后恢复，失败重试、日志归属、托管根变化与幂等恢复。
+- `internal/files/managed_write_test.go`：精确临时路径在写入前校验，配额/读取失败保留原件，临时文件冲突不接管，软链接无写入副作用。
+- `cmd/crashcheck/transfers.go`：真实 SIGKILL 覆盖发送上传/定稿、收集批次、保存到文件、GC，重启后比对文件字节、台账和计数，再验证重试与重复清理。
+- `web/e2e/static-browser-compatibility.spec.ts`：本地第二 origin 的 PNG/JPEG/GIF/WebP 解码、Canvas/fetch、三种 CORS、管理 API 隔离、WebM 解码播放/非零 Range seek、非法类型、公开盘关闭与静态服务启停。
+
+视频夹具在仓库内，生成方式见 `web/e2e/fixtures/generate-static-video.mjs`，不依赖远程媒体。双 origin Chromium 用例不替代 MP4、Safari/Firefox、实际反向代理/CDN 或真实 WebDAV/S3/PicGo 客户端矩阵。

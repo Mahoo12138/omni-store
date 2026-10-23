@@ -72,6 +72,10 @@ v2.0.0
 OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh
 ```
 
+默认开发版本已统一为 `2.0.0-dev`（Go、Web 包、Docker 与门禁脚本）；正式构建仍通过 `OMNISTORE_RELEASE_VERSION`/构建参数注入版本和 commit。迁移文件的序号不代表已发布同名产品版本。
+
+开发中可设置 `OMNISTORE_ALLOW_DIRTY=1` 验证未提交修改；这不会满足正式发布的干净工作区或 tag 要求。浏览器阶段使用 `node scripts/verify-browser.mjs` 创建独立新实例。Crashcheck 默认运行全部场景，`OMNISTORE_CRASH_SCENARIO` 仅用于定位，不应在完整发布验收时设置。
+
 ## 5. Real Acceptance
 
 - fresh install；

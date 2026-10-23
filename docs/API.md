@@ -54,20 +54,19 @@ quota
 
 ## 3. Site Capability
 
-目标：
+当前接口：
 
 ```text
-GET /api/v1/admin/site-capabilities
-PUT /api/v1/admin/site-capabilities/{capability}
+GET /api/v1/admin/capabilities
+PUT /api/v1/admin/capabilities/{capability}
 ```
 
 capability：
 
 ```text
-public-drive
-image-bed
-static-assets
-transfer-center
+public_drive
+image_bed
+transfer_center
 ```
 
 Body：
@@ -85,6 +84,8 @@ Body：
 - root accessible；
 - service namespace collision check（需要时）；
 - audit。
+
+静态 HTTP 不属于 Site Capability；使用各源的 `/api/v1/admin/sources/{key}/static-access/*` 接口。
 
 ## 4. Public Drive
 
@@ -227,7 +228,9 @@ POST /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/save
 
 响应为 `{ collection, code }`；短码默认兼容规则与发件包一致。可选 `password` 独立于 require_code。大小参数设置时必须为正整数，以 MiB 换算为字节；`max_total_size_mb` 限制该收集任务所有提交的累计大小。
 
-列表同样限制最近 200 条，详情按 ID 单独授权。关闭后停止公开提交，所有者仍可读取已有批次。批次与文件 ID 必须同时属于路径指定的收集任务；访客所有者可以读取自己的批次和下载文件。
+列表同样限制最近 200 条，详情按 ID 单独授权。关闭后停止公开提交，所有者仍可读取已有批次。收件箱仅列出已提交文件清单的批次，不显示上传期间的空占位记录。批次与文件 ID 必须同时属于路径指定的收集任务；访客所有者可以读取自己的批次和下载文件。
+
+`close` 不删除文件，也不释放已保留载荷的站点/访客字节配额；关闭后的原期限不变，到期后 GC 回收载荷。没有期限的已关闭任务持续保留，进行中任务数量可减少，但运维用量仍包含其文件。所有者下载与保存接口在关闭后继续可用。
 
 `save-to-files` JSON 为 `{ source_key, path }`，仅真实登录所有者可用，并要求目标目录写权限。响应为 `{ saved: [相对路径] }`。复制不覆盖同名目标，不删除原提交，也不改变原任务期限。
 
@@ -278,6 +281,10 @@ POST /api/v1/public/transfer-collections/{publicKey}/submit
 收集公开提交为一次 multipart 批次：可含 `name`、`note`、N 个 `relative_path` 与 N 个 `file`，路径与文件按各自字段数组的索引一一配对。两种字段数量必须一致且非空。当前不提供单独的公开 submission 创建、续传或 finalize 接口。
 
 服务端验证访问会话、任务状态、相对路径、类型、必填信息、单文件与累计大小限制、访客所有者/站点/源配额。任一文件失败回滚本批记录并删除本批载荷；成功返回本批 `file_count`、`total_size` 等回执。客户端错误或重新验证不清空文件和填写内容。
+
+进程中断后，启动恢复根据持久日志、任务源和文件台账收敛：未提交的收集批次整体回滚，已提交批次保留。发送上传日志同时记录精确临时路径，以便立即清理中断载荷。无法证明托管根或任务归属时保留证据并阻止启动。没有新增续传、请求幂等键或自动重试接口；响应丢失不能据此推断提交失败。
+
+GC 不再按临时文件名前缀或数字目录名推断所有权；没有台账/日志证明的旧遗留内容保留供管理员核查。清理响应保留 `orphan_temp_removed`、`orphan_dirs_removed` 字段以兼容调用者，两个旧扫描计数为 0。活跃或待恢复上传对应的占位/草稿不会被作为普通超时记录删除。
 
 ## 10. Download Count
 

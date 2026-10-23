@@ -313,3 +313,9 @@ CREATE TABLE source_managed_roots (
 ```
 
 使用实例持久标识、数据库登记与磁盘 marker 配对。该登记不是图片/Transfer payload 的删除清单；GC 仍需具体对象及日志证明归属。备份/恢复保留登记，找不到匹配时报告 blocked，不自动接管目录。
+
+## 16. Transfer 写入恢复日志（非数据库迁移）
+
+系统数据目录 `operations/transfer-uploads/` 保存版本 1 的 JSON 操作日志。`send-file` 关联 source/transfer 与最终文件路径，新日志还保存 `temp_rel_path`；`submission-batch` 关联 source/collection/submission 与批次目录。`collection_id`、`temp_rel_path` 为可选字段，旧发送日志保持可读。
+
+收集的空占位行不代表提交成功；提交凭证是同一事务内登记的 `transfer_submission_files`、批次统计与任务统计。恢复只删除经任务和托管根登记证明归属的未提交内容，不把未知同名目录当作可清理文件。本阶段不新增 migration，不改动 `v1.0.0.sql` 至 `v2.0.3.sql`。

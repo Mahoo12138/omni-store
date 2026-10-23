@@ -60,7 +60,7 @@ Preview & Sharing 已基本落地：
 
 ## 版本兼容
 
-已发布 migration：
+历史已发布 migration：
 
 ```text
 v1.0.0.sql
@@ -70,13 +70,16 @@ v1.1.1.sql
 
 全部冻结。
 
-2.0 必须新增：
+当前代码已包含的 2.0 migration：
 
 ```text
 v2.0.0.sql
+v2.0.1.sql
+v2.0.2.sql
+v2.0.3.sql
 ```
 
-不能修改历史 migration。
+不能修改历史 migration。迁移文件编号不等于产品发布版本；当前开发版本为 `2.0.0-dev`，本轮未新增或修改 migration。
 
 ## 本次文档修订基线（2026-09-29）
 
@@ -103,3 +106,22 @@ v2.0.0.sql
 Web 端新增公开入口 `/transfer`（发送文件/收集文件/收发记录三个 Tab，与 `/app/transfer` 共用同一界面，详情地址支持直接打开与刷新）、公共导航（公开网盘/图床/文件中转，登录态显示工作台入口）和后台「站点配置」页（站点服务绑定、实例信息、配置备份）。
 
 验证：`go build ./...`；`go test ./...`（26 个包全部通过）；`go test -race ./internal/staticassets ./internal/http ./internal/db ./internal/sources ./internal/operations ./internal/transfers ./internal/backup ./internal/managedroot`；前端 58 项单元测试、`tsc -b` 与生产构建；Chromium E2E 66 项全部通过，其中新增公开导航（1440/320/375px）、公开中转入口（访客记录持久化、停用服务不影响已有链接、登出后不泄漏上一位所有者缓存）、站点配置（状态保存、失败保存与并发编辑恢复）与静态协议（1440/375px）。E2E 使用干净种子环境，完成后清理了本次创建的公开配置。未验证 Safari/Firefox、真实客户端矩阵与跨机器部署。
+
+## 2026-10-18：2.0 恢复一致性与浏览器兼容加固
+
+基于 `bac9423` 继续开发，分支 `codex/2.0-release-hardening`。本轮为开发中的工作区成果，不是已发布版本，也不代表整个 2.0 已达到 RC 条件。
+
+- Collect 在写文件前持久化批次日志；空提交占位行不再被当成已提交依据。进程中断后，未提交批次回滚，已提交文件保留，启动时清除无文件的占位行。
+- Send 记录精确临时路径，恢复校验源、任务、文件路径与托管根归属；失败保留日志。上传、定稿与草稿 GC 协调，重复同路径上传不能破坏已获胜请求的文件。
+- 已完成删除的恢复只移除日志，避免删除同名新内容；未完成删除阻止托管路径复用。GC 保留带待恢复日志的任务，不再按名称猜测删除无归属证据的文件或目录。
+- Collect 关闭仅停止接收；既有内容持续可下载、保存，仍计入站点/访客容量与源删除保护，直到原定过期时间再回收。无过期时间的关闭任务保留内容。
+- 新增真实第二 origin 浏览器检查，覆盖图片解码、Canvas、CORS、WebM 播放/seek、非法类型及服务启停；统一浏览器门禁改用新临时种子与动态端口，失败保留证据。
+- crashcheck 增加 Send 上传/定稿、Collect 提交、Save to Files、GC 五条真实 SIGKILL 路径，连同既有九条共十四条。
+
+迁移与 API：不改 SQLite schema 或历史迁移。对外路由和响应结构保持兼容；收件箱隐藏未完成占位提交，关闭任务的载荷统计包含保留文件。旧上传日志仍可读取；旧版未记录路径的临时文件保留供人工核查，不承诺自动识别删除。
+
+开发门禁：Node 24.19.0 / Go 1.27.0 下，`OMNISTORE_ALLOW_DIRTY=1 ./scripts/verify-release.sh` 完整运行成功。前端 58 项单元测试、TypeScript 与生产构建；Go 格式检查、vet、全量非缓存测试（总语句覆盖率 71.7%，全部关键包门槛通过）及全量非缓存 race；全新临时实例 Chromium E2E 67/67；嵌入前端的发布二进制、Linux amd64/arm64 交叉构建、Compose 配置与 diff 检查均通过。Compose 配置校验不代表已运行容器；本轮未发布镜像或标签。
+
+恢复验收：`OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh` 完整运行成功，十四条路径各十轮，共 140 次真实 SIGKILL。验证文件字节、数据库台账、重复恢复/重试与保存到普通目录的副本；不把一次进程能重启当作数据一致性通过。
+
+下一阶段仍需：完成真实 WebDAV/S3/PicGo 客户端矩阵、MP4 与其他浏览器/生产代理验收、GT-08 实际访客配额压测，以及 Transfer Preview 与下载会话/Range 计数语义的目标闭环。逐项结果见 [兼容矩阵](design/compatibility-testing.md)；不能以 API 自编请求替代真实客户端通过结论。
