@@ -112,8 +112,8 @@ echo "[5/10] Go race detector"
 go test -race -count=1 ./...
 
 echo "[6/10] Browser E2E"
-cd "$PROJECT_DIR/web"
-pnpm exec playwright test
+cd "$PROJECT_DIR"
+node scripts/verify-browser.mjs
 
 echo "[7/10] Release binary and embedded frontend"
 cd "$PROJECT_DIR"
