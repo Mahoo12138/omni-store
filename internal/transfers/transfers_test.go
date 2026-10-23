@@ -157,13 +157,17 @@ func TestSendLifecycleFromDraftToRevoke(t *testing.T) {
 		t.Fatalf("nested structure lost: %+v", fileList)
 	}
 
-	// 下载名额：第 3 次后耗尽。
+	// 下载名额：同一会话同一目标的重试复用名额，三个不同目标后耗尽。
 	for i := 0; i < 3; i++ {
-		if _, _, err := service.ReserveSendDownload(send.PublicKey, token); err != nil {
+		target := SendFileDownloadTarget(int64(i + 1))
+		if _, _, err := service.ReserveSendDownload(send.PublicKey, token, target); err != nil {
 			t.Fatalf("reserve %d: %v", i+1, err)
 		}
+		if _, _, err := service.ReserveSendDownload(send.PublicKey, token, target); err != nil {
+			t.Fatalf("retry %d must reuse the claim: %v", i+1, err)
+		}
 	}
-	if _, _, err := service.ReserveSendDownload(send.PublicKey, token); !errors.Is(err, ErrDownloadLimit) {
+	if _, _, err := service.ReserveSendDownload(send.PublicKey, token, SendArchiveDownloadTarget); !errors.Is(err, ErrDownloadLimit) {
 		t.Fatalf("over-limit error=%v", err)
 	}
 

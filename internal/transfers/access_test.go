@@ -97,10 +97,14 @@ func TestTransferAccessRequirements(t *testing.T) {
 			if list, err := service.ListSendFiles(send.PublicKey, sendToken); err != nil || len(list) != 1 {
 				t.Fatalf("files=%+v err=%v", list, err)
 			}
-			if _, _, err := service.ReserveSendDownload(send.PublicKey, sendToken); err != nil {
+			if _, _, err := service.ReserveSendDownload(send.PublicKey, sendToken, SendArchiveDownloadTarget); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := service.ReserveSendDownload(send.PublicKey, sendToken); !errors.Is(err, ErrDownloadLimit) {
+			// 同一会话的续传/重试复用已占名额，不重复计数。
+			if _, _, err := service.ReserveSendDownload(send.PublicKey, sendToken, SendArchiveDownloadTarget); err != nil {
+				t.Fatalf("repeat download must reuse the claim: %v", err)
+			}
+			if _, _, err := service.ReserveSendDownload(send.PublicKey, sendToken, SendFileDownloadTarget(1)); !errors.Is(err, ErrDownloadLimit) {
 				t.Fatalf("download limit error=%v", err)
 			}
 			if _, err := service.SubmitToCollection(collection.PublicKey, collectionToken, "", "", []IncomingSubmissionFile{

@@ -77,7 +77,7 @@ test.describe(() => {
 
     const created = await api.post(`/api/v1/transfers`, {
       headers: authHeaders(session, true),
-      data: { require_code: true, title: '客户交付包', description: 'E2E 场景', expires_in_hours: 48, max_downloads: 5 },
+      data: { require_code: true, title: '客户交付包', description: 'E2E 场景', expires_in_hours: 48, max_downloads: 2 },
     })
     expect(created.ok()).toBeTruthy()
     const { data: createdData } = await created.json()
@@ -160,27 +160,39 @@ test.describe(() => {
     expect(download.headers()['content-disposition']).toContain('attachment')
     expect(download.headers()['cache-control']).toBe('no-store')
 
-    // ZIP 包含全部条目与路径。
+    // 同一会话的 Range 续传复用已占名额。
+    const resumed = await api.get(
+      `/api/v1/public/transfers/${publicKey}/files/${target.id}/download`,
+      { headers: { authorization: `Bearer ${token}`, range: 'bytes=0-2' } },
+    )
+    expect(resumed.status()).toBe(206)
+    expect(Buffer.from(await resumed.body()).toString('utf-8')).toBe('PDF')
+
+    // ZIP 包含全部条目与路径，重复打包同样不重复计数。
     const archive = await api.get(`/api/v1/public/transfers/${publicKey}/archive`, {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(archive.ok()).toBeTruthy()
     const admzip = Buffer.from(await archive.body())
     expect(admzip.subarray(0, 2).toString()).toBe('PK')
+    expect((await api.get(`/api/v1/public/transfers/${publicKey}/archive`, {
+      headers: { authorization: `Bearer ${token}` },
+    })).ok()).toBeTruthy()
 
-    // 名额耗尽：max_downloads=5，已用 2（download+archive）……继续下载直到耗尽。
-    for (let i = 0; i < 3; i++) {
-      const extra = await api.get(
-        `/api/v1/public/transfers/${publicKey}/files/${target.id}/download`,
-        { headers: { authorization: `Bearer ${token}` } },
-      )
-      expect(extra.ok()).toBeTruthy()
-    }
-    const exhausted = await api.get(
+    // max_downloads=2 已由文件与 ZIP 占满：新目标被拒，已计过目标仍可重试。
+    const other = fileList.items.find((item: { relative_path: string }) => item.relative_path === 'projects/roadmap.md')
+    const blocked = await api.get(
+      `/api/v1/public/transfers/${publicKey}/files/${other.id}/download`,
+      { headers: { authorization: `Bearer ${token}` } },
+    )
+    expect(blocked.status()).toBe(403)
+    const retried = await api.get(
       `/api/v1/public/transfers/${publicKey}/files/${target.id}/download`,
       { headers: { authorization: `Bearer ${token}` } },
     )
-    expect(exhausted.status()).toBe(403)
+    expect(retried.ok()).toBeTruthy()
+    const afterLimit = await api.get(`/api/v1/public/transfers/${publicKey}`)
+    expect((await afterLimit.json()).data.downloads_left).toBe(0)
 
     // 撤销后公开 404，会话失效。
     expect((await api.delete(`/api/v1/transfers/${transferID}`, { headers: authHeaders(session, true) })).ok()).toBeTruthy()
@@ -250,10 +262,12 @@ test.describe(() => {
     if (createdData.collection) createdCollections.add(createdData.collection.id)
     const publicKey: string = createdData.send.public_key
     const pickupCode: string = createdData.pickup_code
-    await api.post(`/api/v1/transfers/${createdData.send.id}/files/upload`, {
-      headers: authHeaders(session, true),
-      multipart: { relative_path: 'race.txt', file: { name: 'r.txt', mimeType: 'text/plain', buffer: Buffer.from('RACE') } },
-    })
+    for (let i = 0; i < 6; i++) {
+      await api.post(`/api/v1/transfers/${createdData.send.id}/files/upload`, {
+        headers: authHeaders(session, true),
+        multipart: { relative_path: `race-${i}.txt`, file: { name: 'r.txt', mimeType: 'text/plain', buffer: Buffer.from(`RACE-${i}`) } },
+      })
+    }
     await api.post(`/api/v1/transfers/${createdData.send.id}/finalize`, { headers: authHeaders(session, true) })
 
     const unlocked = await api.post(`/api/v1/public/transfers/${publicKey}/unlock`, {
@@ -261,25 +275,28 @@ test.describe(() => {
     })
     const { data: unlockData } = await unlocked.json()
     const token: string = unlockData.token
+    const headers = { authorization: `Bearer ${token}` }
+    const downloadURL = (id: number) => `/api/v1/public/transfers/${publicKey}/files/${id}/download`
 
-    const files = await api.get(`/api/v1/public/transfers/${publicKey}/files`, {
-      headers: { authorization: `Bearer ${token}` },
-    })
+    const files = await api.get(`/api/v1/public/transfers/${publicKey}/files`, { headers })
     const { data: fileList } = await files.json()
-    const fileID = fileList.items[0].id
+    expect(fileList.items).toHaveLength(6)
 
-    // 8 个并发下载竞争 5 个名额：恰好 5 成功 3 失败（原子 UPDATE 保证）。
-    const attempts = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        api.get(`/api/v1/public/transfers/${publicKey}/files/${fileID}/download`, {
-          headers: { authorization: `Bearer ${token}` },
-        }),
-      ),
+    // 同一目标的并发重复请求（续传/重试）只占一个名额。
+    const sameTarget = await Promise.all(
+      Array.from({ length: 8 }, () => api.get(downloadURL(fileList.items[0].id), { headers })),
     )
-    const succeeded = attempts.filter((response) => response.status() === 200).length
-    const limited = attempts.filter((response) => response.status() === 403).length
-    expect(succeeded).toBe(5)
-    expect(limited).toBe(3)
+    expect(sameTarget.every((response) => response.status() === 200)).toBeTruthy()
+    const remaining = (await (await api.get(`/api/v1/public/transfers/${publicKey}`)).json()).data.downloads_left
+    expect(remaining).toBe(4)
+
+    // 剩余 4 个名额由不同目标并发占用，全部成功且不超限。
+    const distinct = await Promise.all(
+      fileList.items.slice(1, 5).map((item: { id: number }) => api.get(downloadURL(item.id), { headers })),
+    )
+    expect(distinct.every((response) => response.status() === 200)).toBeTruthy()
+    const exhausted = await api.get(downloadURL(fileList.items[5].id), { headers })
+    expect(exhausted.status()).toBe(403)
   })
 
   test('collect: constraints, anonymous abuse protection and owner inbox', async ({ page, playwright, baseURL }) => {

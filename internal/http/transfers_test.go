@@ -169,6 +169,18 @@ func publicGet(t *testing.T, handler http.Handler, target string, token string) 
 	return recorder
 }
 
+func publicGetRange(t *testing.T, handler http.Handler, target, token, byteRange string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, target, nil)
+	request.Header.Set("Range", byteRange)
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
 func publicPostJSON(t *testing.T, handler http.Handler, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
@@ -243,10 +255,14 @@ func TestTransferSendEndToEndHTTP(t *testing.T) {
 		t.Fatalf("files status=%d body=%s", filesList.Code, filesList.Body.String())
 	}
 
-	// 单文件下载两次占满名额，第三次（archive）被拒。
+	// 同一会话的文件下载与续传（Range）只占一个名额，ZIP 占第二个。
 	first := publicGet(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/files/1/download", token)
 	if first.Code != http.StatusOK || !strings.Contains(first.Body.String(), "PDF-CONTENT") {
 		t.Fatalf("download status=%d body=%s", first.Code, first.Body.String())
+	}
+	resumed := publicGetRange(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/files/1/download", token, "bytes=0-2")
+	if resumed.Code != http.StatusPartialContent || resumed.Body.String() != "PDF" {
+		t.Fatalf("range status=%d body=%q", resumed.Code, resumed.Body.String())
 	}
 	second := publicGet(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/archive", token)
 	if second.Code != http.StatusOK {
@@ -259,9 +275,16 @@ func TestTransferSendEndToEndHTTP(t *testing.T) {
 	if len(zipReader.File) != 2 {
 		t.Fatalf("zip entries=%d", len(zipReader.File))
 	}
-	exhausted := publicGet(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/files/1/download", token)
+	// 两个名额已满：新目标（第二个文件）被拒，已计过的目标仍可续传/重试。
+	exhausted := publicGet(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/files/2/download", token)
 	if exhausted.Code != http.StatusForbidden {
 		t.Fatalf("exhausted status=%d body=%s", exhausted.Code, exhausted.Body.String())
+	}
+	if retry := publicGetRange(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/files/1/download", token, "bytes=0-2"); retry.Code != http.StatusPartialContent {
+		t.Fatalf("claimed target retry status=%d", retry.Code)
+	}
+	if archiveRetry := publicGet(t, fixture.handler, "/api/v1/public/transfers/"+publicKey+"/archive", token); archiveRetry.Code != http.StatusOK {
+		t.Fatalf("claimed archive retry status=%d", archiveRetry.Code)
 	}
 
 	// 撤销后公开 404。
