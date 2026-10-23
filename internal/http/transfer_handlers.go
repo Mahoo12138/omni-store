@@ -500,7 +500,7 @@ func (s *Server) handlePublicTransferFile(w http.ResponseWriter, r *http.Request
 		WriteError(w, r, CodeValidationError, "文件 ID 非法", nil)
 		return
 	}
-	send, src, err := s.transfers.ReserveSendDownload(publicKey, bearerToken(r))
+	send, src, err := s.transfers.ReserveSendDownload(publicKey, bearerToken(r), transfers.SendFileDownloadTarget(fileID))
 	if err != nil {
 		writeTransferError(w, r, err)
 		return
@@ -529,7 +529,7 @@ func (s *Server) handlePublicTransferFile(w http.ResponseWriter, r *http.Request
 // handlePublicTransferArchive 流式打包全部文件；占用一次下载名额。
 func (s *Server) handlePublicTransferArchive(w http.ResponseWriter, r *http.Request) {
 	publicKey := r.PathValue("publicKey")
-	send, src, err := s.transfers.ReserveSendDownload(publicKey, bearerToken(r))
+	send, src, err := s.transfers.ReserveSendDownload(publicKey, bearerToken(r), transfers.SendArchiveDownloadTarget)
 	if err != nil {
 		writeTransferError(w, r, err)
 		return

@@ -881,21 +881,61 @@ func (s *Service) ListSendFiles(publicKey, sessionToken string) ([]*SendFile, er
 	return out, rows.Err()
 }
 
-// ReserveSendDownload 原子占用一次下载名额并返回发件包与源。
-// max_downloads 竞争由条件 UPDATE 保证（并发下载不会超限）。
-func (s *Service) ReserveSendDownload(publicKey, sessionToken string) (*Send, *models.StorageSource, error) {
+// 下载目标标识：同一访问会话对同一目标只消耗一次名额。
+const (
+	// SendArchiveDownloadTarget 是整包 ZIP 下载的目标标识。
+	SendArchiveDownloadTarget = "archive"
+	sendFileTargetPrefix      = "file:"
+)
+
+// SendFileDownloadTarget 返回单文件下载的目标标识。
+func SendFileDownloadTarget(fileID int64) string {
+	return sendFileTargetPrefix + strconv.FormatInt(fileID, 10)
+}
+
+// ReserveSendDownload 为一次下载意图占用名额并返回发件包与源。
+// 同一访问会话对同一目标（单文件或整包）只计一次：Range 续传、失败重试与
+// 并发重复请求复用已占名额；不同目标、不同会话仍各自计数。
+// max_downloads 竞争由事务内的条件 UPDATE 保证（并发下载不会超限）。
+func (s *Service) ReserveSendDownload(publicKey, sessionToken, target string) (*Send, *models.StorageSource, error) {
+	if strings.TrimSpace(target) == "" {
+		return nil, nil, fmt.Errorf("%w: 缺少下载目标", ErrConflictState)
+	}
 	row, err := s.getSendByKey(publicKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := s.checkSession(row.send.ID, 0, sessionToken); err != nil {
+	sessionID, err := s.sessionID(row.send.ID, 0, sessionToken)
+	if err != nil {
 		return nil, nil, err
 	}
 	if err := checkSendActive(&row.send); err != nil {
 		return nil, nil, err
 	}
 	now := time.Now().UTC()
-	result, err := s.db.Exec(`UPDATE transfers SET download_count = download_count + 1
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`INSERT OR IGNORE INTO transfer_download_claims
+  (session_id, transfer_id, target, created_at) VALUES (?, ?, ?, ?)`,
+		sessionID, row.send.ID, target, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	if claimed, _ := result.RowsAffected(); claimed == 0 {
+		// 本会话已为该目标计过名额：续传/重试直接复用，不再增加 download_count。
+		if err := tx.Commit(); err != nil {
+			return nil, nil, err
+		}
+		src, err := s.sources.GetByID(row.sourceID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &row.send, src, nil
+	}
+	result, err = tx.Exec(`UPDATE transfers SET download_count = download_count + 1
   WHERE id = ? AND status = 'active'
     AND (max_downloads IS NULL OR download_count < max_downloads)
     AND (expires_at IS NULL OR expires_at > ?)`, row.send.ID, now)
@@ -903,7 +943,11 @@ func (s *Service) ReserveSendDownload(publicKey, sessionToken string) (*Send, *m
 		return nil, nil, err
 	}
 	if affected, _ := result.RowsAffected(); affected == 0 {
-		// 并发竞争失败：重读当前行再分类，避免用过期快照误判。
+		// 竞争失败：先回滚本次声明并释放连接（连接池上限为 1），
+		// 再重读当前行分类，避免用过期快照误判。
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			return nil, nil, err
+		}
 		row, err = s.getSendByKey(publicKey)
 		if err != nil {
 			return nil, nil, err
@@ -915,6 +959,9 @@ func (s *Service) ReserveSendDownload(publicKey, sessionToken string) (*Send, *m
 			return nil, nil, err
 		}
 		return nil, nil, ErrConflictState
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
 	}
 	src, err := s.sources.GetByID(row.sourceID)
 	if err != nil {
@@ -1008,19 +1055,25 @@ func (s *Service) createSession(transferID, collectionID int64, taskExpiry *time
 	return token, expires, nil
 }
 
-func (s *Service) checkSession(transferID, collectionID int64, token string) error {
+// sessionID 校验访问会话并返回其行 ID；下载名额按会话登记。
+func (s *Service) sessionID(transferID, collectionID int64, token string) (int64, error) {
 	if strings.TrimSpace(token) == "" {
-		return ErrNotFound
+		return 0, ErrNotFound
 	}
-	var one int
-	err := s.db.QueryRow(`SELECT 1 FROM transfer_access_sessions
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM transfer_access_sessions
   WHERE token_hash = ? AND expires_at > ?
     AND ((? != 0 AND transfer_id = ?) OR (? != 0 AND collection_id = ?))`,
-		auth.HashToken(token), time.Now().UTC(), transferID, transferID, collectionID, collectionID).Scan(&one)
+		auth.HashToken(token), time.Now().UTC(), transferID, transferID, collectionID, collectionID).Scan(&id)
 	if err != nil {
-		return ErrNotFound
+		return 0, ErrNotFound
 	}
-	return nil
+	return id, nil
+}
+
+func (s *Service) checkSession(transferID, collectionID int64, token string) error {
+	_, err := s.sessionID(transferID, collectionID, token)
+	return err
 }
 
 func nullableString(value string) any {
