@@ -146,7 +146,7 @@ Database migration 不承诺降级回 1.x。
 
 ## 9. 本次图床 / 静态资源拆分
 
-v2.0.0 曾新增第 4 行 Site binding；v2.0.1 将其迁移到按源的 source_static_access/source_static_origins，并移除 static_assets Site 枚举。已有公开 ID、路径、缓存/CORS、版本和启停状态原样保留。未配置源默认不公开，不得从旧 public_read_enabled、image_bed_enabled 或个人图床偏好推断发布范围。
+2.0.0 直接建出三项 Site binding（公开盘、图床、流转中心），静态访问按源存放于 source_static_access/source_static_origins，不保留 static_assets Site 枚举。升级不自动发布任何源，也不推断发布身份；未配置源默认不公开，不得从旧 public_read_enabled、image_bed_enabled 或个人图床偏好推断发布范围。
 
 图片类旧记录继续保留 ID、source、path；不能凭登录/匿名标签把所有登录用户图归为静态资源。用户需要路径型博客时，选择现有普通目录并配置发布服务；需要搬迁旧图片则是明确文件迁移工作，不能自动从 original_filename 还原并覆盖可能同名文件。
 

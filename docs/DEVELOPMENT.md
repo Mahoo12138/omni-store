@@ -43,7 +43,7 @@ v1.1.1.sql
 migrations/v2.0.0.sql
 ```
 
-后续变更新增更高 SemVer 迁移；静态 HTTP 重构使用 `v2.0.1.sql`，不得修改已应用文件。
+2.0 发布前，所有 2.0 schema 变更都并入 `v2.0.0.sql`；发布后新增更高 SemVer 迁移，不得修改已应用文件。
 
 Migration 必须同时测试：
 

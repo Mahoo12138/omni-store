@@ -194,7 +194,7 @@ POST   /api/v1/transfers/{transferID}/finalize
 
 响应为 `{ send, pickup_code }`。`require_code=false` 时 `pickup_code` 为空；启用时生成 8 位随机码，只在创建响应中返回一次明文。列表与详情仅返回 `require_code`、`has_password`，不返回密码或短码。
 
-省略 `require_code` 按 `true` 处理；网页默认关闭并显式发送 false。`v2.0.2` 迁移为存量任务设置 true，保留历史访问保护。`expires_in_hours` 省略使用站点默认值，登录用户可用 0 表示不过期；访客不接受 0，任务期限受身份截止时间限制。`max_downloads` 省略表示不限，设置时必须是正整数。
+省略 `require_code` 按 `true` 处理；网页默认关闭并显式发送 false。`v2.0.0` 迁移的 `require_code` 列默认 `1`，未显式关闭的任务仍要求短码。`expires_in_hours` 省略使用站点默认值，登录用户可用 0 表示不过期；访客不接受 0，任务期限受身份截止时间限制。`max_downloads` 省略表示不限，设置时必须是正整数。
 
 上传为 multipart：单个 `file` 与 `relative_path`。`files/from-store` 的 JSON 为 `{ source_key, paths }`，需要真实登录和来源子树读取权限；访客身份不能使用。定稿至少需要一个文件；已 active 的包拒绝继续上传。
 

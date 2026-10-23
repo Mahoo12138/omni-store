@@ -74,12 +74,9 @@ v1.1.1.sql
 
 ```text
 v2.0.0.sql
-v2.0.1.sql
-v2.0.2.sql
-v2.0.3.sql
 ```
 
-不能修改历史 migration。迁移文件编号不等于产品发布版本；当前开发版本为 `2.0.0-dev`，本轮未新增或修改 migration。
+不能修改历史 migration。迁移文件编号不等于产品发布版本；当前开发版本为 `2.0.0-dev`。2.0.1–2.0.4 的增量变更已在发布前合并进 `v2.0.0.sql`，不再保留独立文件；升级路径只保留 1.1.x → 2.0.0。
 
 ## 本次文档修订基线（2026-09-29）
 
@@ -93,7 +90,7 @@ v2.0.3.sql
 
 静态访问从 Site 单例改为每源独立的匿名只读 HTTP 协议。Site binding 仅保留公开盘、图床和流转中心。后台入口为「存储源 → 静态 HTTP」，各源独立发布、启停和设置缓存/CORS。管理 API 改为 `/api/v1/admin/sources/{key}/static-access/*`，公开 `/assets/{id}/{path}` 不变。
 
-新增不可重放迁移 `v2.0.1.sql`，从旧单例迁移公开身份、启停、配置版本和白名单；不移动或删除普通文件。跨源重绑不覆盖已有目标配置，撤销配置须先关闭协议；源有静态配置时禁止删除。
+静态访问的 schema 变更（原 `v2.0.1.sql`，现并入 `v2.0.0.sql`）建立按源的发布配置：不自动发布任何源，不移动或删除普通文件。跨源重绑不覆盖已有目标配置，撤销配置须先关闭协议；源有静态配置时禁止删除。
 
 验证：`go test ./...`；`go test -race ./internal/staticassets ./internal/http ./internal/db ./internal/sources ./internal/operations`；前端 48 项单元测试和生产构建；Chromium 8 项 E2E（静态协议与后台设置回归），覆盖 1440px/375px、多源同路径内容、普通上传后匿名读取、单源启停、根发布确认、持久化、版本冲突、旧配置迁移及系统备份恢复。浏览器使用独立临时数据和端口 18090，没有重启现有 18080 服务。未验证 Safari/Firefox、真实 CDN 或跨机器部署。
 
@@ -101,7 +98,7 @@ v2.0.3.sql
 
 文件中转对未登录访客开放：访客可创建发件包与收集任务、上传文件并管理自己的收发记录。访客身份使用独立 Cookie，与普通登录会话分开，不创建普通用户、不授予文件管理、存储源或管理权限；身份有效期不超过 Web 会话期限与 7 天中的较小值，界面提供 1 天有效期，单个访客最多 20 个活跃任务、1 GiB 活跃载荷，单文件也不高于 1 GiB，实际剩余空间仍在写入时校验。登录用户的任务归账号所有；从网盘复制快照、保存提交到普通目录仍需真实登录与目录权限。
 
-新增不可重放迁移：`v2.0.2.sql` 为 `transfers`/`transfer_collections` 增加 `require_code`（历史任务置 1，保留原短码保护）；`v2.0.3.sql` 增加 `transfer_guest_identities` 并重建两张任务表，`owner_user_id` 与 `owner_guest_id` 二选一且 guest 删除受限，访问会话与上传草稿按 publicKey 重新初始化。
+中转台账的 schema 变更（原 `v2.0.2.sql`/`v2.0.3.sql`，现并入 `v2.0.0.sql`）：`transfers`/`transfer_collections` 直接建为最终形态，`require_code` 默认 `1`；新增 `transfer_guest_identities`，`owner_user_id` 与 `owner_guest_id` 二选一且 guest 删除受限；访问会话与上传草稿按 publicKey 初始化。
 
 Web 端新增公开入口 `/transfer`（发送文件/收集文件/收发记录三个 Tab，与 `/app/transfer` 共用同一界面，详情地址支持直接打开与刷新）、公共导航（公开网盘/图床/文件中转，登录态显示工作台入口）和后台「站点配置」页（站点服务绑定、实例信息、配置备份）。
 

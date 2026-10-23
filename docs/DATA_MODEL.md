@@ -270,7 +270,7 @@ CREATE TABLE source_static_origins (
 
 ```
 
-v2.0.1 保留已有公开 ID、路径、origin、版本和启停状态，不移动文件。白名单外键随跨源 relocate 迁移；已有配置的目标源不能被覆盖。移除配置必须先关闭协议，只撤销公开身份，不删除文件；源有静态配置时禁止删除。
+v2.0.0 不自动发布任何源，也不移动文件：旧的 public_read_enabled/public_mount_path 只用于收敛公开网盘绑定，不能推断发布范围。白名单外键随跨源 relocate 迁移；已有配置的目标源不能被覆盖。移除配置必须先关闭协议，只撤销公开身份，不删除文件；源有静态配置时禁止删除。
 
 无需逐文件发布记录，公开读取使用普通源路径，不依赖 images 台账或 Reconcile。
 
@@ -318,4 +318,4 @@ CREATE TABLE source_managed_roots (
 
 系统数据目录 `operations/transfer-uploads/` 保存版本 1 的 JSON 操作日志。`send-file` 关联 source/transfer 与最终文件路径，新日志还保存 `temp_rel_path`；`submission-batch` 关联 source/collection/submission 与批次目录。`collection_id`、`temp_rel_path` 为可选字段，旧发送日志保持可读。
 
-收集的空占位行不代表提交成功；提交凭证是同一事务内登记的 `transfer_submission_files`、批次统计与任务统计。恢复只删除经任务和托管根登记证明归属的未提交内容，不把未知同名目录当作可清理文件。本阶段不新增 migration，不改动 `v1.0.0.sql` 至 `v2.0.3.sql`。
+收集的空占位行不代表提交成功；提交凭证是同一事务内登记的 `transfer_submission_files`、批次统计与任务统计。恢复只删除经任务和托管根登记证明归属的未提交内容，不把未知同名目录当作可清理文件。2.0 的 schema 变更全部在 `v2.0.0.sql`；`v1.0.0.sql` 至 `v1.1.1.sql` 已冻结，不得修改。

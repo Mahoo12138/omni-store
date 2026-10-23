@@ -18,7 +18,7 @@
 
 访客 Cookie 为 HttpOnly、SameSite=Lax，Path 为 `/api/v1`。身份和 CSRF 由服务端验证，不使用邮箱、姓名、publicKey 或界面缓存授权。访客身份不能被普通登录中间件识别为用户，不能进入普通来源管理或应用管理。
 
-`v2.0.3` 使用独立 `transfer_guest_identities` 表保存访客 Token 的摘要与期限，任务所有者由 user ID 或 guest ID 二选一；迁移保留已有任务 ID、publicKey、短码要求和载荷关系。访客 CSRF 从 Cookie 凭据作独立单向派生，Cookie 原值不返回给脚本。登录身份响应的 `limits` 为 null，访客响应才包含访客限额；两种身份都返回当前身份截止时间。
+`v2.0.0` 使用独立 `transfer_guest_identities` 表保存访客 Token 的摘要与期限，任务所有者由 user ID 或 guest ID 二选一；迁移不重建已有任务表，短码要求与载荷关系保持原语义。访客 CSRF 从 Cookie 凭据作独立单向派生，Cookie 原值不返回给脚本。登录身份响应的 `limits` 为 null，访客响应才包含访客限额；两种身份都返回当前身份截止时间。
 
 中转所有者 API 允许当前用户或访客读取、上传、定稿、撤销发送任务，创建/关闭收集任务，以及读取自己的提交批次。写请求必须匹配当前身份的 CSRF。读取其他所有者的 ID 统一返回不存在。
 
@@ -61,7 +61,7 @@
 
 publicKey 是高熵任务链接。短码只用于已知 publicKey 的访问验证，不定位或搜索任务。需要短码时生成随机码并保存 HMAC 摘要；密码保存密码摘要，列表与详情不返回明文凭据。
 
-`require_code` 与 `has_password` 独立。网页创建默认关闭短码，显式传 `require_code=false`；API 省略字段保留 `true`。`v2.0.2` 为存量任务增加默认 true 的列，避免迁移后取消历史短码保护。
+`require_code` 与 `has_password` 独立。网页创建默认关闭短码，显式传 `require_code=false`；API 省略字段保留 `true`。`v2.0.0` 建表时 `require_code` 默认 `1`，省略字段的写入不会意外取消短码保护。
 
 没有短码和密码要求时，公开页仍调用 unlock 获取该任务的 Bearer 会话；其余情况只显示任务实际要求的输入。unlock 依据 IP + 任务限流。访问会话最多 12 小时，且不超过任务截止时间；仅授权一个发件包或收集任务，不转化为所有者或普通登录身份。
 
