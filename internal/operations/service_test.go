@@ -155,3 +155,54 @@ func TestRunIntegrityCheckAndCleanup(t *testing.T) {
 		t.Fatalf("revoked payload survived cleanup: %v", err)
 	}
 }
+
+func TestStatusCountsRetainedCollectionPayloadUntilExpiry(t *testing.T) {
+	service, _, source, _, owner := newOperationsFixture(t)
+	send, _, err := service.transfers.CreateSend(transfers.CreateSendInput{OwnerUserID: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.transfers.AddSendUpload(send.ID, owner, "send.txt", strings.NewReader("SEND")); err != nil {
+		t.Fatal(err)
+	}
+	collection, code, err := service.transfers.CreateCollection(transfers.CreateCollectionInput{OwnerUserID: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := service.transfers.UnlockCollection(collection.PublicKey, code, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.transfers.SubmitToCollection(collection.PublicKey, token, "", "", []transfers.IncomingSubmissionFile{{RelativePath: "collect.txt", Body: strings.NewReader("COLLECT")}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, phase := range []string{"active", "closed", "expired"} {
+		wantBytes, wantActive, wantSourceTasks := int64(11), int64(1), int64(2)
+		if phase == "closed" {
+			wantActive = 0
+			if err := service.transfers.CloseCollection(collection.ID, owner); err != nil {
+				t.Fatal(err)
+			}
+		} else if phase == "expired" {
+			wantBytes, wantActive, wantSourceTasks = 4, 0, 1
+			if _, err := service.db.Exec(`UPDATE transfer_collections SET expires_at = ? WHERE id = ?`, time.Now().UTC().Add(-time.Second), collection.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := service.transfers.RunGC(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		status, err := service.GetStatus()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Transfers.PayloadBytes != wantBytes || status.Transfers.ActiveCollections != wantActive {
+			t.Fatalf("%s usage=%+v", phase, status.Transfers)
+		}
+		for _, health := range status.Sources {
+			if health.Key == source.Key && health.ActiveTransfers != wantSourceTasks {
+				t.Fatalf("%s source refs=%d want=%d", phase, health.ActiveTransfers, wantSourceTasks)
+			}
+		}
+	}
+}

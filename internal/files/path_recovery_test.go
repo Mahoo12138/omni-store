@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omni-store/omnistore/internal/managedroot"
 	"github.com/omni-store/omnistore/internal/models"
 )
 
@@ -125,6 +126,274 @@ func TestRecoverMoveUsesDatabaseMarkerAsCommitBoundary(t *testing.T) {
 			assertNoLinkedPath(t, service, source.ID, otherPath)
 			assertNoPathOperation(t, service)
 		})
+	}
+}
+
+func TestRecoverCommittedDeletePreservesReplacementAndMetadata(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		name, payload := "reused.txt", "reused.txt"
+		if directory {
+			name, payload = "reused", "reused/child.txt"
+		}
+		t.Run(name, func(t *testing.T) {
+			service, source, _, sourceRoot, _, userID := newTransferRecoveryFixture(t)
+			seedLinkedPath(t, service, source, userID, payload)
+			op := service.newPathOperation(pathOperationDelete, source, name, "", directory, &userID)
+			if err := service.writePathOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(filepath.Join(sourceRoot, name)); err != nil {
+				t.Fatal(err)
+			}
+			if err := service.markPathFilesystemReady(op.OperationID); err != nil {
+				t.Fatal(err)
+			}
+			if err := service.deletePathMetadata(source.ID, name, directory); err != nil {
+				t.Fatal(err)
+			}
+			if err := service.markPathDatabaseReady(op.OperationID); err != nil {
+				t.Fatal(err)
+			}
+			// A completed delete whose journal cleanup failed must not own a
+			// subsequently recreated object, even when its path is identical.
+			seedLinkedPath(t, service, source, userID, payload)
+			result, err := service.RecoverPathOperations()
+			if err != nil || result.CompletedDeletes != 1 {
+				t.Fatalf("recover completed delete: %+v, %v", result, err)
+			}
+			if data, err := os.ReadFile(filepath.Join(sourceRoot, payload)); err != nil || string(data) != "linked" {
+				t.Fatalf("replacement was deleted: %q, %v", data, err)
+			}
+			assertLinkedPath(t, service, source.ID, payload)
+			assertNoPathOperation(t, service)
+		})
+	}
+}
+
+func TestRecoverManagedDeleteRejectsUnownedAndNestedRoots(t *testing.T) {
+	for _, name := range []string{"unknown", "foreign-marker", "nested"} {
+		t.Run(name, func(t *testing.T) {
+			service, source, otherSource, _ := newManagedNamespaceService(t)
+			rel := ".omnistore/transfer/send/package"
+			if name == "nested" {
+				rel = "ordinary/" + rel
+			}
+			if name == "foreign-marker" {
+				owner := managedroot.NewService(service.db)
+				for _, src := range []*models.StorageSource{source, otherSource} {
+					if err := owner.Ensure(src); err != nil {
+						t.Fatal(err)
+					}
+				}
+				marker, err := os.ReadFile(filepath.Join(otherSource.RootPath, ".omnistore", "managed-root.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(source.RootPath, ".omnistore", "managed-root.json"), marker, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			payload := filepath.Join(source.RootPath, filepath.FromSlash(rel), "preserve.txt")
+			if err := os.MkdirAll(filepath.Dir(payload), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(payload, []byte("foreign-owned"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			op := service.newPathOperation(pathOperationDelete, source, rel, "", true, nil)
+			if err := service.writePathOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.RecoverPathOperations(); err == nil {
+				t.Fatal("recovery accepted an unowned or nested managed root")
+			} else if name == "unknown" && !errors.Is(err, managedroot.ErrUnknownRoot) {
+				t.Fatalf("unknown-root error = %v", err)
+			} else if name == "foreign-marker" && !errors.Is(err, managedroot.ErrOwnershipMismatch) {
+				t.Fatalf("foreign-marker error = %v", err)
+			}
+			if data, err := os.ReadFile(payload); err != nil || string(data) != "foreign-owned" {
+				t.Fatalf("unowned payload changed: %q, %v", data, err)
+			}
+			if _, err := os.Stat(service.pathOperationPath(op.OperationID)); err != nil {
+				t.Fatalf("failed recovery removed evidence: %v", err)
+			}
+		})
+	}
+}
+
+func TestPendingManagedPathWriteGuardsRecoveryScopes(t *testing.T) {
+	service, source, otherSource, _ := newManagedNamespaceService(t)
+	from := ".omnistore/transfer/send/package"
+	to := ".omnistore/transfer/send/moved"
+	for _, tc := range []struct {
+		name      string
+		kind      string
+		targets   []string
+		committed bool
+		other     bool
+		blocked   bool
+	}{
+		{"delete exact", pathOperationDelete, []string{from}, false, false, true},
+		{"delete descendant", pathOperationDelete, []string{from + "/file.txt"}, false, false, true},
+		{"delete ancestor", pathOperationDelete, []string{".omnistore/transfer/send"}, false, false, true},
+		{"delete prefix sibling", pathOperationDelete, []string{from + "-other/file.txt"}, false, false, false},
+		{"delete other scope", pathOperationDelete, []string{".omnistore/image-bed/image.png"}, false, false, false},
+		{"delete other source", pathOperationDelete, []string{from + "/file.txt"}, false, true, false},
+		{"delete committed reusable", pathOperationDelete, []string{from + "/file.txt"}, true, false, false},
+		{"move source", pathOperationMove, []string{from + "/file.txt"}, false, false, true},
+		{"move destination", pathOperationMove, []string{to + "/file.txt"}, false, false, true},
+		{"move ancestor", pathOperationMove, []string{".omnistore/transfer"}, false, false, true},
+		{"move unrelated", pathOperationMove, []string{to + "-other/file.txt"}, false, false, false},
+		{"move committed still guarded", pathOperationMove, []string{to + "/file.txt"}, true, false, true},
+		{"temporary path also guarded", pathOperationDelete, []string{".omnistore/transfer/other/file.txt", from + "/.omnistore-upload-0123456789abcdef.tmp"}, false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			destination := ""
+			if tc.kind == pathOperationMove {
+				destination = to
+			}
+			op := service.newPathOperation(tc.kind, source, from, destination, true, nil)
+			if err := service.writePathOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			if tc.committed {
+				if err := service.markPathDatabaseReady(op.OperationID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sourceID := source.ID
+			if tc.other {
+				sourceID = otherSource.ID
+			}
+			err := service.guardPendingManagedPathWrite(sourceID, tc.targets...)
+			if (err != nil) != tc.blocked {
+				t.Fatalf("guard blocked=%v, want %v: %v", err != nil, tc.blocked, err)
+			}
+			if _, err := os.Stat(service.pathOperationPath(op.OperationID)); err != nil {
+				t.Fatalf("guard mutated pending operation: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(source.RootPath, ".omnistore")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("guard created managed path: %v", err)
+			}
+			if err := service.removePathOperation(op.OperationID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestPendingManagedPathWriteRejectsInvalidRecoveryEvidence(t *testing.T) {
+	for _, state := range []string{"malformed-journal", "journal-symlink", "marker-symlink"} {
+		t.Run(state, func(t *testing.T) {
+			service, source, _, _ := newManagedNamespaceService(t)
+			rel := ".omnistore/transfer/send/package/file.txt"
+			op := service.newPathOperation(pathOperationDelete, source, rel, "", false, nil)
+			if err := service.writePathOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			switch state {
+			case "malformed-journal":
+				if err := os.WriteFile(service.pathOperationPath(op.OperationID), []byte("{truncated"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			case "journal-symlink":
+				if err := os.Remove(service.pathOperationPath(op.OperationID)); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("missing-target", service.pathOperationPath(op.OperationID)); err != nil {
+					t.Fatal(err)
+				}
+			case "marker-symlink":
+				if err := os.Symlink("missing-target", service.pathDatabaseReadyPath(op.OperationID)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := service.guardPendingManagedPathWrite(source.ID, rel); err == nil {
+				t.Fatal("invalid recovery evidence allowed path reuse")
+			}
+		})
+	}
+}
+
+func TestManagedWriteCannotReusePendingDeleteBeforeMkdir(t *testing.T) {
+	final := ".omnistore/transfer/send/package/file.txt"
+	temp := ".omnistore/transfer/send/package/.omnistore-upload-0123456789abcdef.tmp"
+	for _, pending := range []string{final, ".omnistore/transfer/send/package"} {
+		t.Run(pending, func(t *testing.T) {
+			service, source, _, _ := newManagedNamespaceService(t)
+			op := service.newPathOperation(pathOperationDelete, source, pending, "", pending != final, nil)
+			if err := service.writePathOperation(op); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", strings.NewReader("replacement"), 0, false); err == nil {
+				t.Fatal("managed write reused an unresolved delete path")
+			}
+			if _, err := os.Stat(filepath.Join(source.RootPath, ".omnistore")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("blocked write created a directory: %v", err)
+			}
+			if _, err := os.Stat(service.pathOperationPath(op.OperationID)); err != nil {
+				t.Fatalf("blocked write changed recovery evidence: %v", err)
+			}
+		})
+	}
+}
+
+func TestManagedWriteReusesCommittedDeleteAndSurvivesRecovery(t *testing.T) {
+	service, source, _, _ := newManagedNamespaceService(t)
+	if err := managedroot.NewService(service.db).Ensure(source); err != nil {
+		t.Fatal(err)
+	}
+	final := ".omnistore/transfer/send/package/file.txt"
+	temp := ".omnistore/transfer/send/package/.omnistore-upload-0123456789abcdef.tmp"
+	op := service.newPathOperation(pathOperationDelete, source, ".omnistore/transfer/send/package", "", true, nil)
+	if err := service.writePathOperation(op); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.markPathDatabaseReady(op.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", strings.NewReader("replacement"), 0, false); err != nil {
+		t.Fatalf("committed delete blocked a new write: %v", err)
+	}
+	if result, err := service.RecoverPathOperations(); err != nil || result.CompletedDeletes != 1 {
+		t.Fatalf("recover committed managed delete: %+v, %v", result, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(source.RootPath, filepath.FromSlash(final))); err != nil || string(data) != "replacement" {
+		t.Fatalf("recovery deleted replacement managed payload: %q, %v", data, err)
+	}
+	assertNoPathOperation(t, service)
+}
+
+func TestRecoverPendingManagedDeleteChecksOwnershipThenCompletes(t *testing.T) {
+	service, source, _, _ := newManagedNamespaceService(t)
+	if err := managedroot.NewService(service.db).Ensure(source); err != nil {
+		t.Fatal(err)
+	}
+	from := ".omnistore/transfer/send/package"
+	for _, rel := range []string{from + "/file.txt", from + "-other/preserve.txt"} {
+		if _, err := service.WriteManagedFile(source, rel, "transfer", strings.NewReader("payload"), 0, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	op := service.newPathOperation(pathOperationDelete, source, from, "", true, nil)
+	if err := service.writePathOperation(op); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.RecoverPathOperations(); err != nil || result.CompletedDeletes != 1 {
+		t.Fatalf("recover trusted managed delete: %+v, %v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(source.RootPath, filepath.FromSlash(from))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("trusted managed delete did not complete: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(source.RootPath, filepath.FromSlash(from+"-other/preserve.txt"))); err != nil || string(data) != "payload" {
+		t.Fatalf("recovery changed unrelated managed payload: %q, %v", data, err)
+	}
+	if err := managedroot.NewService(service.db).Ensure(source); err != nil {
+		t.Fatalf("recovery changed managed ownership: %v", err)
+	}
+	assertNoPathOperation(t, service)
+	if result, err := service.RecoverPathOperations(); err != nil || result.CompletedDeletes != 0 {
+		t.Fatalf("second recovery is not a no-op: %+v, %v", result, err)
 	}
 }
 
