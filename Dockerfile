@@ -9,7 +9,7 @@ RUN pnpm run build
 
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 WORKDIR /src
-ARG VERSION=1.0.0-dev
+ARG VERSION=2.0.0-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 ARG TARGETOS

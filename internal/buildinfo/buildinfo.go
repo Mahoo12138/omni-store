@@ -5,7 +5,7 @@ import "runtime"
 
 var (
 	// Version 遵循 SemVer；开发构建保留 -dev 标识。
-	Version = "1.0.0-dev"
+	Version = "2.0.0-dev"
 	// Commit 是构建对应的完整 Git commit；本地构建默认为 unknown。
 	Commit = "unknown"
 	// BuildTime 是 UTC RFC 3339 构建时间；本地构建默认为 unknown。

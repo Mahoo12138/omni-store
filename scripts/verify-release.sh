@@ -8,7 +8,7 @@ trap 'rm -rf "$CHECK_DIR"' EXIT INT TERM
 
 cd "$PROJECT_DIR"
 
-VERSION=${OMNISTORE_RELEASE_VERSION:-1.0.0-dev}
+VERSION=${OMNISTORE_RELEASE_VERSION:-2.0.0-dev}
 MIN_GO_COVERAGE=${OMNISTORE_MIN_GO_COVERAGE:-52.0}
 SEMVER_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 if ! printf '%s\n' "$VERSION" | grep -Eq "$SEMVER_PATTERN"; then
