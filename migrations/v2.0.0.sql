@@ -321,3 +321,17 @@ CREATE TABLE transfer_access_sessions (
 );
 
 CREATE INDEX idx_transfer_access_sessions_gc ON transfer_access_sessions(expires_at);
+
+-- 13. 下载名额声明：按（访问会话, 任务, 下载目标）去重。
+-- 同一文件的 Range 续传、失败重试与并发重复请求复用同一名额，不再重复消耗
+-- max_downloads；不同目标、不同会话仍各自计数。声明随访问会话或任务级联删除。
+CREATE TABLE transfer_download_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL REFERENCES transfer_access_sessions(id) ON DELETE CASCADE,
+  transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+  target TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  UNIQUE(session_id, transfer_id, target)
+);
+
+CREATE INDEX idx_transfer_download_claims_transfer ON transfer_download_claims(transfer_id);
