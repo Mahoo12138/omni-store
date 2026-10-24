@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -18,6 +18,7 @@ import {
   IconStar,
   LogoMark,
 } from '../ui/Icon'
+import { Menu, type MenuOption } from '../ui/Menu'
 import * as css from './AppShell.css'
 
 // 登录侧布局：桌面使用左侧导航，窄屏切为底部导航。
@@ -135,89 +136,52 @@ function AppShellLoading() {
 
 // 侧栏底部用户菜单：桌面显示完整账号，窄屏收为底部导航入口。
 function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onEsc)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onEsc)
-    }
-  }, [open])
-
+  const navigate = useNavigate()
   const initial = displayName.slice(0, 1).toUpperCase()
 
+  const items: MenuOption[] = [
+    {
+      id: 'settings',
+      label: '设置',
+      icon: <IconSettings size={16} />,
+      onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }),
+    },
+    {
+      id: 'image-bed',
+      label: '图床',
+      icon: <IconImage size={16} />,
+      onSelect: () => navigate({ to: '/app/image-bed' }),
+    },
+    {
+      id: 'about',
+      label: '使用帮助',
+      icon: <IconQuestion size={16} />,
+      onSelect: () => navigate({ to: '/about' }),
+    },
+    {
+      id: 'logout',
+      label: '退出登录',
+      icon: <IconLogout size={16} />,
+      danger: true,
+      onSelect: onLogout,
+    },
+  ]
+
   return (
-    <div className={css.userMenu} ref={ref}>
-      <button
-        type="button"
-        className={css.userMenuBtn}
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`账号菜单：${displayName}`}
-      >
-        <span className={css.avatar}>{initial}</span>
-        <span className={css.userIdentity}>
-          <span className={css.userName}>{displayName}</span>
-          <span className={css.userCaption}>账号与设置</span>
-        </span>
-        <IconChevronDown size={14} className={css.userChevron} />
-      </button>
-      {open && (
-        <div role="menu" className={css.userDropdown}>
-          <Link
-            to="/app/admin"
-            search={{ section: 'profile' }}
-            role="menuitem"
-            className={css.userDropdownItem}
-            onClick={() => setOpen(false)}
-          >
-            <IconSettings size={16} />
-            设置
-          </Link>
-          <Link
-            to="/app/image-bed"
-            role="menuitem"
-            className={css.userDropdownItem}
-            onClick={() => setOpen(false)}
-          >
-            <IconImage size={16} />
-            图床
-          </Link>
-          <Link
-            to="/about"
-            role="menuitem"
-            className={css.userDropdownItem}
-            onClick={() => setOpen(false)}
-          >
-            <IconQuestion size={16} />
-            使用帮助
-          </Link>
-          <div className={css.userDropdownDivider} />
-          <button
-            type="button"
-            role="menuitem"
-            className={css.userDropdownItem}
-            onClick={() => {
-              setOpen(false)
-              onLogout()
-            }}
-          >
-            <IconLogout size={16} />
-            退出登录
-          </button>
-        </div>
-      )}
-    </div>
+    <Menu
+      ariaLabel={`账号菜单：${displayName}`}
+      trigger={
+        <>
+          <span className={css.avatar}>{initial}</span>
+          <span className={css.userIdentity}>
+            <span className={css.userName}>{displayName}</span>
+            <span className={css.userCaption}>账号与设置</span>
+          </span>
+          <IconChevronDown size={14} className={css.userChevron} />
+        </>
+      }
+      triggerClassName={css.userMenuBtn}
+      items={items}
+    />
   )
 }
