@@ -1,6 +1,8 @@
 import { globalStyle, style } from '@vanilla-extract/css'
 import { vars } from '../../styles/theme.css'
 
+// 通知卡样式：容器已迁移到 Fluent Toaster（bottom-end, limit 4），
+// 卡片内容仍是自定义 JSX，沿用原视觉。移动端避让底部导航的偏移在页面批次统一处理。
 export const notice = style({
   width: 'min(360px, calc(100vw - 32px))',
   padding: `${vars.space.sm} ${vars.space.md}`,
@@ -29,21 +31,20 @@ export const info = style({
   color: vars.color.primarySubtleInk,
 })
 
-globalStyle('[data-sonner-toaster][data-y-position="bottom"]', {
-  '@media': {
-    'screen and (max-width: 820px)': {
-      bottom: 'calc(82px + env(safe-area-inset-bottom)) !important',
-    },
-    'screen and (max-width: 600px)': {
-      width: 'calc(100% - 32px) !important',
-    },
-  },
+// 常驻任务卡层：与通知 Toaster 同区域（右下角），向上堆叠；层本身不拦截交互，卡自身恢复
+export const taskLayer = style({
+  position: 'fixed',
+  right: 24,
+  bottom: 24,
+  zIndex: vars.zIndex.toast,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+  gap: vars.space.sm,
+  pointerEvents: 'none',
+  maxWidth: 'min(420px, calc(100vw - 32px))',
 })
 
-globalStyle('[data-sonner-toaster] [data-sonner-toast]', {
-  '@media': {
-    'screen and (max-width: 600px)': {
-      width: '100% !important',
-    },
-  },
+globalStyle(`${taskLayer} > *`, {
+  pointerEvents: 'auto',
 })

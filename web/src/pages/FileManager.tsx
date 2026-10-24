@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -34,7 +35,7 @@ import { Field } from '../components/ui/Field'
 import { Input } from '../components/ui/Input'
 import { Menu, type MenuOption } from '../components/ui/Menu'
 import { Select } from '../components/ui/Select'
-import { toast, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
+import { getTaskToastLayer, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
 import { Tooltip } from '../components/ui/Tooltip'
 import {
   EntryIcon,
@@ -1262,9 +1263,8 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   )
 }
 
-// 任务卡 toast 只在挂载时创建一次；后续状态经 store 原地更新。
-// 反复以同 id 调用 toast.custom 会让 sonner 重建整卡 DOM，
-// 用户点击“关闭/取消”可能落在重建瞬间而落空。
+// 任务卡经 portal 渲染到独立任务层（见 ui/Toast.getTaskToastLayer）；
+// Host 挂载即创建、卸载即移除，状态经 store 原地更新，不存在 DOM 重建窗口。
 type StableToastStore<T> = {
   get: () => T
   subscribe: (listener: () => void) => () => void
@@ -1301,41 +1301,21 @@ function UploadTaskToastHost({
   onRetry: () => void
   onClose: () => void
 }) {
-  const toastID = 'file-upload-task'
   const store = useStableToastStore({ task, onCancel, onRetry, onClose })
 
   useEffect(() => {
     store.set({ task, onCancel, onRetry, onClose })
   })
 
-  useEffect(() => {
-    toast.custom(
-      (id) => <UploadTaskToastView store={store} toastID={id} />,
-      {
-        id: toastID,
-        duration: Infinity,
-        dismissible: false,
-        unstyled: true,
-        position: 'bottom-right',
-      },
-    )
-  }, [store, toastID])
-
-  useEffect(() => () => {
-    toast.dismiss(toastID)
-  }, [toastID])
-
-  return null
+  return createPortal(<UploadTaskToastView store={store} />, getTaskToastLayer())
 }
 
-function UploadTaskToastView({ store, toastID }: {
+function UploadTaskToastView({ store }: {
   store: StableToastStore<{ task: UploadTaskSnapshot; onCancel: () => void; onRetry: () => void; onClose: () => void }>
-  toastID: string | number
 }) {
   const state = useSyncExternalStore(store.subscribe, store.get)
   return (
     <UploadTaskToast
-      toastID={toastID}
       task={state.task}
       onCancel={state.onCancel}
       onRetry={state.onRetry}
@@ -1345,13 +1325,11 @@ function UploadTaskToastView({ store, toastID }: {
 }
 
 function UploadTaskToast({
-  toastID,
   task,
   onCancel,
   onRetry,
   onClose,
 }: {
-  toastID: string | number
   task: UploadTaskSnapshot
   onCancel: () => void
   onRetry: () => void
@@ -1391,7 +1369,6 @@ function UploadTaskToast({
         </div>
         {!isRunning && (
           <button className={css.uploadToastClose} type="button" onClick={() => {
-            toast.dismiss(toastID)
             onClose()
           }}>关闭</button>
         )}
@@ -1472,47 +1449,26 @@ function PasteTaskToastHost({
   task: PasteTaskSnapshot
   onClose: () => void
 }) {
-  const toastID = 'file-paste-task'
   const store = useStableToastStore({ task, onClose })
 
   useEffect(() => {
     store.set({ task, onClose })
   })
 
-  useEffect(() => {
-    toast.custom(
-      (id) => <PasteTaskToastView store={store} toastID={id} />,
-      {
-        id: toastID,
-        duration: Infinity,
-        dismissible: false,
-        unstyled: true,
-        position: 'bottom-right',
-      },
-    )
-  }, [store, toastID])
-
-  useEffect(() => () => {
-    toast.dismiss(toastID)
-  }, [toastID])
-
-  return null
+  return createPortal(<PasteTaskToastView store={store} />, getTaskToastLayer())
 }
 
-function PasteTaskToastView({ store, toastID }: {
+function PasteTaskToastView({ store }: {
   store: StableToastStore<{ task: PasteTaskSnapshot; onClose: () => void }>
-  toastID: string | number
 }) {
   const state = useSyncExternalStore(store.subscribe, store.get)
-  return <PasteTaskToast toastID={toastID} task={state.task} onClose={state.onClose} />
+  return <PasteTaskToast task={state.task} onClose={state.onClose} />
 }
 
 function PasteTaskToast({
-  toastID,
   task,
   onClose,
 }: {
-  toastID: string | number
   task: PasteTaskSnapshot
   onClose: () => void
 }) {
@@ -1541,7 +1497,6 @@ function PasteTaskToast({
         </div>
         {task.status !== 'running' && (
           <button className={css.uploadToastClose} type="button" onClick={() => {
-            toast.dismiss(toastID)
             onClose()
           }}>关闭</button>
         )}
@@ -1559,37 +1514,30 @@ function PasteTaskToast({
   )
 }
 
-function BatchDeleteTaskToastHost({ task, onClose }: {
+function BatchDeleteTaskToastHost({
+  task,
+  onClose,
+}: {
   task: BatchDeleteTaskSnapshot
   onClose: () => void
 }) {
-  const toastID = 'file-batch-delete-task'
   const store = useStableToastStore({ task, onClose })
 
   useEffect(() => {
     store.set({ task, onClose })
   })
 
-  useEffect(() => {
-    toast.custom(
-      (id) => <BatchDeleteTaskToastView store={store} toastID={id} />,
-      { id: toastID, duration: Infinity, dismissible: false, unstyled: true, position: 'bottom-right' },
-    )
-  }, [store, toastID])
-  useEffect(() => () => { toast.dismiss(toastID) }, [toastID])
-  return null
+  return createPortal(<BatchDeleteTaskToastView store={store} />, getTaskToastLayer())
 }
 
-function BatchDeleteTaskToastView({ store, toastID }: {
+function BatchDeleteTaskToastView({ store }: {
   store: StableToastStore<{ task: BatchDeleteTaskSnapshot; onClose: () => void }>
-  toastID: string | number
 }) {
   const state = useSyncExternalStore(store.subscribe, store.get)
-  return <BatchDeleteTaskToast toastID={toastID} task={state.task} onClose={state.onClose} />
+  return <BatchDeleteTaskToast task={state.task} onClose={state.onClose} />
 }
 
-function BatchDeleteTaskToast({ toastID, task, onClose }: {
-  toastID: string | number
+function BatchDeleteTaskToast({ task, onClose }: {
   task: BatchDeleteTaskSnapshot
   onClose: () => void
 }) {
@@ -1615,7 +1563,6 @@ function BatchDeleteTaskToast({ toastID, task, onClose }: {
         </div>
         {task.status !== 'running' && (
           <button className={css.uploadToastClose} type="button" onClick={() => {
-            toast.dismiss(toastID)
             onClose()
           }}>关闭</button>
         )}
