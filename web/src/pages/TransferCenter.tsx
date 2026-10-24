@@ -1,9 +1,10 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AppShell } from '../components/layout/AppShell'
 import { TransferWorkspace } from '../components/transfer/TransferWorkspace'
-import * as css from './TransferCenter.css'
+import { useStyles } from './TransferCenter.styles'
 
 export function TransferCenterPage() {
+  const css = useStyles()
   const search = useSearch({ from: '/app/transfer' })
   const navigate = useNavigate()
   return <AppShell title="流转中心">

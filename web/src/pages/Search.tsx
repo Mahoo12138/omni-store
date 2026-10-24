@@ -21,9 +21,10 @@ import {
 } from '../components/ui/Icon'
 import { Select } from '../components/ui/Select'
 import { formatBytes, formatDate } from '../utils/format'
-import * as css from './Search.css'
+import { useStyles } from './Search.styles'
 
 export function SearchPage() {
+  const css = useStyles()
   const search = useSearch({ from: '/app/search' })
   const navigate = useNavigate()
   const [draftQuery, setDraftQuery] = useState(search.q)

@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { IconDownload, IconFile, IconKey } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
-import * as css from './PublicCollect.css'
+import { useStyles } from './PublicCollect.styles'
 
 type Access = { token: string; expires_at: string }
 
@@ -18,6 +18,7 @@ export function PublicPickupPage() {
 }
 
 function PickupTask({ publicKey }: { publicKey: string }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const autoStarted = useRef(false)
   const recoveringToken = useRef('')

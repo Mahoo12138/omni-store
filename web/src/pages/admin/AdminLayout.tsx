@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchMe } from '../../api/auth'
 import { AppShell } from '../../components/layout/AppShell'
 import { Button } from '../../components/ui/Button'
-import * as css from '../../components/layout/AdminShell.css'
+import { useStyles } from '../../components/layout/AdminShell.styles'
 
 // 设置布局：复用 /app 侧栏 + 顶栏。个人设置对所有登录用户开放，
 // 管理分区由页面和后端共同限制为超级管理员。
@@ -31,6 +31,7 @@ export function AdminPageHeader({
   title: string
   actions?: ReactNode
 }) {
+  const css = useStyles()
   return (
     <div className={css.pageHeader}>
       <h1 className={css.pageTitle}>{title}</h1>

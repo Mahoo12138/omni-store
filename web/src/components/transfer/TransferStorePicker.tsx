@@ -6,12 +6,13 @@ import { DialogWrap } from '../ui/Dialog'
 import { Field } from '../ui/Field'
 import { Select } from '../ui/Select'
 import { formatBytes } from '../../utils/format'
-import * as css from '../../pages/TransferCenter.css'
+import { useStyles } from '../../pages/TransferCenter.styles'
 
 export function StoreBrowserDialog({ onAdd, onClose }: {
   onAdd: (sourceKey: string, paths: string[]) => Promise<void>
   onClose: () => void
 }) {
+  const css = useStyles()
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
   const usable = sources.data ?? []
   const [sourceKey, setSourceKey] = useState('')

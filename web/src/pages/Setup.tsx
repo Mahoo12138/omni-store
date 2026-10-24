@@ -7,9 +7,10 @@ import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { LogoMark } from '../components/ui/Icon'
-import * as css from './AuthForm.css'
+import { useStyles } from './AuthForm.styles'
 
 export function SetupPage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const status = useQuery({ queryKey: ['setup-status'], queryFn: fetchSetupStatus })
 

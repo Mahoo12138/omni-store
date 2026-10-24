@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { IconCheck, IconClose, IconFolder, IconKey, IconUpload } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
-import * as css from './PublicCollect.css'
+import { useStyles } from './PublicCollect.styles'
 
 type Access = { token: string; expires_at: string }
 type PickedFile = { id: number; relativePath: string; file: File }
@@ -21,6 +21,7 @@ export function PublicCollectPage() {
 // The keyed task owns authentication and the upload draft together. Re-authentication
 // keeps the draft; opening a different collection cannot inherit either state.
 function CollectionTask({ publicKey }: { publicKey: string }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const folderInput = useRef<HTMLInputElement>(null)

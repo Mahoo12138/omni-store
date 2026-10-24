@@ -7,9 +7,10 @@ import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { IconDownload, IconFile, IconFolder, IconStar } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
-import * as css from './Favorites.css'
+import { useStyles } from './Favorites.styles'
 
 export function FavoritesPage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const favorites = useQuery({ queryKey: ['my-favorites'], queryFn: fetchMyFavorites })

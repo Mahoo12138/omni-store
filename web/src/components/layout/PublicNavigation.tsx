@@ -2,10 +2,11 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAuthStatus } from '../../api/auth'
 import { IconCloud, IconFolder, IconGrid, IconImage, IconUser } from '../ui/Icon'
-import * as css from './PublicNavigation.css'
+import { useStyles } from './PublicNavigation.styles'
 
 // Public pages share one set of destinations, account state and button styles.
 export function PublicNavigation({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
+  const css = useStyles()
   const { pathname } = useLocation()
   const disk = pathname === '/' || pathname.startsWith('/public/')
   const upload = pathname === '/upload'

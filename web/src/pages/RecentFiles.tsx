@@ -7,9 +7,10 @@ import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { IconActivity, IconDownload, IconFile, IconFolder } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
-import * as css from './RecentFiles.css'
+import { useStyles } from './RecentFiles.styles'
 
 export function RecentFilesPage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const recent = useQuery({ queryKey: ['recent-files'], queryFn: () => fetchRecentFiles(50) })
   const files = recent.data ?? []

@@ -17,9 +17,10 @@ import { Input } from '../components/ui/Input'
 import { IconChevronLeft, IconFile, IconFolder, IconRefresh, IconRestore, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatBytes, formatDate } from '../utils/format'
-import * as css from './Trash.css'
+import { useStyles } from './Trash.styles'
 
 export function TrashPage() {
+  const css = useStyles()
   const { sourceKey } = useParams({ from: '/app/sources/$sourceKey/trash' })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -199,6 +200,7 @@ function PurgeDialog({ sourceKey, entry, onClose, onSuccess }: {
   onClose: () => void
   onSuccess: () => void
 }) {
+  const css = useStyles()
   const [error, setError] = useState('')
   const mutation = useMutation({
     mutationFn: () => purgeTrash(sourceKey, entry.key),

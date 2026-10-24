@@ -7,10 +7,11 @@ import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { LogoMark } from '../components/ui/Icon'
-import * as css from './AuthForm.css'
+import { useStyles } from './AuthForm.styles'
 import { validateTransferSearch } from '../utils/transfer-workspace'
 
 export function LoginPage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const search = useSearch({ from: '/login' })
   const queryClient = useQueryClient()

@@ -9,9 +9,10 @@ import { Button } from '../components/ui/Button'
 import { IconCopy, IconExternalLink, IconFile, IconFolder, IconLink, IconQr, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatDate } from '../utils/format'
-import * as css from './Shares.css'
+import { useStyles } from './Shares.styles'
 
 export function SharesPage() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const shares = useQuery({ queryKey: ['shares'], queryFn: fetchShares })
   const [revokeTarget, setRevokeTarget] = useState<FileShare | null>(null)
@@ -87,6 +88,7 @@ export function SharesPage() {
 }
 
 function ShareRow({ share, onCopy, onQr, onRevoke }: { share: FileShare; onCopy: () => void; onQr: () => void; onRevoke: () => void }) {
+  const css = useStyles()
   const left = share.max_downloads > 0 ? Math.max(0, share.max_downloads - share.download_count) : null
   return (
     <article className={css.card}>

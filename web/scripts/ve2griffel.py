@@ -41,12 +41,26 @@ VARS: dict[str, str] = {
     'font.body': 'var(--fontFamilyBase)', 'font.mono': 'var(--fontFamilyMonospace)',
     'zIndex.dropdown': '10', 'zIndex.sticky': '20', 'zIndex.backdrop': '30', 'zIndex.modal': '40', 'zIndex.toast': '50',
     'motion.fast': 'var(--durationNormal)', 'motion.base': 'var(--durationSlower)', 'motion.ease': 'var(--curveDecelerateMax)',
+    'color.tileBlueBg': 'oklch(0.94 0.045 262)',
+    'color.tileBlueFg': 'oklch(0.55 0.2 262)',
+    'color.tileGreenBg': 'oklch(0.94 0.05 150)',
+    'color.tileGreenFg': 'oklch(0.52 0.14 150)',
+    'color.tileAmberBg': 'oklch(0.95 0.05 80)',
+    'color.tileAmberFg': 'oklch(0.6 0.13 70)',
+    'color.tilePurpleBg': 'oklch(0.94 0.045 300)',
+    'color.tilePurpleFg': 'oklch(0.53 0.17 300)',
+    'color.tileTealBg': 'oklch(0.94 0.05 200)',
+    'color.tileTealFg': 'oklch(0.52 0.11 210)',
+    'color.tileRedBg': 'oklch(0.94 0.035 27)',
+    'color.tileRedFg': 'oklch(0.55 0.19 27)',
 }
 
 def replace_vars(src: str) -> str:
-    for k, v in VARS.items():
-        src = src.replace('${vars.%s}' % k, v)
-        src = src.replace('vars.%s' % k, v)
+    # 按 key 长度降序,避免前缀污染(text 吃掉 textSecondary);
+    # 模板串内替换不加引号,独立值位置替换为带引号字符串
+    for k in sorted(VARS, key=len, reverse=True):
+        src = src.replace('${vars.%s}' % k, VARS[k])
+        src = src.replace('vars.%s' % k, "'%s'" % VARS[k])
     return src
 
 def flatten_media(sel_block: str) -> str:
