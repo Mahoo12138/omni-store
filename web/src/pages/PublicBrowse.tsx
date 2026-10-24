@@ -18,13 +18,16 @@ import {
 import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
 import * as ft from '../components/files/FileTable.css'
-import * as css from './PublicBrowse.css'
+import { useStyles } from './PublicBrowse.styles'
+import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 import * as homeCss from './Home.css'
 
 type ViewMode = 'list' | 'grid'
 
 // 公开目录浏览 /public/*（2.0 固定入口）：匿名只读，文件点击即在新页打开 raw。
 export function PublicBrowsePage() {
+  const css = useStyles()
+  const o = useOutlineStyles()
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -89,11 +92,11 @@ export function PublicBrowsePage() {
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </span>
-              <div className={css.viewToggle} role="tablist" aria-label="视图切换">
+              <div className={o.outlineList} role="tablist" aria-label="视图切换">
                 <button
                   role="tab"
                   aria-selected={view === 'list'}
-                  className={css.viewToggleBtn}
+                  className={o.outlineTab}
                   onClick={() => setView('list')}
                   title="列表视图"
                   aria-label="列表视图"
@@ -103,7 +106,7 @@ export function PublicBrowsePage() {
                 <button
                   role="tab"
                   aria-selected={view === 'grid'}
-                  className={css.viewToggleBtn}
+                  className={o.outlineTab}
                   onClick={() => setView('grid')}
                   title="网格视图"
                   aria-label="网格视图"
@@ -188,6 +191,7 @@ function FileGrid({
   onOpenDir: (name: string) => void
   virtualPath: string
 }) {
+  const css = useStyles()
   if (loading) {
     return (
       <div className={css.grid} aria-busy="true" aria-label="加载中">
@@ -233,6 +237,7 @@ function GridCard({
   onOpenDir: (name: string) => void
   href: string
 }) {
+  const css = useStyles()
   if (entry.type === 'dir') {
     return (
       <button className={css.gridCard} onClick={() => onOpenDir(entry.name)} title={entry.name}>

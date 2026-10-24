@@ -23,7 +23,9 @@ import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
 import { transferFilePath, type TransferRecordKind, type TransferWorkspaceSearch } from '../../utils/transfer-workspace'
-import * as css from './TransferWorkspace.css'
+import { useStyles } from './TransferWorkspace.styles'
+import { useStyles as useOutlineStyles } from '../ui/Outline.styles'
+import { mergeClasses } from '@fluentui/react-components'
 
 type WorkspaceProps = {
   search: TransferWorkspaceSearch
@@ -48,6 +50,7 @@ const positiveInteger = (value: string, label: string) => {
 }
 
 export function TransferServiceSummary() {
+  const css = useStyles()
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false, staleTime: 0 })
   const service = system.isError ? undefined : system.data?.transfer_center
   return <div className={css.service} aria-live="polite">
@@ -58,6 +61,8 @@ export function TransferServiceSummary() {
 }
 
 export function TransferWorkspace({ search, onNavigate, framed = false }: WorkspaceProps) {
+  const css = useStyles()
+  const o = useOutlineStyles()
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 0 })
   const identity = useQuery({ queryKey: ['transfer-identity', auth.data?.authenticated], queryFn: fetchTransferIdentity, retry: false, enabled: auth.isSuccess, staleTime: 0 })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false, staleTime: 0 })
@@ -73,16 +78,16 @@ export function TransferWorkspace({ search, onNavigate, framed = false }: Worksp
   if (search.record && search.id) { params.set('record', search.record); params.set('id', String(search.id)) }
   return <div className={framed ? css.workspace : css.publicWorkspace}>
     <Tabs.Root key={owner?.owner_key ?? 'pending'} value={search.view} onValueChange={(value) => { if (!writing) onNavigate({ view: value as TransferWorkspaceSearch['view'] }) }}>
-      <Tabs.List className={framed ? css.tabs : css.publicTabs} aria-label="中转功能">
-        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="send" disabled={writing}>发送文件</Tabs.Tab>
-        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="collect" disabled={writing}>收集文件</Tabs.Tab>
-        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="history" disabled={writing}>收发记录</Tabs.Tab>
+      <Tabs.List className={framed ? css.tabs : mergeClasses(o.outlineList, css.publicTabs)} aria-label="中转功能">
+        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="send" disabled={writing}>发送文件</Tabs.Tab>
+        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="collect" disabled={writing}>收集文件</Tabs.Tab>
+        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="history" disabled={writing}>收发记录</Tabs.Tab>
       </Tabs.List>
       {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : auth.isError || identity.isError ? (
         <div className={css.notice}>
           <span role="alert">收发身份暂时无法恢复，请重新检查。</span>
           <Button variant="secondary" onClick={() => { if (auth.isError) void auth.refetch(); else void identity.refetch() }}>重新检查收发身份</Button>
-          <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={css.link}>登录并继续</Link>
+          <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={mergeClasses(o.outlineTab, css.link)}>登录并继续</Link>
         </div>
       ) : guest ? <p className={css.text}>你正在以访客身份使用。记录保存在当前浏览器，清除 Cookie 或更换设备后无法恢复。访客身份有效期至 {new Date(identity.data!.expires_at!).toLocaleString()}，任务最晚于此时结束。</p> : null}
       {service?.hint ? <p className={css.text}>{service.hint}</p> : null}
@@ -95,6 +100,7 @@ export function TransferWorkspace({ search, onNavigate, framed = false }: Worksp
 }
 
 function Settings({ kind, config, setConfig, disabled, guest }: { kind: TransferRecordKind; config: Config; setConfig: Dispatch<SetStateAction<Config>>; disabled: boolean; guest: boolean }) {
+  const css = useStyles()
   const collect = kind === 'collect'
   const update = (key: keyof Config, value: string | boolean) => setConfig((old) => ({ ...old, [key]: value }))
   return <details className={css.settings}>
@@ -134,6 +140,7 @@ type PickedFile = { id: string; file: File; path: string; state: 'queued' | 'upl
 function FilePicker({ files, onFiles, onRemove, disabled, testPrefix = 'transfer', onStore }: {
   files: PickedFile[]; onFiles: (files: File[]) => void; onRemove: (id: string) => void; disabled: boolean; testPrefix?: string; onStore?: () => void
 }) {
+  const css = useStyles()
   const input = useRef<HTMLInputElement>(null)
   const folder = useRef<HTMLInputElement>(null)
   const selected = (list: FileList | null) => { const batch = Array.from(list ?? []); if (batch.length) onFiles(batch) }
@@ -157,6 +164,7 @@ function FilePicker({ files, onFiles, onRemove, disabled, testPrefix = 'transfer
 }
 
 function ShareLinks({ kind, task, code, onRecord }: { kind: TransferRecordKind; task: TransferSend | TransferCollection; code?: string; onRecord?: (kind: TransferRecordKind, id: number) => void }) {
+  const css = useStyles()
   const [error, setError] = useState('')
   const [qr, setQR] = useState(false)
   const path = `/${kind === 'send' ? 'pickup' : 'collect'}/${task.public_key}`
@@ -179,6 +187,7 @@ function ShareLinks({ kind, task, code, onRecord }: { kind: TransferRecordKind; 
 }
 
 function CollectionComposer({ canCreate, onRecord, guest }: { canCreate: boolean; guest: boolean; onRecord: (kind: TransferRecordKind, id: number) => void }) {
+  const css = useStyles()
   const defaults = { ...initialConfig, expiry: guest ? '24' : initialConfig.expiry }
   const [config, setConfig] = useState(defaults)
   const [result, setResult] = useState<{ collection: TransferCollection; code: string } | null>(null)
@@ -203,6 +212,7 @@ function CollectionComposer({ canCreate, onRecord, guest }: { canCreate: boolean
 }
 
 function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: boolean; guest: boolean; canUseStore: boolean; onRecord: (kind: TransferRecordKind, id: number) => void }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const defaults = { ...initialConfig, expiry: guest ? '24' : initialConfig.expiry }
   const [config, setConfig] = useState(defaults)
@@ -283,6 +293,7 @@ function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: 
 }
 
 function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID: string; canUseStore: boolean } & WorkspaceProps) {
+  const css = useStyles()
   const [category, setCategory] = useState<TransferRecordKind>(search.record ?? 'send')
   const sends = useQuery({ queryKey: ['transfer-sends', ownerID], queryFn: listMySends, retry: false })
   const collections = useQuery({ queryKey: ['transfer-collections', ownerID], queryFn: listMyCollections, retry: false })
@@ -305,10 +316,12 @@ function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID
 }
 
 function TaskMeta({ task }: { task: TransferSend | TransferCollection }) {
+  const css = useStyles()
   return <div className={css.meta}><Badge color={task.status === 'active' ? 'green' : task.status === 'draft' ? 'blue' : 'gray'}>{statusLabels[task.status] ?? task.status}</Badge><span>{task.total_files} 个文件 · {formatBytes(task.total_size)}</span><span>{task.expires_at ? `有效期至 ${new Date(task.expires_at).toLocaleString()}` : '永不过期'}</span></div>
 }
 
 function RecordDetail({ ownerID, canUseStore, kind, id, onBack }: { ownerID: string; canUseStore: boolean; kind: TransferRecordKind; id: number; onBack: () => void }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const task = useQuery<TransferSend | TransferCollection>({ queryKey: ['transfer-record', ownerID, kind, id], queryFn: () => kind === 'send' ? getSend(id) : getCollection(id), retry: false })
   const writing = useIsMutating({ mutationKey: ['transfer-write', id] }) > 0
@@ -343,10 +356,12 @@ function RecordDetail({ ownerID, canUseStore, kind, id, onBack }: { ownerID: str
 }
 
 function CollectionConstraints({ collection }: { collection: TransferCollection }) {
+  const css = useStyles()
   return <p className={css.text}>姓名：{collection.require_name ? '必填' : '可选'}<br />备注：{collection.require_note ? '必填' : '可选'}<br />文件类型：{collection.allowed_exts.length ? collection.allowed_exts.join('、') : '不限制'}<br />单文件上限：{collection.max_file_size ? formatBytes(collection.max_file_size) : '不限制'}<br />总量上限：{collection.max_total_size ? formatBytes(collection.max_total_size) : '不限制'}</p>
 }
 
 function SendRecord({ send, onChanged, canUseStore }: { send: TransferSend; canUseStore: boolean; onChanged: () => Promise<unknown> }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const files = useQuery({ queryKey: ['transfer-draft', send.id], queryFn: () => listSendFilesByID(send.id), retry: false })
   const [picked, setPicked] = useState<PickedFile[]>([])
@@ -393,6 +408,7 @@ function SendRecord({ send, onChanged, canUseStore }: { send: TransferSend; canU
 }
 
 function CollectionInbox({ collection, canUseStore }: { collection: TransferCollection; canUseStore: boolean }) {
+  const css = useStyles()
   const submissions = useQuery({ queryKey: ['transfer-inbox', collection.id], queryFn: () => listSubmissions(collection.id), retry: false })
   return <div className={css.stack}><h3 className={css.subheading}>收到的文件</h3>
     {submissions.isPending ? <p className={css.text}>正在加载提交…</p> : submissions.isError ? <div className={css.stack}><p role="alert" className={css.error}>{message(submissions.error)}</p><div className={css.actions}><Button variant="secondary" onClick={() => void submissions.refetch()}>重新加载提交</Button></div></div> : !submissions.data?.length ? <p className={css.text}>还没有收到提交。分享收集链接，对方可直接打开上传。</p> : submissions.data.map((submission) => <SubmissionFiles key={submission.id} canUseStore={canUseStore} collectionID={collection.id} submission={submission} />)}
@@ -400,6 +416,7 @@ function CollectionInbox({ collection, canUseStore }: { collection: TransferColl
 }
 
 function SubmissionFiles({ collectionID, submission, canUseStore }: { collectionID: number; submission: TransferSubmission; canUseStore: boolean }) {
+  const css = useStyles()
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources, retry: false, enabled: canUseStore })
   const [sourceKey, setSourceKey] = useState('')
   const [path, setPath] = useState('')

@@ -20,9 +20,11 @@ import { resolvePreview } from '../preview/resolver'
 import { IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconKey, IconLink, IconList } from '../components/ui/Icon'
 import { formatDate } from '../utils/format'
 import * as ft from '../components/files/FileTable.css'
-import * as css from './PublicShare.css'
+import { useStyles } from './PublicShare.styles'
+import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 
 export function PublicSharePage() {
+  const css = useStyles()
   const { shareKey } = useParams({ from: '/s/$shareKey' })
   const search = useSearch({ from: '/s/$shareKey' })
   const queryClient = useQueryClient()
@@ -83,6 +85,7 @@ export function PublicSharePage() {
 }
 
 function ShareStatus({ title, hint }: { title: string; hint: string }) {
+  const css = useStyles()
   return (
     <PublicShell>
       <div className={css.empty}>
@@ -96,6 +99,7 @@ function ShareStatus({ title, hint }: { title: string; hint: string }) {
 
 // —— 文件分享：按统一预览类型内嵌展示（图片/PDF/文本/音视频），不支持则仅下载 ——
 function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInfo }) {
+  const css = useStyles()
   const item: PreviewItem = {
     name: info.name,
     size: info.size ?? null,
@@ -119,6 +123,8 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
 
 // —— 目录分享：列表 / 画廊两种视图 + 目录流式 ZIP 打包下载 ——
 function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; info: PublicShareInfo; path: string; page: number }) {
+  const css = useStyles()
+  const o = useOutlineStyles()
   const navigateRoute = useNavigate()
   const [view, setView] = useState<'list' | 'gallery'>('list')
   const [previewState, setPreviewState] = useState<{ items: PreviewItem[]; index: number } | null>(null)
@@ -197,10 +203,10 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
               <IconDownload size={15} /> 下载全部 (ZIP)
             </a>
           ) : null}
-          <div className={css.viewToggle}>
+          <div className={o.outlineList}>
             <button
               type="button"
-              className={css.viewOption}
+              className={o.outlineTab}
               onClick={() => setView('list')}
               aria-pressed={view === 'list'}
             >
@@ -208,7 +214,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
             </button>
             <button
               type="button"
-              className={css.viewOption}
+              className={o.outlineTab}
               onClick={() => setView('gallery')}
               aria-pressed={view === 'gallery'}
               disabled={galleryImages.length === 0}
@@ -281,6 +287,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
 }
 
 function ShareHero({ info, children }: { info: PublicShareInfo; children?: React.ReactNode }) {
+  const css = useStyles()
   const remaining = info.max_downloads > 0 ? Math.max(0, info.max_downloads - info.download_count) : null
   return (
     <header className={css.hero}>

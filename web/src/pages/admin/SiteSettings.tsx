@@ -18,7 +18,9 @@ import { IconDownload } from '../../components/ui/Icon'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import * as css from './AdminOverview.css'
-import * as siteCss from './SiteSettings.css'
+import { useStyles as useSiteStyles } from './SiteSettings.styles'
+import { useStyles as useOutlineStyles } from '../../components/ui/Outline.styles'
+import { mergeClasses } from '@fluentui/react-components'
 
 type SiteTab = 'services' | 'general'
 const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string }[] = [
@@ -41,19 +43,21 @@ const siteServices: { key: SiteCapability; name: string; description: string; bi
 const fetchAnonymousStatus = () => apiFetch<{ max_file_size_mb: number; enabled: boolean }>('/api/v1/image-bed/anonymous-status')
 
 export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabChange: (tab: SiteTab) => void }) {
+  const site = useSiteStyles()
+  const o = useOutlineStyles()
   return (
-    <div className={siteCss.root}>
+    <div className={site.root}>
       <div>
         <h2 className={css.sectionTitle}>站点配置</h2>
         <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
       </div>
-      <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={siteCss.tabs}>
-        <Tabs.List className={siteCss.tabList} aria-label="站点配置">
-          <Tabs.Tab className={siteCss.tab} value="services">站点服务</Tabs.Tab>
-          <Tabs.Tab className={siteCss.tab} value="general">通用配置</Tabs.Tab>
+      <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={site.tabs}>
+        <Tabs.List className={mergeClasses(o.outlineList, site.tabList)} aria-label="站点配置">
+          <Tabs.Tab className={mergeClasses(o.outlineTab, site.tab)} value="services">站点服务</Tabs.Tab>
+          <Tabs.Tab className={mergeClasses(o.outlineTab, site.tab)} value="general">通用配置</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="services" className={siteCss.panel}><SiteServicesSection /></Tabs.Panel>
-        <Tabs.Panel value="general" className={siteCss.panel}>
+        <Tabs.Panel value="services" className={site.panel}><SiteServicesSection /></Tabs.Panel>
+        <Tabs.Panel value="general" className={site.panel}>
           <BrandingSection />
           <SiteRuntimeSection />
           <BackupSection />
@@ -64,6 +68,7 @@ export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabC
 }
 
 function SiteServicesSection() {
+  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const capabilities = useQuery({ queryKey: ['admin-capabilities'], queryFn: adminListCapabilities, retry: false })
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources, retry: false })
@@ -78,7 +83,7 @@ function SiteServicesSection() {
     const error = capabilities.error || sources.error
     return (
       <section className={css.section}><div className={css.sectionBody}>
-        {error ? <><div role="alert" className={siteCss.error}>站点服务加载失败：{error.message}</div><Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button></>
+        {error ? <><div role="alert" className={site.error}>站点服务加载失败：{error.message}</div><Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button></>
           : <span role="status" className={css.kvLabel}>正在加载站点服务…</span>}
       </div></section>
     )
@@ -100,7 +105,7 @@ function SiteServicesSection() {
               <Button variant="secondary" disabled={!binding} onClick={() => { setEditing(service.key); setMessage(null) }}>配置</Button>
             </header>
             <div className={css.sectionBody}>
-              <dl className={siteCss.facts}>
+              <dl className={site.facts}>
                 <div><dt>服务状态</dt><dd>
                   {!binding ? <Badge color="red">配置缺失</Badge>
                     : !binding.source_key ? <Badge color="gray">未绑定</Badge>
@@ -109,13 +114,13 @@ function SiteServicesSection() {
                     : source.is_disabled ? <Badge color="red">存储源已禁用</Badge>
                     : <Badge color="green">已启用</Badge>}
                 </dd></div>
-                <div><dt>绑定存储源</dt><dd className={siteCss.source}>
+                <div><dt>绑定存储源</dt><dd className={site.source}>
                   <span>{binding?.source_name || '未绑定'}</span>
-                  {source ? <span className={siteCss.path}>{source.root_path}</span> : null}
+                  {source ? <span className={site.path}>{source.root_path}</span> : null}
                 </dd></div>
               </dl>
               {service.key === 'image_bed' && binding ? <ImageBedOptions usable={binding.enabled && !!source && !source.is_disabled} /> : null}
-              {message?.key === service.key ? <div role="status" className={siteCss.message}>{message.text}</div> : null}
+              {message?.key === service.key ? <div role="status" className={site.message}>{message.text}</div> : null}
             </div>
           </article>
         )
@@ -138,6 +143,7 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
+  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const [enabled, setEnabled] = useState(binding.enabled)
   const [sourceKey, setSourceKey] = useState(binding.source_key ?? '')
@@ -183,13 +189,14 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
         <Select ariaLabel="绑定存储源" value={sourceKey} disabled={mutation.isPending} onValueChange={setSourceKey}
           options={[{ value: '', label: '未绑定' }, ...sources.map((source) => ({ value: source.key, label: `${source.name}${source.is_disabled ? '（已禁用）' : ''}`, disabled: source.is_disabled }))]} />
       </Field>
-      {sourceKey ? <p className={siteCss.path}>{sources.find((source) => source.key === sourceKey)?.root_path}</p> : null}
-      {conflict ? <div role="alert" className={siteCss.error}>{conflict}</div> : error ? <div role="alert" className={siteCss.error}>{error}</div> : null}
+      {sourceKey ? <p className={site.path}>{sources.find((source) => source.key === sourceKey)?.root_path}</p> : null}
+      {conflict ? <div role="alert" className={site.error}>{conflict}</div> : error ? <div role="alert" className={site.error}>{error}</div> : null}
     </DialogWrap>
   )
 }
 
 function ImageBedOptions({ usable }: { usable: boolean }) {
+  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const settings = useQuery({ queryKey: ['admin-anon-settings'], queryFn: adminGetAnonymousSettings, retry: false })
   const retention = useQuery({ queryKey: ['admin-image-bed-retention'], queryFn: adminGetImageBedRetention, retry: false })
@@ -214,31 +221,32 @@ function ImageBedOptions({ usable }: { usable: boolean }) {
   })
   const days = (value: number) => value === 0 ? '不自动过期' : `${value} 天`
   return (
-    <div className={siteCss.featureGroup}>
+    <div className={site.featureGroup}>
       {settings.data ? (
         <>
           <label className={fieldCss.checkboxRow}>
             <input type="checkbox" aria-label="允许匿名上传" className={fieldCss.checkbox} checked={settings.data.enabled}
               disabled={mutation.isPending || settings.isFetching || (!usable && !settings.data.enabled)} onChange={(event) => mutation.mutate(event.target.checked)} />允许匿名上传
           </label>
-          <p className={siteCss.hint}>{!usable ? '图床服务或绑定源当前不可用，匿名入口暂不可用。'
+          <p className={site.hint}>{!usable ? '图床服务或绑定源当前不可用，匿名入口暂不可用。'
             : settings.data.enabled ? `任何人都可通过 /upload 上传图片${status.data ? `，单张最大 ${status.data.max_file_size_mb} MB` : ''}。`
               : '匿名上传已关闭，登录用户仍可使用图床。'}{mutation.isPending ? ' 正在保存…' : ''}</p>
         </>
-      ) : settings.isError ? <div role="alert" className={siteCss.error}>匿名设置读取失败：{settings.error.message} <Button variant="ghost" onClick={() => void settings.refetch()}>重试</Button></div>
-        : <span className={siteCss.hint}>正在加载匿名上传设置…</span>}
-      {error ? <div role="alert" className={siteCss.error}>{error}</div> : null}
-      <div className={siteCss.featureRow}>
-        <p className={siteCss.hint}>{retention.data ? `图片保留：登录用户${days(retention.data.user_retention_days)} · 匿名上传${days(retention.data.anonymous_retention_days)}` : '图片保留策略尚未加载。'}</p>
+      ) : settings.isError ? <div role="alert" className={site.error}>匿名设置读取失败：{settings.error.message} <Button variant="ghost" onClick={() => void settings.refetch()}>重试</Button></div>
+        : <span className={site.hint}>正在加载匿名上传设置…</span>}
+      {error ? <div role="alert" className={site.error}>{error}</div> : null}
+      <div className={site.featureRow}>
+        <p className={site.hint}>{retention.data ? `图片保留：登录用户${days(retention.data.user_retention_days)} · 匿名上传${days(retention.data.anonymous_retention_days)}` : '图片保留策略尚未加载。'}</p>
         <Button variant="secondary" disabled={!retention.data || retention.isFetching} onClick={() => setRetentionOpen(true)}>保留策略</Button>
       </div>
-      {retention.isError ? <div role="alert" className={siteCss.error}>保留策略读取失败：{retention.error.message} <Button variant="ghost" onClick={() => void retention.refetch()}>重试</Button></div> : null}
+      {retention.isError ? <div role="alert" className={site.error}>保留策略读取失败：{retention.error.message} <Button variant="ghost" onClick={() => void retention.refetch()}>重试</Button></div> : null}
       {retentionOpen && retention.data ? <ImageRetentionDialog retention={retention.data} onClose={() => setRetentionOpen(false)} /> : null}
     </div>
   )
 }
 
 function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedRetention; onClose: () => void }) {
+  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const [userDays, setUserDays] = useState(String(retention.user_retention_days))
   const [anonymousDays, setAnonymousDays] = useState(String(retention.anonymous_retention_days))
@@ -262,24 +270,25 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
         <Field label="登录用户图片保留天数"><Input type="number" min="0" step="1" aria-label="登录用户图片保留天数" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} /></Field>
         <Field label="匿名图片保留天数"><Input type="number" min="0" step="1" aria-label="匿名图片保留天数" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} /></Field>
       </div>
-      {error ? <div role="alert" className={siteCss.error}>{error}</div> : null}
+      {error ? <div role="alert" className={site.error}>{error}</div> : null}
     </DialogWrap>
   )
 }
 
 function SiteRuntimeSection() {
+  const site = useSiteStyles()
   const health = useQuery({ queryKey: ['health'], queryFn: () => apiFetch<{ version: string }>('/api/v1/health') })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false })
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}><h3 className={css.sectionTitle}>运行信息</h3></div>
       <div className={css.sectionBody}>
-        <dl className={siteCss.facts}>
+        <dl className={site.facts}>
           <div><dt>运行版本</dt><dd>{health.data?.version ?? '—'}</dd></div>
           <div><dt>对外地址</dt><dd>{system.data?.public_url || '—'}</dd></div>
         </dl>
-        {system.isError ? <div role="alert" className={siteCss.error}>运行信息读取失败：{system.error.message} <Button variant="ghost" onClick={() => void system.refetch()}>重试</Button></div> : null}
-        <p className={siteCss.hint}>监听地址、对外地址和上传限制由 config.yaml 与 OMNISTORE_* 环境变量管理，修改后需重启服务。</p>
+        {system.isError ? <div role="alert" className={site.error}>运行信息读取失败：{system.error.message} <Button variant="ghost" onClick={() => void system.refetch()}>重试</Button></div> : null}
+        <p className={site.hint}>监听地址、对外地址和上传限制由 config.yaml 与 OMNISTORE_* 环境变量管理，修改后需重启服务。</p>
       </div>
     </section>
   )
@@ -334,6 +343,7 @@ function BackupSection() {
 
 
 function BrandingSection() {
+  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const branding = useQuery({ queryKey: ['admin-branding'], queryFn: adminGetBranding, retry: false })
   const [name, setName] = useState('')
@@ -397,7 +407,7 @@ function BrandingSection() {
             </div>
           </form>
         ) : (
-          branding.isError ? <div role="alert" className={siteCss.error}>品牌信息读取失败：{branding.error.message} <Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button></div> : <div className={css.kvRow}>
+          branding.isError ? <div role="alert" className={site.error}>品牌信息读取失败：{branding.error.message} <Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button></div> : <div className={css.kvRow}>
             <span className={css.kvLabel}>实例名称</span>
             <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
           </div>
