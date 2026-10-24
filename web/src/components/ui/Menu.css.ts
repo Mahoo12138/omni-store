@@ -1,6 +1,7 @@
 import { style } from '@vanilla-extract/css'
 import { vars } from '../../styles/theme.css'
 
+// Fluent Menu 已接管弹层/选项样式，这里只保留无样式触发器按钮与危险项前景色。
 export const trigger = style({
   display: 'inline-flex',
   alignItems: 'center',
@@ -13,78 +14,5 @@ export const trigger = style({
   cursor: 'pointer',
 })
 
-export const popup = style({
-  minWidth: '176px',
-  padding: vars.space.xs,
-  border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
-  backgroundColor: vars.color.surface,
-  boxShadow: vars.shadow.md,
-  color: vars.color.text,
-  outline: 'none',
-  zIndex: vars.zIndex.dropdown,
-})
-
-const itemBase = style({
-  display: 'flex',
-  alignItems: 'center',
-  width: '100%',
-  minHeight: '34px',
-  gap: vars.space.sm,
-  padding: `6px ${vars.space.sm}`,
-  border: 0,
-  borderRadius: vars.radius.sm,
-  background: 'transparent',
-  color: vars.color.text,
-  font: 'inherit',
-  fontSize: vars.fontSize.sm,
-  textAlign: 'left',
-  cursor: 'pointer',
-  selectors: {
-    '&[data-highlighted]': {
-      backgroundColor: vars.color.surfaceHover,
-    },
-    '&:focus-visible': {
-      outline: `2px solid ${vars.color.primary}`,
-      outlineOffset: '-2px',
-    },
-    '&[data-disabled]': {
-      opacity: 0.45,
-      cursor: 'not-allowed',
-    },
-  },
-})
-
-export const item = itemBase
-
-export const itemDanger = style([
-  itemBase,
-  {
-    color: vars.color.danger,
-    selectors: {
-      '&[data-highlighted]': {
-        backgroundColor: vars.color.dangerSubtle,
-      },
-    },
-  },
-])
-
-export const itemIcon = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '16px',
-  height: '16px',
-  flexShrink: 0,
-})
-
-export const itemLabel = style({
-  minWidth: 0,
-  flex: 1,
-})
-
-export const itemSuffix = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  marginLeft: 'auto',
-})
+/** 危险操作项：图标与文字用 danger 色（悬停底色沿用 Fluent 中性层） */
+export const danger = style({ color: vars.color.danger })

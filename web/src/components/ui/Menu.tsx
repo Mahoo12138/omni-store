@@ -1,5 +1,11 @@
-import { Menu as BaseMenu } from '@base-ui-components/react/menu'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
+import {
+  Menu as FluentMenu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+} from '@fluentui/react-components'
 import * as css from './Menu.css'
 
 export interface MenuOption {
@@ -20,36 +26,39 @@ interface MenuProps {
   triggerClassName?: string
 }
 
-/** 通用下拉菜单：触发器、定位和键盘交互统一交给 Base UI。 */
+export function ItemView({ item }: { item: MenuOption }) {
+  const danger = item.danger ? css.danger : undefined
+  // 槽位类型不收任意 ReactNode（suffix 可能是任何节点），在边界断言
+  const secondaryContent = item.suffix as ComponentProps<typeof MenuItem>['secondaryContent']
+  return (
+    <MenuItem
+      disabled={item.disabled}
+      aria-current={item.current ? 'page' : undefined}
+      onClick={() => item.onSelect()}
+      icon={item.icon ? <span className={danger}>{item.icon}</span> : undefined}
+      secondaryContent={secondaryContent}
+    >
+      <span className={danger}>{item.label}</span>
+    </MenuItem>
+  )
+}
+
+/** 通用下拉菜单：触发器、定位和键盘交互统一交给 Fluent Menu。 */
 export function Menu({ ariaLabel, trigger, items, triggerClassName }: MenuProps) {
   return (
-    <BaseMenu.Root>
-      <BaseMenu.Trigger
-        type="button"
-        className={triggerClassName ?? css.trigger}
-        aria-label={ariaLabel}
-      >
-        {trigger}
-      </BaseMenu.Trigger>
-      <BaseMenu.Portal>
-        <BaseMenu.Positioner side="bottom" align="end" sideOffset={6}>
-          <BaseMenu.Popup className={css.popup}>
-            {items.map((item) => (
-              <BaseMenu.Item
-                key={item.id}
-                className={item.danger ? css.itemDanger : css.item}
-                disabled={item.disabled}
-                aria-current={item.current ? 'page' : undefined}
-                onClick={() => item.onSelect()}
-              >
-                <span className={css.itemIcon}>{item.icon}</span>
-                <span className={css.itemLabel}>{item.label}</span>
-                {item.suffix && <span className={css.itemSuffix}>{item.suffix}</span>}
-              </BaseMenu.Item>
-            ))}
-          </BaseMenu.Popup>
-        </BaseMenu.Positioner>
-      </BaseMenu.Portal>
-    </BaseMenu.Root>
+    <FluentMenu>
+      <MenuTrigger>
+        <button type="button" className={triggerClassName ?? css.trigger} aria-label={ariaLabel}>
+          {trigger}
+        </button>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList aria-label={ariaLabel}>
+          {items.map((item) => (
+            <ItemView key={item.id} item={item} />
+          ))}
+        </MenuList>
+      </MenuPopover>
+    </FluentMenu>
   )
 }
