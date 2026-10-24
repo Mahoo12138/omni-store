@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { Select as BaseSelect } from '@base-ui-components/react/select'
-import { IconCheck, IconChevronDown } from './Icon'
+import { Dropdown, Option } from '@fluentui/react-components'
 import * as css from './Select.css'
 
 export interface SelectOption {
@@ -15,9 +14,11 @@ interface SelectProps {
   options: readonly SelectOption[]
   placeholder?: string
   ariaLabel?: string
+  /** 兼容保留：Fluent Dropdown 无原生表单语义，当前无调用方使用 */
   name?: string
   id?: string
   disabled?: boolean
+  /** 兼容保留：当前无调用方使用 */
   required?: boolean
   leadingIcon?: ReactNode
   leadingIconVariant?: 'tile' | 'plain'
@@ -26,91 +27,63 @@ interface SelectProps {
   className?: string
 }
 
+// Fluent Dropdown 内核：触发器内容通过 button 槽自定义（支持 leadingIcon），
+// 弹层/选项用 Fluent 原生观感（主题已映射品牌色：选中项 primarySubtle 底、品牌勾）。
+// Option 不传 text（仅多选摘要场景需要），展示与匹配都走 children/value。
 export function Select({
   value,
   onValueChange,
   options,
   placeholder = '请选择…',
   ariaLabel,
-  name,
   id,
   disabled,
-  required,
   leadingIcon,
   leadingIconVariant = 'tile',
   size = 'default',
   width = 'full',
   className,
 }: SelectProps) {
-  const triggerClassName = [
-    css.trigger,
-    css.triggerSize[size],
-    css.triggerWidth[width],
-    className,
-  ].filter(Boolean).join(' ')
+  const selected = options.find((item) => item.value === value)
+  const triggerContent = (
+    <>
+      {leadingIcon ? (
+        <span className={`${css.leadingIcon} ${leadingIconVariant === 'plain' ? css.leadingIconPlain : ''}`}>
+          {leadingIcon}
+        </span>
+      ) : null}
+      {selected ? (
+        <span className={css.value}>{selected.label}</span>
+      ) : (
+        <span className={css.placeholder}>{placeholder}</span>
+      )}
+    </>
+  )
 
   return (
-    <BaseSelect.Root
-      items={options}
-      value={value}
-      onValueChange={(nextValue) => {
-        if (nextValue !== null) onValueChange(nextValue)
-      }}
-      name={name}
+    <Dropdown
       id={id}
       disabled={disabled}
-      required={required}
-      modal={false}
+      aria-label={ariaLabel ?? placeholder}
+      size={size === 'compact' ? 'small' : size === 'large' ? 'large' : 'medium'}
+      selectedOptions={value ? [value] : []}
+      onOptionSelect={(_, data) => {
+        if (data.optionValue !== undefined) onValueChange(String(data.optionValue))
+      }}
+      button={{ children: triggerContent }}
+      className={[css.triggerWidth[width], className].filter(Boolean).join(' ')}
     >
-      <BaseSelect.Trigger
-        type="button"
-        className={triggerClassName}
-        aria-label={ariaLabel ?? placeholder}
-      >
-        {leadingIcon ? (
-          <span className={`${css.leadingIcon} ${leadingIconVariant === 'plain' ? css.leadingIconPlain : ''}`}>
-            {leadingIcon}
-          </span>
-        ) : null}
-        <BaseSelect.Value className={css.value}>
-          {(selectedValue) => {
-            const option = options.find((item) => item.value === selectedValue)
-            return option?.label ?? <span className={css.placeholder}>{placeholder}</span>
-          }}
-        </BaseSelect.Value>
-        <BaseSelect.Icon className={css.icon}>
-          <IconChevronDown size={14} />
-        </BaseSelect.Icon>
-      </BaseSelect.Trigger>
-
-      <BaseSelect.Portal>
-        <BaseSelect.Positioner
-          className={css.positioner}
-          sideOffset={6}
-          collisionPadding={8}
-          alignItemWithTrigger={false}
+      {options.map((option) => (
+        // Option 的类型要求 children 为 ReactNode 时 text 必填（text 用于键盘 type-to-find）
+        <Option
+          key={option.value}
+          value={option.value}
+          disabled={option.disabled}
+          text={typeof option.label === 'string' ? option.label : ''}
         >
-          <BaseSelect.Popup className={css.popup}>
-            <BaseSelect.List className={css.list}>
-              {options.map((option) => (
-                <BaseSelect.Item
-                  key={option.value}
-                  className={css.item}
-                  value={option.value}
-                  disabled={option.disabled}
-                >
-                  <BaseSelect.ItemText className={css.itemText}>
-                    {option.label}
-                  </BaseSelect.ItemText>
-                  <BaseSelect.ItemIndicator className={css.itemIndicator}>
-                    <IconCheck size={14} />
-                  </BaseSelect.ItemIndicator>
-                </BaseSelect.Item>
-              ))}
-            </BaseSelect.List>
-          </BaseSelect.Popup>
-        </BaseSelect.Positioner>
-      </BaseSelect.Portal>
-    </BaseSelect.Root>
+          {option.label}
+        </Option>
+      ))}
+    </Dropdown>
   )
 }

@@ -39,11 +39,14 @@ export const appLightTheme: Theme = {
   colorBrandForeground1: palette.primarySubtleInk,
   colorBrandForeground2: palette.primarySubtleInk,
 
-  colorNeutralBackground1: palette.background,
-  colorNeutralBackground2: palette.surface,
+  // Background1 是 Fluent 弹层/菜单/对话框的面色，映射亮纸面；
+  // 页面底色由 global.css.ts 控制，不走这套 token。
+  colorNeutralBackground1: palette.surface,
+  colorNeutralBackground2: palette.background,
   colorNeutralBackground3: palette.surfaceHover,
   colorNeutralBackground1Hover: palette.surfaceHover,
   colorNeutralBackground1Pressed: palette.surfaceHover,
+  colorNeutralBackground1Selected: palette.primarySubtle,
   colorNeutralBackgroundDisabled: palette.surfaceHover,
 
   colorNeutralForeground1: palette.text,
@@ -61,6 +64,12 @@ export const appLightTheme: Theme = {
   // Fluent 组件键盘焦点环（::after 指示器）统一用品牌色
   colorStrokeFocus1: palette.primarySubtleInk,
   colorStrokeFocus2: palette.primary,
+
+  // 组合品牌色：输入类控件聚焦下划线、选项选中标记
+  colorCompoundBrandStroke: palette.primary,
+  colorCompoundBrandStrokeHover: palette.primaryHover,
+  colorCompoundBrandStrokePressed: palette.primaryActive,
+  colorCompoundBrandBackground: palette.primary,
 
   borderRadiusSmall: '5px',
   borderRadiusMedium: '10px',
