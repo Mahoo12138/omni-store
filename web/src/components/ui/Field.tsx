@@ -1,8 +1,10 @@
 import { cloneElement, isValidElement, useId } from 'react'
 import type { ReactElement, ReactNode } from 'react'
+import { Label } from '@fluentui/react-components'
 import * as css from './Field.css'
 
-// 弹窗 / 表单字段容器
+// 弹窗 / 表单字段容器：label（Fluent Label）+ 控件 + hint/error。
+// id 关联逻辑保持不变：cloneElement 注入 id；复合字段用 htmlFor 指向内部控件。
 interface FieldProps {
   label: string
   /** 复合字段中真实表单控件的 id；此时 Field 不会把 id 写到包裹元素。 */
@@ -20,14 +22,14 @@ export function Field({ label, htmlFor, required, hint, error, children }: Field
   const control = child && htmlFor === undefined ? cloneElement(child, { id: controlId }) : children
   return (
     <div className={css.field}>
-      <label className={css.label} htmlFor={controlId}>
+      <Label className={css.label} htmlFor={controlId} weight="regular">
         {label}
         {required && (
           <span style={{ color: 'var(--danger, #d04040)', marginLeft: 4 }} aria-hidden="true">
             *
           </span>
         )}
-      </label>
+      </Label>
       {control}
       {(error || hint) && (
         <span className={error ? css.hintError : css.hint}>{error || hint}</span>
