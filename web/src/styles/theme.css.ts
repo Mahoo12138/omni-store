@@ -4,22 +4,22 @@ import { createGlobalTheme } from '@vanilla-extract/css'
 // 颜色、间距、圆角、阴影、字号全部从这里取，组件中不写魔法值。
 export const vars = createGlobalTheme(':root', {
   color: {
-    // 品牌蓝：唯一动作色
-    primary: 'oklch(0.52 0.18 257)',
-    primaryHover: 'oklch(0.46 0.18 257)',
-    primaryActive: 'oklch(0.41 0.17 257)',
-    primarySubtle: 'oklch(0.955 0.025 257)',
-    primarySubtleInk: 'oklch(0.43 0.17 257)',
+    // 松柏绿：唯一动作色
+    primary: 'oklch(0.43 0.075 175)',
+    primaryHover: 'oklch(0.37 0.07 175)',
+    primaryActive: 'oklch(0.32 0.065 175)',
+    primarySubtle: 'oklch(0.95 0.018 175)',
+    primarySubtleInk: 'oklch(0.35 0.07 175)',
 
-    // 中性层：冷调，向品牌色轻微偏移
-    background: 'oklch(0.982 0.006 248)',
-    surface: 'oklch(1 0 0)',
-    surfaceHover: 'oklch(0.965 0.01 248)',
-    border: 'oklch(0.91 0.012 248)',
-    borderStrong: 'oklch(0.82 0.018 248)',
+    // 暖纸色中性层，避免与冷灰混用
+    background: 'oklch(0.975 0.009 95)',
+    surface: 'oklch(0.997 0.002 95)',
+    surfaceHover: 'oklch(0.955 0.012 95)',
+    border: 'oklch(0.9 0.012 95)',
+    borderStrong: 'oklch(0.79 0.018 95)',
 
-    text: 'oklch(0.25 0.035 258)',
-    textSecondary: 'oklch(0.49 0.03 255)',
+    text: 'oklch(0.25 0.018 170)',
+    textSecondary: 'oklch(0.49 0.018 170)',
     textOnPrimary: 'oklch(1 0 0)',
 
     // 语义状态
@@ -53,15 +53,15 @@ export const vars = createGlobalTheme(':root', {
   },
   radius: {
     sm: '5px',
-    md: '9px',
-    lg: '14px',
-    tile: '10px',
+    md: '10px',
+    lg: '18px',
+    tile: '12px',
     full: '999px',
   },
   shadow: {
     // 卡片只允许极浅单层阴影，不与大模糊阴影叠加
-    sm: '0 1px 2px oklch(0.25 0.035 258 / 0.05)',
-    md: '0 14px 36px oklch(0.25 0.035 258 / 0.10)',
+    sm: '0 1px 2px oklch(0.25 0.018 170 / 0.035)',
+    md: '0 18px 48px oklch(0.25 0.018 170 / 0.09)',
   },
   fontSize: {
     xs: '12px',

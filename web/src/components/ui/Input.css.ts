@@ -29,7 +29,7 @@ export const input = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.md,
   outline: 'none',
-  transition: `border-color ${vars.motion.fast} ${vars.motion.ease}`,
+  transition: `border-color ${vars.motion.fast} ${vars.motion.ease}, box-shadow ${vars.motion.fast} ${vars.motion.ease}`,
   selectors: {
     '&::placeholder': {
       // 占位文本同样满足对比度要求
@@ -40,6 +40,7 @@ export const input = style({
     },
     '&:focus': {
       borderColor: vars.color.primary,
+      boxShadow: `0 0 0 3px ${vars.color.primarySubtle}`,
     },
   },
 })

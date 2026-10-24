@@ -35,11 +35,17 @@ export function AppShell({
   const queryClient = useQueryClient()
   const clipboard = useFileClipboard()
   const { pathname } = useLocation()
+  const navRef = useRef<HTMLElement>(null)
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
   useEffect(() => {
     if (me.isError && pathname.startsWith('/app')) navigate({ to: '/login', search: pathname === '/app/transfer' ? { redirect: '/app/transfer' } : {} })
   }, [me.isError, navigate, pathname])
+
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 820px)').matches) return
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [pathname, me.isSuccess])
 
   if (me.isPending) {
     return <AppShellLoading />
@@ -79,13 +85,15 @@ export function AppShell({
           <LogoMark size={30} />
           <span className={css.brandName}>OmniStore</span>
         </Link>
-        <nav className={css.nav} aria-label="主导航">
+        <nav ref={navRef} className={css.nav} aria-label="主导航">
+          <span className={css.navLabel}>工作空间</span>
           {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
+              activeOptions={{ exact: true }}
               className={item.active ? css.navLinkActive : css.navLink}
-              aria-current={item.active ? 'page' : undefined}
+              aria-current={item.active ? 'page' : false}
             >
               {item.icon}
               {item.label}
@@ -95,7 +103,7 @@ export function AppShell({
             <Link
               to="/app/admin"
               className={adminActive ? css.navLinkActive : css.navLink}
-              aria-current={adminActive ? 'page' : undefined}
+              aria-current={adminActive ? 'page' : false}
             >
               <IconSettings />
               系统设置

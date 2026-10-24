@@ -28,6 +28,7 @@ import * as css from './TransferWorkspace.css'
 type WorkspaceProps = {
   search: TransferWorkspaceSearch
   onNavigate: (search: TransferWorkspaceSearch) => void
+  framed?: boolean
 }
 
 type Config = {
@@ -56,7 +57,7 @@ export function TransferServiceSummary() {
   </div>
 }
 
-export function TransferWorkspace({ search, onNavigate }: WorkspaceProps) {
+export function TransferWorkspace({ search, onNavigate, framed = false }: WorkspaceProps) {
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 0 })
   const identity = useQuery({ queryKey: ['transfer-identity', auth.data?.authenticated], queryFn: fetchTransferIdentity, retry: false, enabled: auth.isSuccess, staleTime: 0 })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false, staleTime: 0 })
@@ -70,12 +71,12 @@ export function TransferWorkspace({ search, onNavigate }: WorkspaceProps) {
   const record = (kind: TransferRecordKind, id: number) => onNavigate({ view: 'history', record: kind, id })
   const params = new URLSearchParams({ view: search.view })
   if (search.record && search.id) { params.set('record', search.record); params.set('id', String(search.id)) }
-  return <div className={css.stack}>
+  return <div className={framed ? css.workspace : css.publicWorkspace}>
     <Tabs.Root key={owner?.owner_key ?? 'pending'} value={search.view} onValueChange={(value) => { if (!writing) onNavigate({ view: value as TransferWorkspaceSearch['view'] }) }}>
-      <Tabs.List className={css.tabs} aria-label="中转功能">
-        <Tabs.Tab className={css.tab} value="send" disabled={writing}>发送文件</Tabs.Tab>
-        <Tabs.Tab className={css.tab} value="collect" disabled={writing}>收集文件</Tabs.Tab>
-        <Tabs.Tab className={css.tab} value="history" disabled={writing}>收发记录</Tabs.Tab>
+      <Tabs.List className={framed ? css.tabs : css.publicTabs} aria-label="中转功能">
+        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="send" disabled={writing}>发送文件</Tabs.Tab>
+        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="collect" disabled={writing}>收集文件</Tabs.Tab>
+        <Tabs.Tab className={framed ? css.tab : css.publicTab} value="history" disabled={writing}>收发记录</Tabs.Tab>
       </Tabs.List>
       {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : auth.isError || identity.isError ? (
         <div className={css.notice}>
@@ -189,7 +190,7 @@ function CollectionComposer({ canCreate, onRecord, guest }: { canCreate: boolean
   if (result) return <section className={css.receipt} aria-label="收集任务创建结果"><h2 className={css.heading}>收集链接已生成</h2><p className={css.text}>把链接发给对方，对方打开后即可提交文件。收到的文件会出现在你的收发记录中。</p><ShareLinks kind="collect" task={result.collection} code={result.code} onRecord={onRecord} /><div className={css.actions}><Button type="button" variant="ghost" onClick={() => { setResult(null); create.reset(); setConfig(defaults) }}>再发起一次收集</Button></div></section>
   return <form className={css.composer} onSubmit={(event) => { event.preventDefault(); if (canCreate && !create.isPending) create.mutate() }}>
     <div className={css.stack}>
-      <div className={css.stack}><h2 className={css.heading}>向别人收集文件</h2><p className={css.text}>填写本次收集的信息，生成一个对方可以直接打开的上传链接。</p></div>
+      <div className={css.composerIntro}><h2 className={css.heading}>向别人收集文件</h2><p className={css.text}>填写本次收集的信息，生成一个对方可以直接打开的上传链接。</p></div>
       <fieldset className={css.fields} disabled={create.isPending}>
         <Field label="收集任务标题" required><Input aria-label="收集任务标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：十月作业、项目资料" /></Field>
         <Field label="收集任务说明"><Input aria-label="收集任务说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="告诉对方需要提交什么" /></Field>
@@ -258,7 +259,10 @@ function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: 
   return <>
     <form className={css.composer} onSubmit={(event) => { event.preventDefault(); if (canCreate && !busy) send.mutate() }}>
       <div className={css.stack}>
-        <h2 className={css.heading}>把文件发给别人</h2>
+        <div className={css.composerIntro}>
+          <h2 className={css.heading}>把文件发给别人</h2>
+          <p className={css.text}>整理本次交付的内容，上传完成后生成一个可直接取件的分享链接。</p>
+        </div>
         <fieldset className={css.fields} disabled={busy || !!draft}>
           <Field label="发件包标题" required><Input aria-label="发件包标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：项目交付资料" /></Field>
           <Field label="发件包说明"><Input aria-label="发件包说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="给收件人留句话" /></Field>

@@ -91,11 +91,6 @@ export function AppHomePage() {
               <NoSourceView isAdmin={isAdmin} />
             ) : (
               <div className={css.sourceList}>
-                <div className={css.sourceListHead} aria-hidden="true">
-                  <span>存储源名称</span>
-                  <span>权限与服务</span>
-                  <span>操作</span>
-                </div>
                 {sourceList.map((source) => (
                   <button
                     type="button"

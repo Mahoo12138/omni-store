@@ -11,6 +11,9 @@ globalStyle('body', {
   fontSize: vars.fontSize.md,
   color: vars.color.text,
   backgroundColor: vars.color.background,
+  backgroundImage: `radial-gradient(70rem 32rem at 85% -10%, color-mix(in oklch, ${vars.color.primarySubtle} 58%, transparent), transparent 72%)`,
+  backgroundAttachment: 'fixed',
+  lineHeight: 1.5,
   WebkitFontSmoothing: 'antialiased',
   minWidth: '320px',
 })

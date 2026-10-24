@@ -9,13 +9,13 @@ export const shell = style({
 })
 
 export const sidebar = style({
-  width: '224px',
+  width: '240px',
   flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
   backgroundColor: vars.color.surface,
   borderRight: `1px solid ${vars.color.border}`,
-  padding: '20px 16px 18px',
+  padding: '24px 16px 20px',
   position: 'sticky',
   top: 0,
   height: '100dvh',
@@ -32,14 +32,18 @@ export const sidebar = style({
 
 export const brand = style({
   display: 'flex', alignItems: 'center', gap: '10px', color: vars.color.primary,
-  fontSize: '18px', fontWeight: 700, letterSpacing: '-0.035em', padding: '2px 8px 32px',
+  fontSize: '19px', fontWeight: 700, letterSpacing: '-0.035em', padding: '2px 10px 36px',
   '@media': { 'screen and (max-width: 820px)': { display: 'none' } },
 })
 export const brandName = style({ color: vars.color.text })
 
 export const nav = style({
-  display: 'flex', flexDirection: 'column', gap: '6px',
-  '@media': { 'screen and (max-width: 820px)': { width: '100%', flexDirection: 'row', flex: 1, gap: vars.space.xs } },
+  display: 'flex', flexDirection: 'column', gap: '4px',
+  '@media': { 'screen and (max-width: 820px)': { minWidth: 0, flexDirection: 'row', flex: 1, gap: vars.space.xs, overflowX: 'auto', scrollbarWidth: 'none' } },
+})
+export const navLabel = style({
+  padding: '0 13px 10px', color: vars.color.textSecondary, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em',
+  '@media': { 'screen and (max-width: 820px)': { display: 'none' } },
 })
 export const navLink = style({
   minHeight: 44, display: 'flex', alignItems: 'center', gap: '11px', padding: '10px 13px', borderRadius: vars.radius.md,
@@ -52,13 +56,13 @@ export const navLink = style({
   },
   '@media': {
     'screen and (max-width: 820px)': {
-      minWidth: 0, minHeight: 52, flex: 1, flexDirection: 'column', justifyContent: 'center', gap: 2,
+      minWidth: 60, minHeight: 52, flex: '0 0 60px', flexDirection: 'column', justifyContent: 'center', gap: 2,
       padding: '5px 4px', fontSize: vars.fontSize.xs,
     },
   },
 })
 export const navLinkActive = style([navLink, {
-  backgroundColor: vars.color.primarySubtle, color: vars.color.primary,
+  backgroundColor: vars.color.primarySubtle, color: vars.color.primary, fontWeight: 600,
   selectors: { '&:hover': { backgroundColor: vars.color.primarySubtle, color: vars.color.primary } },
 }])
 export const sidebarSpacer = style({ flex: 1, '@media': { 'screen and (max-width: 820px)': { display: 'none' } } })
@@ -121,8 +125,8 @@ export const userDropdownItem = style({
 })
 export const userDropdownDivider = style({ height: 1, backgroundColor: vars.color.border, margin: '4px 0' })
 export const main = style({
-  flex: 1, width: '100%', maxWidth: '1360px', margin: '0 auto', padding: '48px clamp(24px, 4vw, 64px) 64px',
-  '@media': { 'screen and (max-width: 820px)': { padding: '32px 18px 48px' }, 'screen and (max-width: 480px)': { padding: '24px 14px 40px' } },
+  flex: 1, width: '100%', maxWidth: '1440px', margin: '0 auto', padding: '56px clamp(28px, 4vw, 72px) 80px',
+  '@media': { 'screen and (max-width: 820px)': { padding: '36px 20px 56px' }, 'screen and (max-width: 480px)': { padding: '28px 16px 44px' } },
 })
 export const mainWide = style([main, {
   maxWidth: '1600px',
@@ -131,7 +135,7 @@ export const mainWide = style([main, {
 }])
 
 const pulse = keyframes({ '0%, 100%': { opacity: .5 }, '50%': { opacity: .85 } })
-export const loadingShell = style({ minHeight: '100dvh', display: 'grid', gridTemplateColumns: '224px 1fr', background: vars.color.background, '@media': { 'screen and (max-width: 820px)': { gridTemplateColumns: '1fr', gridTemplateRows: '1fr' } } })
+export const loadingShell = style({ minHeight: '100dvh', display: 'grid', gridTemplateColumns: '240px 1fr', background: vars.color.background, '@media': { 'screen and (max-width: 820px)': { gridTemplateColumns: '1fr', gridTemplateRows: '1fr' } } })
 export const loadingSidebar = style({
   background: vars.color.surface, borderRight: `1px solid ${vars.color.border}`,
   '@media': {

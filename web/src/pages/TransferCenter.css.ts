@@ -1,8 +1,10 @@
 import { style } from '@vanilla-extract/css'
 import { vars } from '../styles/theme.css'
 
-export const pageHeader = style({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: vars.space.lg })
-export const pageTitle = style({ margin: 0, fontSize: vars.fontSize.xxl, color: vars.color.text })
+export const pageHeader = style({ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 40 })
+export const pageEyebrow = style({ marginBottom: vars.space.sm, color: vars.color.primary, fontSize: vars.fontSize.sm, fontWeight: 600, letterSpacing: '0.04em' })
+export const pageTitle = style({ margin: 0, fontSize: 40, lineHeight: 1.15, fontWeight: 700, letterSpacing: '-0.04em', color: vars.color.text, '@media': { 'screen and (max-width: 640px)': { fontSize: vars.fontSize.display } } })
+export const pageLead = style({ maxWidth: '62ch', margin: `${vars.space.sm} 0 0`, color: vars.color.textSecondary, fontSize: vars.fontSize.lg, lineHeight: 1.65, textWrap: 'pretty' })
 export const panel = style({ display: 'grid', gap: vars.space.sm })
 export const emptyState = style({ display: 'grid', justifyContent: 'center', justifyItems: 'center', gap: vars.space.xs, padding: `${vars.space.xl} ${vars.space.lg}`, color: vars.color.textSecondary, textAlign: 'center' })
 export const emptyIcon = style({ color: vars.color.primary, opacity: 0.7 })
