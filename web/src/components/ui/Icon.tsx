@@ -1,7 +1,55 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, FC, ReactNode } from 'react'
+import {
+  AddRegular,
+  ArrowClockwiseRegular,
+  ArrowCounterclockwiseRegular,
+  ArrowDownloadRegular,
+  ArrowLeftRegular,
+  ArrowMoveRegular,
+  ArrowUpRegular,
+  ArrowUploadRegular,
+  CheckmarkRegular,
+  ChevronDownRegular,
+  ChevronLeftRegular,
+  ChevronRightRegular,
+  ClipboardRegular,
+  CloudRegular,
+  CopyRegular,
+  CutRegular,
+  DeleteRegular,
+  DismissRegular,
+  DocumentRegular,
+  EditRegular,
+  FolderAddRegular,
+  FolderFilled,
+  FolderRegular,
+  GlobeRegular,
+  GridRegular,
+  HardDriveRegular,
+  HomeRegular,
+  ImageRegular,
+  InfoRegular,
+  KeyRegular,
+  LinkRegular,
+  ListRegular,
+  MoreHorizontalRegular,
+  OpenRegular,
+  PersonAddRegular,
+  PersonRegular,
+  PulseRegular,
+  QrCodeRegular,
+  QuestionCircleRegular,
+  SearchRegular,
+  ServerRegular,
+  SettingsRegular,
+  ShieldRegular,
+  SignOutRegular,
+  StarRegular
+} from '@fluentui/react-icons'
 
-// 统一图标系统：24 视窗、1.8 描边、圆角端点的单风格内联 SVG。
-// 图标只在这里定义，页面不散落 SVG / emoji。
+// 统一图标系统：通用图标改为 @fluentui/react-icons 的 shim（保持 IconXxx 命名、
+// size/className/style props 兼容）；品牌标（LogoMark）与文件类型彩色砖
+// （EntryIcon/IconTile）是业务资产，继续手绘 SVG。
 
 interface IconProps {
   size?: number
@@ -9,341 +57,60 @@ interface IconProps {
   style?: CSSProperties
 }
 
-function Svg({ size = 20, className, style, children }: IconProps & { children: ReactNode }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      style={style}
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
+type FluentIcon = FC<{ className?: string; style?: CSSProperties; fontSize?: number }>
+
+function shim(Icon: FluentIcon) {
+  const Shim = ({ size = 20, className, style }: IconProps) => (
+    <Icon fontSize={size} className={className} style={style} />
   )
+  return Shim
 }
 
-export const IconFolder = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-  </Svg>
-)
-
-export const IconFolderFilled = (p: IconProps) => (
-  <svg
-    width={p.size ?? 20}
-    height={p.size ?? 20}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={p.className}
-    aria-hidden="true"
-  >
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-  </svg>
-)
-
-export const IconFile = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M6 3h8l4 4v14H6V3Z" />
-    <path d="M14 3v4h4" />
-  </Svg>
-)
-
-export const IconImage = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="3" y="4" width="18" height="16" rx="2" />
-    <circle cx="9" cy="10" r="1.6" />
-    <path d="M3 17l5-4 4 3 4-3 5 4" />
-  </Svg>
-)
-
-export const IconSettings = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" />
-  </Svg>
-)
-
-export const IconUpload = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 16V5M7 9l5-4 5 4" />
-    <path d="M4 19h16" />
-  </Svg>
-)
-
-export const IconFolderPlus = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-    <path d="M12 11v5M9.5 13.5h5" />
-  </Svg>
-)
-
-export const IconGlobe = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M3 12h18M12 3c2.5 2.4 3.8 5.5 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.5-3.8-9S9.5 5.4 12 3Z" />
-  </Svg>
-)
-
-export const IconShield = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 3l7 3v6c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3Z" />
-  </Svg>
-)
-
-export const IconChevronRight = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M9 6l6 6-6 6" />
-  </Svg>
-)
-
-export const IconChevronLeft = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M15 6l-6 6 6 6" />
-  </Svg>
-)
-
-export const IconExternalLink = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M14 4h6v6" />
-    <path d="M20 4l-8 8" />
-    <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
-  </Svg>
-)
-
-export const IconChevronDown = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M6 9l6 6 6-6" />
-  </Svg>
-)
-
-export const IconRefresh = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M20 12a8 8 0 1 1-2.3-5.6" />
-    <path d="M20 4v4.5h-4.5" />
-  </Svg>
-)
-
-export const IconRestore = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M4 8V3m0 0h5M4 3l4 4" />
-    <path d="M5.5 16.5A8 8 0 1 0 6 7" />
-  </Svg>
-)
-
-export const IconSearch = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="11" cy="11" r="6.5" />
-    <path d="M16 16l5 5" />
-  </Svg>
-)
-
-export const IconDownload = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 5v11M7 12l5 4 5-4" />
-    <path d="M4 19h16" />
-  </Svg>
-)
-
-export const IconTrash = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13" />
-  </Svg>
-)
-
-export const IconEdit = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M4 20h4L20 8l-4-4L4 16v4Z" />
-    <path d="M13.5 6.5l4 4" />
-  </Svg>
-)
-
-export const IconMove = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
-  </Svg>
-)
-
-export const IconScissors = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="6.5" cy="7.5" r="2.5" />
-    <circle cx="6.5" cy="16.5" r="2.5" />
-    <path d="M8.5 8.8L20 3M8.5 15.2L20 21M10 12h10" />
-  </Svg>
-)
-
-export const IconCopy = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="9" y="9" width="12" height="12" rx="2" />
-    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
-  </Svg>
-)
-
-export const IconClipboard = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="5" y="4" width="14" height="17" rx="2" />
-    <path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h3" />
-  </Svg>
-)
-
-export const IconMore = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
-    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-    <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
-  </Svg>
-)
-
-export const IconCheck = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M5 12.5l4.2 4.2L19 7" />
-  </Svg>
-)
-
-export const IconLogout = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h10" />
-  </Svg>
-)
-
-export const IconUser = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="8" r="4" />
-    <path d="M4 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
-  </Svg>
-)
-
-export const IconKey = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="8" cy="14" r="4.5" />
-    <path d="M11.5 10.5L20 2M16 6l3 3M13 9l2.5 2.5" />
-  </Svg>
-)
-
-export const IconLink = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M10 14a4 4 0 0 0 5.7 0l3.5-3.5a4 4 0 1 0-5.7-5.7L12 6.3" />
-    <path d="M14 10a4 4 0 0 0-5.7 0l-3.5 3.5a4 4 0 1 0 5.7 5.7L12 17.7" />
-  </Svg>
-)
-
-export const IconPlus = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 5v14M5 12h14" />
-  </Svg>
-)
-
-export const IconServer = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="3" y="4" width="18" height="7" rx="1.5" />
-    <rect x="3" y="13" width="18" height="7" rx="1.5" />
-    <path d="M7 7.5h.01M7 16.5h.01" />
-  </Svg>
-)
-
-export const IconCloud = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M7 18a4 4 0 0 1-1-7.9A6 6 0 0 1 18 9.3 4.5 4.5 0 0 1 17 18H7Z" />
-  </Svg>
-)
-
-export const IconHardDrive = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 13a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4Z" />
-    <path d="M3 13l1.5-6a2 2 0 0 1 2-1.5h11a2 2 0 0 1 2 1.5L21 13" />
-    <path d="M8 17h.01" />
-  </Svg>
-)
-
-export const IconList = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M8 6h13M8 12h13M8 18h13" />
-    <circle cx="4" cy="6" r="1" />
-    <circle cx="4" cy="12" r="1" />
-    <circle cx="4" cy="18" r="1" />
-  </Svg>
-)
-
-export const IconGrid = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="3" y="3" width="7" height="7" rx="1" />
-    <rect x="14" y="3" width="7" height="7" rx="1" />
-    <rect x="3" y="14" width="7" height="7" rx="1" />
-    <rect x="14" y="14" width="7" height="7" rx="1" />
-  </Svg>
-)
-
-export const IconInfo = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 11v5M12 8v.01" />
-  </Svg>
-)
-
-export const IconClose = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M6 6l12 12M18 6L6 18" />
-  </Svg>
-)
-
-export const IconQr = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
-    <path d="M14 14h3v3h-3zM17 17h3v3h-3z" />
-  </Svg>
-)
-
-export const IconHome = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 11l9-7 9 7" />
-    <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
-  </Svg>
-)
-
-export const IconQuestion = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.7-2.5 2-2.5 4M12 17v.01" />
-  </Svg>
-)
-
-export const IconArrowUp = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 19V5M5 12l7-7 7 7" />
-  </Svg>
-)
-
-export const IconArrowLeft = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M19 12H5M12 5l-7 7 7 7" />
-  </Svg>
-)
-
-export const IconActivity = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 12h4l3-8 4 16 3-8h4" />
-  </Svg>
-)
-
-export const IconStar = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />
-  </Svg>
-)
-
-export const IconUserPlus = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="10" cy="8" r="4" />
-    <path d="M2 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
-    <path d="M19 6v6M16 9h6" />
-  </Svg>
-)
+export const IconActivity = shim(PulseRegular)
+export const IconArrowLeft = shim(ArrowLeftRegular)
+export const IconArrowUp = shim(ArrowUpRegular)
+export const IconCheck = shim(CheckmarkRegular)
+export const IconChevronDown = shim(ChevronDownRegular)
+export const IconChevronLeft = shim(ChevronLeftRegular)
+export const IconChevronRight = shim(ChevronRightRegular)
+export const IconClipboard = shim(ClipboardRegular)
+export const IconClose = shim(DismissRegular)
+export const IconCloud = shim(CloudRegular)
+export const IconCopy = shim(CopyRegular)
+export const IconDownload = shim(ArrowDownloadRegular)
+export const IconEdit = shim(EditRegular)
+export const IconExternalLink = shim(OpenRegular)
+export const IconFile = shim(DocumentRegular)
+export const IconFolder = shim(FolderRegular)
+export const IconFolderFilled = shim(FolderFilled)
+export const IconFolderPlus = shim(FolderAddRegular)
+export const IconGlobe = shim(GlobeRegular)
+export const IconGrid = shim(GridRegular)
+export const IconHardDrive = shim(HardDriveRegular)
+export const IconHome = shim(HomeRegular)
+export const IconImage = shim(ImageRegular)
+export const IconInfo = shim(InfoRegular)
+export const IconKey = shim(KeyRegular)
+export const IconLink = shim(LinkRegular)
+export const IconList = shim(ListRegular)
+export const IconLogout = shim(SignOutRegular)
+export const IconMore = shim(MoreHorizontalRegular)
+export const IconMove = shim(ArrowMoveRegular)
+export const IconPlus = shim(AddRegular)
+export const IconQr = shim(QrCodeRegular)
+export const IconQuestion = shim(QuestionCircleRegular)
+export const IconRefresh = shim(ArrowClockwiseRegular)
+export const IconRestore = shim(ArrowCounterclockwiseRegular)
+export const IconScissors = shim(CutRegular)
+export const IconSearch = shim(SearchRegular)
+export const IconServer = shim(ServerRegular)
+export const IconSettings = shim(SettingsRegular)
+export const IconShield = shim(ShieldRegular)
+export const IconStar = shim(StarRegular)
+export const IconTrash = shim(DeleteRegular)
+export const IconUpload = shim(ArrowUploadRegular)
+export const IconUser = shim(PersonRegular)
+export const IconUserPlus = shim(PersonAddRegular)
 
 // OmniStore 品牌标：立方体箱子里的六边形核心（对应设计稿的蓝色方块 logo）。
 export function LogoMark({ size = 28 }: { size?: number }) {
