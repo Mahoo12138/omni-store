@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Toaster, useToastController } from '@fluentui/react-components'
 import type { ToastIntent } from '@fluentui/react-components'
-import * as css from './Toast.css'
 
 export const appStatusToastID = 'app-status'
 
@@ -53,12 +52,27 @@ export function AppToaster() {
 
 // 常驻任务卡（上传/粘贴/批量删除）不走 Toaster：其 CollapseDelayed 高度动画的
 // 结束态不追踪内容变高，进度卡会溢出视口。改为独立 fixed 层，由 Host 组件 portal 渲染。
+// 该层在非组件上下文创建，样式直接内联（zIndex 对应 vars.zIndex.toast=50）。
 let taskLayer: HTMLDivElement | null = null
 
 export function getTaskToastLayer(): HTMLDivElement {
   if (!taskLayer) {
     taskLayer = document.createElement('div')
-    taskLayer.className = css.taskLayer
+    Object.assign(taskLayer.style, {
+      position: 'fixed',
+      right: '24px',
+      bottom: '24px',
+      zIndex: '50',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-end',
+      gap: '8px',
+      pointerEvents: 'none',
+      maxWidth: 'min(420px, calc(100vw - 32px))',
+    } satisfies Partial<CSSStyleDeclaration>)
+    taskLayer.appendChild(document.createElement('style')).textContent =
+      '#omnistore-task-layer > * { pointer-events: auto; }'
+    taskLayer.id = 'omnistore-task-layer'
     document.body.appendChild(taskLayer)
   }
   return taskLayer

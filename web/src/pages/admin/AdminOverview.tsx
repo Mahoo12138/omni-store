@@ -68,7 +68,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Field } from '../../components/ui/Field'
-import * as fieldCss from '../../components/ui/Field.css'
+import * as fieldCss from '../../components/ui/Field.utils'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import {

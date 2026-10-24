@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Dropdown, Option } from '@fluentui/react-components'
-import * as css from './Select.css'
+import { useStyles } from './Select.styles'
 
 export interface SelectOption {
   value: string
@@ -44,6 +44,7 @@ export function Select({
   width = 'full',
   className,
 }: SelectProps) {
+  const css = useStyles()
   const selected = options.find((item) => item.value === value)
   const triggerContent = (
     <>
@@ -71,7 +72,7 @@ export function Select({
         if (data.optionValue !== undefined) onValueChange(String(data.optionValue))
       }}
       button={{ children: triggerContent }}
-      className={[css.triggerWidth[width], className].filter(Boolean).join(' ')}
+      className={[width === 'content' ? css.triggerWidthContent : width === 'wide' ? css.triggerWidthWide : css.triggerWidthFull, className].filter(Boolean).join(' ')}
     >
       {options.map((option) => (
         // Option 的类型要求 children 为 ReactNode 时 text 必填（text 用于键盘 type-to-find）

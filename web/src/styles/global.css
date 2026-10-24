@@ -1,0 +1,56 @@
+/* 全局基础样式（普通 CSS，颜色/字体/焦点环取 Fluent 主题变量） */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fontFamilyBase);
+  font-size: 14px;
+  color: var(--colorNeutralForeground1);
+  background-color: var(--colorNeutralBackground2);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-width: 320px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--colorBrandForeground1);
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.025em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+/* 尊重减少动效偏好：全站动效退化为即时切换。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+  }
+}

@@ -1,7 +1,7 @@
 import type { ComponentProps, InputHTMLAttributes } from 'react'
 import { useId } from 'react'
 import { Input as FluentInput } from '@fluentui/react-components'
-import * as css from './Input.css'
+import { useStyles } from './Input.styles'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -13,6 +13,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 type FluentInputProps = ComponentProps<typeof FluentInput>
 
 export function Input({ label, hint, id: providedId, 'aria-describedby': describedBy, ...rest }: InputProps) {
+  const css = useStyles()
   const generatedId = useId()
   const id = providedId ?? generatedId
   const hintId = hint ? `${id}-hint` : undefined

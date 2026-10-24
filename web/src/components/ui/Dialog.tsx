@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import * as css from './Dialog.css'
+import { useStyles } from './Dialog.styles'
 
 // 自研模态弹窗：portal + 同步 aria-hidden 背景隔离 + 手写焦点圈。
 // 不用 Fluent Dialog 的原因：其 tabster 隔离是异步记账的，受控关闭与列表刷新
@@ -63,6 +63,9 @@ interface DialogProps {
   children: ReactNode
 }
 
+// 基础层级（对应原 vars.zIndex.modal），嵌套弹窗在此基础上按深度叠加
+const DIALOG_BASE_Z_INDEX = 40
+
 export function DialogWrap({
   open,
   onOpenChange,
@@ -80,6 +83,7 @@ export function DialogWrap({
   const onOpenChangeRef = useRef(onOpenChange)
   onOpenChangeRef.current = onOpenChange
   const instance = useRef({}).current
+  const css = useStyles()
 
   const requestClose = useCallback(() => {
     onOpenChangeRef.current(false)
@@ -160,13 +164,13 @@ export function DialogWrap({
       <div
         className={css.backdrop}
         data-omnistore-dialog=""
-        style={{ zIndex: `calc(${css.dialogBaseZIndex} + ${layerOffset})` }}
+        style={{ zIndex: DIALOG_BASE_Z_INDEX + layerOffset }}
         onClick={requestClose}
       />
       <div
         className={css.viewport}
         data-omnistore-dialog=""
-        style={{ zIndex: `calc(${css.dialogBaseZIndex} + ${layerOffset + 1})` }}
+        style={{ zIndex: DIALOG_BASE_Z_INDEX + layerOffset + 1 }}
       >
         <div
           className={wide ? css.popupWide : css.popup}

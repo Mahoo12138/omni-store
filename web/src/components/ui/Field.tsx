@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useId } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { Label } from '@fluentui/react-components'
-import * as css from './Field.css'
+import { useStyles } from './Field.styles'
 
 // 弹窗 / 表单字段容器：label（Fluent Label）+ 控件 + hint/error。
 // id 关联逻辑保持不变：cloneElement 注入 id；复合字段用 htmlFor 指向内部控件。
@@ -16,6 +16,7 @@ interface FieldProps {
   children: ReactNode
 }
 export function Field({ label, htmlFor, required, hint, error, children }: FieldProps) {
+  const css = useStyles()
   const generatedId = useId()
   const child = isValidElement(children) ? children as ReactElement<{ id?: string }> : null
   const controlId = htmlFor ?? child?.props.id ?? generatedId

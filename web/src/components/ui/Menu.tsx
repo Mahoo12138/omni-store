@@ -6,7 +6,7 @@ import {
   MenuPopover,
   MenuTrigger,
 } from '@fluentui/react-components'
-import * as css from './Menu.css'
+import { useStyles } from './Menu.styles'
 
 export interface MenuOption {
   id: string
@@ -27,6 +27,7 @@ interface MenuProps {
 }
 
 export function ItemView({ item }: { item: MenuOption }) {
+  const css = useStyles()
   const danger = item.danger ? css.danger : undefined
   // 槽位类型不收任意 ReactNode（suffix 可能是任何节点），在边界断言
   const secondaryContent = item.suffix as ComponentProps<typeof MenuItem>['secondaryContent']
@@ -45,6 +46,7 @@ export function ItemView({ item }: { item: MenuOption }) {
 
 /** 通用下拉菜单：触发器、定位和键盘交互统一交给 Fluent Menu。 */
 export function Menu({ ariaLabel, trigger, items, triggerClassName }: MenuProps) {
+  const css = useStyles()
   return (
     <FluentMenu>
       <MenuTrigger>
