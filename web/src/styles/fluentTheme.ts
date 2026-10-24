@@ -71,6 +71,9 @@ export const appLightTheme: Theme = {
   colorCompoundBrandStrokePressed: palette.primaryActive,
   colorCompoundBrandBackground: palette.primary,
 
+  // 弹窗背板遮罩
+  colorBackgroundOverlay: 'oklch(0.2 0.02 262 / 0.45)',
+
   borderRadiusSmall: '5px',
   borderRadiusMedium: '10px',
   borderRadiusLarge: '18px',
