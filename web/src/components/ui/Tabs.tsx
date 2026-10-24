@@ -1,5 +1,6 @@
 import {
   createContext,
+  useId,
   useContext,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -13,6 +14,8 @@ import {
 interface TabsContextValue {
   value: string
   setValue: (value: string) => void
+  /** 面板可访问名关联：Tab/Panel 共用的 id 前缀 */
+  uid: string
 }
 const TabsContext = createContext<TabsContextValue | null>(null)
 
@@ -30,6 +33,7 @@ function TabsRoot({
   children: ReactNode
 }) {
   const [internal, setInternal] = useState(defaultValue ?? '')
+  const uid = useId()
   const value = controlled ?? internal
   const setValue = (next: string) => {
     if (next === value) return
@@ -37,7 +41,7 @@ function TabsRoot({
     onValueChange?.(next)
   }
   return (
-    <TabsContext.Provider value={{ value, setValue }}>
+    <TabsContext.Provider value={{ value, setValue, uid }}>
       <div className={className}>{children}</div>
     </TabsContext.Provider>
   )
@@ -93,6 +97,7 @@ function TabsTab({
     <button
       type="button"
       role="tab"
+      id={`${ctx.uid}-tab-${value}`}
       aria-selected={selected}
       data-active={selected ? '' : undefined}
       data-value={value}
@@ -122,7 +127,7 @@ function TabsPanel({
   const selected = ctx.value === value
   if (!selected && !keepMounted) return null
   return (
-    <div role="tabpanel" className={className} hidden={!selected}>
+    <div role="tabpanel" aria-labelledby={`${ctx.uid}-tab-${value}`} className={className} hidden={!selected}>
       {children}
     </div>
   )

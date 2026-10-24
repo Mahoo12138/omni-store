@@ -25,18 +25,17 @@ let scrollLockCount = 0
 const ariaHiddenCounts = new Map<Element, number>()
 
 function isolateBackground() {
-  const added: Element[] = []
+  const touched: Element[] = []
   for (const child of Array.from(document.body.children)) {
     if (child.hasAttribute('data-omnistore-dialog')) continue
     const count = ariaHiddenCounts.get(child) ?? 0
     ariaHiddenCounts.set(child, count + 1)
-    if (count === 0) {
-      child.setAttribute('aria-hidden', 'true')
-      added.push(child)
-    }
+    touched.push(child)
+    if (count === 0) child.setAttribute('aria-hidden', 'true')
   }
+  // 计数对所有经过的节点生效(包括别处已隐藏的),归零才真正移除属性
   return () => {
-    for (const child of added) {
+    for (const child of touched) {
       const count = ariaHiddenCounts.get(child) ?? 1
       if (count <= 1) {
         ariaHiddenCounts.delete(child)
@@ -115,14 +114,21 @@ export function DialogWrap({
 
     const isTop = () => dialogStack[dialogStack.length - 1] === instance
 
+    // Fluent 浮层(Dropdown/Menu 等)打开时,Escape/Tab 归浮层处理,不能在捕获阶段
+    // 抢走(否则浮层关不掉,残留弹层挡住后续交互)
+    const floatingLayerOpen = () =>
+      !!document.querySelector('.fui-Listbox, .fui-MenuPopover')
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isTop()) return
       if (event.key === 'Escape') {
+        if (floatingLayerOpen()) return
         event.stopPropagation()
         requestClose()
         return
       }
       if (event.key === 'Tab') {
+        if (floatingLayerOpen()) return
         const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
           .filter((el) => el.offsetParent !== null || el === document.activeElement)
         if (focusables.length === 0) {
@@ -164,12 +170,16 @@ export function DialogWrap({
       <div
         className={css.backdrop}
         data-omnistore-dialog=""
+        data-dialog-backdrop=""
+        data-dialog-depth={depth}
         style={{ zIndex: DIALOG_BASE_Z_INDEX + layerOffset }}
         onClick={requestClose}
       />
       <div
         className={css.viewport}
         data-omnistore-dialog=""
+        data-dialog-viewport=""
+        data-dialog-depth={depth}
         style={{ zIndex: DIALOG_BASE_Z_INDEX + layerOffset + 1 }}
       >
         <div

@@ -14,12 +14,17 @@ let statusAlive = false
 
 function notice(message: ReactNode, intent: ToastIntent) {
   if (!controller) return
+  // 卡内容包语义 role:Fluent Toast 卡本身无 role(status/alert 在默认的 AriaLive
+  // 镜像里,而镜像已被 announce 关闭),项目与 E2E 依赖 status/alert 语义。
+  const content = (
+    <div role={intent === 'error' ? 'alert' : 'status'}>{message}</div>
+  )
   if (statusAlive) {
-    controller.updateToast({ content: message, toastId: appStatusToastID, timeout: 5000, intent })
+    controller.updateToast({ content, toastId: appStatusToastID, timeout: 5000, intent })
     return
   }
   statusAlive = true
-  controller.dispatchToast(message, {
+  controller.dispatchToast(content, {
     toastId: appStatusToastID,
     timeout: 5000,
     intent,

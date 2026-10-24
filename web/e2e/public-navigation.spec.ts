@@ -154,7 +154,7 @@ async function checkRouteMatrix(page: Page, account: AccountName) {
         expect(button.height, `${route.path}: compact navigation button height`).toBeCloseTo(32, 1)
         expect(button.structure.padding).toBe('0px 10px')
         expect(button.structure.gap).toBe('6px')
-        expect(button.structure['border-radius']).toBe('5px')
+        expect(button.structure['border-radius']).toBe('2px')
         const baseline = dimensions.get(button.name)
         if (baseline) {
           expect(button.width, `${route.path}: ${button.name} width`).toBeCloseTo(baseline.width, 1)
