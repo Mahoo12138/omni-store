@@ -1,6 +1,9 @@
-// 设计 token 的单一色源：theme.css.ts（vanilla-extract）与 fluentTheme.ts（Fluent UI v9）
+// 设计 token 的单一色源：theme.css.ts（vanilla-extract）与 Fluent 侧的 griffel 样式
 // 都从这里取原始值，避免两套主题各自漂移。色值来源：docs/index.png + docs/home.png
-// （见 docs/DESIGN_SYSTEM.md）。全部使用 oklch()。
+// （见 docs/DESIGN_SYSTEM.md）。
+//
+// 注意：本文件被 griffel AOT（wyw-in-js）在构建期求值，必须保持纯 JS 语法
+// （不写 `as const`、类型注解、TS 导入），且不得依赖 vanilla-extract 运行时。
 export const palette = {
   // 松柏绿：唯一动作色
   primary: 'oklch(0.43 0.075 175)',
@@ -41,9 +44,41 @@ export const palette = {
   tileTealFg: 'oklch(0.52 0.11 210)',
   tileRedBg: 'oklch(0.94 0.035 27)',
   tileRedFg: 'oklch(0.55 0.19 27)',
-} as const
+}
 
 export const fontStacks = {
   body: "Aptos, 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
   mono: "ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
-} as const
+}
+
+export const radius = {
+  sm: '5px',
+  md: '10px',
+  lg: '18px',
+  tile: '12px',
+  full: '999px',
+}
+
+export const space = {
+  xs: '4px',
+  sm: '8px',
+  md: '16px',
+  lg: '24px',
+  xl: '40px',
+}
+
+export const fontSize = {
+  xs: '12px',
+  sm: '13px',
+  md: '14px',
+  lg: '16px',
+  xl: '20px',
+  xxl: '24px',
+  display: '32px',
+}
+
+export const motion = {
+  fast: '150ms',
+  base: '200ms',
+  ease: 'cubic-bezier(0.22, 1, 0.36, 1)',
+}

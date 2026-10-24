@@ -58,6 +58,10 @@ export const appLightTheme: Theme = {
   colorNeutralStrokeAccessible: palette.borderStrong,
   colorNeutralStrokeDisabled: palette.border,
 
+  // Fluent 组件键盘焦点环（::after 指示器）统一用品牌色
+  colorStrokeFocus1: palette.primarySubtleInk,
+  colorStrokeFocus2: palette.primary,
+
   borderRadiusSmall: '5px',
   borderRadiusMedium: '10px',
   borderRadiusLarge: '18px',
