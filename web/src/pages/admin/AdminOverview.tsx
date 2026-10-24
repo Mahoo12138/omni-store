@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Tabs } from '@base-ui-components/react/tabs'
+import { Tabs } from '../../components/ui/Tabs'
 import { apiFetch, ApiRequestError } from '../../api/client'
 import {
   adminCreateSource,

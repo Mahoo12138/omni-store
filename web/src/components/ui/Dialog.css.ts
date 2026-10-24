@@ -1,7 +1,7 @@
 import { globalStyle, style } from '@vanilla-extract/css'
 import { vars } from '../../styles/theme.css'
 
-// Dialog（base-ui）容器、面板、背景层
+// 自研 Dialog 的容器、面板、背景层样式
 export const dialogBaseZIndex = vars.zIndex.modal
 
 export const viewport = style({
@@ -110,8 +110,3 @@ export const footer = style({
   borderTop: `1px solid ${vars.color.border}`,
   flexShrink: 0,
 })
-
-// base-ui 的 Dialog 内部使用 data-state 等属性。
-// 给弹窗与背景层提供 enter/exit 过渡；默认不依赖 JS 动画，直接静态展示。
-globalStyle(`${popup}[data-state="open"]`, { animation: 'none' })
-globalStyle(`${backdrop}[data-state="open"]`, { animation: 'none' })

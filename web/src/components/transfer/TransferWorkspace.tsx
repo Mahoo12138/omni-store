@@ -1,7 +1,7 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Tabs } from '@base-ui-components/react/tabs'
+import { Tabs } from '../ui/Tabs'
 import { fetchAuthStatus } from '../../api/auth'
 import { apiFetchBlob } from '../../api/client'
 import { fetchMySources } from '../../api/sources'

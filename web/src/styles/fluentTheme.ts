@@ -1,89 +1,9 @@
-import {
-  createLightTheme,
-  type BrandVariants,
-  type Theme,
-} from '@fluentui/react-components'
-import { fontStacks, palette } from './palette'
+import { webLightTheme, webDarkTheme, type Theme } from '@fluentui/react-components'
 
-// Fluent UI v9 主题：品牌 ramp 由松柏绿按 oklch 明度插值生成。
-// ramp 锚点：80=主色、70=hover、60=active/pressed、150=subtle 底色——与 palette.ts 的
-// primary/primaryHover/primaryActive/primarySubtle 一一对应。暗色主题预留（createDarkTheme）。
-const oklch = (l: number, c: number, h = 175) => `oklch(${l} ${c} ${h})`
+// 直接采用 Fluent UI 官方 Web 主题（设计语言、颜色、圆角、字体、交互全部原生）。
+// 需要品牌化或暗色切换时在此统一扩展（例如 overrideTokens 或按 prefers-color-scheme
+// 切换 appDarkTheme）；业务专属色（文件类型砖/Logo）见 palette.ts，与主题无关。
 
-export const brand: BrandVariants = {
-  10: oklch(0.11, 0.02),
-  20: oklch(0.15, 0.03),
-  30: oklch(0.19, 0.042),
-  40: oklch(0.24, 0.052),
-  50: oklch(0.28, 0.06),
-  60: oklch(0.32, 0.065),
-  70: oklch(0.37, 0.07),
-  80: oklch(0.43, 0.075),
-  90: oklch(0.52, 0.07),
-  100: oklch(0.62, 0.055),
-  110: oklch(0.72, 0.045),
-  120: oklch(0.82, 0.032),
-  130: oklch(0.88, 0.025),
-  140: oklch(0.92, 0.022),
-  150: oklch(0.95, 0.018),
-  160: oklch(0.97, 0.012),
-}
+export const appLightTheme: Theme = webLightTheme
 
-// 覆盖 Fluent 中性层 token，对齐 palette.ts 的暖纸色/文字/边框/字体/圆角/阴影，
-// 让 Fluent 组件与自研组件观感一致。语义色（success/danger/warning）按组件迁移时再精调。
-export const appLightTheme: Theme = {
-  ...createLightTheme(brand),
-  fontFamilyBase: fontStacks.body,
-  fontFamilyMonospace: fontStacks.mono,
-
-  colorBrandForeground1: palette.primarySubtleInk,
-  colorBrandForeground2: palette.primarySubtleInk,
-
-  // Background1 是 Fluent 弹层/菜单/对话框的面色，映射亮纸面；
-  // 页面底色由 global.css.ts 控制，不走这套 token。
-  colorNeutralBackground1: palette.surface,
-  colorNeutralBackground2: palette.background,
-  colorNeutralBackground3: palette.surfaceHover,
-  colorNeutralBackground1Hover: palette.surfaceHover,
-  colorNeutralBackground1Pressed: palette.surfaceHover,
-  colorNeutralBackground1Selected: palette.primarySubtle,
-  colorNeutralBackgroundDisabled: palette.surfaceHover,
-
-  colorNeutralForeground1: palette.text,
-  colorNeutralForeground2: palette.textSecondary,
-  colorNeutralForeground3: palette.textSecondary,
-  colorNeutralForegroundOnBrand: palette.textOnPrimary,
-  colorNeutralForegroundDisabled: palette.borderStrong,
-
-  colorNeutralStroke1: palette.borderStrong,
-  colorNeutralStroke2: palette.border,
-  colorNeutralStroke3: palette.border,
-  colorNeutralStrokeAccessible: palette.borderStrong,
-  colorNeutralStrokeDisabled: palette.border,
-
-  // Fluent 组件键盘焦点环（::after 指示器）统一用品牌色
-  colorStrokeFocus1: palette.primarySubtleInk,
-  colorStrokeFocus2: palette.primary,
-
-  // 组合品牌色：输入类控件聚焦下划线、选项选中标记
-  colorCompoundBrandStroke: palette.primary,
-  colorCompoundBrandStrokeHover: palette.primaryHover,
-  colorCompoundBrandStrokePressed: palette.primaryActive,
-  colorCompoundBrandBackground: palette.primary,
-
-  // 弹窗背板遮罩
-  colorBackgroundOverlay: 'oklch(0.2 0.02 262 / 0.45)',
-
-  borderRadiusSmall: '5px',
-  borderRadiusMedium: '10px',
-  borderRadiusLarge: '18px',
-  borderRadiusXLarge: '18px',
-
-  shadow4: '0 1px 2px oklch(0.25 0.018 170 / 0.035)',
-  shadow8: '0 1px 2px oklch(0.25 0.018 170 / 0.035)',
-  shadow16: '0 18px 48px oklch(0.25 0.018 170 / 0.09)',
-  shadow28: '0 18px 48px oklch(0.25 0.018 170 / 0.09)',
-  shadow64: '0 18px 48px oklch(0.25 0.018 170 / 0.09)',
-}
-
-// 暗色主题占位：切换时用 createDarkTheme(brand) + 暖纸色暗值覆盖，砖色/预览层需补暗值。
+export const appDarkTheme: Theme = webDarkTheme

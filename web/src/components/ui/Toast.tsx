@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Toaster, useToastController } from '@fluentui/react-components'
+import type { ToastIntent } from '@fluentui/react-components'
 import * as css from './Toast.css'
 
 export const appStatusToastID = 'app-status'
@@ -12,17 +13,18 @@ let controller: ToastController | null = null
 // 存活时必须走 updateToast（内部 updateId++ 触发重渲染并重启计时）。
 let statusAlive = false
 
-function notice(message: ReactNode, className: string, role: 'status' | 'alert') {
+function notice(message: ReactNode, intent: ToastIntent) {
   if (!controller) return
-  const content = <div className={`${css.notice} ${className}`} role={role}>{message}</div>
   if (statusAlive) {
-    controller.updateToast({ content, toastId: appStatusToastID, timeout: 5000 })
+    controller.updateToast({ content: message, toastId: appStatusToastID, timeout: 5000, intent })
     return
   }
   statusAlive = true
-  controller.dispatchToast(content, {
+  controller.dispatchToast(message, {
     toastId: appStatusToastID,
     timeout: 5000,
+    intent,
+    // 通知卡自带 live 语义，传入 announce 关闭 Fluent 的 AriaLive 文本镜像
     onStatusChange: (_, data) => {
       if (data.status === 'dismissed' || data.status === 'unmounted') statusAlive = false
     },
@@ -30,25 +32,23 @@ function notice(message: ReactNode, className: string, role: 'status' | 'alert')
 }
 
 export function toastSuccess(message: ReactNode) {
-  return notice(message, css.success, 'status')
+  return notice(message, 'success')
 }
 
 export function toastError(message: ReactNode) {
-  return notice(message, css.error, 'alert')
+  return notice(message, 'error')
 }
 
 export function toastInfo(message: ReactNode) {
-  return notice(message, css.info, 'status')
+  return notice(message, 'info')
 }
 
 /**
  * 应用级通知容器：所有页面通知统一从右下角出现，避免把状态信息插进页面布局。
- * 通知卡自带 role=status/alert 的 live 语义，传入 announce 关闭 Fluent 的
- * AriaLive 文本镜像（避免内容对 getByText/getByRole 出现两份）。
  */
 export function AppToaster() {
   controller = useToastController()
-  return <Toaster position="bottom-end" limit={4} offset={{ horizontal: 24, vertical: 24 }} announce={() => undefined} />
+  return <Toaster position="bottom-end" offset={{ horizontal: 24, vertical: 24 }} announce={() => undefined} />
 }
 
 // 常驻任务卡（上传/粘贴/批量删除）不走 Toaster：其 CollapseDelayed 高度动画的

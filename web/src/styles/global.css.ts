@@ -11,8 +11,6 @@ globalStyle('body', {
   fontSize: vars.fontSize.md,
   color: vars.color.text,
   backgroundColor: vars.color.background,
-  backgroundImage: `radial-gradient(70rem 32rem at 85% -10%, color-mix(in oklch, ${vars.color.primarySubtle} 58%, transparent), transparent 72%)`,
-  backgroundAttachment: 'fixed',
   lineHeight: 1.5,
   WebkitFontSmoothing: 'antialiased',
   minWidth: '320px',
@@ -27,7 +25,7 @@ globalStyle('button, input, select, textarea', {
 })
 
 globalStyle('a', {
-  color: vars.color.primary,
+  color: vars.color.primarySubtleInk,
   textDecoration: 'none',
 })
 
@@ -37,7 +35,7 @@ globalStyle('h1, h2, h3', {
 })
 
 globalStyle(':focus-visible', {
-  outline: `2px solid ${vars.color.primary}`,
+  outline: `2px solid var(--colorStrokeFocus2)`,
   outlineOffset: '2px',
 })
 

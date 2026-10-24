@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Tabs } from '@base-ui-components/react/tabs'
+import { Tabs } from '../../components/ui/Tabs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adminExportSystemConfig, adminGetAnonymousSettings, adminGetBranding,
