@@ -93,3 +93,11 @@ h3 {
     transform: translateY(-6px);
   }
 }
+
+/* 两行截断(griffel 对 -webkit-line-clamp 支持不稳,走普通 CSS) */
+.omnistore-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}

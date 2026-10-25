@@ -1609,8 +1609,8 @@ function EditSourceDialog({
     <DialogWrap
       open
       onOpenChange={(o) => { if (!o) onClose() }}
-      title={<span className={css.sourceConfigTitle} title={`配置：${src.name}`}>配置：{src.name}</span>}
-      description={<code className={css.sourceConfigPath} title={src.root_path}>{src.root_path}</code>}
+      title={<span className={`omnistore-clamp-2 ${css.sourceConfigTitle}`} title={`配置：${src.name}`}>配置：{src.name}</span>}
+      description={<code className={`omnistore-clamp-2 ${css.sourceConfigPath}`} title={src.root_path}>{src.root_path}</code>}
       wide
       footer={
         <>

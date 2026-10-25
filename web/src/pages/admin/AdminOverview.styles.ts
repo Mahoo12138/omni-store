@@ -692,25 +692,24 @@ export const useStyles = makeStyles({
   'containerType': 'inline-size',
   'containerName': 'storage-sources',
   },
-  'sourceItem': {
-  'display': 'grid',
-  'alignItems': 'center',
-  ...shorthands.gap('16px'),
-  'minWidth': '0px',
-  ...shorthands.padding('24px'),
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
-  'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  '@container': {
-    'storage-sources (max-width: 560px)': {
+  sourceItem: {
+    'display': 'grid',
+    'gridTemplateColumns': 'minmax(0, 1fr) auto',
+    'gridTemplateAreas': '"identity identity" "meta actions"',
+    'alignItems': 'center',
+    ...shorthands.gap('16px'),
+    'minWidth': '0px',
+    ...shorthands.padding('24px'),
+    ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+    'backgroundColor': 'var(--colorNeutralBackground1)',
+    ...shorthands.borderRadius('var(--borderRadiusMedium)'),
+    '@container storage-sources (max-width: 560px)': {
       'gridTemplateColumns': 'minmax(0, 1fr)',
       'gridTemplateAreas': '"identity" "meta" "actions"',
       'padding': '16px',
     },
   },
-  },
-  'sourceIdentity': {
-  'gridArea': 'identity',
+  sourceIdentity: {
   ...shorthands.gridArea('identity'),
   'display': 'grid',
   'gridTemplateColumns': '40px minmax(0, 1fr)',
@@ -894,17 +893,10 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   },
   'sourceConfigTitle': {
-  'display': '-webkit-box',
-  'WebkitBoxOrient': 'vertical',
-  'WebkitLineClamp': '2px',
-  ...shorthands.overflow('hidden'),
   'overflowWrap': 'anywhere',
   },
+  // 两行截断走 global.css 的 omnistore-clamp-2(与 className 组合使用)
   'sourceConfigPath': {
-  'display': '-webkit-box',
-  'WebkitBoxOrient': 'vertical',
-  'WebkitLineClamp': '2px',
-  ...shorthands.overflow('hidden'),
   'fontFamily': 'var(--fontFamilyMonospace)',
   'fontSize': '12px',
   'lineHeight': 1.6,
