@@ -289,14 +289,10 @@ test('credential overview opens one isolated management modal at a time', async 
   await expect(imageApiDialog).toBeVisible()
   await imageApi.getByRole('button', { name: '新建 Token', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '新建图床 Token' })).toBeVisible()
-  const visibleBackdropCount = await page.locator('body *').evaluateAll((elements) => elements.filter((element) => {
-    const style = getComputedStyle(element)
-    return style.position === 'fixed'
-      && style.inset === '0px'
-      && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
-      && style.backgroundColor !== 'transparent'
-  }).length)
-  expect(visibleBackdropCount).toBe(2)
+  // 嵌套打开时两层的背板都已挂载(Fluent 设计:内层背板透明,遮罩由最外层承担;
+  // surface 本身是 fixed inset-0 元素,因此按 data-dialog-backdrop 标记计数)
+  const mountedBackdropCount = await page.locator('[data-dialog-backdrop]').count()
+  expect(mountedBackdropCount).toBe(2)
   await page.getByRole('dialog', { name: '新建图床 Token' }).getByRole('button', { name: '取消', exact: true }).click()
   await imageApiDialog.getByRole('button', { name: '完成', exact: true }).click()
 
