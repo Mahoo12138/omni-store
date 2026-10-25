@@ -1,12 +1,12 @@
-import { vars } from './theme.css'
+import { palette } from './palette'
 
 // 图标砖配色对：识别实体（存储源、快速操作），不做装饰。
 export const tilePalettes = [
-  { bg: vars.color.tileBlueBg, fg: vars.color.tileBlueFg },
-  { bg: vars.color.tileGreenBg, fg: vars.color.tileGreenFg },
-  { bg: vars.color.tileAmberBg, fg: vars.color.tileAmberFg },
-  { bg: vars.color.tilePurpleBg, fg: vars.color.tilePurpleFg },
-  { bg: vars.color.tileTealBg, fg: vars.color.tileTealFg },
+  { bg: palette.tileBlueBg, fg: palette.tileBlueFg },
+  { bg: palette.tileGreenBg, fg: palette.tileGreenFg },
+  { bg: palette.tileAmberBg, fg: palette.tileAmberFg },
+  { bg: palette.tilePurpleBg, fg: palette.tilePurpleFg },
+  { bg: palette.tileTealBg, fg: palette.tileTealFg },
 ] as const
 
 export type TilePalette = (typeof tilePalettes)[number]

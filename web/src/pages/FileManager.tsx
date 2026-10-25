@@ -64,7 +64,6 @@ import {
   IconTrash,
   IconUpload,
 } from '../components/ui/Icon'
-import { vars } from '../styles/theme.css'
 import { formatBytes } from '../utils/format'
 import { resolvePreview } from '../preview/resolver'
 import { PreviewModal } from '../preview/PreviewModal'
@@ -114,7 +113,7 @@ export function FileManagerPage() {
   if (sources.isPending) {
     return (
       <AppShell title="文件">
-        <div style={{ padding: 32, color: vars.color.textSecondary, textAlign: 'center' }}>加载中…</div>
+        <div style={{ padding: 32, color: 'var(--colorNeutralForeground2)', textAlign: 'center' }}>加载中…</div>
       </AppShell>
     )
   }
@@ -815,7 +814,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
           {/* 工具条：当前位置 / 搜索 / 视图切换 / 刷新 */}
           <div className={css.toolbar}>
             <span className={css.toolbarLocation}>
-              当前位置: <strong style={{ color: vars.color.text }}>{currentPath}</strong>
+              当前位置: <strong style={{ color: 'var(--colorNeutralForeground1)' }}>{currentPath}</strong>
             </span>
             <span className={css.searchBox}>
               <span className={css.searchIcon}>
@@ -940,7 +939,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                         title={favoriteForEntry(entry) ? '取消收藏' : '收藏'}
                         onClick={() => toggleFavorite(entry)}
                         disabled={favoriteMutation.isPending}
-                        style={favoriteForEntry(entry) ? { color: vars.color.primary } : undefined}
+                        style={favoriteForEntry(entry) ? { color: 'var(--colorBrandBackground)' } : undefined}
                       >
                         <IconStar size={15} />
                       </button>
@@ -1010,7 +1009,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                       title={favoriteForEntry(entry) ? '取消收藏' : '收藏'}
                       onClick={() => toggleFavorite(entry)}
                       disabled={favoriteMutation.isPending}
-                      style={favoriteForEntry(entry) ? { color: vars.color.primary } : undefined}
+                      style={favoriteForEntry(entry) ? { color: 'var(--colorBrandBackground)' } : undefined}
                     >
                       <IconStar size={15} />
                     </button>
@@ -1113,7 +1112,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 </button>
                 {pageRange(page, totalPages).map((p, i) =>
                   p === '…' ? (
-                    <span key={`g${i}`} style={{ padding: '0 6px', color: vars.color.textSecondary }}>…</span>
+                    <span key={`g${i}`} style={{ padding: '0 6px', color: 'var(--colorNeutralForeground2)' }}>…</span>
                   ) : (
                     <button
                       key={p}
@@ -1801,10 +1800,10 @@ function BatchDeleteDialog({ entries, onClose, onConfirm }: {
         </>
       }
     >
-      <p style={{ margin: '0 0 10px', fontSize: vars.fontSize.sm, color: vars.color.text }}>
+      <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
         选中的项目会移入回收站；文件夹及其内容会一起移动，之后可在回收站恢复。
       </p>
-      <ul style={{ margin: 0, paddingLeft: 20, fontSize: vars.fontSize.sm, color: vars.color.textSecondary }}>
+      <ul style={{ margin: 0, paddingLeft: 20, fontSize: '13px', color: 'var(--colorNeutralForeground2)' }}>
         {preview.map((entry) => <li key={entry.name}>{entry.name}{entry.type === 'dir' ? '（文件夹）' : ''}</li>)}
         {entries.length > preview.length ? <li>以及其他 {entries.length - preview.length} 项</li> : null}
       </ul>
@@ -1940,11 +1939,11 @@ function GridView({
   const css = useStyles()
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   if (loading) {
-    return <div style={{ padding: 32, textAlign: 'center', color: vars.color.textSecondary }}>加载中…</div>
+    return <div style={{ padding: 32, textAlign: 'center', color: 'var(--colorNeutralForeground2)' }}>加载中…</div>
   }
   if (entries.length === 0) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: vars.color.textSecondary }}>
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--colorNeutralForeground2)' }}>
         {filter ? '没有匹配的条目' : '目录为空'}
       </div>
     )
@@ -1961,8 +1960,8 @@ function GridView({
               draggable={Boolean(onDragEntryStart && e.type !== 'unsupported')}
           className={css.gridCard}
           style={{
-            background: dropTargetName === e.name ? vars.color.primarySubtle : undefined,
-            outline: dropTargetName === e.name ? `2px solid ${vars.color.primary}` : undefined,
+            background: dropTargetName === e.name ? 'var(--colorBrandBackground2)' : undefined,
+            outline: dropTargetName === e.name ? `2px solid ${'var(--colorBrandBackground)'}` : undefined,
           }}
           onDragStart={onDragEntryStart ? (event) => {
             if (e.type === 'unsupported') {
@@ -2028,7 +2027,7 @@ function GridView({
                 aria-pressed={isFavorite(e.name)}
                 title={isFavorite(e.name) ? '取消收藏' : '收藏'}
                 onClick={() => onToggleFavorite(e.name)}
-                style={isFavorite(e.name) ? { color: vars.color.primary } : undefined}
+                style={isFavorite(e.name) ? { color: 'var(--colorBrandBackground)' } : undefined}
               >
                 <IconStar size={12} />
               </button>
@@ -2148,8 +2147,8 @@ function Row({
         <span
           className={css.sideKvValue}
           style={{
-            fontFamily: mono ? vars.font.mono : 'inherit',
-            color: muted ? vars.color.textSecondary : vars.color.text,
+            fontFamily: mono ? 'var(--fontFamilyMonospace)' : 'inherit',
+            color: muted ? 'var(--colorNeutralForeground2)' : 'var(--colorNeutralForeground1)',
           }}
         >
           {value}
@@ -2219,15 +2218,15 @@ function NoSourceView() {
               <div className={css.emptySideList}>
                 <span className={css.emptySideListTitle}>你可以</span>
                 <span className={css.emptySideItem}>
-                  <IconCopy size={14} style={{ color: vars.color.textSecondary }} />
+                  <IconCopy size={14} style={{ color: 'var(--colorNeutralForeground2)' }} />
                   联系管理员为你分配存储源
                 </span>
                 <span className={css.emptySideItem}>
-                  <IconCopy size={14} style={{ color: vars.color.textSecondary }} />
+                  <IconCopy size={14} style={{ color: 'var(--colorNeutralForeground2)' }} />
                   切换到已有访问权限的存储源
                 </span>
                 <span className={css.emptySideItem}>
-                  <IconCopy size={14} style={{ color: vars.color.textSecondary }} />
+                  <IconCopy size={14} style={{ color: 'var(--colorNeutralForeground2)' }} />
                   了解更多产品功能和使用方法
                 </span>
               </div>
@@ -2460,17 +2459,17 @@ function BatchShareDialog({ sourceKey, currentPath, entries, onClose }: {
           </Field>
         </>
       ) : (
-        <div style={{ maxHeight: 'min(45vh, 360px)', overflow: 'auto', fontSize: vars.fontSize.sm }}>
+        <div style={{ maxHeight: 'min(45vh, 360px)', overflow: 'auto', fontSize: '13px' }}>
           <p role="status" aria-live="polite">{running ? `正在处理 ${attempted} / ${attemptTotal} 项：${currentName}` : `完成：${created.length} 个成功，${failed.length} 个失败`}</p>
           {created.length > 0 && <ul aria-label="已创建的分享链接" style={{ paddingLeft: 20 }}>
             {created.map((share) => <li key={share.key}><a href={share.url} target="_blank" rel="noreferrer">{share.name}</a></li>)}
           </ul>}
-          {failed.length > 0 && <ul aria-label="创建失败的项目" style={{ paddingLeft: 20, color: vars.color.danger }}>
+          {failed.length > 0 && <ul aria-label="创建失败的项目" style={{ paddingLeft: 20, color: 'var(--colorPaletteRedForeground1)' }}>
             {failed.map(({ entry, message }) => <li key={entry.name}>{entry.name}：{message}</li>)}
           </ul>}
         </div>
       )}
-      {validationError && started && <p role="alert" style={{ color: vars.color.danger }}>{validationError}</p>}
+      {validationError && started && <p role="alert" style={{ color: 'var(--colorPaletteRedForeground1)' }}>{validationError}</p>}
     </DialogWrap>
   )
 }
@@ -2639,7 +2638,7 @@ function DeleteDialog({
         </>
       }
     >
-      <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+      <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
         {isDir
           ? `目录「${target.name}」及其中内容会移入回收站，可在永久清理前恢复。`
           : `「${target.name}」会移入回收站，可在永久清理前恢复。`}

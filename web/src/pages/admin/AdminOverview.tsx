@@ -89,10 +89,9 @@ import {
 } from '../../components/ui/Icon'
 import { AdminLayout, AdminPageHeader } from './AdminLayout'
 import { SiteSettingsSection } from './SiteSettings'
-import { vars } from '../../styles/theme.css'
 import { formatBytes, formatDate } from '../../utils/format'
 import { auditActionLabel, auditActorLabel, auditEntryLabel } from '../../utils/audit'
-import * as css from './AdminOverview.css'
+import { useStyles } from './AdminOverview.styles'
 
 // 系统设置页（docs/settings-layout.png）：左侧分组的子导航 + 右侧多 section。
 // 把原 /app/admin、/app/admin/sources、/app/admin/users、/app/admin/audit-logs、
@@ -191,6 +190,7 @@ const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 export function AdminOverviewPage() {
+  const css = useStyles()
   const search = useSearch({ strict: false }) as { section?: string; tab?: string }
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
@@ -293,6 +293,7 @@ function HorizontalDataRegion({
   busy?: boolean
   children: React.ReactNode
 }) {
+  const css = useStyles()
   return (
     <div className={css.dataScrollFrame}>
       <div
@@ -312,6 +313,7 @@ function HorizontalDataRegion({
 // --- 我的（原 /app/settings：个人资料 + 修改密码 + WebDAV/图床 Token）---
 
 function ProfileSection() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const tokens = useQuery({ queryKey: ['token-status'], queryFn: fetchTokenStatus })
@@ -592,6 +594,7 @@ function CredentialGroupHeader({
   status: React.ReactNode
   action: React.ReactNode
 }) {
+  const css = useStyles()
   return (
     <header className={css.credentialGroupHeader}>
       <div className={css.credentialGroupCopy}>
@@ -624,6 +627,7 @@ function TokenBlock({
   error: boolean
   resetting: boolean
 }) {
+  const css = useStyles()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [showOpen, setShowOpen] = useState(false)
   const tokenInputId = useId()
@@ -703,7 +707,7 @@ function TokenBlock({
           </>
         }
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           确定要重置该 Token 吗？此操作无法撤销。
         </p>
       </DialogWrap>
@@ -742,6 +746,7 @@ function TokenBlock({
 }
 
 function ImageBedTokenManager() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const tokens = useQuery({ queryKey: ['image-bed-tokens'], queryFn: fetchImageBedTokens })
   const [createOpen, setCreateOpen] = useState(false)
@@ -911,7 +916,7 @@ function ImageBedTokenManager() {
           </>
         }
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           即将撤销“{deleting?.label}”。其他图床 Token 不受影响。
         </p>
       </DialogWrap>
@@ -920,6 +925,7 @@ function ImageBedTokenManager() {
 }
 
 function S3CredentialManager() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const credentials = useQuery({ queryKey: ['s3-credentials'], queryFn: fetchS3Credentials })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
@@ -1134,7 +1140,7 @@ function S3CredentialManager() {
           </>
         }
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           即将撤销“{deleting?.name}”。其他 S3 凭据不受影响。
         </p>
       </DialogWrap>
@@ -1145,6 +1151,7 @@ function S3CredentialManager() {
 // --- 偏好设置（占位）---
 
 function PreferencesSection() {
+  const css = useStyles()
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
@@ -1169,6 +1176,7 @@ function portOf(addr?: string): string | undefined {
 // --- 存储源（原 AdminSources）---
 
 function SourcesSection() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
   const [createOpen, setCreateOpen] = useState(false)
@@ -1304,7 +1312,7 @@ function SourcesSection() {
           </>
         }
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           此操作只会从 OmniStore 中移除该存储源及其授权关系，不会删除磁盘上的真实文件。该操作不可撤销。
         </p>
       </DialogWrap>
@@ -1467,6 +1475,7 @@ const sourceEntryKindLabels: Record<SourcePreflight['entries'][number]['kind'], 
 }
 
 function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
+  const css = useStyles()
   const summary = preview.summary
   return (
     <section className={css.sourcePreview} aria-label="目录预检结果">
@@ -1515,6 +1524,7 @@ function EditSourceDialog({
   sourceKey: string
   onClose: () => void
 }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const detail = useQuery({ queryKey: ['admin-source', sourceKey], queryFn: () => adminGetSource(sourceKey) })
 
@@ -1673,7 +1683,7 @@ function EditSourceDialog({
                 }}
                 aria-label="存储源配额 GiB"
               />
-              <span style={{ color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>GiB</span>
+              <span style={{ color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>GiB</span>
             </div>
           </Field>
 
@@ -1707,8 +1717,8 @@ function EditSourceDialog({
       {msg && (
         <div
           style={{
-            fontSize: vars.fontSize.sm,
-            color: vars.color.textSecondary,
+            fontSize: '13px',
+            color: 'var(--colorNeutralForeground2)',
             textAlign: 'right',
           }}
         >
@@ -1722,6 +1732,7 @@ function EditSourceDialog({
 // --- 访问策略 ---
 
 function PoliciesSection() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const policies = useQuery({ queryKey: ['admin-policies'], queryFn: adminListPolicies })
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
@@ -1853,7 +1864,7 @@ function PoliciesSection() {
           </>
         }
       >
-        <p style={{ margin: 0, color: vars.color.text, fontSize: vars.fontSize.sm }}>
+        <p style={{ margin: 0, color: 'var(--colorNeutralForeground1)', fontSize: '13px' }}>
           删除后，依赖该策略获得的访问权限会立即失效，不会删除存储源或真实文件。
         </p>
       </DialogWrap>
@@ -1876,6 +1887,7 @@ function PolicyDialog({
   onOpenChange: (open: boolean) => void
   onSaved: () => void
 }) {
+  const css = useStyles()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [sourcePermissions, setSourcePermissions] = useState<Record<string, AccessPermission>>({})
@@ -2115,7 +2127,7 @@ function PolicyDialog({
         </div>
       </Field>
       {message ? (
-        <p role="status" style={{ margin: 0, color: vars.color.danger, fontSize: vars.fontSize.sm }}>
+        <p role="status" style={{ margin: 0, color: 'var(--colorPaletteRedForeground1)', fontSize: '13px' }}>
           {message}
         </p>
       ) : null}
@@ -2126,6 +2138,7 @@ function PolicyDialog({
 // --- 用户（原 AdminUsers）---
 
 function UsersSection() {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const users = useQuery({ queryKey: ['admin-users'], queryFn: adminListUsers })
@@ -2197,7 +2210,7 @@ function UsersSection() {
                   <td className={css.compactTd}>
                     {formatBytes(u.usage_bytes)} / {u.quota_bytes > 0 ? formatBytes(u.quota_bytes) : '不限'}
                   </td>
-                  <td className={css.compactTd} style={{ color: vars.color.textSecondary }}>
+                  <td className={css.compactTd} style={{ color: 'var(--colorNeutralForeground2)' }}>
                     {formatDate(u.created_at)}
                   </td>
                   <td className={css.compactTd}>
@@ -2229,7 +2242,7 @@ function UsersSection() {
             </tbody>
           </table>
           {users.isSuccess && users.data.length === 0 && (
-            <div style={{ padding: 16, textAlign: 'center', color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
+            <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>
               还没有用户
             </div>
           )}
@@ -2263,7 +2276,7 @@ function UsersSection() {
           </>
         )}
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           所有网页登录会话、WebDAV Token、图床 Token 和 S3 Key 将立即失效。账号、文件、分享与权限不会删除，用户仍可使用密码重新登录并创建新凭据。
         </p>
       </DialogWrap>
@@ -2287,7 +2300,7 @@ function UsersSection() {
           </>
         }
       >
-        <p style={{ margin: 0, fontSize: vars.fontSize.sm, color: vars.color.text }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--colorNeutralForeground1)' }}>
           该用户的 Token、授权关系与会话都会被清除。该操作不可撤销。
         </p>
       </DialogWrap>
@@ -2458,6 +2471,7 @@ function CreateUserDialog({
 // --- 审计日志（原 AdminAudit）---
 
 function AuditSection() {
+  const css = useStyles()
   const [draftFilters, setDraftFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
   const [filters, setFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
   const [page, setPage] = useState(1)
@@ -2567,14 +2581,14 @@ function AuditSection() {
                 </td>
                 <td className={css.compactTd}>{auditEntryLabel(log.entry_type) ?? log.entry_type}</td>
                 <td className={css.compactTd}>{auditActionLabel(log.action) ?? log.action}</td>
-                <td className={css.compactTd} style={{ fontFamily: vars.font.mono, color: vars.color.textSecondary }}>
+                <td className={css.compactTd} style={{ fontFamily: 'var(--fontFamilyMonospace)', color: 'var(--colorNeutralForeground2)' }}>
                   {log.storage_source_name ?? '—'}
                 </td>
                 <td className={css.compactTd}>
                   {log.relative_path ?? '—'}
                   {log.target_relative_path ? ` → ${log.target_relative_path}` : ''}
                 </td>
-                <td className={css.compactTd} style={{ fontFamily: vars.font.mono, color: vars.color.textSecondary }}>
+                <td className={css.compactTd} style={{ fontFamily: 'var(--fontFamilyMonospace)', color: 'var(--colorNeutralForeground2)' }}>
                   {log.ip_address ?? '—'}
                 </td>
                 <td className={css.compactTd}>
@@ -2592,12 +2606,12 @@ function AuditSection() {
           <div className={css.auditMessage}>正在加载审计日志…</div>
         )}
         {logs.isSuccess && logs.data.items.length === 0 && (
-          <div style={{ padding: 16, textAlign: 'center', color: vars.color.textSecondary, fontSize: vars.fontSize.sm }}>
+          <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>
             没有符合条件的日志
           </div>
         )}
         {logs.isError && (
-          <div style={{ padding: 16, textAlign: 'center', color: vars.color.danger, fontSize: vars.fontSize.sm }}>
+          <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorPaletteRedForeground1)', fontSize: '13px' }}>
             加载失败
           </div>
         )}
@@ -2632,6 +2646,7 @@ function AuditSection() {
 // --- 页脚：版本号 + git commit（仿 docs/settings-layout.png 左下角）---
 
 function VersionFooter() {
+  const css = useStyles()
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => apiFetch<{ version: string; commit?: string; build_time?: string }>('/api/v1/health'),
@@ -2665,6 +2680,7 @@ const staticCorsModeLabels: Record<string, string> = {
 }
 
 function StaticAssetsSection({ sourceKey }: { sourceKey: string }) {
+  const css = useStyles()
   const config = useQuery({ queryKey: ['static-assets-config', sourceKey], queryFn: () => adminGetStaticConfig(sourceKey) })
   if (config.isPending) {
     return (
@@ -2682,6 +2698,7 @@ function StaticAssetsSection({ sourceKey }: { sourceKey: string }) {
 }
 
 function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const [publishRoot, setPublishRoot] = useState('blog-assets')
   const [confirmRoot, setConfirmRoot] = useState(false)
@@ -2749,13 +2766,14 @@ function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
             {preflight.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
           </div>
         )}
-        {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+        {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
       </div>
     </section>
   )
 }
 
 function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources })
   const sourceKey = config.source_key
@@ -2888,8 +2906,8 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
           {!config.enabled && <Button variant="dangerGhost" disabled={removeMut.isPending} onClick={() => {
             if (window.confirm('撤销此源的静态公开地址？已有 URL 将失效，磁盘文件会保留。')) removeMut.mutate()
           }}>移除静态访问配置</Button>}
-          {msg && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.textSecondary }}>{msg}</div>}
-          {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+          {msg && <div style={{ fontSize: '13px', color: 'var(--colorNeutralForeground2)' }}>{msg}</div>}
+          {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
         </div>
       </section>
 
@@ -3009,7 +3027,7 @@ function StaticAssetsRebindDialog({
           </label>
         </Field>
       )}
-      {err && <div style={{ fontSize: vars.fontSize.sm, color: vars.color.danger }}>{err}</div>}
+      {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
     </DialogWrap>
   )
 }
@@ -3032,6 +3050,7 @@ function formatAuditTime(iso: string): string {
 }
 
 function DashboardSection() {
+  const css = useStyles()
   const overview = useQuery({
     queryKey: ['admin-overview'], queryFn: fetchAdminOverview, refetchInterval: 30_000, retry: false,
   })

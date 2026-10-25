@@ -17,7 +17,7 @@ import * as fieldCss from '../../components/ui/Field.utils'
 import { IconDownload } from '../../components/ui/Icon'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
-import * as css from './AdminOverview.css'
+import { useStyles } from './AdminOverview.styles'
 import { useStyles as useSiteStyles } from './SiteSettings.styles'
 import { useStyles as useOutlineStyles } from '../../components/ui/Outline.styles'
 import { mergeClasses } from '@fluentui/react-components'
@@ -43,6 +43,7 @@ const siteServices: { key: SiteCapability; name: string; description: string; bi
 const fetchAnonymousStatus = () => apiFetch<{ max_file_size_mb: number; enabled: boolean }>('/api/v1/image-bed/anonymous-status')
 
 export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabChange: (tab: SiteTab) => void }) {
+  const css = useStyles()
   const site = useSiteStyles()
   const o = useOutlineStyles()
   return (
@@ -68,6 +69,7 @@ export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabC
 }
 
 function SiteServicesSection() {
+  const css = useStyles()
   const site = useSiteStyles()
   const queryClient = useQueryClient()
   const capabilities = useQuery({ queryKey: ['admin-capabilities'], queryFn: adminListCapabilities, retry: false })
@@ -276,6 +278,7 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
 }
 
 function SiteRuntimeSection() {
+  const css = useStyles()
   const site = useSiteStyles()
   const health = useQuery({ queryKey: ['health'], queryFn: () => apiFetch<{ version: string }>('/api/v1/health') })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false })
@@ -294,6 +297,7 @@ function SiteRuntimeSection() {
   )
 }
 function BackupSection() {
+  const css = useStyles()
   const [message, setMessage] = useState('')
   const exportMutation = useMutation({
     mutationFn: adminExportSystemConfig,
@@ -343,6 +347,7 @@ function BackupSection() {
 
 
 function BrandingSection() {
+  const css = useStyles()
   const site = useSiteStyles()
   const queryClient = useQueryClient()
   const branding = useQuery({ queryKey: ['admin-branding'], queryFn: adminGetBranding, retry: false })
