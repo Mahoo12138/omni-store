@@ -710,6 +710,7 @@ export const useStyles = makeStyles({
   },
   },
   'sourceIdentity': {
+  'gridArea': 'identity',
   ...shorthands.gridArea('identity'),
   'display': 'grid',
   'gridTemplateColumns': '40px minmax(0, 1fr)',
@@ -753,6 +754,7 @@ export const useStyles = makeStyles({
   'overflowWrap': 'anywhere',
   },
   'sourceMeta': {
+  'gridArea': 'meta',
   ...shorthands.gridArea('meta'),
   'display': 'grid',
   'alignItems': 'start',
@@ -790,6 +792,7 @@ export const useStyles = makeStyles({
   'fontWeight': 400,
   },
   'sourceActions': {
+  'gridArea': 'actions',
   ...shorthands.gridArea('actions'),
   'display': 'flex',
   'flexWrap': 'wrap',
