@@ -19,7 +19,7 @@ import {
   LogoMark,
 } from '../ui/Icon'
 import { Menu, type MenuOption } from '../ui/Menu'
-import * as css from './AppShell.css'
+import { useStyles } from './AppShell.styles'
 
 // 登录侧布局：桌面使用左侧导航，窄屏切为底部导航。
 // 未登录自动跳转 /login；账号入口始终位于导航末端。
@@ -32,6 +32,7 @@ export function AppShell({
   children: ReactNode
   wide?: boolean
 }) {
+  const css = useStyles()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const clipboard = useFileClipboard()
@@ -123,6 +124,7 @@ export function AppShell({
 }
 
 function AppShellLoading() {
+  const css = useStyles()
   return (
     <div className={css.loadingShell} aria-busy="true" aria-label="正在加载工作区">
       <div className={css.loadingSidebar} />
@@ -136,6 +138,7 @@ function AppShellLoading() {
 
 // 侧栏底部用户菜单：桌面显示完整账号，窄屏收为底部导航入口。
 function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
+  const css = useStyles()
   const navigate = useNavigate()
   const initial = displayName.slice(0, 1).toUpperCase()
 

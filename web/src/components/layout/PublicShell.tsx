@@ -4,11 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchSystemStatus } from '../../api/system'
 import { IconHome, LogoMark } from '../ui/Icon'
 import { PublicNavigation } from './PublicNavigation'
-import * as css from './PublicShell.css'
+import { useStyles } from './PublicShell.styles'
 
 // 公开侧布局：品牌与共享导航；独立 hero 也复用同一套导航。
 // 品牌名来自实例品牌设置（1.2.0），未配置时回退 OmniStore。
 export function PublicShell({ children, showHeader = true }: { children: ReactNode; showHeader?: boolean }) {
+  const css = useStyles()
   const systemStatus = useQuery({
     queryKey: ['system-status'],
     queryFn: fetchSystemStatus,
@@ -48,6 +49,7 @@ export function PublicBreadcrumb({
   showHome?: boolean
   rootLabel?: string
 }) {
+  const css = useStyles()
   return (
     <nav className={css.breadcrumb} aria-label="当前位置">
       {showHome && (

@@ -16,9 +16,10 @@ import {
   IconPlus,
   IconUpload,
 } from '../components/ui/Icon'
-import * as css from './Dashboard.css'
+import { useStyles } from './Dashboard.styles'
 
 export function AppHomePage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
@@ -172,6 +173,7 @@ function capabilities(source: UserSource): string {
 }
 
 function SourceListLoading() {
+  const css = useStyles()
   return (
     <div className={css.sourceList} role="status" aria-busy="true" aria-label="正在加载存储源">
       {[0, 1, 2].map((item) => (
@@ -197,6 +199,7 @@ function RetryState({
   message: string
   onRetry: () => void
 }) {
+  const css = useStyles()
   return (
     <div className={css.inlineState} role="alert">
       <div>
@@ -209,6 +212,7 @@ function RetryState({
 }
 
 function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
+  const css = useStyles()
   return (
     <div className={css.emptyState}>
       <span className={css.emptyIcon}><IconFolderFilled size={34} /></span>
@@ -236,6 +240,7 @@ function SystemStatusPanel({
   error: boolean
   onRetry: () => void
 }) {
+  const css = useStyles()
   const flags: Array<{ label: string; value: SystemStatusFlag | undefined }> = [
     { label: 'WebDAV', value: data?.webdav },
     { label: '公开网盘', value: data?.public_drive },
@@ -291,6 +296,7 @@ function RecentActivity({
   onRetry: () => void
   showAll: boolean
 }) {
+  const css = useStyles()
   return (
     <section className={css.activitySection} aria-labelledby="activity-title">
       <div className={css.sectionHeader}>

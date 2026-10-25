@@ -64,3 +64,14 @@ h3 {
     background-position: -200% 0;
   }
 }
+
+/* 骨架屏 pulse(AppShell/Dashboard 等复用) */
+@keyframes omnistore-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
