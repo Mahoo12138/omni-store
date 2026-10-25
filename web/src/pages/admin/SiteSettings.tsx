@@ -19,8 +19,6 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { useStyles } from './AdminOverview.styles'
 import { useStyles as useSiteStyles } from './SiteSettings.styles'
-import { useStyles as useOutlineStyles } from '../../components/ui/Outline.styles'
-import { mergeClasses } from '@fluentui/react-components'
 
 type SiteTab = 'services' | 'general'
 const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string }[] = [
@@ -45,7 +43,6 @@ const fetchAnonymousStatus = () => apiFetch<{ max_file_size_mb: number; enabled:
 export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabChange: (tab: SiteTab) => void }) {
   const css = useStyles()
   const site = useSiteStyles()
-  const o = useOutlineStyles()
   return (
     <div className={site.root}>
       <div>
@@ -53,9 +50,9 @@ export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabC
         <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
       </div>
       <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={site.tabs}>
-        <Tabs.List className={mergeClasses(o.outlineList, site.tabList)} aria-label="站点配置">
-          <Tabs.Tab className={mergeClasses(o.outlineTab, site.tab)} value="services">站点服务</Tabs.Tab>
-          <Tabs.Tab className={mergeClasses(o.outlineTab, site.tab)} value="general">通用配置</Tabs.Tab>
+        <Tabs.List className={site.tabList} aria-label="站点配置">
+          <Tabs.Tab value="services">站点服务</Tabs.Tab>
+          <Tabs.Tab value="general">通用配置</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="services" className={site.panel}><SiteServicesSection /></Tabs.Panel>
         <Tabs.Panel value="general" className={site.panel}>

@@ -73,6 +73,7 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
+  IconChevronDown,
   IconChevronRight,
   IconCloud,
   IconGlobe,
@@ -2475,6 +2476,7 @@ function AuditSection() {
   const [draftFilters, setDraftFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
   const [filters, setFilters] = useState<AuditFilters>(() => ({ ...emptyAuditFilters }))
   const [page, setPage] = useState(1)
+  const [showAllFilters, setShowAllFilters] = useState(false)
 
   const logs = useQuery({
     queryKey: [
@@ -2517,34 +2519,15 @@ function AuditSection() {
         <p className={css.sectionHint}>按主体、入口、结果或关键字筛选实例上的关键操作。</p>
       </div>
       <form className={css.auditFilters} onSubmit={applyFilters}>
-        <Field label="主体">
+        <Field label="主体" className={css.auditField}>
           <Select
             value={draftFilters.actorType}
             onValueChange={(value) => setDraftFilters((current) => ({ ...current, actorType: value }))}
             options={auditActorOptions}
             ariaLabel="筛选审计主体"
-            size="compact"
           />
         </Field>
-        <Field label="入口">
-          <Select
-            value={draftFilters.entryType}
-            onValueChange={(value) => setDraftFilters((current) => ({ ...current, entryType: value }))}
-            options={auditEntryOptions}
-            ariaLabel="筛选审计入口"
-            size="compact"
-          />
-        </Field>
-        <Field label="结果">
-          <Select
-            value={draftFilters.status}
-            onValueChange={(value) => setDraftFilters((current) => ({ ...current, status: value }))}
-            options={auditStatusOptions}
-            ariaLabel="筛选审计结果"
-            size="compact"
-          />
-        </Field>
-        <Field label="关键字">
+        <Field label="关键字" className={css.auditFieldKeyword}>
           <Input
             value={draftFilters.searchText}
             onChange={(event) => setDraftFilters((current) => ({ ...current, searchText: event.target.value }))}
@@ -2552,7 +2535,36 @@ function AuditSection() {
             maxLength={128}
           />
         </Field>
+        {showAllFilters && (
+          <>
+            <Field label="入口" className={css.auditField}>
+              <Select
+                value={draftFilters.entryType}
+                onValueChange={(value) => setDraftFilters((current) => ({ ...current, entryType: value }))}
+                options={auditEntryOptions}
+                ariaLabel="筛选审计入口"
+              />
+            </Field>
+            <Field label="结果" className={css.auditField}>
+              <Select
+                value={draftFilters.status}
+                onValueChange={(value) => setDraftFilters((current) => ({ ...current, status: value }))}
+                options={auditStatusOptions}
+                ariaLabel="筛选审计结果"
+              />
+            </Field>
+          </>
+        )}
         <div className={css.auditFilterActions}>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-expanded={showAllFilters}
+            aria-label={showAllFilters ? '收起更多筛选' : '展开更多筛选'}
+            title={showAllFilters ? '收起更多筛选' : '展开更多筛选'}
+            icon={<IconChevronDown size={16} className={showAllFilters ? css.auditToggleExpanded : undefined} />}
+            onClick={() => setShowAllFilters((current) => !current)}
+          />
           <Button type="submit">查询</Button>
           <Button type="button" variant="secondary" onClick={resetFilters}>重置</Button>
         </div>

@@ -19,10 +19,6 @@ export const useStyles = makeStyles({
   tabList: {
   'marginBottom': '24px',
   },
-  tab: {
-  'minHeight': '44px',
-  'fontSize': '14px',
-  },
   panel: {
   'display': 'flex',
   'flexDirection': 'column',

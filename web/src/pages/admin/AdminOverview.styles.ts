@@ -2,6 +2,8 @@ import { makeStyles, shorthands } from '@fluentui/react-components'
 
 export const useStyles = makeStyles({
   'grid2': {
+
+  'gridTemplateColumns': 'minmax(0, 1.4fr) minmax(0, 1fr)',
   'display': 'grid',
   ...shorthands.gap('24px'),
   'alignItems': 'start',
@@ -10,6 +12,8 @@ export const useStyles = makeStyles({
   },
   },
   'panel': {
+
+  'overflow': 'hidden',
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
@@ -105,6 +109,8 @@ export const useStyles = makeStyles({
   'verticalAlign': '1px',
   },
   'settingsLayout': {
+
+  'gridTemplateColumns': 'minmax(160px, 200px) minmax(0, 1fr)',
   'display': 'grid',
   ...shorthands.gap('24px'),
   'alignItems': 'start',
@@ -114,6 +120,9 @@ export const useStyles = makeStyles({
   },
   },
   'settingsSide': {
+
+  'position': 'sticky',
+  'flexDirection': 'column',
   'top': '32px',
   'display': 'flex',
   ...shorthands.gap('16px'),
@@ -134,6 +143,8 @@ export const useStyles = makeStyles({
   },
   },
   'settingsGroup': {
+
+  'flexDirection': 'column',
   'display': 'flex',
   ...shorthands.gap('2px'),
   '@media screen and (max-width: 1180px)': {
@@ -156,6 +167,8 @@ export const useStyles = makeStyles({
   },
   },
   'settingsNavLink': {
+
+  'color': 'var(--colorNeutralForeground2)',
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('8px'),
@@ -222,6 +235,8 @@ export const useStyles = makeStyles({
   ...shorthands.gap('24px'),
   },
   'accountPanel': {
+
+  'gridTemplateColumns': 'minmax(0, 1fr) auto',
   'display': 'grid',
   'alignItems': 'center',
   ...shorthands.gap('24px'),
@@ -299,12 +314,16 @@ export const useStyles = makeStyles({
   },
   },
   'credentialsPanel': {
+
+  'overflow': 'hidden',
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   ...shorthands.overflow('hidden'),
   },
   'credentialsHeader': {
+
+  'gridTemplateColumns': 'minmax(0, 1fr) minmax(220px, 0.7fr)',
   'display': 'grid',
   ...shorthands.gap('24px'),
   'alignItems': 'end',
@@ -341,6 +360,10 @@ export const useStyles = makeStyles({
   },
   },
   'credentialOverviewItem': {
+
+  'gridTemplateColumns': '40px minmax(0, 1fr) auto 20px',
+  'backgroundColor': 'transparent',
+  'color': 'var(--colorNeutralForeground2)',
   'display': 'grid',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
@@ -412,6 +435,8 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   },
   'credentialGroupHeader': {
+
+  'gridTemplateColumns': 'minmax(0, 1fr) auto',
   'display': 'grid',
   ...shorthands.gap('16px'),
   'alignItems': 'start',
@@ -437,6 +462,8 @@ export const useStyles = makeStyles({
   'lineHeight': 1.55,
   },
   'credentialGroupAction': {
+
+  'justifyContent': 'flex-end',
   'display': 'flex',
   'flexShrink': 0,
   '@media screen and (max-width: 560px)': {
@@ -471,11 +498,14 @@ export const useStyles = makeStyles({
   'marginTop': '24px',
   },
   'credentialFacts': {
+
+  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
   'display': 'grid',
   ...shorthands.gap('16px'),
   'paddingTop': '16px',
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   '@media screen and (max-width: 800px)': {
+    'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
   },
   '@media screen and (max-width: 480px)': {
     'gridTemplateColumns': 'minmax(0, 1fr)',
@@ -503,6 +533,9 @@ export const useStyles = makeStyles({
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   },
   'credentialItem': {
+
+  'gridTemplateColumns': 'minmax(180px, 1fr) minmax(170px, 0.75fr) auto',
+  'alignItems': 'center',
   'display': 'grid',
   ...shorthands.gap('16px'),
   'minHeight': '72px',
@@ -512,6 +545,7 @@ export const useStyles = makeStyles({
     ...shorthands.borderBottom('none'),
   },
   '@media screen and (max-width: 760px)': {
+    'gridTemplateColumns': 'minmax(0, 1fr) auto',
   },
   '@media screen and (max-width: 520px)': {
     'gridTemplateColumns': 'minmax(0, 1fr)',
@@ -544,6 +578,8 @@ export const useStyles = makeStyles({
   'fontSize': '12px',
   'overflowWrap': 'anywhere',
   '@media screen and (max-width: 760px)': {
+    'gridColumn': '1',
+    'gridRow': 2,
   },
   '@media screen and (max-width: 520px)': {
     'gridColumn': '1',
@@ -596,6 +632,8 @@ export const useStyles = makeStyles({
   'flexDirection': 'column',
   },
   'bucketRow': {
+
+  'gridTemplateColumns': 'minmax(0, 1fr) auto',
   'display': 'grid',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
@@ -627,6 +665,8 @@ export const useStyles = makeStyles({
   'lineHeight': 1.5,
   },
   'section': {
+
+  'overflow': 'hidden',
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
@@ -654,6 +694,8 @@ export const useStyles = makeStyles({
   ...shorthands.gap('16px'),
   },
   'sectionHeaderWithAction': {
+
+  'alignItems': 'center',
   'display': 'flex',
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
@@ -710,6 +752,8 @@ export const useStyles = makeStyles({
     },
   },
   sourceIdentity: {
+
+  'gridArea': 'identity',
   ...shorthands.gridArea('identity'),
   'display': 'grid',
   'gridTemplateColumns': '40px minmax(0, 1fr)',
@@ -753,6 +797,8 @@ export const useStyles = makeStyles({
   'overflowWrap': 'anywhere',
   },
   'sourceMeta': {
+
+  'gridTemplateColumns': 'auto minmax(0, 1fr)',
   'gridArea': 'meta',
   ...shorthands.gridArea('meta'),
   'display': 'grid',
@@ -791,6 +837,8 @@ export const useStyles = makeStyles({
   'fontWeight': 400,
   },
   'sourceActions': {
+
+  'justifyContent': 'flex-end',
   'gridArea': 'actions',
   ...shorthands.gridArea('actions'),
   'display': 'flex',
@@ -832,6 +880,8 @@ export const useStyles = makeStyles({
   'fontSize': '14px',
   },
   'sourceConfigPanel': {
+
+  'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap('24px'),
   'minWidth': '0px',
@@ -893,10 +943,16 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   },
   'sourceConfigTitle': {
+
+  'display': '-webkit-box',
+  'overflow': 'hidden',
   'overflowWrap': 'anywhere',
   },
   // 两行截断走 global.css 的 omnistore-clamp-2(与 className 组合使用)
   'sourceConfigPath': {
+
+  'display': '-webkit-box',
+  'overflow': 'hidden',
   'fontFamily': 'var(--fontFamilyMonospace)',
   'fontSize': '12px',
   'lineHeight': 1.6,
@@ -974,6 +1030,9 @@ export const useStyles = makeStyles({
   'lineHeight': 1.55,
   },
   'exportSummary': {
+
+  'gridTemplateColumns': '44px minmax(0, 1fr) auto',
+  'alignItems': 'center',
   'display': 'grid',
   ...shorthands.gap('16px'),
   '@media screen and (max-width: 640px)': {
@@ -1002,6 +1061,8 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   },
   'exportAction': {
+
+  'justifyContent': 'flex-end',
   'display': 'flex',
   '@media screen and (max-width: 640px)': {
     'gridColumn': '1 / -1',
@@ -1032,22 +1093,31 @@ export const useStyles = makeStyles({
   'color': 'var(--colorPaletteRedForeground1)',
   },
   'auditFilters': {
-  'display': 'grid',
+  'display': 'flex',
+  'flexWrap': 'wrap',
+  'alignItems': 'flex-end',
   ...shorthands.gap('16px'),
-  'alignItems': 'end',
   ...shorthands.padding('24px'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'backgroundColor': 'var(--colorNeutralBackground1)',
-  '@media screen and (max-width: 1480px)': {
   },
-  '@media screen and (max-width: 560px)': {
-    'gridTemplateColumns': 'minmax(0, 1fr)',
+  // 默认只露出主体/关键字,入口/结果收在展开按钮后。
+  auditField: {
+  'width': '240px',
+  'minWidth': '0px',
   },
+  auditFieldKeyword: {
+  'flex': '1 1 280px',
+  'minWidth': '240px',
+  },
+  auditToggleExpanded: {
+  'transform': 'rotate(180deg)',
   },
   'auditFilterActions': {
   'display': 'flex',
   ...shorthands.gap('8px'),
   'alignItems': 'center',
+  'marginLeft': 'auto',
   },
   'auditMessage': {
   ...shorthands.padding('16px'),
@@ -1056,6 +1126,8 @@ export const useStyles = makeStyles({
   'fontSize': '13px',
   },
   'auditPagination': {
+
+  'alignItems': 'center',
   'display': 'flex',
   'justifyContent': 'space-between',
   ...shorthands.gap('16px'),
@@ -1073,6 +1145,9 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   },
   'kvRow': {
+
+  'gridTemplateColumns': '120px 1fr',
+  'alignItems': 'center',
   'display': 'grid',
   ...shorthands.gap('16px'),
   'fontSize': '13px',
@@ -1092,6 +1167,9 @@ export const useStyles = makeStyles({
   'wordBreak': 'break-all',
   },
   'dangerBox': {
+
+  'gridTemplateColumns': '24px minmax(0, 1fr) auto',
+  'alignItems': 'center',
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
@@ -1161,6 +1239,8 @@ export const useStyles = makeStyles({
   },
   },
   'policyEditorRow': {
+
+  'gridTemplateColumns': 'minmax(0, 1fr) auto',
   'display': 'grid',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
@@ -1182,6 +1262,8 @@ export const useStyles = makeStyles({
   },
   },
   'policyPathRuleRow': {
+
+  'gridTemplateColumns': 'minmax(180px, 1fr) auto auto',
   'display': 'grid',
   ...shorthands.gap('8px'),
   'alignItems': 'center',
@@ -1238,6 +1320,8 @@ export const useStyles = makeStyles({
   'overflowWrap': 'anywhere',
   },
   'sourcePreviewStats': {
+
+  'gridTemplateColumns': 'repeat(4, minmax(0, 1fr))',
   'display': 'grid',
   ...shorthands.gap('8px'),
   'color': 'var(--colorNeutralForeground2)',
@@ -1274,6 +1358,8 @@ export const useStyles = makeStyles({
   },
   },
   'sourcePreviewEntryName': {
+
+  'overflow': 'hidden',
   ...shorthands.overflow('hidden'),
   'textOverflow': 'ellipsis',
   'whiteSpace': 'nowrap',
@@ -1291,9 +1377,12 @@ export const useStyles = makeStyles({
   'lineHeight': 1.55,
   },
   'opsStatGrid': {
+
+  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
   'display': 'grid',
   ...shorthands.gap('16px'),
   '@media screen and (max-width: 1200px)': {
+    'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   '@media screen and (max-width: 860px)': {
     'gridTemplateColumns': 'minmax(0, 1fr)',
@@ -1327,6 +1416,8 @@ export const useStyles = makeStyles({
   ...shorthands.gap('0px'),
   },
   'opsFailRow': {
+
+  'gridTemplateColumns': 'auto auto minmax(0, 1fr)',
   'display': 'grid',
   'alignItems': 'baseline',
   ...shorthands.gap('16px'),
@@ -1372,6 +1463,8 @@ export const useStyles = makeStyles({
   'flexShrink': 0,
   },
   'dashboardFacts': {
+
+  'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
   'display': 'grid',
   ...shorthands.gap('16px'),
   ...shorthands.margin('0px'),
