@@ -51,6 +51,25 @@ export function ImageBedPage() {
     )
   }
 
+  if (status.isError) {
+    return (
+      <AppShell title="图床">
+        <div className={css.noTargetPage} role="alert">
+          <div className={css.noTargetIcon}><IconCloud size={42} /></div>
+          <h1 className={css.noTargetTitle}>图床加载失败</h1>
+          <p className={css.noTargetHint}>
+            {status.error instanceof ApiRequestError
+              ? status.error.message
+              : '请检查网络连接后重试。'}
+          </p>
+          <div>
+            <Button variant="secondary" onClick={() => status.refetch()}>重新加载</Button>
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
+
   if (status.isSuccess && !status.data.available) {
     return (
       <AppShell title="图床">
