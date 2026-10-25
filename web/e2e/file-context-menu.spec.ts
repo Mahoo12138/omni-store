@@ -24,7 +24,7 @@ test('file context menu exposes actions in list and grid views', async ({ page }
   await menu.getByRole('menuitem', { name: '复制', exact: true }).click()
   await expect(page.getByRole('region', { name: '文件剪贴板' })).toContainText('已复制 1 项')
 
-  await page.getByRole('tab', { name: '网格视图' }).click()
+  await page.getByRole('button', { name: '网格视图' }).click()
   await page.getByText(folder, { exact: true }).click({ button: 'right' })
   menu = page.getByRole('menu')
   await expect(menu).toBeVisible()
@@ -32,7 +32,7 @@ test('file context menu exposes actions in list and grid views', async ({ page }
   await menu.getByRole('menuitem', { name: '打开' }).click()
   await expect(page.getByRole('navigation', { name: '面包屑' })).toContainText(folder)
   await page.getByRole('navigation', { name: '面包屑' }).getByText('团队文件', { exact: true }).click()
-  await page.getByRole('tab', { name: '列表视图' }).click()
+  await page.getByRole('button', { name: '列表视图' }).click()
   const createdRow = page.getByRole('row', { name: new RegExp(folder) })
   await createdRow.getByRole('button', { name: `更多操作 ${folder}` }).click()
   await page.getByRole('menuitem', { name: '删除', exact: true }).click()

@@ -483,6 +483,12 @@ export const useStyles = makeStyles({
     'height': '44px',
   },
   },
+  // 视图切换:两个 Fluent ToggleButton,原生 checked 态(中性 selected 底),与工具栏
+  // 其他 32px 控件同高。
+  viewToggle: {
+  'display': 'inline-flex',
+  ...shorthands.gap('4px'),
+  },
   'actions': {
   'display': 'inline-flex',
   'alignItems': 'center',
@@ -705,25 +711,19 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   'justifyContent': 'center',
+  'minWidth': '32px',
+  'height': '32px',
   ...shorthands.padding('0', '8px'),
-  'background': 'transparent',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
+  'background': 'var(--colorBrandBackground)',
+  'color': 'var(--colorNeutralForegroundOnBrand)',
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorBrandBackground)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'fontSize': '13px',
-  'transitionProperty': 'background-color, color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  '&:hover:not(:disabled)': {
-  },
-  '&:disabled': {
-    'opacity': 0.4,
-    'cursor': 'not-allowed',
-  },
+  'fontVariantNumeric': 'tabular-nums',
   '@media screen and (max-width: 640px)': {
     'minWidth': '44px',
     'height': '44px',
   },
-    'backgroundColor': 'var(--colorBrandBackground)',
-    'color': 'white',
-    ...shorthands.borderColor('var(--colorBrandBackground)'),
   },
   'sidePanel': {
   'backgroundColor': 'var(--colorNeutralBackground1)',

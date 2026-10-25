@@ -9,7 +9,7 @@ test('file view, page size and server-side sorting persist per source', async ({
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.getByRole('button', { name: '打开存储源 团队文件' }).click()
 
-  await page.getByRole('tab', { name: '列表视图' }).click()
+  await page.getByRole('button', { name: '列表视图' }).click()
   const row = page.getByRole('row').nth(1)
   const checkbox = row.locator('input[type="checkbox"]')
   if (await checkbox.count()) await checkbox.check()
@@ -39,10 +39,10 @@ test('file view, page size and server-side sorting persist per source', async ({
   expect(fileSizes).toEqual([...fileSizes].sort((left, right) => right - left))
   await expect(page.getByRole('toolbar', { name: '批量文件操作' })).toHaveCount(0)
 
-  await page.getByRole('tab', { name: '网格视图' }).click()
+  await page.getByRole('button', { name: '网格视图' }).click()
   await page.getByRole('combobox', { name: '每页条数' }).click()
   await page.getByRole('option', { name: '50 条/页' }).click()
-  await expect(page.getByRole('tab', { name: '网格视图' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('button', { name: '网格视图' })).toHaveAttribute('aria-pressed', 'true')
 
   const stored = await page.evaluate(() => {
     const key = Object.keys(localStorage).find((entry) => entry.startsWith('omnistore:file-preferences:'))
@@ -54,7 +54,7 @@ test('file view, page size and server-side sorting persist per source', async ({
   await page.reload()
   await expect(page.getByRole('combobox', { name: '排序方式' })).toContainText('大小降序')
   await expect(page.getByRole('combobox', { name: '每页条数' })).toContainText('50 条/页')
-  await expect(page.getByRole('tab', { name: '网格视图' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('button', { name: '网格视图' })).toHaveAttribute('aria-pressed', 'true')
   await page.screenshot({ path: '/tmp/omni-store-file-preferences.png', fullPage: false })
   expect(pageErrors).toEqual([])
 })

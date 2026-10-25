@@ -18,7 +18,7 @@ test('file browsing keeps its actions available on phones and narrow desktops', 
   await checkbox.check()
   await expect(page.getByText('已选择 1 项')).toBeVisible()
 
-  await page.getByRole('tab', { name: '网格视图' }).click()
+  await page.getByRole('button', { name: '网格视图' }).click()
   // 1.2.0：图片文件名点击打开统一预览弹层（移动端同样可用）。
   await page.getByRole('button', { name: 'demo.png', exact: true }).click()
   const previewDialog = page.getByRole('dialog', { name: '预览 demo.png' })
@@ -36,7 +36,7 @@ test('file browsing keeps its actions available on phones and narrow desktops', 
   await page.setViewportSize({ width: 1024, height: 760 })
   await page.goto('/app')
   await page.getByRole('button', { name: '打开存储源 公开演示资料' }).click()
-  await page.getByRole('tab', { name: '列表视图' }).click()
+  await page.getByRole('button', { name: '列表视图' }).click()
   const desktopTable = page.getByRole('table')
   await expect(desktopTable).toBeVisible()
   expect(await desktopTable.evaluate((element) => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { ToggleButton } from '@fluentui/react-components'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -78,7 +79,6 @@ import {
   type UploadConflictDecision,
 } from '../utils/uploadTask'
 import { useStyles } from './FileManager.styles'
-import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 
 type PasteTaskSnapshot = {
   status: 'running' | 'completed' | 'completed_with_errors'
@@ -144,7 +144,6 @@ export function FileManagerPage() {
 // --- 主视图 ---
 
 function FileManagerView({ source, sources }: { source: UserSource; sources: UserSource[] }) {
-  const o = useOutlineStyles()
   const css = useStyles()
   const sourceKey = source.key
   const clipboard = useFileClipboard()
@@ -839,31 +838,24 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 { value: 'mtime:desc', label: '修改时间降序' },
               ]}
               ariaLabel="排序方式"
-              size="compact"
               width="content"
             />
             <button className={css.iconBtn} aria-label="刷新" onClick={() => refresh()}>
               <IconRefresh size={16} />
             </button>
-            <div className={o.outlineList} role="tablist" aria-label="视图切换">
-              <button
-                className={o.outlineIconTab}
+            <div className={css.viewToggle}>
+              <ToggleButton
+                icon={<IconList size={16} />}
                 aria-label="列表视图"
-                aria-selected={view === 'list'}
-                role="tab"
+                checked={view === 'list'}
                 onClick={() => updatePreferences({ view: 'list' })}
-              >
-                <IconList size={16} />
-              </button>
-              <button
-                className={o.outlineIconTab}
+              />
+              <ToggleButton
+                icon={<IconGrid size={16} />}
                 aria-label="网格视图"
-                aria-selected={view === 'grid'}
-                role="tab"
+                checked={view === 'grid'}
                 onClick={() => updatePreferences({ view: 'grid' })}
-              >
-                <IconGrid size={16} />
-              </button>
+              />
             </div>
           </div>
 
@@ -1147,7 +1139,6 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                     { value: '100', label: '100 条/页' },
                   ]}
                   ariaLabel="每页条数"
-                  size="compact"
                   width="content"
                 />
               </div>

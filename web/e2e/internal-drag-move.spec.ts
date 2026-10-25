@@ -75,7 +75,7 @@ test('dragging selected entries into a directory moves successes and reports con
   await page.unrouteAll()
   await page.locator('nav[aria-label="面包屑"]').getByText('团队文件', { exact: true }).click()
 
-  await page.getByRole('tab', { name: '网格视图' }).click()
+  await page.getByRole('button', { name: '网格视图' }).click()
   await page.evaluate(({ sourceName, targetName }) => {
     const tiles = Array.from(document.querySelectorAll<HTMLElement>('[draggable="true"]'))
     const source = tiles.find((tile) => tile.textContent?.includes(sourceName))
@@ -106,7 +106,7 @@ test('dragging selected entries into a directory moves successes and reports con
   })
   await expect(page.getByRole('alert')).toContainText('不能将')
   expect(moveRequests).toHaveLength(moveRequestCount)
-  await page.getByRole('tab', { name: '列表视图' }).click()
+  await page.getByRole('button', { name: '列表视图' }).click()
 
   for (const name of [target, gridTarget]) {
     const row = page.getByRole('row', { name: new RegExp(name) })

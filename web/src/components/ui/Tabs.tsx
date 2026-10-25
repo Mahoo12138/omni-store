@@ -77,11 +77,14 @@ function TabsTab({
   value,
   className,
   disabled,
+  ariaLabel,
   children,
 }: {
   value: string
   className?: string
   disabled?: boolean
+  /** 纯图标 tab 的可访问名（icon svg aria-hidden，children 不产生名称） */
+  ariaLabel?: string
   children: ReactNode
 }) {
   return (
@@ -89,6 +92,7 @@ function TabsTab({
       value={value}
       disabled={disabled}
       id={`omnistore-tab-${value}`}
+      aria-label={ariaLabel}
       className={mergeClasses(tabClassNames.root, className ?? '')}
     >
       {children}
