@@ -78,7 +78,8 @@ import {
   type UploadTaskSnapshot,
   type UploadConflictDecision,
 } from '../utils/uploadTask'
-import * as css from './FileManager.css'
+import { useStyles } from './FileManager.styles'
+import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 
 type PasteTaskSnapshot = {
   status: 'running' | 'completed' | 'completed_with_errors'
@@ -144,6 +145,8 @@ export function FileManagerPage() {
 // --- 主视图 ---
 
 function FileManagerView({ source, sources }: { source: UserSource; sources: UserSource[] }) {
+  const o = useOutlineStyles()
+  const css = useStyles()
   const sourceKey = source.key
   const clipboard = useFileClipboard()
   const navigate = useNavigate()
@@ -843,9 +846,9 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
             <button className={css.iconBtn} aria-label="刷新" onClick={() => refresh()}>
               <IconRefresh size={16} />
             </button>
-            <div className={css.viewToggle} role="tablist" aria-label="视图切换">
+            <div className={o.outlineList} role="tablist" aria-label="视图切换">
               <button
-                className={css.viewBtn}
+                className={o.outlineIconTab}
                 aria-label="列表视图"
                 aria-selected={view === 'list'}
                 role="tab"
@@ -854,7 +857,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
                 <IconList size={16} />
               </button>
               <button
-                className={css.viewBtn}
+                className={o.outlineIconTab}
                 aria-label="网格视图"
                 aria-selected={view === 'grid'}
                 role="tab"
@@ -1335,6 +1338,7 @@ function UploadTaskToast({
   onRetry: () => void
   onClose: () => void
 }) {
+  const css = useStyles()
   const finished = task.completedFiles + task.skippedFiles
   const percent = task.totalBytes > 0
     ? Math.min(100, Math.round((task.uploadedBytes / task.totalBytes) * 100))
@@ -1409,6 +1413,7 @@ function ClipboardBar({
   onPaste: () => void
   onClear: () => void
 }) {
+  const css = useStyles()
   const first = items[0]
   const sourceLocation = first ? `${first.sourceName} · ${parentPath(first.path)}` : ''
   const operationLabel = operation === 'copy' ? '已复制' : '已剪切'
@@ -1472,6 +1477,7 @@ function PasteTaskToast({
   task: PasteTaskSnapshot
   onClose: () => void
 }) {
+  const css = useStyles()
   const processed = task.completed + task.failed
   const percent = task.total > 0 ? Math.round((processed / task.total) * 100) : 100
   const verb = task.action === 'drag' ? '移动' : task.operation === 'copy' ? '复制' : '剪切'
@@ -1541,6 +1547,7 @@ function BatchDeleteTaskToast({ task, onClose }: {
   task: BatchDeleteTaskSnapshot
   onClose: () => void
 }) {
+  const css = useStyles()
   const processed = task.completed + task.failed
   const percent = task.total > 0 ? Math.round((processed / task.total) * 100) : 100
   const title = task.status === 'running'
@@ -1591,6 +1598,7 @@ function DirectoryUploadDialog({
   supportsDirectoryPicker: boolean
   onChoose: () => void
 }) {
+  const css = useStyles()
   return (
     <DialogWrap
       open={open}
@@ -1620,6 +1628,7 @@ function UploadConflictDialog({
   item: UploadTaskItem
   onDecision: (decision: UploadConflictDecision) => void
 }) {
+  const css = useStyles()
   return (
     <DialogWrap
       open
@@ -1756,6 +1765,7 @@ function SelectionToolbar({
   onDelete: () => void
   onClear: () => void
 }) {
+  const css = useStyles()
   return (
     <div className={css.selectionToolbar} role="toolbar" aria-label="批量文件操作">
       <strong>已选择 {count} 项</strong>
@@ -1817,6 +1827,7 @@ function Breadcrumb({
   currentPath: string
   upOne: () => void
 }) {
+  const css = useStyles()
   const navigate = useNavigate()
   const segs = currentPath === '/' ? [] : currentPath.split('/').filter(Boolean)
   const sourceItems: MenuOption[] = sources.map((source) => ({
@@ -1872,6 +1883,7 @@ function Breadcrumb({
 type EntryAction = MenuOption
 
 function EntryActionsMenu({ entryName, items }: { entryName: string; items: EntryAction[] }) {
+  const css = useStyles()
   return (
     <Menu
       ariaLabel={`更多操作 ${entryName}`}
@@ -1925,6 +1937,7 @@ function GridView({
   onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLDivElement>) => void
   contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
+  const css = useStyles()
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   if (loading) {
     return <div style={{ padding: 32, textAlign: 'center', color: vars.color.textSecondary }}>加载中…</div>
@@ -2076,6 +2089,7 @@ function SourceInfoCard({
   quota?: StorageQuota
   userQuota?: UserQuota
 }) {
+  const css = useStyles()
   return (
     <aside className={css.sideCol}>
       <section className={css.sidePanel}>
@@ -2124,6 +2138,7 @@ function Row({
   muted?: boolean
   badge?: 'green' | 'gray' | 'blue' | 'purple' | 'red'
 }) {
+  const css = useStyles()
   return (
     <div className={css.sideKvRow}>
       <span className={css.sideKvLabel}>{label}</span>
@@ -2147,6 +2162,7 @@ function Row({
 // --- 空状态 ---
 
 function NoSourceView() {
+  const css = useStyles()
   const navigate = useNavigate()
   return (
     <>

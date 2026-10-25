@@ -82,3 +82,14 @@ h3 {
     transform: rotate(360deg);
   }
 }
+
+/* 空状态浮动(FileManager 复用) */
+@keyframes omnistore-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
