@@ -20,8 +20,10 @@ test('recent files tracks web file operations and offers download and folder nav
   })
   await expect(page.getByRole('row', { name: new RegExp(filename) })).toBeVisible()
 
-  await page.getByRole('link', { name: '最近文件', exact: true }).click()
-  const recentItem = page.locator('article').filter({ has: page.getByRole('button', { name: filename, exact: true }) })
+  // 最近文件面板位于 /app 首页右侧
+  await page.getByRole('link', { name: '文件', exact: true }).click()
+  const recentPanel = page.getByRole('region', { name: '最近文件' })
+  const recentItem = recentPanel.locator('article').filter({ has: page.getByRole('button', { name: filename, exact: true }) })
   await expect(recentItem).toBeVisible()
   await expect(recentItem).toContainText('团队文件')
   await expect(recentItem).toContainText(filename)

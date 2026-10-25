@@ -1,38 +1,30 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
-import { fetchMySources, type UserSource } from '../api/sources'
-import { fetchMyActivity, type ActivityItem } from '../api/activity'
-import { fetchSystemStatus, type SystemStatus, type SystemStatusFlag } from '../api/system'
+import { downloadFileUrl, fetchMySources, type UserSource } from '../api/sources'
+import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
 import { AppShell } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
-import { auditActionLabel } from '../utils/audit'
+import { openSearchDialog } from '../components/search/SearchDialog'
 import {
-  IconActivity,
-  IconCheck,
   IconChevronRight,
+  IconDownload,
+  IconFile,
+  IconFolder,
   IconFolderFilled,
-  IconImage,
-  IconPlus,
-  IconUpload,
+  IconSearch,
 } from '../components/ui/Icon'
+import { formatBytes, formatDate } from '../utils/format'
 import { useStyles } from './Dashboard.styles'
 
+// /app 首页：存储源与最近文件单列堆叠。
 export function AppHomePage() {
   const css = useStyles()
   const navigate = useNavigate()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const sources = useQuery({ queryKey: ['my-sources'], queryFn: fetchMySources })
-  const activity = useQuery({
-    queryKey: ['my-activity'],
-    queryFn: () => fetchMyActivity(5),
-    retry: false,
-  })
-  const system = useQuery({
-    queryKey: ['system-status'],
-    queryFn: fetchSystemStatus,
-    staleTime: 60_000,
-  })
+  const recent = useQuery({ queryKey: ['recent-files'], queryFn: () => fetchRecentFiles(50) })
 
   const sourceList = sources.data ?? []
   const isAdmin = me.data?.role === 'super_admin'
@@ -44,6 +36,15 @@ export function AppHomePage() {
       to: '/app/sources/$sourceKey',
       params: { sourceKey },
       search: { path: '/', page: 1 },
+    })
+  }
+
+  function openRecentParent(sourceKey: string, filePath: string) {
+    const parent = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : ''
+    navigate({
+      to: '/app/sources/$sourceKey',
+      params: { sourceKey },
+      search: { path: parent ? `/${parent}` : '/', page: 1 },
     })
   }
 
@@ -59,107 +60,65 @@ export function AppHomePage() {
               : '选择一个存储源，开始管理文件。'}
           </p>
         </div>
-        {isAdmin && (
-          <Button
-            variant="primary"
-            onClick={() => navigate({ to: '/app/admin', search: { section: 'sources' } })}
-          >
-            <IconPlus size={16} />
-            新建存储源
-          </Button>
-        )}
+        <Button variant="secondary" onClick={openSearchDialog}>
+          <IconSearch size={16} />
+          搜索
+        </Button>
       </header>
 
       <div className={css.workspace}>
-        <div className={css.mainCol}>
-          <section className={css.cardSection} aria-labelledby="sources-title">
-            <div className={css.sectionHeader}>
-              <h2 id="sources-title" className={css.sectionTitle}>存储源</h2>
-              {sources.isSuccess && sourceList.length > 0 && (
-                <span className={css.sectionMeta}>{sourceList.length} 个可用</span>
-              )}
-            </div>
-
-            {sources.isPending ? (
-              <SourceListLoading />
-            ) : sources.isError ? (
-              <RetryState
-                title="无法加载存储源"
-                message="请检查网络连接后重试。"
-                onRetry={() => sources.refetch()}
-              />
-            ) : sourceList.length === 0 ? (
-              <NoSourceView isAdmin={isAdmin} />
-            ) : (
-              <div className={css.sourceList}>
-                {sourceList.map((source) => (
-                  <button
-                    type="button"
-                    key={source.key}
-                    className={css.sourceRow}
-                    onClick={() => openSource(source.key)}
-                    aria-label={`打开存储源 ${source.name}`}
-                  >
-                    <span className={css.sourceIdentity}>
-                      <span className={css.sourceIcon}><IconFolderFilled size={28} /></span>
-                      <span className={css.sourceText}>
-                        <strong>{source.name}</strong>
-                        <span>{source.description || '本地目录'}</span>
-                      </span>
-                    </span>
-                    <span className={css.sourceCapabilities}>{capabilities(source)}</span>
-                    <span className={css.openAction}>
-                      打开 <IconChevronRight size={16} />
-                    </span>
-                  </button>
-                ))}
-              </div>
+        <section className={css.cardSection} aria-labelledby="sources-title">
+          <div className={css.sectionHeader}>
+            <h2 id="sources-title" className={css.sectionTitle}>存储源</h2>
+            {sources.isSuccess && sourceList.length > 0 && (
+              <span className={css.sectionMeta}>{sourceList.length} 个可用</span>
             )}
-          </section>
+          </div>
 
-          <RecentActivity
-            items={activity.data ?? []}
-            loading={activity.isPending}
-            error={activity.isError}
-            onRetry={() => activity.refetch()}
-            showAll={isAdmin}
-          />
-        </div>
-
-        <aside className={css.utilityRail} aria-label="快捷操作与服务状态">
-          <section className={css.utilitySection}>
-            <h2 className={css.utilityTitle}>继续操作</h2>
-            <div className={css.quickActions}>
-              <button
-                type="button"
-                className={css.quickAction}
-                disabled={sourceList.length === 0}
-                onClick={() => sourceList[0] && openSource(sourceList[0].key)}
-              >
-                <span className={css.quickIcon}><IconUpload size={20} /></span>
-                <span>
-                  <strong>上传文件</strong>
-                  <small>{sourceList[0] ? `进入 ${sourceList[0].name}` : '需要先创建存储源'}</small>
-                </span>
-                <span className={css.quickArrow}><IconChevronRight size={16} /></span>
-              </button>
-              <Link to="/app/image-bed" className={css.quickAction}>
-                <span className={css.quickIcon}><IconImage size={20} /></span>
-                <span>
-                  <strong>打开图床</strong>
-                  <small>上传图片并复制外链</small>
-                </span>
-                <span className={css.quickArrow}><IconChevronRight size={16} /></span>
-              </Link>
+          {sources.isPending ? (
+            <SourceListLoading />
+          ) : sources.isError ? (
+            <RetryState
+              title="无法加载存储源"
+              message="请检查网络连接后重试。"
+              onRetry={() => sources.refetch()}
+            />
+          ) : sourceList.length === 0 ? (
+            <NoSourceView isAdmin={isAdmin} />
+          ) : (
+            <div className={css.sourceList}>
+              {sourceList.map((source) => (
+                <button
+                  type="button"
+                  key={source.key}
+                  className={css.sourceRow}
+                  onClick={() => openSource(source.key)}
+                  aria-label={`打开存储源 ${source.name}`}
+                >
+                  <span className={css.sourceIdentity}>
+                    <span className={css.sourceIcon}><IconFolderFilled size={28} /></span>
+                    <span className={css.sourceText}>
+                      <strong>{source.name}</strong>
+                      <span>{source.description || '本地目录'}</span>
+                    </span>
+                  </span>
+                  <span className={css.sourceCapabilities}>{capabilities(source)}</span>
+                  <span className={css.openAction}>
+                    打开 <IconChevronRight size={16} />
+                  </span>
+                </button>
+              ))}
             </div>
-          </section>
-          <SystemStatusPanel
-            data={system.data}
-            loading={system.isPending}
-            error={system.isError}
-            onRetry={() => system.refetch()}
-          />
-        </aside>
+          )}
+        </section>
+
+        <RecentFilesPanel
+          files={recent.data}
+          pending={recent.isPending}
+          error={recent.error}
+          onRetry={() => recent.refetch()}
+          onOpenParent={openRecentParent}
+        />
       </div>
     </AppShell>
   )
@@ -229,112 +188,87 @@ function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
-function SystemStatusPanel({
-  data,
-  loading,
+// 原独立页面 /app/recent 的内容，迁移为首页右侧面板。
+function RecentFilesPanel({
+  files,
+  pending,
   error,
   onRetry,
+  onOpenParent,
 }: {
-  data: SystemStatus | undefined
-  loading: boolean
-  error: boolean
+  files: RecentFile[] | undefined
+  pending: boolean
+  error: unknown
   onRetry: () => void
+  onOpenParent: (sourceKey: string, filePath: string) => void
 }) {
   const css = useStyles()
-  const flags: Array<{ label: string; value: SystemStatusFlag | undefined }> = [
-    { label: 'WebDAV', value: data?.webdav },
-    { label: '公开网盘', value: data?.public_drive },
-    { label: '图床服务', value: data?.image_bed },
-    { label: '匿名上传', value: data?.anonymous },
-    { label: '文件中转', value: data?.transfer_center },
-  ]
-  const allEnabled = flags.every(({ value }) => value?.enabled)
+  const items = files ?? []
   return (
-    <section className={css.statusSection} aria-labelledby="status-title">
-      <div className={css.statusHeader}>
-        <h2 id="status-title" className={css.utilityTitle}>服务状态</h2>
-        {!loading && data && (
-          <span className={allEnabled ? css.runningReady : css.running}>
-            {allEnabled ? <IconCheck size={13} /> : <i />}
-            {allEnabled ? '全部就绪' : '运行中'}
-          </span>
-        )}
+    <section className={css.recentPanel} aria-labelledby="recent-title">
+      <div className={css.recentHeader}>
+        <h2 id="recent-title" className={css.sectionTitle}>最近文件</h2>
+        {items.length > 0 && <span className={css.sectionMeta}>最多显示 50 个</span>}
       </div>
-      {loading ? (
-        <div className={css.statusSkeleton} role="status" aria-label="正在检查服务状态">
-          {[0, 1, 2].map((item) => <i key={item} aria-hidden="true" />)}
-        </div>
-      ) : error || !data ? (
-        <div className={css.compactError} role="alert">
-          <span>暂时无法读取状态</span>
-          <button type="button" onClick={onRetry}>重新检查</button>
-        </div>
-      ) : (
-        <div className={css.statusList}>
-          {flags.map(({ label, value }) => (
-            <div className={css.statusRow} key={label}>
-              <span>{label}</span>
-              <span>{value?.status ?? '未知'} <i className={value?.enabled ? css.dotOn : css.dotOff} /></span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function RecentActivity({
-  items,
-  loading,
-  error,
-  onRetry,
-  showAll,
-}: {
-  items: ActivityItem[]
-  loading: boolean
-  error: boolean
-  onRetry: () => void
-  showAll: boolean
-}) {
-  const css = useStyles()
-  return (
-    <section className={css.activitySection} aria-labelledby="activity-title">
-      <div className={css.sectionHeader}>
-        <h2 id="activity-title" className={css.sectionTitle}>最近活动</h2>
-        {showAll && items.length > 0 && (
-          <Link to="/app/admin" search={{ section: 'audit' }} className={css.textAction}>查看全部</Link>
-        )}
-      </div>
-      {loading ? (
-        <div className={css.activityList} role="status" aria-label="正在加载最近活动">
-          {[0, 1, 2].map((item) => (
-            <div className={css.activitySkeleton} key={item} aria-hidden="true">
-              <i />
-              <span><i /><i /></span>
-              <i />
+      {pending ? (
+        <div className={css.recentList} role="status" aria-busy="true" aria-label="正在读取最近文件">
+          {[0, 1, 2, 3].map((item) => (
+            <div className={css.recentSkeleton} key={item} aria-hidden="true">
+              <i className={css.recentSkeletonIcon} />
+              <span className={css.recentSkeletonLines}><i /><i /></span>
             </div>
           ))}
         </div>
       ) : error ? (
-        <RetryState
-          title="无法加载最近活动"
-          message="操作记录暂时不可用。"
-          onRetry={onRetry}
-        />
+        <div className={css.recentState} role="alert">
+          <strong className={css.recentStateTitle}>最近文件加载失败</strong>
+          <span>{error instanceof ApiRequestError ? error.message : '请检查连接后重试。'}</span>
+          <Button variant="secondary" onClick={onRetry}>重新加载</Button>
+        </div>
       ) : items.length === 0 ? (
-        <div className={css.activityEmpty}>这里还很安静。完成上传、整理或共享后，操作记录会显示在这里。</div>
+        <div className={css.recentEmpty}>
+          <span className={css.recentEmptyIcon}><IconFile size={22} /></span>
+          <strong className={css.recentEmptyTitle}>还没有最近文件</strong>
+          <span>上传、下载或整理文件后，它们会出现在这里。</span>
+        </div>
       ) : (
-        <div className={css.activityList}>
-          {items.map((item) => (
-            <div className={css.activityRow} key={item.id}>
-              <span className={css.activityIcon}><IconActivity size={16} /></span>
-              <span className={css.activityBody}>
-                <strong>{activityTitle(item)}</strong>
-                <small>{item.source_name ? `在 ${item.source_name}` : '系统操作'}</small>
-              </span>
-              <time>{formatRelative(item.created_at)}</time>
-            </div>
-          ))}
+        <div className={css.recentList}>
+          {items.map((file) => {
+            const parent = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : ''
+            return (
+              <article className={css.recentRow} key={`${file.source_key}:${file.path}`}>
+                <span className={css.recentFileIcon}><IconFile size={19} /></span>
+                <div className={css.recentIdentity}>
+                  <button
+                    type="button"
+                    className={css.recentFileName}
+                    onClick={() => onOpenParent(file.source_key, file.path)}
+                  >
+                    {file.name}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.recentLocation}
+                    onClick={() => onOpenParent(file.source_key, file.path)}
+                  >
+                    <IconFolder size={13} /> {file.source_name} / {parent}
+                  </button>
+                  <span className={css.recentMeta}>
+                    {formatBytes(file.size)} · <time dateTime={file.accessed_at}>最近操作 {formatDate(file.accessed_at)}</time>
+                  </span>
+                </div>
+                <a
+                  className={css.recentDownload}
+                  href={downloadFileUrl(file.source_key, `/${file.path}`)}
+                  download={file.name}
+                  aria-label={`下载 ${file.name}`}
+                  title={`下载 ${file.name}`}
+                >
+                  <IconDownload size={17} />
+                </a>
+              </article>
+            )
+          })}
         </div>
       )}
     </section>
@@ -356,20 +290,4 @@ function formatWelcomeDate(date: Date): string {
     day: 'numeric',
     weekday: 'long',
   }).format(date)
-}
-
-function activityTitle(item: ActivityItem): string {
-  if (item.title && item.title !== item.action) return item.title
-  return auditActionLabel(item.action) ?? (item.title || '完成了一项操作')
-}
-
-function formatRelative(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return '—'
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 60) return '刚刚'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`
-  if (seconds < 86400 * 7) return `${Math.floor(seconds / 86400)} 天前`
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(date)
 }
