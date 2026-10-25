@@ -1,0 +1,286 @@
+import { makeStyles, shorthands } from '@fluentui/react-components'
+
+export const useStyles = makeStyles({
+  toolbar: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'justifyContent': 'space-between',
+  'flexWrap': 'wrap',
+  ...shorthands.gap('8px'),
+  'marginBottom': '16px',
+  },
+  toolbarGroup: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap('8px'),
+  'flexWrap': 'wrap',
+  },
+  searchBox: {
+  'position': 'relative',
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  },
+  searchIcon: {
+  'position': 'absolute',
+  'left': '10px',
+  'color': 'var(--colorNeutralForeground2)',
+  'pointerEvents': 'none',
+  'display': 'inline-flex',
+  },
+  searchInput: {
+  'height': '36px',
+  'width': '220px',
+  ...shorthands.padding('0 12px 0 34px'),
+  'fontSize': '14px',
+  'fontFamily': 'var(--fontFamilyBase)',
+  'color': 'var(--colorNeutralForeground1)',
+  'backgroundColor': 'var(--colorNeutralBackground1)',
+  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
+  'outline': 'none',
+  'transitionProperty': 'border-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  '&::placeholder': {
+    'color': 'var(--colorNeutralForeground2)',
+  },
+  '&:focus': {
+    ...shorthands.borderColor('var(--colorBrandBackground)'),
+  },
+  '@media screen and (max-width: 640px)': {
+    'width': '150px',
+  },
+  },
+  tableWrap: {
+  'backgroundColor': 'var(--colorNeutralBackground1)',
+  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
+  'overflowX': 'auto',
+  '@media screen and (max-width: 980px)': {
+    'overflowX': 'hidden',
+  },
+  },
+  table: {
+  'width': '100%',
+  'borderCollapse': 'collapse',
+  'fontSize': '14px',
+  },
+  th: {
+  'textAlign': 'left',
+  ...shorthands.padding(`12px 16px`),
+  'color': 'var(--colorNeutralForeground2)',
+  'fontWeight': 500,
+  'fontSize': '13px',
+  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'whiteSpace': 'nowrap',
+  },
+  detailHeading: {
+  'textAlign': 'left',
+  ...shorthands.padding(`12px 16px`),
+  'color': 'var(--colorNeutralForeground2)',
+  'fontWeight': 500,
+  'fontSize': '13px',
+  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'whiteSpace': 'nowrap',
+  '@media screen and (max-width: 980px)': {
+    'display': 'none',
+  },
+  },
+  selectionTh: {
+  ...shorthands.padding(`12px 16px`),
+  'color': 'var(--colorNeutralForeground2)',
+  'fontWeight': 500,
+  'fontSize': '13px',
+  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'whiteSpace': 'nowrap',
+  'width': '42px',
+  'paddingRight': '0px',
+  'textAlign': 'center',
+  '@media screen and (max-width: 980px)': {
+    'width': '44px',
+    ...shorthands.padding('12px 0px'),
+  },
+  },
+  row: {
+  'transitionProperty': 'background-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  '&:hover': {
+    'backgroundColor': 'var(--colorNeutralBackground1Hover)',
+  },
+  },
+  mobileRow: {
+  '@media screen and (max-width: 980px)': {
+    'display': 'grid',
+    'gridTemplateColumns': 'minmax(0, 1fr)',
+  },
+  },
+  selectableRow: {
+  '@media screen and (max-width: 980px)': {
+    'display': 'grid',
+    'gridTemplateColumns': '44px minmax(0, 1fr)',
+  },
+  },
+  dropTarget: {
+  'backgroundColor': 'var(--colorBrandBackground2)',
+  'outline': `2px solid var(--colorBrandBackground)`,
+  'outlineOffset': '-2px',
+  },
+  td: {
+  ...shorthands.padding(`10px 16px`),
+  'whiteSpace': 'nowrap',
+  'color': 'var(--colorNeutralForeground2)',
+  },
+  detailCell: {
+  ...shorthands.padding(`10px 16px`),
+  'whiteSpace': 'nowrap',
+  'color': 'var(--colorNeutralForeground2)',
+  '@media screen and (max-width: 980px)': {
+    'display': 'none',
+  },
+  },
+  selectionCell: {
+  ...shorthands.padding(`10px 16px`),
+  'whiteSpace': 'nowrap',
+  'color': 'var(--colorNeutralForeground2)',
+  'width': '42px',
+  'paddingRight': '0px',
+  'textAlign': 'center',
+  '@media screen and (max-width: 980px)': {
+    'width': '44px',
+    ...shorthands.padding('12px 0px'),
+  },
+  },
+  checkboxTarget: {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'cursor': 'pointer',
+  '@media screen and (max-width: 980px)': {
+    'width': '44px',
+    'height': '44px',
+  },
+  },
+  nameCell: {
+  ...shorthands.padding(`10px 16px`),
+  'whiteSpace': 'nowrap',
+  'color': 'var(--colorNeutralForeground2)',
+  '@media screen and (max-width: 980px)': {
+    ...shorthands.padding('12px 0px'),
+  },
+  },
+  mobileMeta: {
+  'display': 'none',
+  '@media screen and (max-width: 980px)': {
+    'display': 'block',
+    ...shorthands.margin('6px 0 0 32px'),
+    'color': 'var(--colorNeutralForeground2)',
+    'fontSize': '12px',
+    'wordBreak': 'normal',
+  },
+  },
+  nameInner: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap('12px'),
+  },
+  nameLink: {
+  'color': 'var(--colorNeutralForeground1)',
+  'cursor': 'pointer',
+  'background': 'none',
+  ...shorthands.border('none'),
+  ...shorthands.padding('0px'),
+  'font': 'inherit',
+  'textAlign': 'left',
+  'transitionProperty': 'color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  '&:hover': {
+    'color': 'var(--colorBrandBackground)',
+  },
+  },
+  nameStatic: {
+  'color': 'var(--colorNeutralForeground1)',
+  },
+  nameMuted: {
+  'color': 'var(--colorNeutralForeground2)',
+  },
+  actionsCell: {
+  ...shorthands.padding(`10px 16px`),
+  'whiteSpace': 'nowrap',
+  'color': 'var(--colorNeutralForeground2)',
+  '@media screen and (max-width: 980px)': {
+    ...shorthands.padding('12px 0px'),
+  },
+  },
+  actions: {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('2px'),
+  },
+  actionBtn: {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'width': '30px',
+  'height': '30px',
+  'background': 'none',
+  ...shorthands.border('none'),
+  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
+  'color': 'var(--colorNeutralForeground2)',
+  'cursor': 'pointer',
+  'transitionProperty': 'background-color, color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  '&:hover': {
+    'backgroundColor': 'var(--colorBrandBackground2)',
+    'color': 'var(--colorBrandBackground)',
+  },
+  '@media screen and (max-width: 980px)': {
+    'width': '44px',
+    'height': '44px',
+  },
+  },
+  actionBtnDanger: {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'width': '30px',
+  'height': '30px',
+  'background': 'none',
+  ...shorthands.border('none'),
+  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
+  'color': 'var(--colorNeutralForeground2)',
+  'cursor': 'pointer',
+  'transitionProperty': 'background-color, color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  '&:hover': {
+    'backgroundColor': 'var(--colorBrandBackground2)',
+    'color': 'var(--colorBrandBackground)',
+  },
+  '@media screen and (max-width: 980px)': {
+    'width': '44px',
+    'height': '44px',
+    ...shorthands.padding('12px 0px'),
+  },
+  },
+  empty: {
+  ...shorthands.padding(`40px 24px`),
+  'textAlign': 'center',
+  'color': 'var(--colorNeutralForeground2)',
+  },
+  emptyTitle: {
+  'fontSize': '16px',
+  'fontWeight': 600,
+  'color': 'var(--colorNeutralForeground1)',
+  'marginBottom': '4px',
+  },
+  skeletonRow: {
+  'height': '14px',
+  ...shorthands.margin(`16px 16px`),
+  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
+  'background': `linear-gradient(90deg, var(--colorNeutralBackground1Hover) 25%, var(--colorNeutralStroke2) 50%, var(--colorNeutralBackground1Hover) 75%)`,
+  'backgroundSize': '200% 100%',
+  'animation': `omnistore-shimmer 1.4s linear infinite`,
+  },
+  pager: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'justifyContent': 'flex-end',
+  ...shorthands.gap('8px'),
+  'marginTop': '16px',
+  'fontSize': '13px',
+  'color': 'var(--colorNeutralForeground2)',
+  },
+})

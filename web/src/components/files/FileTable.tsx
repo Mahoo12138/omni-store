@@ -4,7 +4,7 @@ import { EntryIcon } from '../ui/Icon'
 import { ContextMenu } from '../ui/ContextMenu'
 import type { MenuOption } from '../ui/Menu'
 import { formatBytes, formatDate } from '../../utils/format'
-import * as css from './FileTable.css'
+import { useStyles } from './FileTable.styles'
 
 // 公开侧与私有侧共用的文件表格（docs/index.png）。
 // 只负责渲染；导航、下载和写操作由调用方通过回调提供。
@@ -51,6 +51,7 @@ export function FileTable({
   onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
   contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
+  const css = useStyles()
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   return (
     <div className={css.tableWrap}>

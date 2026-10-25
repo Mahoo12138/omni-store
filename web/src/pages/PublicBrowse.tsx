@@ -17,15 +17,17 @@ import {
 } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
-import * as ft from '../components/files/FileTable.css'
+import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { useStyles } from './PublicBrowse.styles'
+import { useStyles as useHomeStyles } from './Home.styles'
 import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
-import * as homeCss from './Home.css'
 
 type ViewMode = 'list' | 'grid'
 
 // 公开目录浏览 /public/*（2.0 固定入口）：匿名只读，文件点击即在新页打开 raw。
 export function PublicBrowsePage() {
+  const ft = useFtStyles()
+  const home = useHomeStyles()
   const css = useStyles()
   const o = useOutlineStyles()
   const location = useLocation()
@@ -67,14 +69,14 @@ export function PublicBrowsePage() {
     <PublicShell showHeader={false}>
       <PublicDriveHero />
       <section
-        className={homeCss.directorySection}
+        className={home.directorySection}
         aria-label={`公开目录：${segments.join('/')}`}
       >
-        <header className={`${homeCss.directoryHeader} ${css.browseHeader}`}>
+        <header className={`${home.directoryHeader} ${css.browseHeader}`}>
           <PublicBreadcrumb segments={segments} onNavigate={goTo} />
         </header>
 
-        <div className={`${homeCss.directoryPanel} ${css.browsePanel}`}>
+        <div className={`${home.directoryPanel} ${css.browsePanel}`}>
           <div className={ft.toolbar}>
             <div className={css.readOnlyNotice} role="note">
               <IconInfo size={15} />

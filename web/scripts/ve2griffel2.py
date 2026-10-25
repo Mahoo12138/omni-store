@@ -81,7 +81,15 @@ def conv_pairs(body: str, indent: str) -> str:
             continue
         key, val = parsed
         if key == 'selectors':
-            for k2, v2 in (parse_pair(x) for x in split_top(strip_braces(val))):
+            if '{' not in val:
+                out.append(f"{indent}'{key}': {val},")
+                continue
+            for item in split_top(strip_braces(val)):
+                parsed2 = parse_pair(item)
+                if not parsed2:
+                    out.append(f'{indent}// TODO 未解析 selector: {item[:60]}')
+                    continue
+                k2, v2 = parsed2
                 if k2:
                     k2n = k2.strip().strip('\'"')
                     out.append(f"{indent}'{k2n}': {{")

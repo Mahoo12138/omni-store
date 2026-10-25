@@ -19,7 +19,7 @@ import { PreviewContent, type PreviewItem } from '../preview/PreviewContent'
 import { resolvePreview } from '../preview/resolver'
 import { IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconKey, IconLink, IconList } from '../components/ui/Icon'
 import { formatDate } from '../utils/format'
-import * as ft from '../components/files/FileTable.css'
+import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { useStyles } from './PublicShare.styles'
 import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 
@@ -123,6 +123,7 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
 
 // —— 目录分享：列表 / 画廊两种视图 + 目录流式 ZIP 打包下载 ——
 function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; info: PublicShareInfo; path: string; page: number }) {
+  const ft = useFtStyles()
   const css = useStyles()
   const o = useOutlineStyles()
   const navigateRoute = useNavigate()

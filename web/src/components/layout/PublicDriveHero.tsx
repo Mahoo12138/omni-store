@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchPublicSummary } from '../../api/public'
 import { LogoMark } from '../ui/Icon'
 import { PublicNavigation } from './PublicNavigation'
-import * as css from '../../pages/Home.css'
+import { useStyles } from '../../pages/Home.styles'
 
 // Shared public-drive masthead and introduction for the index and file-browser routes.
 export function PublicDriveHero() {
+  const css = useStyles()
   const summary = useQuery({ queryKey: ['public-summary'], queryFn: fetchPublicSummary })
   const enabled = summary.data?.enabled ?? false
 

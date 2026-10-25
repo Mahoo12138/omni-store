@@ -17,7 +17,7 @@ import {
   IconShield,
   LogoMark,
 } from '../components/ui/Icon'
-import * as css from './About.css'
+import { useStyles } from './About.styles'
 
 const usageItems = [
   {
@@ -83,6 +83,7 @@ const accessEndpoints = [
 ] as const
 
 export function AboutPage() {
+  const css = useStyles()
   const systemStatus = useQuery({
     queryKey: ['system-status'],
     queryFn: fetchSystemStatus,

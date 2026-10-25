@@ -6,10 +6,11 @@ import { fetchPublicSummary } from '../api/public'
 import { PublicDriveHero } from '../components/layout/PublicDriveHero'
 import { PublicShell } from '../components/layout/PublicShell'
 import { IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
-import * as css from './Home.css'
+import { useStyles } from './Home.styles'
 
 // 公开网盘首页：2.0 起全站单一公开 Source，展示其入口卡片。
 export function HomePage() {
+  const css = useStyles()
   const navigate = useNavigate()
   const setup = useQuery({ queryKey: ['setup-status'], queryFn: fetchSetupStatus })
   const summary = useQuery({ queryKey: ['public-summary'], queryFn: fetchPublicSummary })
