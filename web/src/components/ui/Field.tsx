@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useId } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { Label } from '@fluentui/react-components'
+import { Label, mergeClasses } from '@fluentui/react-components'
 import { useStyles } from './Field.styles'
 
 // 弹窗 / 表单字段容器：label（Fluent Label）+ 控件 + hint/error。
@@ -13,16 +13,17 @@ interface FieldProps {
   required?: boolean
   hint?: string
   error?: string
+  className?: string
   children: ReactNode
 }
-export function Field({ label, htmlFor, required, hint, error, children }: FieldProps) {
+export function Field({ label, htmlFor, required, hint, error, className, children }: FieldProps) {
   const css = useStyles()
   const generatedId = useId()
   const child = isValidElement(children) ? children as ReactElement<{ id?: string }> : null
   const controlId = htmlFor ?? child?.props.id ?? generatedId
   const control = child && htmlFor === undefined ? cloneElement(child, { id: controlId }) : children
   return (
-    <div className={css.field}>
+    <div className={mergeClasses(css.field, className)}>
       <Label className={css.label} htmlFor={controlId} weight="regular">
         {label}
         {required && (

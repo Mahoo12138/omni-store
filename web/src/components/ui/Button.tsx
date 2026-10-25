@@ -1,10 +1,12 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, ReactElement } from 'react'
 import { Button as FluentButton, makeStyles, tokens } from '@fluentui/react-components'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerGhost' | 'ghost'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
+  /** Fluent 风格图标槽:渲染在 children 之前,仅 icon 无 children 时为图标按钮 */
+  icon?: ReactElement
 }
 
 // Fluent Button 原生外观；Fluent 没有内置 danger 变体，用调色板红 token 补齐
@@ -15,6 +17,11 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground3,
     ':hover': { backgroundColor: tokens.colorPaletteRedBackground2 },
     ':active': { backgroundColor: tokens.colorPaletteRedBackground2 },
+    // disabled 态回退 Fluent 原生灰,否则灰字落在被覆盖的红底上不可见
+    ':disabled': {
+      backgroundColor: tokens.colorNeutralBackgroundDisabled,
+      color: tokens.colorNeutralForegroundDisabled,
+    },
   },
   dangerGhost: {
     color: tokens.colorPaletteRedForeground1,
@@ -25,7 +32,7 @@ const useStyles = makeStyles({
   },
 })
 
-export function Button({ variant = 'primary', className, ...props }: ButtonProps) {
+export function Button({ variant = 'primary', className, icon, children, ...props }: ButtonProps) {
   const styles = useStyles()
   const appearance =
     variant === 'primary' || variant === 'danger'
@@ -43,7 +50,10 @@ export function Button({ variant = 'primary', className, ...props }: ButtonProps
     <FluentButton
       appearance={appearance}
       className={[extra, className].filter(Boolean).join(' ')}
+      icon={icon}
       {...props}
-    />
+    >
+      {children}
+    </FluentButton>
   )
 }

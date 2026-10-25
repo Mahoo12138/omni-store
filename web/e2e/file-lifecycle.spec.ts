@@ -40,7 +40,8 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   await expect.poll(() => page.context().pages().length).toBe(pageCount)
   await expect(page).toHaveURL(fileManagerURL)
 
-  await page.getByRole('link', { name: '搜索', exact: true }).click()
+  // 全局搜索改为 ⌘K 呼出的弹窗（/app/search 页面已移除）
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
   await page.getByLabel('搜索关键字').fill(fileName)
   await page.getByRole('button', { name: '搜索', exact: true }).click()
   const result = page.locator('article').filter({ hasText: fileName })

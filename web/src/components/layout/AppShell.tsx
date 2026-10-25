@@ -4,8 +4,8 @@ import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
+import { SearchDialog, openSearchDialog } from '../search/SearchDialog'
 import {
-  IconActivity,
   IconChevronDown,
   IconFolder,
   IconCloud,
@@ -13,7 +13,6 @@ import {
   IconLink,
   IconLogout,
   IconQuestion,
-  IconSearch,
   IconSettings,
   IconStar,
   LogoMark,
@@ -49,6 +48,18 @@ export function AppShell({
     navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' })
   }, [pathname, me.isSuccess])
 
+  // 全局搜索:⌘K / Ctrl+K 在任意登录页呼出。
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        openSearchDialog()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   if (me.isPending) {
     return <AppShellLoading />
   }
@@ -68,9 +79,7 @@ export function AppShell({
 
   const navItems = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
-    { to: '/app/recent', label: '最近文件', icon: <IconActivity />, active: pathname.startsWith('/app/recent') },
     { to: '/app/favorites', label: '收藏', icon: <IconStar />, active: pathname.startsWith('/app/favorites') },
-    { to: '/app/search', label: '搜索', icon: <IconSearch />, active: pathname.startsWith('/app/search') },
     { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
     { to: '/app/transfer', label: '流转', icon: <IconCloud />, active: pathname.startsWith('/app/transfer') },
@@ -119,6 +128,8 @@ export function AppShell({
       <div className={css.content}>
         <main className={wide ? css.mainWide : css.main} aria-label={title}>{children}</main>
       </div>
+
+      <SearchDialog />
     </div>
   )
 }

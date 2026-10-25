@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('private routes require login and logout invalidates the session', async ({ page }) => {
-  await page.goto('/app/search')
+  await page.goto('/app/favorites')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByText('登录到你的存储中心')).toBeVisible()
 

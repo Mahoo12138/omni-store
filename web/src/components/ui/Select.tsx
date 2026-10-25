@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Dropdown, Option } from '@fluentui/react-components'
+import { Dropdown, mergeClasses, Option } from '@fluentui/react-components'
 import { useStyles } from './Select.styles'
 
 export interface SelectOption {
@@ -47,9 +47,11 @@ export function Select({
   const css = useStyles()
   const selected = options.find((item) => item.value === value)
   const triggerContent = (
-    <>
+    // Fluent 触发器是 [content]/[icon] 两列 grid,自定义内容必须是单个子元素,
+    // 否则 leadingIcon 与文字会被拆进不同列/行。
+    <span className={css.triggerInner}>
       {leadingIcon ? (
-        <span className={`${css.leadingIcon} ${leadingIconVariant === 'plain' ? css.leadingIconPlain : ''}`}>
+        <span className={mergeClasses(css.leadingIcon, leadingIconVariant === 'plain' ? css.leadingIconPlain : '')}>
           {leadingIcon}
         </span>
       ) : null}
@@ -58,7 +60,7 @@ export function Select({
       ) : (
         <span className={css.placeholder}>{placeholder}</span>
       )}
-    </>
+    </span>
   )
 
   return (

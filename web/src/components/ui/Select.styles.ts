@@ -2,6 +2,12 @@ import { makeStyles, shorthands } from '@fluentui/react-components'
 
 // Fluent Dropdown 触发器内容与宽度布局（触发器/弹层本体已迁移到 Fluent Dropdown）
 export const useStyles = makeStyles({
+  triggerInner: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap('8px'),
+  'minWidth': '0px',
+  },
   triggerWidthFull: { width: '100%' },
   triggerWidthContent: { width: 'max-content', minWidth: '118px' },
   triggerWidthWide: { width: 'max-content', minWidth: '190px' },

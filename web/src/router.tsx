@@ -92,29 +92,6 @@ const appRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/AppHome'), 'AppHomePage'),
 })
 
-interface GlobalSearchParams {
-  q: string
-  source: string
-  page: number
-}
-
-const searchRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/app/search',
-  component: lazyRouteComponent(() => import('./pages/Search'), 'SearchPage'),
-  validateSearch: (search: Record<string, unknown>): GlobalSearchParams => ({
-    q: typeof search.q === 'string' ? search.q : '',
-    source: typeof search.source === 'string' ? search.source : '',
-    page: Number(search.page) >= 1 ? Number(search.page) : 1,
-  }),
-})
-
-const recentFilesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/app/recent',
-  component: lazyRouteComponent(() => import('./pages/RecentFiles'), 'RecentFilesPage'),
-})
-
 const favoritesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/favorites',
@@ -182,8 +159,6 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   setupRoute,
   appRoute,
-  searchRoute,
-  recentFilesRoute,
   favoritesRoute,
   fileManagerRoute,
   trashRoute,
