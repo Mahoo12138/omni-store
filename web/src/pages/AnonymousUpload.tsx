@@ -14,7 +14,7 @@ import {
   IconUpload,
   LogoMark,
 } from '../components/ui/Icon'
-import * as css from './AnonymousUpload.css'
+import { useStyles } from './AnonymousUpload.styles'
 
 const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_CONCURRENT_UPLOADS = 3
@@ -91,6 +91,7 @@ function ResultLinks({
   copiedKey: string
   onCopy: (value: string, key: string) => void
 }) {
+  const css = useStyles()
   return (
     <div className={css.linkGrid}>
       {getLinkOptions(item).map((option) => {
@@ -127,6 +128,7 @@ function UploadResult({
   copiedKey: string
   onCopy: (value: string, key: string) => void
 }) {
+  const css = useStyles()
   const isPending = item.state === 'queued' || item.state === 'uploading'
 
   return (
@@ -172,6 +174,7 @@ function UploadResult({
 }
 
 export function AnonymousUploadPage() {
+  const css = useStyles()
   const status = useQuery({
     queryKey: ['anon-status'],
     queryFn: fetchAnonymousStatus,

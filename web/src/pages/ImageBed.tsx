@@ -31,13 +31,14 @@ import {
 } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
 import { toastError, toastSuccess } from '../components/ui/Toast'
-import * as css from './ImageBed.css'
+import { useStyles } from './ImageBed.styles'
 
 type StatusData = Awaited<ReturnType<typeof fetchImageBedStatus>>
 type TimeFilter = 'all' | 'today' | 'month'
 type ViewMode = 'grid' | 'list'
 
 export function ImageBedPage() {
+  const css = useStyles()
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false })
   const status = useQuery({ queryKey: ['imagebed-status'], queryFn: fetchImageBedStatus })
   const isAdmin = me.data?.role === 'super_admin'
@@ -64,6 +65,7 @@ export function ImageBedPage() {
 }
 
 function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
+  const css = useStyles()
   return (
     <div className={css.noTargetPage}>
       <div className={css.noTargetIcon}><IconCloud size={42} /></div>
@@ -83,6 +85,7 @@ function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function ImageBedContent({ status }: { status: StatusData }) {
+  const css = useStyles()
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
@@ -385,6 +388,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
 }
 
 function InfoRow({ label, value, action }: { label: string; value: string; action: ReactNode }) {
+  const css = useStyles()
   return (
     <div className={css.infoRow}>
       <div className={css.infoText}>
@@ -397,6 +401,7 @@ function InfoRow({ label, value, action }: { label: string; value: string; actio
 }
 
 function CopyButton({ copied, onClick }: { copied: boolean; onClick: () => void }) {
+  const css = useStyles()
   return (
     <button type="button" className={css.copyButton} onClick={onClick} aria-label="复制">
       <IconCopy size={14} /> {copied ? '已复制' : '复制'}
@@ -417,6 +422,7 @@ function ImageCard({
   onCopy: (value: string, key: string) => Promise<void>
   onDelete: (imageId: string) => void
 }) {
+  const css = useStyles()
   const name = image.original_filename || `${image.image_id}.${image.ext}`
   const markdown = `![${name}](${image.public_url})`
   return (
@@ -459,6 +465,7 @@ function ImageCard({
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const css = useStyles()
   return <div className={css.statRow}><dt>{label}</dt><dd>{value}</dd></div>
 }
 

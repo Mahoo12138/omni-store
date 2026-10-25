@@ -7,7 +7,7 @@ import { extOf, PREVIEW_CAPS, resolvePreview, type PreviewKind } from './resolve
 import { fetchBlob, fetchCappedText } from './content'
 import { CodeBlock } from './CodeBlock'
 import { MarkdownView } from './MarkdownView'
-import * as css from './Preview.css'
+import * as css from './Preview.classes'
 
 // react-viewer 的层级取 toast 档位，保证高于预览弹层。
 const VIEWER_Z_INDEX = 50

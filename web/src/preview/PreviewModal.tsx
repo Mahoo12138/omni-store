@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { IconChevronLeft, IconChevronRight, IconClose, IconDownload } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
 import { PreviewContent, type PreviewItem } from './PreviewContent'
-import * as css from './Preview.css'
+import * as css from './Preview.classes'
 
 // 统一预览弹层：文件管理器与分享页共用同一套 PreviewContent 渲染器，
 // 这里只负责壳：全屏遮罩、头部信息、上一个/下一个导航与键盘操作。

@@ -75,3 +75,10 @@ h3 {
     opacity: 0.85;
   }
 }
+
+/* 加载旋转(AnonymousUpload 等复用) */
+@keyframes omnistore-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}

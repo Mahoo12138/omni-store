@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """在生成后的 .styles.ts 上合并组合样式:把基类块正文拼到子类块前,并去 TODO 头。
 用法: python3 scripts/merge-combos.py <styles.ts> BaseName:ChildName ...
+键名带不带引号都能匹配。
 """
 import re
 import sys
 from pathlib import Path
 
-def body_of(s: str, name: str):
-    m = re.search(r'^  ' + name + r': \{\n', s, re.M)
+def body_of(s, name):
+    m = re.search(r"^  ['\"]?" + name + r"['\"]?: \{\n", s, re.M)
     if not m:
         return None
     i = m.end()
@@ -21,16 +22,15 @@ def body_of(s: str, name: str):
         i += 1
     return s[m.end():i-1].rstrip().rstrip(',')
 
-def main(path: str, pairs: list[str]):
+def main(path, pairs):
     p = Path(path)
     s = p.read_text()
     for pair in pairs:
         base, child = pair.split(':')
         b = body_of(s, base)
         assert b is not None, f'{path}: base {base} not found'
-        # 子类块存在才合并
-        if re.search(r'^  ' + child + r': \{', s, re.M):
-            s = re.sub(r'^  ' + child + r': \{\n', lambda _: f'  {child}: {{\n{b},\n', s, count=1, flags=re.M)
+        if re.search(r"^  ['\"]?" + child + r"['\"]?: \{", s, re.M):
+            s = re.sub(r"^  ['\"]?" + child + r"['\"]?: \{\n", lambda _: '  ' + child + ': {\n' + b + ',\n', s, count=1, flags=re.M)
     s = re.sub(r'// TODO\(人工复核\):\n(// .*\n)+\n', '', s)
     s = s.replace('  },,\n', '  },\n')
     s = s.replace(',,', ',')

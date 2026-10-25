@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import * as css from './Preview.css'
+import * as css from './Preview.classes'
 
 // Markdown 预览：react-markdown + GFM（参考 onedrive-vercel-index）。
 // 不启用 rehype-raw：原始 HTML 一律不渲染，从机制上杜绝脚本注入。
