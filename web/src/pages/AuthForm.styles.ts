@@ -12,7 +12,7 @@ export const useStyles = makeStyles({
   'width': '100%',
   'maxWidth': '380px',
   'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'boxShadow': 'var(--shadow4)',
   ...shorthands.padding('40px'),

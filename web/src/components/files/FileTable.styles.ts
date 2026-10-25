@@ -30,12 +30,12 @@ export const useStyles = makeStyles({
   searchInput: {
   'height': '36px',
   'width': '220px',
-  ...shorthands.padding('0 12px 0 34px'),
+  ...shorthands.padding('0', '12px', '0', '34px'),
   'fontSize': '14px',
   'fontFamily': 'var(--fontFamilyBase)',
   'color': 'var(--colorNeutralForeground1)',
   'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'outline': 'none',
   'transitionProperty': 'border-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
@@ -51,7 +51,7 @@ export const useStyles = makeStyles({
   },
   tableWrap: {
   'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'overflowX': 'auto',
   '@media screen and (max-width: 980px)': {
@@ -65,38 +65,38 @@ export const useStyles = makeStyles({
   },
   th: {
   'textAlign': 'left',
-  ...shorthands.padding(`12px 16px`),
+  ...shorthands.padding('12px', '16px'),
   'color': 'var(--colorNeutralForeground2)',
   'fontWeight': 500,
   'fontSize': '13px',
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'whiteSpace': 'nowrap',
   },
   detailHeading: {
   'textAlign': 'left',
-  ...shorthands.padding(`12px 16px`),
+  ...shorthands.padding('12px', '16px'),
   'color': 'var(--colorNeutralForeground2)',
   'fontWeight': 500,
   'fontSize': '13px',
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'whiteSpace': 'nowrap',
   '@media screen and (max-width: 980px)': {
     'display': 'none',
   },
   },
   selectionTh: {
-  ...shorthands.padding(`12px 16px`),
+  ...shorthands.padding('12px', '16px'),
   'color': 'var(--colorNeutralForeground2)',
   'fontWeight': 500,
   'fontSize': '13px',
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'whiteSpace': 'nowrap',
   'width': '42px',
   'paddingRight': '0px',
   'textAlign': 'center',
   '@media screen and (max-width: 980px)': {
     'width': '44px',
-    ...shorthands.padding('12px 0px'),
+    ...shorthands.padding('12px', '0px'),
   },
   },
   row: {
@@ -123,12 +123,12 @@ export const useStyles = makeStyles({
   'outlineOffset': '-2px',
   },
   td: {
-  ...shorthands.padding(`10px 16px`),
+  ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   },
   detailCell: {
-  ...shorthands.padding(`10px 16px`),
+  ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   '@media screen and (max-width: 980px)': {
@@ -136,7 +136,7 @@ export const useStyles = makeStyles({
   },
   },
   selectionCell: {
-  ...shorthands.padding(`10px 16px`),
+  ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   'width': '42px',
@@ -144,7 +144,7 @@ export const useStyles = makeStyles({
   'textAlign': 'center',
   '@media screen and (max-width: 980px)': {
     'width': '44px',
-    ...shorthands.padding('12px 0px'),
+    ...shorthands.padding('12px', '0px'),
   },
   },
   checkboxTarget: {
@@ -158,18 +158,18 @@ export const useStyles = makeStyles({
   },
   },
   nameCell: {
-  ...shorthands.padding(`10px 16px`),
+  ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   '@media screen and (max-width: 980px)': {
-    ...shorthands.padding('12px 0px'),
+    ...shorthands.padding('12px', '0px'),
   },
   },
   mobileMeta: {
   'display': 'none',
   '@media screen and (max-width: 980px)': {
     'display': 'block',
-    ...shorthands.margin('6px 0 0 32px'),
+    ...shorthands.margin('6px', '0', '0', '32px'),
     'color': 'var(--colorNeutralForeground2)',
     'fontSize': '12px',
     'wordBreak': 'normal',
@@ -184,7 +184,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground1)',
   'cursor': 'pointer',
   'background': 'none',
-  ...shorthands.border('none'),
+  ...shorthands.borderStyle('none'),
   ...shorthands.padding('0px'),
   'font': 'inherit',
   'textAlign': 'left',
@@ -200,11 +200,11 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   },
   actionsCell: {
-  ...shorthands.padding(`10px 16px`),
+  ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   '@media screen and (max-width: 980px)': {
-    ...shorthands.padding('12px 0px'),
+    ...shorthands.padding('12px', '0px'),
   },
   },
   actions: {
@@ -219,7 +219,7 @@ export const useStyles = makeStyles({
   'width': '30px',
   'height': '30px',
   'background': 'none',
-  ...shorthands.border('none'),
+  ...shorthands.borderStyle('none'),
   ...shorthands.borderRadius('var(--borderRadiusSmall)'),
   'color': 'var(--colorNeutralForeground2)',
   'cursor': 'pointer',
@@ -240,7 +240,7 @@ export const useStyles = makeStyles({
   'width': '30px',
   'height': '30px',
   'background': 'none',
-  ...shorthands.border('none'),
+  ...shorthands.borderStyle('none'),
   ...shorthands.borderRadius('var(--borderRadiusSmall)'),
   'color': 'var(--colorNeutralForeground2)',
   'cursor': 'pointer',
@@ -252,11 +252,11 @@ export const useStyles = makeStyles({
   '@media screen and (max-width: 980px)': {
     'width': '44px',
     'height': '44px',
-    ...shorthands.padding('12px 0px'),
+    ...shorthands.padding('12px', '0px'),
   },
   },
   empty: {
-  ...shorthands.padding(`40px 24px`),
+  ...shorthands.padding('40px', '24px'),
   'textAlign': 'center',
   'color': 'var(--colorNeutralForeground2)',
   },
@@ -268,7 +268,7 @@ export const useStyles = makeStyles({
   },
   skeletonRow: {
   'height': '14px',
-  ...shorthands.margin(`16px 16px`),
+  ...shorthands.margin('16px', '16px'),
   ...shorthands.borderRadius('var(--borderRadiusSmall)'),
   'background': `linear-gradient(90deg, var(--colorNeutralBackground1Hover) 25%, var(--colorNeutralStroke2) 50%, var(--colorNeutralBackground1Hover) 75%)`,
   'backgroundSize': '200% 100%',

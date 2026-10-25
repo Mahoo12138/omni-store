@@ -17,13 +17,14 @@ export const useStyles = makeStyles({
   },
 
   dark: {
-    '--pnav-foreground': 'var(--colorNeutralBackground1)',
-    '--pnav-border': 'color-mix(in oklch, var(--colorNeutralBackground1) 22%, transparent)',
-    '--pnav-background': 'color-mix(in oklch, var(--colorNeutralBackground1) 6%, transparent)',
-    '--pnav-hover-border': 'color-mix(in oklch, var(--colorNeutralBackground1) 42%, transparent)',
-    '--pnav-hover-background': 'color-mix(in oklch, var(--colorNeutralBackground1) 11%, transparent)',
-    '--pnav-selected-border': 'color-mix(in oklch, var(--colorNeutralBackground1) 65%, transparent)',
-    '--pnav-selected-background': 'color-mix(in oklch, var(--colorNeutralBackground1) 16%, transparent)',
+    // 深色 hero 上的导航:半透明白字面量(不可随主题中性层变成不透明)
+    '--pnav-foreground': '#ffffff',
+    '--pnav-border': 'rgba(255, 255, 255, 0.22)',
+    '--pnav-background': 'rgba(255, 255, 255, 0.06)',
+    '--pnav-hover-border': 'rgba(255, 255, 255, 0.42)',
+    '--pnav-hover-background': 'rgba(255, 255, 255, 0.11)',
+    '--pnav-selected-border': 'rgba(255, 255, 255, 0.65)',
+    '--pnav-selected-background': 'rgba(255, 255, 255, 0.16)',
   },
 
   light: {

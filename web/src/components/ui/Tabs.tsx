@@ -1,21 +1,23 @@
 import {
+  TabList as FluentTabList,
+  Tab as FluentTab,
+  mergeClasses,
+  tabClassNames,
+} from '@fluentui/react-components'
+import {
   createContext,
-  useId,
   useContext,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react'
 
-// 自研标签页：role=tablist/tab/tabpanel + 方向键自动激活（WAI-ARIA tabs 模式）。
-// API 形状与原 base-ui Tabs 一致（Tabs.Root/List/Tab/Panel），页面用法不变；
-// Tab 渲染 button 并带 data-active/aria-selected，兼容既有样式选择器。
+// Fluent TabList 包装:保持 Tabs.Root/List/Tab/Panel 的项目内 API(页面零改动)。
+// 键盘导航/roving tabindex/aria 语义全部交给 Fluent;Panel 用 hidden div 实现
+// keepMounted 语义(草稿状态保活)。
 
 interface TabsContextValue {
   value: string
   setValue: (value: string) => void
-  /** 面板可访问名关联：Tab/Panel 共用的 id 前缀 */
-  uid: string
 }
 const TabsContext = createContext<TabsContextValue | null>(null)
 
@@ -33,7 +35,6 @@ function TabsRoot({
   children: ReactNode
 }) {
   const [internal, setInternal] = useState(defaultValue ?? '')
-  const uid = useId()
   const value = controlled ?? internal
   const setValue = (next: string) => {
     if (next === value) return
@@ -41,7 +42,7 @@ function TabsRoot({
     onValueChange?.(next)
   }
   return (
-    <TabsContext.Provider value={{ value, setValue, uid }}>
+    <TabsContext.Provider value={{ value, setValue }}>
       <div className={className}>{children}</div>
     </TabsContext.Provider>
   )
@@ -56,29 +57,22 @@ function TabsList({
   'aria-label': string
   children: ReactNode
 }) {
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const tabs = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]:not([disabled])'),
-    )
-    if (tabs.length === 0) return
-    const current = tabs.findIndex((tab) => tab === document.activeElement)
-    let next = -1
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1 + tabs.length) % tabs.length
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length
-    else if (event.key === 'Home') next = 0
-    else if (event.key === 'End') next = tabs.length - 1
-    if (next < 0) return
-    event.preventDefault()
-    tabs[next].focus()
-    tabs[next].click()
-  }
+  const ctx = useContext(TabsContext)
+  if (!ctx) throw new Error('Tabs.List 必须在 Tabs.Root 内使用')
   return (
-    <div role="tablist" aria-label={ariaLabel} className={className} onKeyDown={onKeyDown}>
+    <FluentTabList
+      selectedValue={ctx.value}
+      onTabSelect={(_, data) => ctx.setValue(String(data.value))}
+      className={className}
+      aria-label={ariaLabel}
+    >
       {children}
-    </div>
+    </FluentTabList>
   )
 }
 
+// Fluent Tab 默认外观已品牌化;页面级 className(原 outlineTab 等)经 mergeClasses
+// 叠加,组件样式在其后插入可覆盖默认。
 function TabsTab({
   value,
   className,
@@ -90,24 +84,15 @@ function TabsTab({
   disabled?: boolean
   children: ReactNode
 }) {
-  const ctx = useContext(TabsContext)
-  if (!ctx) throw new Error('Tabs.Tab 必须在 Tabs.Root 内使用')
-  const selected = ctx.value === value
   return (
-    <button
-      type="button"
-      role="tab"
-      id={`${ctx.uid}-tab-${value}`}
-      aria-selected={selected}
-      data-active={selected ? '' : undefined}
-      data-value={value}
-      tabIndex={selected ? 0 : -1}
-      className={className}
+    <FluentTab
+      value={value}
       disabled={disabled}
-      onClick={() => ctx.setValue(value)}
+      id={`omnistore-tab-${value}`}
+      className={mergeClasses(tabClassNames.root, className ?? '')}
     >
       {children}
-    </button>
+    </FluentTab>
   )
 }
 
@@ -127,7 +112,7 @@ function TabsPanel({
   const selected = ctx.value === value
   if (!selected && !keepMounted) return null
   return (
-    <div role="tabpanel" aria-labelledby={`${ctx.uid}-tab-${value}`} className={className} hidden={!selected}>
+    <div role="tabpanel" aria-labelledby={`omnistore-tab-${value}`} className={className} hidden={!selected}>
       {children}
     </div>
   )

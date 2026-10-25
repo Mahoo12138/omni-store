@@ -4,8 +4,8 @@ export const useStyles = makeStyles({
   page: {
   'width': '100%',
   'maxWidth': '1180px',
-  ...shorthands.margin('0 auto'),
-  ...shorthands.padding(`16px 0 24px`),
+  ...shorthands.margin('0', 'auto'),
+  ...shorthands.padding('16px', '0', '24px'),
   },
   hero: {
   'display': 'grid',
@@ -13,7 +13,7 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   ...shorthands.gap('64px'),
   'minHeight': '390px',
-  ...shorthands.padding(`40px 0 56px`),
+  ...shorthands.padding('40px', '0', '56px'),
   '@media screen and (max-width: 1040px)': {
     'gridTemplateColumns': '1fr',
     ...shorthands.gap('40px'),
@@ -21,7 +21,7 @@ export const useStyles = makeStyles({
   },
   '@media screen and (max-width: 640px)': {
     ...shorthands.gap('24px'),
-    ...shorthands.padding(`16px 0 40px`),
+    ...shorthands.padding('16px', '0', '40px'),
   },
   },
   heroCopy: {
@@ -113,8 +113,8 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   'justifyContent': 'flex-start',
   ...shorthands.gap('10px'),
-  ...shorthands.padding(`0 16px`),
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.padding('0', '16px'),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'background': 'var(--colorNeutralBackground1)',
   'color': 'var(--colorNeutralForeground2)',
@@ -124,7 +124,7 @@ export const useStyles = makeStyles({
     'minHeight': '54px',
     'justifyContent': 'center',
     ...shorthands.gap('6px'),
-    ...shorthands.padding(`0 8px`),
+    ...shorthands.padding('0', '8px'),
     'fontSize': '13px',
   },
   '@media screen and (max-width: 390px)': {
@@ -164,7 +164,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'center',
   ...shorthands.gap('8px'),
   ...shorthands.padding('16px'),
-  ...shorthands.border(`1px solid color-mix(in oklch, var(--colorBrandBackground) 40%, var(--colorNeutralStroke2))`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('color-mix(in oklch, var(--colorBrandBackground) 40%, var(--colorNeutralStroke2))'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   'color': 'var(--colorBrandBackground)',
@@ -178,7 +178,7 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': 'minmax(0, 1.16fr) minmax(360px, 0.84fr)',
   ...shorthands.gap('40px'),
-  ...shorthands.padding(`24px 0 56px`),
+  ...shorthands.padding('24px', '0', '56px'),
   '@media screen and (max-width: 900px)': {
     'gridTemplateColumns': '1fr',
     ...shorthands.gap('48px'),
@@ -189,14 +189,14 @@ export const useStyles = makeStyles({
   },
   boundarySection: {
   'paddingLeft': '40px',
-  ...shorthands.borderLeft(`1px solid var(--colorNeutralStroke2)`),
+  'borderLeftWidth': '1px', 'borderLeftStyle': 'solid', 'borderLeftColor': 'var(--colorNeutralStroke2)',
   '@media screen and (max-width: 900px)': {
     ...shorthands.padding('0px'),
     ...shorthands.borderLeft('0px'),
   },
   },
   usageList: {
-  ...shorthands.borderTop(`1px solid var(--colorNeutralStroke2)`),
+  'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   },
   usageRow: {
   'display': 'grid',
@@ -204,8 +204,8 @@ export const useStyles = makeStyles({
   'alignItems': 'start',
   ...shorthands.gap('16px'),
   'minHeight': '92px',
-  ...shorthands.padding(`16px 8px`),
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.padding('16px', '8px'),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'transitionProperty': 'background-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
   '&:hover': {
     'background': 'var(--colorNeutralBackground1Hover)',
@@ -214,7 +214,7 @@ export const useStyles = makeStyles({
     'gridTemplateColumns': '30px 40px minmax(0, 1fr)',
     ...shorthands.gap('10px'),
     'alignItems': 'start',
-    ...shorthands.padding(`16px 0`),
+    ...shorthands.padding('16px', '0'),
   },
   },
   rowNumber: {
@@ -249,8 +249,8 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': '48px minmax(0, 1fr)',
   ...shorthands.gap('16px'),
-  ...shorthands.padding(`16px 0`),
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.padding('16px', '0'),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   '&:last-child': {
     ...shorthands.borderBottom('0px'),
   },
@@ -269,8 +269,8 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
-  ...shorthands.padding(`24px 32px`),
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.padding('24px', '32px'),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   '@media screen and (max-width: 720px)': {

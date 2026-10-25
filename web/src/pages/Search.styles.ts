@@ -21,7 +21,7 @@ export const useStyles = makeStyles({
   'letterSpacing': '-0.045em',
   },
   description: {
-  ...shorthands.margin('10px 0 0'),
+  ...shorthands.margin('10px', '0', '0'),
   'color': 'var(--colorNeutralForeground2)',
   'lineHeight': 1.6,
   },
@@ -33,7 +33,7 @@ export const useStyles = makeStyles({
   'marginBottom': '20px',
   ...shorthands.padding('16px'),
   'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'boxShadow': 'var(--shadow4)',
   '@media screen and (max-width: 760px)': {
@@ -45,10 +45,10 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('10px'),
-  ...shorthands.padding('0 13px'),
+  ...shorthands.padding('0', '13px'),
   'color': 'var(--colorNeutralForeground2)',
   'background': 'var(--colorNeutralBackground2)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   '&:focus-within': {
     ...shorthands.borderColor('var(--colorBrandBackground)'),
@@ -64,7 +64,7 @@ export const useStyles = makeStyles({
   ...shorthands.overflow('hidden'),
   'clip': 'rect(0, 0, 0, 0)',
   'whiteSpace': 'nowrap',
-  ...shorthands.border('0px'),
+  ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
   },
   emptyState: {
   'minHeight': '300px',
@@ -77,7 +77,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'textAlign': 'center',
   'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
   emptyIcon: {
@@ -94,7 +94,7 @@ export const useStyles = makeStyles({
   results: {
   ...shorthands.overflow('hidden'),
   'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'boxShadow': 'var(--shadow4)',
   },
@@ -102,9 +102,9 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   'justifyContent': 'space-between',
-  ...shorthands.padding('15px 18px'),
+  ...shorthands.padding('15px', '18px'),
   'color': 'var(--colorNeutralForeground2)',
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'fontSize': '13px',
   },
   resultCount: {
@@ -120,8 +120,8 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': '40px minmax(0, 1fr) auto auto',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
-  ...shorthands.padding('14px 18px'),
-  ...shorthands.borderBottom(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.padding('14px', '18px'),
+  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   '&:last-child': {
     ...shorthands.borderBottom('0px'),
   },
@@ -166,9 +166,9 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   'justifyContent': 'space-between',
   ...shorthands.gap('16px'),
-  ...shorthands.padding('14px 18px'),
+  ...shorthands.padding('14px', '18px'),
   'color': 'var(--colorNeutralForeground2)',
-  ...shorthands.borderTop(`1px solid var(--colorNeutralStroke2)`),
+  'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   'fontSize': '13px',
   '@media screen and (max-width: 520px)': {
     ...shorthands.gap('4px'),

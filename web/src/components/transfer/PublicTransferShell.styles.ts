@@ -23,7 +23,7 @@ export const useStyles = makeStyles({
   },
   workbench: {
   'minWidth': '0px',
-  ...shorthands.padding(`40px 48px`),
+  ...shorthands.padding('40px', '48px'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': 'var(--shadow16)',

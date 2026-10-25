@@ -50,7 +50,7 @@ export const useStyles = makeStyles({
   'flexDirection': 'column',
   ...shorthands.gap('8px'),
   'paddingTop': '16px',
-  ...shorthands.borderTop(`1px solid var(--colorNeutralStroke2)`),
+  'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   },
   featureRow: {
   'display': 'flex',

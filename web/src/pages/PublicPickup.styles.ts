@@ -33,7 +33,7 @@ export const useStyles = makeStyles({
   'maxWidth': '420px',
   ...shorthands.padding('24px'),
   'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'boxShadow': 'var(--shadow16)',
   'textAlign': 'center',
@@ -60,8 +60,8 @@ export const useStyles = makeStyles({
   },
   content: {
   'maxWidth': '760px',
-  ...shorthands.margin('0 auto'),
-  ...shorthands.padding(`40px 24px`),
+  ...shorthands.margin('0', 'auto'),
+  ...shorthands.padding('40px', '24px'),
   },
   header: {
   'marginBottom': '24px',
@@ -82,9 +82,9 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
-  ...shorthands.padding(`8px 16px`),
+  ...shorthands.padding('8px', '16px'),
   'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.border(`1px solid var(--colorNeutralStroke2)`),
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   },
   filePath: {

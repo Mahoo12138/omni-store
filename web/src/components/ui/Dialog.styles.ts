@@ -82,7 +82,7 @@ export const useStyles = makeStyles({
     height: '28px',
     flexShrink: 0,
     ...shorthands.padding(0),
-    ...shorthands.border('none'),
+    ...shorthands.borderStyle('none'),
     borderRadius: 'var(--borderRadiusMedium)',
     backgroundColor: 'transparent',
     color: 'var(--colorNeutralForeground2)',
