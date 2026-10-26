@@ -5,7 +5,8 @@ import { ApiRequestError } from '../api/client'
 import { downloadBlob, fetchTransferBlob, listTransferFiles, lookupTransfer, unlockTransfer, type TransferFile } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { FormField } from '../components/shell/FormLayout'
+import { Input } from '@fluentui/react-components'
 import { IconDownload, IconFile, IconKey } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
 import { useStyles } from './PublicCollect.styles'
@@ -146,8 +147,8 @@ function PickupTask({ publicKey }: { publicKey: string }) {
           event.preventDefault(); setAuthError('');
           unlock.mutate({ code: requiresCode ? code.trim() : '', password: info.data.has_password ? password : '' })
         }}>
-          {requiresCode ? <Input label="取件码" autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /> : null}
-          {info.data.has_password ? <Input label="访问密码" type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /> : null}
+          {requiresCode ? <FormField label="取件码"><Input autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /></FormField> : null}
+          {info.data.has_password ? <FormField label="访问密码"><Input type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /></FormField> : null}
           {authError ? <p className={css.error} role="alert">{authError}</p> : null}
           <Button type="submit" disabled={unlock.isPending || (requiresCode && !code.trim()) || (info.data.has_password && !password)}>{unlock.isPending ? '验证中…' : '领取文件'}</Button>
         </form>

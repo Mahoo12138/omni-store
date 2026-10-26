@@ -1508,4 +1508,13 @@ export const useStyles = makeStyles({
   'dashboardSourceTable': {
   'minWidth': '860px',
   },
+  // Fluent Textarea 的外观补充：替换原 ui/Field.utils.css 的 omnistore-field-textarea。
+  // 根是 <span>,宽高与最小高落在根上,等宽字体落在内部真实 textarea 元素上。
+  'formTextarea': {
+  'width': '100%',
+  'minHeight': '100px',
+  '& textarea': {
+    'fontFamily': 'var(--fontFamilyMonospace)',
+  },
+  },
 })

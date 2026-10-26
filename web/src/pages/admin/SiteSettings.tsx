@@ -12,10 +12,9 @@ import { fetchSystemStatus } from '../../api/system'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
-import { Field } from '../../components/ui/Field'
-import * as fieldCss from '../../components/ui/Field.utils'
+import { Checkbox, Input } from '@fluentui/react-components'
+import { FormField, FormLayout } from '../../components/shell/FormLayout'
 import { IconDownload } from '../../components/ui/Icon'
-import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { useStyles } from './AdminOverview.styles'
 import { useStyles as useSiteStyles } from './SiteSettings.styles'
@@ -179,15 +178,12 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
     <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title={`配置：${service.name}`} description={service.bindingHint}
       footer={<><Button variant="ghost" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={mutation.isPending || (enabled && !sourceKey)} onClick={submit}>{mutation.isPending ? '保存中…' : '保存服务设置'}</Button></>}
     >
-      <Field label="服务开关">
-        <label className={fieldCss.checkboxRow}>
-          <input type="checkbox" aria-label="启用服务" className={fieldCss.checkbox} checked={enabled} disabled={mutation.isPending} onChange={(event) => setEnabled(event.target.checked)} />启用服务
-        </label>
-      </Field>
-      <Field label="绑定存储源" hint="选择“未绑定”并关闭服务，即可解除当前绑定。">
+      <Checkbox label="启用服务" checked={enabled} disabled={mutation.isPending}
+        onChange={(_, data) => setEnabled(!!data.checked)} />
+      <FormField label="绑定存储源" hint="选择“未绑定”并关闭服务，即可解除当前绑定。">
         <Select ariaLabel="绑定存储源" value={sourceKey} disabled={mutation.isPending} onValueChange={setSourceKey}
           options={[{ value: '', label: '未绑定' }, ...sources.map((source) => ({ value: source.key, label: `${source.name}${source.is_disabled ? '（已禁用）' : ''}`, disabled: source.is_disabled }))]} />
-      </Field>
+      </FormField>
       {sourceKey ? <p className={site.path}>{sources.find((source) => source.key === sourceKey)?.root_path}</p> : null}
       {conflict ? <div role="alert" className={site.error}>{conflict}</div> : error ? <div role="alert" className={site.error}>{error}</div> : null}
     </DialogWrap>
@@ -223,10 +219,9 @@ function ImageBedOptions({ usable }: { usable: boolean }) {
     <div className={site.featureGroup}>
       {settings.data ? (
         <>
-          <label className={fieldCss.checkboxRow}>
-            <input type="checkbox" aria-label="允许匿名上传" className={fieldCss.checkbox} checked={settings.data.enabled}
-              disabled={mutation.isPending || settings.isFetching || (!usable && !settings.data.enabled)} onChange={(event) => mutation.mutate(event.target.checked)} />允许匿名上传
-          </label>
+          <Checkbox label="允许匿名上传" checked={settings.data.enabled}
+            disabled={mutation.isPending || settings.isFetching || (!usable && !settings.data.enabled)}
+            onChange={(_, data) => mutation.mutate(!!data.checked)} />
           <p className={site.hint}>{!usable ? '图床服务或绑定源当前不可用，匿名入口暂不可用。'
             : settings.data.enabled ? `任何人都可通过 /upload 上传图片${status.data ? `，单张最大 ${status.data.max_file_size_mb} MB` : ''}。`
               : '匿名上传已关闭，登录用户仍可使用图床。'}{mutation.isPending ? ' 正在保存…' : ''}</p>
@@ -265,10 +260,10 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
     <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title="图片保留策略" description="0 表示不自动过期；到期后图片直链与缩略图停止提供，历史记录保留供清理。"
       footer={<><Button variant="ghost" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={mutation.isPending} onClick={submit}>{mutation.isPending ? '保存中…' : '保存保留策略'}</Button></>}
     >
-      <div className={fieldCss.grid2}>
-        <Field label="登录用户图片保留天数"><Input type="number" min="0" step="1" aria-label="登录用户图片保留天数" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} /></Field>
-        <Field label="匿名图片保留天数"><Input type="number" min="0" step="1" aria-label="匿名图片保留天数" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} /></Field>
-      </div>
+      <FormLayout columns={2}>
+        <FormField label="登录用户图片保留天数"><Input type="number" min="0" step="1" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} /></FormField>
+        <FormField label="匿名图片保留天数"><Input type="number" min="0" step="1" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} /></FormField>
+      </FormLayout>
       {error ? <div role="alert" className={site.error}>{error}</div> : null}
     </DialogWrap>
   )
@@ -401,9 +396,9 @@ function BrandingSection() {
       <div className={css.sectionBody}>
         {editing ? (
           <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-            <Field label="实例名称" required error={msg} hint="1-64 个字符，展示于公开侧页面。">
+            <FormField label="实例名称" required error={msg} hint="1-64 个字符，展示于公开侧页面。">
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
-            </Field>
+            </FormField>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" disabled={save.isPending}>{save.isPending ? '保存中…' : '保存'}</Button>
             </div>

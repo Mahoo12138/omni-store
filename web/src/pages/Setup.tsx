@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { createFirstAdmin, fetchSetupStatus } from '../api/auth'
 import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { FormField } from '../components/shell/FormLayout'
+import { Input } from '@fluentui/react-components'
 import { LogoMark } from '../components/ui/Icon'
 import { useStyles } from './AuthForm.styles'
 
@@ -67,43 +68,47 @@ export function SetupPage() {
         </div>
         <p className={css.subtitle}>创建第一个超级管理员账号</p>
         <form className={css.form} onSubmit={onSubmit}>
-          <Input
-            label="初始化凭据"
-            type="password"
-            value={bootstrapToken}
-            onChange={(e) => setBootstrapToken(e.target.value)}
-            autoComplete="off"
-            hint="从首次启动日志读取，或使用 OMNISTORE_BOOTSTRAP_TOKEN 预先配置。"
-            required
-          />
-          <Input
-            label="用户名（创建后不可修改）"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            required
-          />
-          <Input
-            label="显示名"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-          <Input
-            label="密码（至少 8 位）"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-          <Input
-            label="确认密码"
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
+          <FormField label="初始化凭据" hint="从首次启动日志读取，或使用 OMNISTORE_BOOTSTRAP_TOKEN 预先配置。">
+            <Input
+              type="password"
+              value={bootstrapToken}
+              onChange={(e) => setBootstrapToken(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </FormField>
+          <FormField label="用户名（创建后不可修改）">
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              required
+            />
+          </FormField>
+          <FormField label="显示名">
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </FormField>
+          <FormField label="密码（至少 8 位）">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </FormField>
+          <FormField label="确认密码">
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </FormField>
           {error && <p className={css.error}>{error}</p>}
           <Button type="submit" disabled={submitting}>
             {submitting ? '创建中…' : '创建超级管理员'}

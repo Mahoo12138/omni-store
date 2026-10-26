@@ -16,8 +16,8 @@ import { StoreBrowserDialog } from './TransferStorePicker'
 import { QrCodeDialog } from '../share/QrCodeDialog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { Field } from '../ui/Field'
-import { Input } from '../ui/Input'
+import { FormField } from '../shell/FormLayout'
+import { Input } from '@fluentui/react-components'
 import { IconChevronDown } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
@@ -110,9 +110,9 @@ function Settings({ kind, config, setConfig, disabled, guest }: { kind: Transfer
           <Tabs.Tab value="files">文件</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="basic" className={css.panel}><div className={css.fields}>
-          <Field label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></Field>
+          <FormField label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></FormField>
           {guest ? <p className={css.text}>此处的访客任务保留 1 天；身份更早到期时，任务随之结束。</p> : null}
-          <Field label="访问密码（可选）"><Input type="password" value={config.password} onChange={(event) => update('password', event.target.value)} aria-label={collect ? '收集任务访问密码' : '访问密码'} maxLength={128} autoComplete="new-password" /></Field>
+          <FormField label="访问密码（可选）"><Input type="password" value={config.password} onChange={(event) => update('password', event.target.value)} aria-label={collect ? '收集任务访问密码' : '访问密码'} maxLength={128} autoComplete="new-password" /></FormField>
           <label className={css.checkbox}><input type="checkbox" checked={config.requireCode} onChange={(event) => update('requireCode', event.target.checked)} />{collect ? '启用收件码' : '启用取件码'}</label>
           <p className={css.text}>默认通过分享链接直接访问。设置密码或短码后，对方需要验证；短码只在创建时显示一次。</p>
         </div></Tabs.Panel>
@@ -123,10 +123,10 @@ function Settings({ kind, config, setConfig, disabled, guest }: { kind: Transfer
         </div></Tabs.Panel> : null}
         <Tabs.Panel value="files" className={css.panel}><div className={css.fields}>
           {collect ? <>
-            <Field label="单文件上限 MB"><Input type="number" min="1" step="1" value={config.maxFileSize} onChange={(event) => update('maxFileSize', event.target.value)} aria-label="单文件上限 MB" /></Field>
-            <Field label="总量上限 MB"><Input type="number" min="1" step="1" value={config.maxTotalSize} onChange={(event) => update('maxTotalSize', event.target.value)} aria-label="总量上限 MB" /></Field>
-            <Field label="允许的扩展名" hint="留空表示不限制，例如 pdf png docx。"><Input value={config.allowedExts} onChange={(event) => update('allowedExts', event.target.value)} aria-label="允许的扩展名" /></Field>
-          </> : <Field label="下载次数上限" hint="留空表示不限制，单文件和 ZIP 下载都计入。"><Input type="number" min="1" step="1" value={config.maxDownloads} onChange={(event) => update('maxDownloads', event.target.value)} aria-label="下载次数上限" /></Field>}
+            <FormField label="单文件上限 MB"><Input type="number" min="1" step="1" value={config.maxFileSize} onChange={(event) => update('maxFileSize', event.target.value)} aria-label="单文件上限 MB" /></FormField>
+            <FormField label="总量上限 MB"><Input type="number" min="1" step="1" value={config.maxTotalSize} onChange={(event) => update('maxTotalSize', event.target.value)} aria-label="总量上限 MB" /></FormField>
+            <FormField label="允许的扩展名" hint="留空表示不限制，例如 pdf png docx。"><Input value={config.allowedExts} onChange={(event) => update('allowedExts', event.target.value)} aria-label="允许的扩展名" /></FormField>
+          </> : <FormField label="下载次数上限" hint="留空表示不限制，单文件和 ZIP 下载都计入。"><Input type="number" min="1" step="1" value={config.maxDownloads} onChange={(event) => update('maxDownloads', event.target.value)} aria-label="下载次数上限" /></FormField>}
         </div></Tabs.Panel>
       </Tabs.Root>
     </fieldset>
@@ -198,8 +198,8 @@ function CollectionComposer({ canCreate, onRecord, guest }: { canCreate: boolean
     <div className={css.stack}>
       <div className={css.composerIntro}><h2 className={css.heading}>向别人收集文件</h2><p className={css.text}>填写本次收集的信息，生成一个对方可以直接打开的上传链接。</p></div>
       <fieldset className={css.fields} disabled={create.isPending}>
-        <Field label="收集任务标题" required><Input aria-label="收集任务标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：十月作业、项目资料" /></Field>
-        <Field label="收集任务说明"><Input aria-label="收集任务说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="告诉对方需要提交什么" /></Field>
+        <FormField label="收集任务标题" required><Input aria-label="收集任务标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：十月作业、项目资料" /></FormField>
+        <FormField label="收集任务说明"><Input aria-label="收集任务说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="告诉对方需要提交什么" /></FormField>
       </fieldset>
       {create.isError ? <p role="alert" className={css.error}>{message(create.error)}</p> : null}
       <div className={css.actions}><Button type="submit" disabled={!canCreate || create.isPending}>{create.isPending ? '正在创建…' : '生成收集链接'}</Button></div>
@@ -271,8 +271,8 @@ function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: 
           <p className={css.text}>整理本次交付的内容，上传完成后生成一个可直接取件的分享链接。</p>
         </div>
         <fieldset className={css.fields} disabled={busy || !!draft}>
-          <Field label="发件包标题" required><Input aria-label="发件包标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：项目交付资料" /></Field>
-          <Field label="发件包说明"><Input aria-label="发件包说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="给收件人留句话" /></Field>
+          <FormField label="发件包标题" required><Input aria-label="发件包标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：项目交付资料" /></FormField>
+          <FormField label="发件包说明"><Input aria-label="发件包说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="给收件人留句话" /></FormField>
         </fieldset>
         <FilePicker files={picked} onFiles={select} onRemove={(id) => setPicked((old) => old.filter((item) => item.id !== id))} disabled={!canCreate || busy} onStore={canUseStore ? () => { if (!config.title.trim()) { setError('请先填写发件包标题。'); return } store.mutate() } : undefined} />
         {draftFiles.data?.length ? <p className={css.text}>草稿已保存 {draftFiles.data.length} 个文件 · {formatBytes(draftFiles.data.reduce((total, file) => total + file.size, 0))}</p> : null}

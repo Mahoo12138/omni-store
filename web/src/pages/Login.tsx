@@ -5,7 +5,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { FormField } from '../components/shell/FormLayout'
+import { Input } from '@fluentui/react-components'
 import { LogoMark } from '../components/ui/Icon'
 import { useStyles } from './AuthForm.styles'
 import { validateTransferSearch } from '../utils/transfer-workspace'
@@ -49,21 +50,23 @@ export function LoginPage() {
         </div>
         <p className={css.subtitle}>登录到你的存储中心</p>
         <form className={css.form} onSubmit={onSubmit}>
-          <Input
-            label="用户名"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            required
-          />
-          <Input
-            label="密码"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
+          <FormField label="用户名">
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              required
+            />
+          </FormField>
+          <FormField label="密码">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </FormField>
           {error && <p className={css.error}>{error}</p>}
           <Button type="submit" disabled={submitting}>
             {submitting ? '登录中…' : '登录'}

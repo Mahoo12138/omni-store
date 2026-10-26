@@ -32,8 +32,8 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { ContextMenu } from '../components/ui/ContextMenu'
-import { Field } from '../components/ui/Field'
-import { Input } from '../components/ui/Input'
+import { FormField } from '../components/shell/FormLayout'
+import { Input } from '@fluentui/react-components'
 import { Menu, type MenuOption } from '../components/ui/Menu'
 import { Select } from '../components/ui/Select'
 import { getTaskToastLayer, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
@@ -2286,9 +2286,9 @@ function MkdirDialog({
         </>
       }
     >
-      <Field label="目录名" required error={err}>
+      <FormField label="目录名" required error={err}>
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：旅行" />
-      </Field>
+      </FormField>
     </DialogWrap>
   )
 }
@@ -2340,9 +2340,9 @@ function RenameDialog({
         </>
       }
     >
-      <Field label="新名称" required error={err}>
+      <FormField label="新名称" required error={err}>
         <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-      </Field>
+      </FormField>
     </DialogWrap>
   )
 }
@@ -2441,18 +2441,18 @@ function BatchShareDialog({ sourceKey, currentPath, entries, onClose }: {
     >
       {!started ? (
         <>
-          <Field label="访问密码" hint="选填；所有分享使用相同密码。">
+          <FormField label="访问密码" hint="选填；所有分享使用相同密码。">
             <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="留空表示无需密码" maxLength={128} disabled={running} />
-          </Field>
-          <Field label="有效期" hint="所有分享使用相同有效期。">
+          </FormField>
+          <FormField label="有效期" hint="所有分享使用相同有效期。">
             <Select value={expiryDays} onValueChange={setExpiryDays} options={[
               { value: '0', label: '永久有效' }, { value: '1', label: '1 天' }, { value: '7', label: '7 天' },
               { value: '30', label: '30 天' }, { value: '90', label: '90 天' },
             ]} ariaLabel="分享有效期" />
-          </Field>
-          <Field label="下载次数上限" hint="填写 0 表示不限制；目录分享按文件下载计数。" error={validationError}>
+          </FormField>
+          <FormField label="下载次数上限" hint="填写 0 表示不限制；目录分享按文件下载计数。" error={validationError}>
             <Input type="number" min={0} max={1000000} step={1} value={maxDownloads} onChange={(event) => setMaxDownloads(event.target.value)} disabled={running} />
-          </Field>
+          </FormField>
         </>
       ) : (
         <div style={{ maxHeight: 'min(45vh, 360px)', overflow: 'auto', fontSize: '13px' }}>
@@ -2552,12 +2552,12 @@ function ShareDialog({
       )}
     >
       {created ? (
-        <Field label="分享链接" hint="链接可随时在“分享”页面复制或撤销。">
+        <FormField label="分享链接" hint="链接可随时在“分享”页面复制或撤销。">
           <Input readOnly value={created.url} onFocus={(event) => event.currentTarget.select()} />
-        </Field>
+        </FormField>
       ) : (
         <>
-          <Field label="访问密码" hint="选填；设置后访问者需要先验证密码。">
+          <FormField label="访问密码" hint="选填；设置后访问者需要先验证密码。">
             <Input
               type="password"
               value={password}
@@ -2565,8 +2565,8 @@ function ShareDialog({
               placeholder="留空表示无需密码"
               maxLength={128}
             />
-          </Field>
-          <Field label="有效期">
+          </FormField>
+          <FormField label="有效期">
             <Select
               value={expiryDays}
               onValueChange={setExpiryDays}
@@ -2579,8 +2579,8 @@ function ShareDialog({
               ]}
               ariaLabel="分享有效期"
             />
-          </Field>
-          <Field label="下载次数上限" hint="填写 0 表示不限制；目录内每次文件下载均计数。" error={error}>
+          </FormField>
+          <FormField label="下载次数上限" hint="填写 0 表示不限制；目录内每次文件下载均计数。" error={error}>
             <Input
               type="number"
               min={0}
@@ -2589,7 +2589,7 @@ function ShareDialog({
               value={maxDownloads}
               onChange={(event) => setMaxDownloads(event.target.value)}
             />
-          </Field>
+          </FormField>
         </>
       )}
     </DialogWrap>

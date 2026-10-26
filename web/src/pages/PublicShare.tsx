@@ -13,7 +13,7 @@ import {
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { Input } from '@fluentui/react-components'
 import { PreviewModal } from '../preview/PreviewModal'
 import { PreviewContent, type PreviewItem } from '../preview/PreviewContent'
 import { resolvePreview } from '../preview/resolver'

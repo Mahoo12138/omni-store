@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchMySources, listFiles } from '../../api/sources'
 import { Button } from '../ui/Button'
 import { DialogWrap } from '../ui/Dialog'
-import { Field } from '../ui/Field'
+import { FormField } from '../shell/FormLayout'
 import { Select } from '../ui/Select'
 import { formatBytes } from '../../utils/format'
 import { useStyles } from '../../pages/TransferCenter.styles'
@@ -80,7 +80,7 @@ export function StoreBrowserDialog({ onAdd, onClose }: {
         </>
       }
     >
-      <Field label="存储源">
+      <FormField label="存储源">
         <Select
           value={sourceKey ? String(usable.findIndex((item) => item.key === sourceKey)) : ''}
           disabled={busy}
@@ -93,7 +93,7 @@ export function StoreBrowserDialog({ onAdd, onClose }: {
           ariaLabel="选择存储源"
           placeholder="选择存储源…"
         />
-      </Field>
+      </FormField>
       {error ? <p role="alert">{error}</p> : null}
       {sources.isError || listing.isError ? <p role="alert">文件列表加载失败，请重新选择存储源或目录。</p> : null}
       {sourceKey ? breadcrumb() : null}

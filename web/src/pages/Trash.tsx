@@ -10,10 +10,10 @@ import {
   type TrashEntry,
 } from '../api/sources'
 import { AppFrame } from '../components/shell/AppFrame'
+import { FormField } from '../components/shell/FormLayout'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
-import { Field } from '../components/ui/Field'
-import { Input } from '../components/ui/Input'
+import { Input } from '@fluentui/react-components'
 import { IconChevronLeft, IconFile, IconFolder, IconRefresh, IconRestore, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatBytes, formatDate } from '../utils/format'
@@ -187,9 +187,9 @@ function RestoreDialog({ sourceKey, entry, onClose, onSuccess }: {
       description="可恢复到原路径，也可指定同一存储源中的其他路径。"
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button onClick={submit} disabled={mutation.isPending}>{mutation.isPending ? '恢复中…' : '恢复'}</Button></>}
     >
-      <Field label="恢复路径" required error={error} hint="目标父目录必须存在，且不会覆盖已有内容。">
+      <FormField label="恢复路径" required error={error} hint="目标父目录必须存在，且不会覆盖已有内容。">
         <Input autoFocus value={targetPath} onChange={(event) => setTargetPath(event.target.value)} />
-      </Field>
+      </FormField>
     </DialogWrap>
   )
 }

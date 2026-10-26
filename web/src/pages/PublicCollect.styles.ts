@@ -152,37 +152,8 @@ export const useStyles = makeStyles({
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
-  noteField: {
-  'display': 'grid',
-  ...shorthands.gap('8px'),
-  'minWidth': '0px',
-  },
-  label: {
-  'fontSize': '13px',
-  'fontWeight': 500,
-  'color': 'var(--colorNeutralForeground1)',
-  },
-  textarea: {
-  'width': '100%',
-  'minHeight': '96px',
-  'resize': 'vertical',
-  'boxSizing': 'border-box',
-  ...shorthands.padding('16px'),
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorNeutralBackground1)',
-  'color': 'var(--colorNeutralForeground1)',
-  'font': 'inherit',
-  'fontSize': '14px',
-  'lineHeight': 1.6,
-  '&:focus-visible': {
-    'outline': `2px solid var(--colorBrandBackground)`,
-    'outlineOffset': '2px',
-  },
-  '&:disabled': {
-    'opacity': 0.6,
-  },
-  },
+  // noteField / label / textarea 三个槽位随 ui/Field.* 一起退役：
+  // 收件页的姓名与留言现在由 shell/FormLayout 的 Fluent Field 呈现。
   footer: {
   'display': 'flex',
   'alignItems': 'center',

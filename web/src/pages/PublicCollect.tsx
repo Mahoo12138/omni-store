@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiRequestError } from '../api/client'
 import { lookupCollection, submitToCollection, unlockCollection, type CollectionPublicInfo } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { FormField } from '../components/shell/FormLayout'
+import { Input, Textarea } from '@fluentui/react-components'
 import { IconCheck, IconClose, IconFolder, IconKey, IconUpload } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
 import { useStyles } from './PublicCollect.styles'
@@ -28,7 +29,6 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
   const nextFileID = useRef(0)
   const autoStarted = useRef(false)
   const dragDepth = useRef(0)
-  const noteID = useId()
   const [access, setAccess] = useState<Access | null>(null)
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
@@ -142,8 +142,8 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
           event.preventDefault(); setAuthError('');
           unlock.mutate({ code: requiresCode ? code.trim() : '', password: info.data.has_password ? password : '' })
         }}>
-          {requiresCode ? <Input label="收件码" autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /> : null}
-          {info.data.has_password ? <Input label="访问密码" aria-label="收集任务访问密码" type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /> : null}
+          {requiresCode ? <FormField label="收件码"><Input autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /></FormField> : null}
+          {info.data.has_password ? <FormField label="访问密码"><Input aria-label="收集任务访问密码" type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /></FormField> : null}
           {authError ? <p className={css.error} role="alert">{authError}</p> : null}
           <Button type="submit" disabled={unlock.isPending || (requiresCode && !code.trim()) || (info.data.has_password && !password)}>{unlock.isPending ? '验证中…' : '继续提交'}</Button>
         </form>
@@ -199,8 +199,12 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
           </li>)}</ul> : null}
         </section>
         <div className={css.fields}>
-          <Input label={`你的姓名${info.data.require_name ? '（必填）' : '（选填）'}`} aria-label="提交者姓名" value={name} onChange={(event) => setName(event.target.value)} required={info.data.require_name} disabled={busy} autoComplete="name" />
-          <div className={css.noteField}><label className={css.label} htmlFor={noteID}>留言{info.data.require_note ? '（必填）' : '（选填）'}</label><textarea id={noteID} className={css.textarea} aria-label="提交备注" value={note} onChange={(event) => setNote(event.target.value)} required={info.data.require_note} disabled={busy} /></div>
+          <FormField label={`你的姓名${info.data.require_name ? '（必填）' : '（选填）'}`}>
+            <Input aria-label="提交者姓名" value={name} onChange={(event) => setName(event.target.value)} required={info.data.require_name} disabled={busy} autoComplete="name" />
+          </FormField>
+          <FormField label={`留言${info.data.require_note ? '（必填）' : '（选填）'}`}>
+            <Textarea aria-label="提交备注" rows={4} resize="vertical" value={note} onChange={(event) => setNote(event.target.value)} required={info.data.require_note} disabled={busy} />
+          </FormField>
         </div>
         {sessionMessage ? <p className={css.hint} role="status">{sessionMessage}</p> : null}
         {error ? <p className={css.error} role="alert">{error}</p> : null}

@@ -64,13 +64,11 @@ import {
   type S3Credential,
 } from '../../api/s3'
 import { fetchMySources } from '../../api/sources'
-import { Radio, RadioGroup } from '@fluentui/react-components'
+import { Checkbox, Radio, RadioGroup, Input, Textarea } from '@fluentui/react-components'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
-import { Field } from '../../components/ui/Field'
-import * as fieldCss from '../../components/ui/Field.utils'
-import { Input } from '../../components/ui/Input'
+import { FormField } from '../../components/shell/FormLayout'
 import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
@@ -453,14 +451,14 @@ function ProfileSection() {
           </>
         }
       >
-        <Field label="新的显示名" required error={profileMsg}>
+        <FormField label="新的显示名" required error={profileMsg}>
           <Input
             autoFocus
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder={me.data?.display_name ?? '显示名'}
           />
-        </Field>
+        </FormField>
       </DialogWrap>
 
       {/* 修改密码 弹窗 */}
@@ -483,7 +481,7 @@ function ProfileSection() {
           </>
         }
       >
-        <Field label="旧密码" required>
+        <FormField label="旧密码" required>
           <Input
             type="password"
             autoFocus
@@ -491,8 +489,8 @@ function ProfileSection() {
             onChange={(e) => setOldPwd(e.target.value)}
             autoComplete="current-password"
           />
-        </Field>
-        <Field
+        </FormField>
+        <FormField
           label="新密码（至少 8 位）"
           required
           error={pwdMsg}
@@ -504,7 +502,7 @@ function ProfileSection() {
             onChange={(e) => setNewPwd(e.target.value)}
             autoComplete="new-password"
           />
-        </Field>
+        </FormField>
       </DialogWrap>
 
       <section className={css.credentialsPanel}>
@@ -734,7 +732,7 @@ function TokenBlock({
         }
       >
         {newToken ? (
-          <Field label="Token" htmlFor={tokenInputId}>
+          <FormField label="Token" htmlFor={tokenInputId}>
             <div style={{ display: 'flex', gap: 8 }}>
               <Input id={tokenInputId} readOnly value={newToken} />
               <Button
@@ -744,7 +742,7 @@ function TokenBlock({
                 复制
               </Button>
             </div>
-          </Field>
+          </FormField>
         ) : null}
       </DialogWrap>
     </section>
@@ -875,7 +873,7 @@ function ImageBedTokenManager() {
           </>
         }
       >
-        <Field label="Token 名称" required error={message} hint={message ? undefined : '例如：MacBook PicGo'}>
+        <FormField label="Token 名称" required error={message} hint={message ? undefined : '例如：MacBook PicGo'}>
           <Input
             autoFocus
             value={label}
@@ -883,7 +881,7 @@ function ImageBedTokenManager() {
             onChange={(event) => setLabel(event.target.value)}
             placeholder="1-32 个字符"
           />
-        </Field>
+        </FormField>
       </DialogWrap>
 
       <DialogWrap
@@ -896,12 +894,12 @@ function ImageBedTokenManager() {
         description="请立即复制保存。关闭后无法再次查看明文。"
         footer={<Button variant="secondary" onClick={() => setRevealOpen(false)}>我已保存</Button>}
       >
-        <Field label="Token" htmlFor={revealedTokenInputId}>
+        <FormField label="Token" htmlFor={revealedTokenInputId}>
           <div className={css.tokenRevealRow}>
             <Input id={revealedTokenInputId} readOnly value={revealedToken} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealedToken)}>复制</Button>
           </div>
-        </Field>
+        </FormField>
       </DialogWrap>
 
       <DialogWrap
@@ -1096,7 +1094,7 @@ function S3CredentialManager() {
           </>
         }
       >
-        <Field label="凭据名称" required error={message} hint={message ? undefined : '例如：MacBook rclone'}>
+        <FormField label="凭据名称" required error={message} hint={message ? undefined : '例如：MacBook rclone'}>
           <Input
             autoFocus
             value={name}
@@ -1104,7 +1102,7 @@ function S3CredentialManager() {
             onChange={(event) => setName(event.target.value)}
             placeholder="1-32 个字符"
           />
-        </Field>
+        </FormField>
       </DialogWrap>
 
       <DialogWrap
@@ -1114,18 +1112,18 @@ function S3CredentialManager() {
         description="请立即复制 Access Key ID 与 Secret Access Key。关闭后无法再次查看 Secret。"
         footer={<Button variant="secondary" onClick={() => setRevealed(null)}>我已保存</Button>}
       >
-        <Field label="Access Key ID" htmlFor={accessKeyInputId}>
+        <FormField label="Access Key ID" htmlFor={accessKeyInputId}>
           <div className={css.tokenRevealRow}>
             <Input id={accessKeyInputId} readOnly value={revealed?.accessKeyId ?? ''} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealed?.accessKeyId ?? '')}>复制</Button>
           </div>
-        </Field>
-        <Field label="Secret Access Key" htmlFor={secretKeyInputId}>
+        </FormField>
+        <FormField label="Secret Access Key" htmlFor={secretKeyInputId}>
           <div className={css.tokenRevealRow}>
             <Input id={secretKeyInputId} readOnly value={revealed?.secret ?? ''} />
             <Button variant="secondary" onClick={() => navigator.clipboard.writeText(revealed?.secret ?? '')}>复制</Button>
           </div>
-        </Field>
+        </FormField>
       </DialogWrap>
 
       <DialogWrap
@@ -1459,15 +1457,15 @@ function CreateSourceDialog({
         </>
       }
     >
-      <Field label="名称" required hint="显示在列表和客户端连接信息中">
+      <FormField label="名称" required hint="显示在列表和客户端连接信息中">
         <Input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例如：团队文件"
         />
-      </Field>
-      <Field
+      </FormField>
+      <FormField
         label="真实目录绝对路径"
         required
         error={err}
@@ -1483,7 +1481,7 @@ function CreateSourceDialog({
           }}
           placeholder="例如 /mnt/photos 或 D:\\Photos"
         />
-      </Field>
+      </FormField>
       {preview ? <SourcePreflightPreview preview={preview} /> : null}
     </DialogWrap>
   )
@@ -1689,7 +1687,7 @@ function EditSourceDialog({
           </div>
         </Tabs.Panel>
         <Tabs.Panel value="storage" className={css.sourceConfigPanel} keepMounted>
-          <Field
+          <FormField
             label="存储源硬配额"
             hint={`当前已使用 ${formatBytes(detail.data.quota.usage_bytes)}；填 0 表示不限制。配额不会删除已有文件。`}
           >
@@ -1707,14 +1705,16 @@ function EditSourceDialog({
               />
               <span style={{ color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>GiB</span>
             </div>
-          </Field>
+          </FormField>
 
-          <Field
+          <FormField
             label="排除规则（每行一条 glob）"
             hint="匹配的文件不会出现在文件列表中，例如 *.tmp 或 .git/*"
           >
-            <textarea
-              className={fieldCss.textarea}
+            <Textarea
+              className={css.formTextarea}
+              rows={4}
+              resize="vertical"
               aria-label="排除规则"
               value={patternsValue}
               onChange={(e) => {
@@ -1722,8 +1722,8 @@ function EditSourceDialog({
                 setMsg('')
               }}
             />
-          </Field>
-          <Field
+          </FormField>
+          <FormField
             label="文件台账"
             hint={isDirty
               ? '请先保存当前配置，再扫描并校准台账。'
@@ -1733,7 +1733,7 @@ function EditSourceDialog({
               onClick={() => reconcileMut.mutate()}>
               {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
             </Button>
-          </Field>
+          </FormField>
         </Tabs.Panel>
       </Tabs.Root>
       {msg && (
@@ -2035,23 +2035,25 @@ function PolicyDialog({
         </>
       }
     >
-      <Field label="策略名称" required>
+      <FormField label="策略名称" required>
         <Input
           autoFocus
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="例如：内容团队"
         />
-      </Field>
-      <Field label="说明" hint="说明策略适用的人群或用途">
-        <textarea
-          className={fieldCss.textarea}
+      </FormField>
+      <FormField label="说明" hint="说明策略适用的人群或用途">
+        <Textarea
+          className={css.formTextarea}
+          rows={4}
+          resize="vertical"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="例如：内容团队日常读写权限"
         />
-      </Field>
-      <Field label="存储源规则" hint="未选中的存储源不授权；子路径使用源内相对路径，不以 / 开头">
+      </FormField>
+      <FormField label="存储源规则" hint="未选中的存储源不授权；子路径使用源内相对路径，不以 / 开头">
         <div className={css.policyEditorList}>
           {sources.length === 0 ? <p className={css.policyEditorEmpty}>请先创建存储源。</p> : null}
           {sources.map((source) => {
@@ -2060,18 +2062,17 @@ function PolicyDialog({
             return (
               <div key={source.key} className={css.policySourceBlock}>
                 <div className={css.policyEditorRow}>
-                  <label className={css.policyEditorIdentity}>
-                    <input
-                      type="checkbox"
-                      className={fieldCss.checkbox}
-                      checked={!!permission}
-                      onChange={(event) => toggleSource(source.key, event.target.checked)}
-                    />
-                    <span>
-                      {source.name}
-                      {source.is_disabled ? <span className={css.policyEditorMeta}> · 已禁用</span> : null}
-                    </span>
-                  </label>
+                  <Checkbox
+                    className={css.policyEditorIdentity}
+                    checked={!!permission}
+                    onChange={(_, data) => toggleSource(source.key, !!data.checked)}
+                    label={(
+                      <span>
+                        {source.name}
+                        {source.is_disabled ? <span className={css.policyEditorMeta}> · 已禁用</span> : null}
+                      </span>
+                    )}
+                  />
                   {permission ? (
                     <Select
                       value={permission}
@@ -2128,26 +2129,23 @@ function PolicyDialog({
             )
           })}
         </div>
-      </Field>
-      <Field label="绑定用户" hint="超级管理员无需绑定，始终拥有全部读写权限">
+      </FormField>
+      <FormField label="绑定用户" hint="超级管理员无需绑定，始终拥有全部读写权限">
         <div className={css.policyEditorList}>
           {assignableUsers.length === 0 ? <p className={css.policyEditorEmpty}>还没有可绑定的普通用户。</p> : null}
           {assignableUsers.map((user) => (
-            <label key={user.id} className={css.policyEditorRow}>
-              <span className={css.policyEditorIdentity}>
-                <input
-                  type="checkbox"
-                  className={fieldCss.checkbox}
-                  checked={userIDs.includes(user.id)}
-                  onChange={(event) => toggleUser(user.id, event.target.checked)}
-                />
-                <span>{user.display_name || user.username}</span>
-              </span>
+            <div key={user.id} className={css.policyEditorRow}>
+              <Checkbox
+                className={css.policyEditorIdentity}
+                checked={userIDs.includes(user.id)}
+                onChange={(_, data) => toggleUser(user.id, !!data.checked)}
+                label={user.display_name || user.username}
+              />
               <span className={css.policyEditorMeta}>@{user.username}</span>
-            </label>
+            </div>
           ))}
         </div>
-      </Field>
+      </FormField>
       {message ? (
         <p role="status" style={{ margin: 0, color: 'var(--colorPaletteRedForeground1)', fontSize: '13px' }}>
           {message}
@@ -2373,7 +2371,7 @@ function UserQuotaDialog({
         </>
       )}
     >
-      <Field label="硬配额" hint="单位 GiB，填 0 表示不限制；只统计归属于该用户的文件。">
+      <FormField label="硬配额" hint="单位 GiB，填 0 表示不限制；只统计归属于该用户的文件。">
         <Input
           type="number"
           min="0"
@@ -2382,7 +2380,7 @@ function UserQuotaDialog({
           onChange={(event) => setQuotaGiB(event.target.value)}
           aria-label="用户配额 GiB"
         />
-      </Field>
+      </FormField>
       {message ? <p role="alert">{message}</p> : null}
     </DialogWrap>
   )
@@ -2448,20 +2446,20 @@ function CreateUserDialog({
         </>
       }
     >
-      <Field label="用户名" required hint="2-32 位字母数字下划线短横线">
+      <FormField label="用户名" required hint="2-32 位字母数字下划线短横线">
         <Input
           autoFocus
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
-      </Field>
-      <Field label="显示名" hint="留空则使用用户名">
+      </FormField>
+      <FormField label="显示名" hint="留空则使用用户名">
         <Input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
         />
-      </Field>
-      <Field
+      </FormField>
+      <FormField
         label="密码"
         required
         error={err}
@@ -2473,8 +2471,8 @@ function CreateUserDialog({
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
         />
-      </Field>
-      <Field label="角色" required>
+      </FormField>
+      <FormField label="角色" required>
         <Select
           value={role}
           onValueChange={setRole}
@@ -2485,7 +2483,7 @@ function CreateUserDialog({
           ariaLabel="用户角色"
           required
         />
-      </Field>
+      </FormField>
     </DialogWrap>
   )
 }
@@ -2540,40 +2538,40 @@ function AuditSection() {
         <p className={css.sectionHint}>按主体、入口、结果或关键字筛选实例上的关键操作。</p>
       </div>
       <form className={css.auditFilters} onSubmit={applyFilters}>
-        <Field label="主体" className={css.auditField}>
+        <FormField label="主体" className={css.auditField}>
           <Select
             value={draftFilters.actorType}
             onValueChange={(value) => setDraftFilters((current) => ({ ...current, actorType: value }))}
             options={auditActorOptions}
             ariaLabel="筛选审计主体"
           />
-        </Field>
-        <Field label="关键字" className={css.auditFieldKeyword}>
+        </FormField>
+        <FormField label="关键字" className={css.auditFieldKeyword}>
           <Input
             value={draftFilters.searchText}
             onChange={(event) => setDraftFilters((current) => ({ ...current, searchText: event.target.value }))}
             placeholder="动作、路径、存储源、IP 或错误码"
             maxLength={128}
           />
-        </Field>
+        </FormField>
         {showAllFilters && (
           <>
-            <Field label="入口" className={css.auditField}>
+            <FormField label="入口" className={css.auditField}>
               <Select
                 value={draftFilters.entryType}
                 onValueChange={(value) => setDraftFilters((current) => ({ ...current, entryType: value }))}
                 options={auditEntryOptions}
                 ariaLabel="筛选审计入口"
               />
-            </Field>
-            <Field label="结果" className={css.auditField}>
+            </FormField>
+            <FormField label="结果" className={css.auditField}>
               <Select
                 value={draftFilters.status}
                 onValueChange={(value) => setDraftFilters((current) => ({ ...current, status: value }))}
                 options={auditStatusOptions}
                 ariaLabel="筛选审计结果"
               />
-            </Field>
+            </FormField>
           </>
         )}
         <div className={css.auditFilterActions}>
@@ -2769,7 +2767,7 @@ function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
         </div>
       </header>
       <div className={css.staticProtocolBody}>
-        <Field
+        <FormField
           label="发布目录（源内相对路径）"
           hint={publishRoot.trim() === '' ? '留空表示发布整个存储源根目录，必须显式确认。' : '例如 blog-assets；托管命名空间与排除规则永远不公开。'}
         >
@@ -2779,11 +2777,14 @@ function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
             placeholder="blog-assets"
             aria-label="静态资源发布目录"
           />
-        </Field>
-        {publishRoot.trim() === '' && <label className={fieldCss.checkboxRow}>
-          <input type="checkbox" className={fieldCss.checkbox} checked={confirmRoot} onChange={(event) => setConfirmRoot(event.target.checked)} />
-          我确认公开此存储源根目录内的受支持媒体文件
-        </label>}
+        </FormField>
+        {publishRoot.trim() === '' && (
+          <Checkbox
+            label="我确认公开此存储源根目录内的受支持媒体文件"
+            checked={confirmRoot}
+            onChange={(_, data) => setConfirmRoot(!!data.checked)}
+          />
+        )}
         <div className={css.staticProtocolActions}>
           <Button variant="secondary" disabled={!sourceKey || preflightMut.isPending} onClick={() => preflightMut.mutate()}>
             {preflightMut.isPending ? '预检中…' : '预检发布目录'}
@@ -2898,40 +2899,37 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
           <h3 className={css.sectionTitle}>缓存与跨域</h3>
         </div>
         <div className={css.staticProtocolBody}>
-          <Field label="启用" hint="关闭后原站公开读取返回 404；无法收回已分发到浏览器/CDN 的缓存。">
-            <label className={fieldCss.checkboxRow}>
-              <input type="checkbox" className={fieldCss.checkbox} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-              提供公开读取
-            </label>
-          </Field>
-          <Field label="缓存档位" hint="long 仅适合内容修改就更换 URL 的资源。">
+          <FormField hint="关闭后原站公开读取返回 404；无法收回已分发到浏览器/CDN 的缓存。">
+            <Checkbox label="提供公开读取" checked={enabled} onChange={(_, data) => setEnabled(!!data.checked)} />
+          </FormField>
+          <FormField label="缓存档位" hint="long 仅适合内容修改就更换 URL 的资源。">
             <Select
               value={cacheMode}
               onValueChange={(value) => setCacheMode(value as StaticAssetConfig['cache_mode'])}
               options={Object.entries(staticCacheModeLabels).map(([value, label]) => ({ value, label }))}
               ariaLabel="缓存档位"
             />
-          </Field>
-          <Field label="跨域档位" hint="CORS 不是图片保密机制；公开媒体可跨站嵌入。">
+          </FormField>
+          <FormField label="跨域档位" hint="CORS 不是图片保密机制；公开媒体可跨站嵌入。">
             <Select
               value={corsMode}
               onValueChange={(value) => setCorsMode(value as StaticAssetConfig['cors_mode'])}
               options={Object.entries(staticCorsModeLabels).map(([value, label]) => ({ value, label }))}
               ariaLabel="跨域档位"
             />
-          </Field>
-          <Field label="对外 origin（可选）" hint="只改变输出的 baseUrl；不自动配置 DNS/TLS/反向代理。">
+          </FormField>
+          <FormField label="对外 origin（可选）" hint="只改变输出的 baseUrl；不自动配置 DNS/TLS/反向代理。">
             <Input
               value={publicOrigin}
               onChange={(event) => setPublicOrigin(event.target.value)}
               placeholder="https://files.example.com"
               aria-label="静态资源对外 origin"
             />
-          </Field>
+          </FormField>
           {corsMode === 'allowlist' && (
-            <Field label="允许的 Origin 白名单（每行一个完整 origin）" hint="精确匹配，不支持任意后缀。">
-              <textarea aria-label="静态 HTTP Origin 白名单" className={fieldCss.textarea} value={allowedOrigins} onChange={(event) => setAllowedOrigins(event.target.value)} />
-            </Field>
+            <FormField label="允许的 Origin 白名单（每行一个完整 origin）" hint="精确匹配，不支持任意后缀。">
+              <Textarea aria-label="静态 HTTP Origin 白名单" className={css.formTextarea} rows={4} resize="vertical" value={allowedOrigins} onChange={(event) => setAllowedOrigins(event.target.value)} />
+            </FormField>
           )}
           <Button disabled={saveMut.isPending} onClick={() => { setMsg(''); setErr(''); saveMut.mutate() }}>
             {saveMut.isPending ? '保存中…' : '保存静态 HTTP'}
@@ -3019,7 +3017,7 @@ function StaticAssetsRebindDialog({
         </>
       }
     >
-      <Field label="重绑模式">
+      <FormField label="重绑模式">
         <Select
           value={mode}
           onValueChange={(value) => setMode(value as 'reset' | 'relocate')}
@@ -3029,8 +3027,8 @@ function StaticAssetsRebindDialog({
           ]}
           ariaLabel="重绑模式"
         />
-      </Field>
-      <Field label="新发布存储源">
+      </FormField>
+      <FormField label="新发布存储源">
         <Select
           value={usable.some((source) => source.key === sourceKey)
             ? String(usable.findIndex((source) => source.key === sourceKey))
@@ -3039,26 +3037,25 @@ function StaticAssetsRebindDialog({
           options={usable.map((source, index) => ({ value: String(index), label: source.name }))}
           ariaLabel="重绑目标存储源"
         />
-      </Field>
-      <Field label="新发布目录" hint="留空表示存储源根目录（需在下一步确认）。">
+      </FormField>
+      <FormField label="新发布目录" hint="留空表示存储源根目录（需在下一步确认）。">
         <Input value={publishRoot} onChange={(event) => { setPublishRoot(event.target.value); setConfirmRoot(false) }} aria-label="重绑目标发布目录" />
-      </Field>
-      {publishRoot.trim() === '' && <label className={fieldCss.checkboxRow}>
-        <input type="checkbox" className={fieldCss.checkbox} checked={confirmRoot} onChange={(event) => setConfirmRoot(event.target.checked)} />
-        我确认公开目标存储源根目录内的受支持媒体文件
-      </label>}
+      </FormField>
+      {publishRoot.trim() === '' && (
+        <Checkbox
+          label="我确认公开目标存储源根目录内的受支持媒体文件"
+          checked={confirmRoot}
+          onChange={(_, data) => setConfirmRoot(!!data.checked)}
+        />
+      )}
       {mode === 'relocate' && (
-        <Field label="迁移确认" required hint="勾选表示你已确认同一批内容已迁移/复制到新位置并核验，旧相对路径将继续有效。">
-          <label className={fieldCss.checkboxRow}>
-            <input
-              type="checkbox"
-              className={fieldCss.checkbox}
-              checked={confirmRelocate}
-              onChange={(e) => setConfirmRelocate(e.target.checked)}
-            />
-            我确认同一批内容已就位并核验，愿意承担核验责任（写入审计）
-          </label>
-        </Field>
+        <FormField hint="勾选表示你已确认同一批内容已迁移/复制到新位置并核验，旧相对路径将继续有效。">
+          <Checkbox
+            label="我确认同一批内容已就位并核验，愿意承担核验责任（写入审计）"
+            checked={confirmRelocate}
+            onChange={(_, data) => setConfirmRelocate(!!data.checked)}
+          />
+        </FormField>
       )}
       {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
     </DialogWrap>
