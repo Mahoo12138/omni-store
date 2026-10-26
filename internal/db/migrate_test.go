@@ -61,6 +61,44 @@ func TestOpenAppliesInitialAndFileExperienceMigrations(t *testing.T) {
 	}
 }
 
+func TestFreshDatabaseHasThemePreferenceColumn(t *testing.T) {
+	conn, err := Open(filepath.Join(t.TempDir(), "omnistore.db"))
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer conn.Close()
+
+	rows, err := conn.Query(`PRAGMA table_info(user_preferences)`)
+	if err != nil {
+		t.Fatalf("pragma table_info: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid, notNull, pk int
+			name, ctype      string
+			dflt             any
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			t.Fatalf("scan column row: %v", err)
+		}
+		if name != "theme" {
+			continue
+		}
+		if notNull != 1 {
+			t.Fatal("user_preferences.theme must be NOT NULL")
+		}
+		if got, _ := dflt.(string); got != "'system'" {
+			t.Fatalf("user_preferences.theme default=%v, want 'system'", dflt)
+		}
+		return
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate columns: %v", err)
+	}
+	t.Fatal("fresh database is missing the user_preferences.theme column")
+}
+
 func TestMigrateNeverReplaysAppliedVersion(t *testing.T) {
 	conn, err := Open(filepath.Join(t.TempDir(), "omnistore.db"))
 	if err != nil {

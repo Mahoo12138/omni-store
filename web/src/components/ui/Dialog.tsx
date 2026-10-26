@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from '@fluentui/react-components'
 import { useStyles } from './Dialog.styles'
+import { layout } from '../../styles/layout'
 
 // Fluent Dialog 内核:开合/portal/焦点圈/滚动锁/嵌套层级全部交给 Fluent。
 // DialogWrap 的 props API 保持不变,调用方零改动。
@@ -17,7 +18,7 @@ import { useStyles } from './Dialog.styles'
 // - Escape 让位:弹窗内 Fluent Dropdown/Menu 浮层打开时,Esc 只关浮层不关弹窗。
 
 const DialogDepthContext = createContext(0)
-const DIALOG_BASE_Z_INDEX = 40
+const DIALOG_BASE_Z_INDEX = layout.zIndexDialog
 
 // 背景隔离计数(Fluent 的 tabster 隔离是异步的,弹窗打开后约几百毫秒才对背景
 // aria-hidden;页面级 role 查询会在窗口期内撞上背景同名元素)。这里在打开的
@@ -103,8 +104,8 @@ export function DialogWrap({
             } as object
           }
           style={{
-            width: `min(${wide ? 640 : 480}px, calc(100vw - 32px))`,
-            maxWidth: 'calc(100vw - 32px)',
+            width: `min(${wide ? layout.dialogWideWidthPx : layout.dialogWidthPx}px, calc(100vw - ${layout.viewportInsetPx}px))`,
+            maxWidth: `calc(100vw - ${layout.viewportInsetPx}px)`,
             zIndex: DIALOG_BASE_Z_INDEX + layerOffset + 1,
           }}
         >

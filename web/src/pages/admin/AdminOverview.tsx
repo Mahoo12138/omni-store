@@ -64,6 +64,7 @@ import {
   type S3Credential,
 } from '../../api/s3'
 import { fetchMySources } from '../../api/sources'
+import { Radio, RadioGroup } from '@fluentui/react-components'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
@@ -90,8 +91,11 @@ import {
 } from '../../components/ui/Icon'
 import { AdminLayout } from './AdminLayout'
 import { PageHeader } from '../../components/shell/PageHeader'
+import { THEME_OPTIONS, THEME_PREFERENCES_LABEL } from '../../components/theme/themeOptions'
 import { SiteSettingsSection } from './SiteSettings'
 import { formatBytes, formatDate } from '../../utils/format'
+import { isThemeMode } from '../../utils/themeMode'
+import { setThemeMode, useTheme } from '../../utils/useTheme'
 import { auditActionLabel, auditActorLabel, auditEntryLabel } from '../../utils/audit'
 import { useStyles } from './AdminOverview.styles'
 
@@ -1154,14 +1158,30 @@ function S3CredentialManager() {
 
 function PreferencesSection() {
   const css = useStyles()
+  const { mode } = useTheme()
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
         <h2 className={css.sectionTitle}>偏好设置</h2>
-        <p className={css.sectionHint}>个性化设置（语言、主题、列表密度等）。即将开放。</p>
+        <p className={css.sectionHint}>个性化设置（语言、列表密度等）仍在规划中，当前可配置外观主题。</p>
       </div>
       <div className={css.sectionBody}>
-        <span className={css.kvLabel}>暂无可配置项。</span>
+        <RadioGroup
+          aria-label={THEME_PREFERENCES_LABEL}
+          layout="horizontal"
+          value={mode}
+          onChange={(_, data) => {
+            if (isThemeMode(data.value)) setThemeMode(data.value)
+          }}
+        >
+          {THEME_OPTIONS.map((option) => (
+            // Radio 的主槽是隐藏 <input>(空元素),文案必须走 label 槽而不是 children。
+            <Radio key={option.value} value={option.value} label={{ children: option.label }} />
+          ))}
+        </RadioGroup>
+        <span className={css.kvLabel}>
+          跟随系统时随操作系统深浅自动切换；手动档位立即生效，并在登录后同步到账号，换设备后仍然保持。
+        </span>
       </div>
     </section>
   )

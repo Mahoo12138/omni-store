@@ -1,4 +1,7 @@
 import type { CSSProperties, FC } from 'react'
+import { tokens } from '@fluentui/react-components'
+import { entryTiles, isImageName, pickThemeColor, resolveFileTypeTile } from '../../styles/fileTypes'
+import { useTheme } from '../../utils/useTheme'
 import {
   AddRegular,
   ArrowClockwiseRegular,
@@ -13,6 +16,7 @@ import {
   CloudRegular,
   CopyRegular,
   CutRegular,
+  DarkThemeRegular,
   DeleteRegular,
   DismissRegular,
   DocumentRegular,
@@ -41,7 +45,9 @@ import {
   SettingsRegular,
   ShieldRegular,
   SignOutRegular,
-  StarRegular
+  StarRegular,
+  WeatherMoonRegular,
+  WeatherSunnyRegular
 } from '@fluentui/react-icons'
 
 // 统一图标系统：通用图标改为 @fluentui/react-icons 的 shim（保持 IconXxx 命名、
@@ -101,51 +107,37 @@ export const IconServer = shim(ServerRegular)
 export const IconSettings = shim(SettingsRegular)
 export const IconShield = shim(ShieldRegular)
 export const IconStar = shim(StarRegular)
+// 外观三档：跟随系统用 Fluent 的半明半暗图标，浅色/深色用晴与月。
+export const IconThemeAuto = shim(DarkThemeRegular)
+export const IconThemeDark = shim(WeatherMoonRegular)
+export const IconThemeLight = shim(WeatherSunnyRegular)
 export const IconTrash = shim(DeleteRegular)
 export const IconUpload = shim(ArrowUploadRegular)
 export const IconUser = shim(PersonRegular)
 export const IconUserPlus = shim(PersonAddRegular)
 
 // OmniStore 品牌标：立方体箱子里的六边形核心（对应设计稿的蓝色方块 logo）。
+// 底色与描边写死品牌对，不跟随容器的 currentColor —— 深色下容器文字是白色，
+// 依赖 currentColor 会把方块染成白色、白色描边随之消失。
 export function LogoMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <rect width="28" height="28" rx="7" fill="currentColor" />
+      <rect width="28" height="28" rx="7" fill={tokens.colorBrandBackground} />
       <path
         d="M14 6.8l6 3.4v7.6l-6 3.4-6-3.4v-7.6l6-3.4Z"
-        stroke="white"
+        stroke={tokens.colorNeutralForegroundOnBrand}
         strokeWidth="1.7"
         strokeLinejoin="round"
       />
-      <path d="M8.3 10.5L14 13.7l5.7-3.2M14 13.7V21" stroke="white" strokeWidth="1.7" strokeLinejoin="round" />
+      <path
+        d="M8.3 10.5L14 13.7l5.7-3.2M14 13.7V21"
+        stroke={tokens.colorNeutralForegroundOnBrand}
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
-
-// 文件类型 → 玻夫与颜色（对应设计稿的彩色文件图标）。
-const fileTypeMap: Record<string, { label: string; color: string }> = {
-  pdf: { label: 'P', color: 'oklch(0.55 0.19 27)' },
-  doc: { label: 'W', color: 'oklch(0.55 0.2 262)' },
-  docx: { label: 'W', color: 'oklch(0.55 0.2 262)' },
-  xls: { label: 'X', color: 'oklch(0.52 0.14 150)' },
-  xlsx: { label: 'X', color: 'oklch(0.52 0.14 150)' },
-  csv: { label: 'X', color: 'oklch(0.52 0.14 150)' },
-  ppt: { label: 'P', color: 'oklch(0.6 0.15 55)' },
-  pptx: { label: 'P', color: 'oklch(0.6 0.15 55)' },
-  zip: { label: 'Z', color: 'oklch(0.53 0.17 300)' },
-  rar: { label: 'Z', color: 'oklch(0.53 0.17 300)' },
-  '7z': { label: 'Z', color: 'oklch(0.53 0.17 300)' },
-  gz: { label: 'Z', color: 'oklch(0.53 0.17 300)' },
-  mp4: { label: '▶', color: 'oklch(0.52 0.11 210)' },
-  mkv: { label: '▶', color: 'oklch(0.52 0.11 210)' },
-  mov: { label: '▶', color: 'oklch(0.52 0.11 210)' },
-  mp3: { label: '♪', color: 'oklch(0.52 0.11 210)' },
-  flac: { label: '♪', color: 'oklch(0.52 0.11 210)' },
-  txt: { label: 'T', color: 'oklch(0.5 0.02 262)' },
-  md: { label: 'M', color: 'oklch(0.5 0.02 262)' },
-}
-
-const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'])
 
 const tileStyle = (size: number): CSSProperties => ({
   width: size,
@@ -157,51 +149,73 @@ const tileStyle = (size: number): CSSProperties => ({
   flexShrink: 0,
 })
 
-// 文件/目录图标（文件表格名称列使用）。
+// 文件/目录图标（文件表格名称列使用）。砖色与深浅两档见 styles/fileTypes.ts，
+// 这里只负责按当前解析出的主题取色：inline style 走运行时，不受 AOT 字面量约束。
 export function EntryIcon({ name, type, size = 26 }: { name: string; type: string; size?: number }) {
+  const { resolved } = useTheme()
+
   if (type === 'dir') {
     return (
-      <span style={{ ...tileStyle(size), color: 'oklch(0.72 0.13 75)' }}>
+      <span style={{ ...tileStyle(size), color: pickThemeColor(entryTiles.dir.fg, resolved) }}>
         <IconFolderFilled size={size * 0.85} />
       </span>
     )
   }
   if (type === 'unsupported') {
+    const link = entryTiles.link
     return (
       <span
-        style={{ ...tileStyle(size), background: 'oklch(0.94 0.005 262)', color: 'oklch(0.5 0.02 262)' }}
+        style={{
+          ...tileStyle(size),
+          background: pickThemeColor(link.bg, resolved),
+          color: pickThemeColor(link.fg, resolved),
+        }}
       >
         <IconLink size={size * 0.55} />
       </span>
     )
   }
 
-  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
-  if (imageExts.has(ext)) {
-    return (
-      <span style={{ ...tileStyle(size), background: 'oklch(0.94 0.05 200)', color: 'oklch(0.52 0.11 210)' }}>
-        <IconImage size={size * 0.6} />
-      </span>
-    )
-  }
-  const meta = fileTypeMap[ext]
-  if (meta) {
+  if (isImageName(name)) {
+    const image = entryTiles.image
     return (
       <span
         style={{
           ...tileStyle(size),
-          background: meta.color,
-          color: 'white',
+          background: pickThemeColor(image.bg, resolved),
+          color: pickThemeColor(image.fg, resolved),
+        }}
+      >
+        <IconImage size={size * 0.6} />
+      </span>
+    )
+  }
+
+  const tile = resolveFileTypeTile(name, resolved)
+  if (tile) {
+    return (
+      <span
+        style={{
+          ...tileStyle(size),
+          background: tile.background,
+          color: tile.color,
           fontSize: size * 0.46,
           fontWeight: 700,
         }}
       >
-        {meta.label}
+        {tile.label}
       </span>
     )
   }
+  const file = entryTiles.file
   return (
-    <span style={{ ...tileStyle(size), background: 'oklch(0.94 0.005 262)', color: 'oklch(0.5 0.02 262)' }}>
+    <span
+      style={{
+        ...tileStyle(size),
+        background: pickThemeColor(file.bg, resolved),
+        color: pickThemeColor(file.fg, resolved),
+      }}
+    >
       <IconFile size={size * 0.6} />
     </span>
   )

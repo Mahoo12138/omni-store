@@ -27,7 +27,7 @@ export function Field({ label, htmlFor, required, hint, error, className, childr
       <Label className={css.label} htmlFor={controlId} weight="regular">
         {label}
         {required && (
-          <span style={{ color: 'var(--danger, #d04040)', marginLeft: 4 }} aria-hidden="true">
+          <span style={{ color: 'var(--danger, var(--colorPaletteRedForeground1))', marginLeft: 4 }} aria-hidden="true">
             *
           </span>
         )}

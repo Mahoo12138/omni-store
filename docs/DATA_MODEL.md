@@ -78,7 +78,18 @@ public_mount_redirects
 user_preferences.default_image_bed_storage_source_id
 ```
 
-如果 `user_preferences` 没有其他有效字段，可以整体删除。
+`user_preferences` 保留为账号级偏好表，2.0 只有一个有效字段：
+
+```sql
+CREATE TABLE user_preferences (
+  user_id INTEGER PRIMARY KEY,
+  theme TEXT NOT NULL DEFAULT 'system' CHECK(theme IN ('light', 'dark', 'system')),
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+```
+
+`theme` 由 `GET/PATCH /api/v1/me/preferences` 读写；1.1.x 升级上来的账号没有该列，迁移后落到默认值 `system`，账号删除时偏好行一并删除。
 
 ## 4. images
 

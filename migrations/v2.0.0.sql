@@ -6,7 +6,7 @@
 -- 2. site_capability_bindings 收敛为三项 Site Capability；静态 HTTP 不再是全站单例能力。
 -- 3. 新增 source_static_access / source_static_origins：每个存储源独立的匿名只读发布。
 -- 4. 新增 managed_root_registrations（.omnistore/ 托管根所有权登记）。
--- 5. 删除 public_mount_redirects；user_preferences 移除图床 Source 偏好。
+-- 5. 删除 public_mount_redirects；user_preferences 移除图床 Source 偏好，新增外观偏好 theme。
 -- 6. 新增文件流转中心台账：发送任务、收集任务、访客身份、访问会话与下载名额声明。
 --
 -- 旧公开挂载与图床 Source 选择按以下规则收敛到新的 Site 绑定：
@@ -117,9 +117,11 @@ ALTER TABLE storage_sources_v2 RENAME TO storage_sources;
 
 CREATE INDEX idx_site_capability_source ON site_capability_bindings(storage_source_id);
 
--- 6. 删除用户图床 Source 偏好（2.0 全站单绑定，用户不再选择源）。
+-- 6. 删除用户图床 Source 偏好（2.0 全站单绑定，用户不再选择源），
+--    改为保存界面外观偏好 theme（light/dark/system）。
 CREATE TABLE user_preferences_v2 (
   user_id INTEGER PRIMARY KEY,
+  theme TEXT NOT NULL DEFAULT 'system' CHECK(theme IN ('light', 'dark', 'system')),
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );

@@ -4,7 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="OmniStore 是一个轻量、自托管的文件与图床管理中心。" />
-    <meta name="theme-color" content="#ffffff" />
+    <!-- 双色 theme-color：默认由操作系统决定；用户手动选档时由 utils/themeMode 改写 media，
+         让所选档位优先于系统偏好。底色取 Fluent 的 colorNeutralBackground1 两档实测值。 -->
+    <meta name="theme-color" data-theme="light" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" data-theme="dark" media="(prefers-color-scheme: dark)" content="#292929" />
+    <script>
+      // 防闪白：React 挂载前先按本地档位 + 系统偏好写好 documentElement[data-theme]，
+      // global.css 据此切换 color-scheme 与画布底色。
+      // 存储键与 prefers-color-scheme 串必须与 src/utils/themeMode.ts 保持一致。
+      (function () {
+        var mode = 'system'
+        try {
+          var stored = window.localStorage.getItem('omnistore:theme-mode')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') mode = stored
+        } catch (error) {
+          // 隐私模式下读不到存储，按跟随系统处理。
+        }
+        var dark =
+          mode === 'dark' ||
+          (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>OmniStore</title>
   </head>

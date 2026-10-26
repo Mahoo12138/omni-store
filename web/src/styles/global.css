@@ -1,9 +1,48 @@
 /* 全局基础样式（普通 CSS，颜色/字体/焦点环取 Fluent 主题变量） */
 
+/*
+ * 画布与恒深底遮罩基元。
+ *
+ * FluentProvider 把主题变量写在它自己的子树上（.fui-FluentProvider.<id>），
+ * html/body 作为祖先取不到 —— 所以页面画布底色与 color-scheme 必须在这里按
+ * documentElement[data-theme] 决定。data-theme 由 index.html 的防闪白脚本先写、
+ * 由 utils/themeMode 在挂载后校正。取值与 webLightTheme / webDarkTheme 的实测值对齐：
+ * colorNeutralBackground1 = #ffffff / #292929，colorNeutralBackground2 = #fafafa / #1f1f1f。
+ *
+ * scrim / onScrim / chrome / chromeStrong / surfaceDark / codeSurface 是「恒深底」一族：
+ * 它们画在暗色遮罩或暗底代码块上，深浅主题下都必须保持白字深底，因此不接 [data-theme] 反转。
+ * 消费方：preview.css（预览层遮罩与工具条）、分享页与图床缩略图的说明条。
+ */
+:root {
+  color-scheme: light;
+  --omnistore-canvas: #ffffff;
+  --omnistore-canvas-sunken: #fafafa;
+  --omnistore-scrim: oklch(0.2 0.03 258 / 0.72);
+  --omnistore-on-scrim: oklch(0.99 0 0);
+  --omnistore-chrome: oklch(1 0 0 / 0.14);
+  --omnistore-chrome-strong: oklch(1 0 0 / 0.26);
+  --omnistore-surface-dark: oklch(0.18 0.02 258);
+  --omnistore-code-surface: oklch(0.24 0.03 258);
+  --omnistore-code-on-surface: oklch(0.93 0.01 258);
+  /* 预览弹层的堆叠层：与 styles/layout.ts 的 dialogBaseZIndex 同档（互斥出现，不比较大小）。 */
+  --omnistore-z-preview: 40;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --omnistore-canvas: #292929;
+  --omnistore-canvas-sunken: #1f1f1f;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  background-color: var(--omnistore-canvas-sunken);
+  scroll-behavior: smooth;
 }
 
 body {
@@ -11,14 +50,10 @@ body {
   font-family: var(--fontFamilyBase);
   font-size: 14px;
   color: var(--colorNeutralForeground1);
-  background-color: var(--colorNeutralBackground2);
+  background-color: var(--omnistore-canvas-sunken);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-width: 320px;
-}
-
-html {
-  scroll-behavior: smooth;
 }
 
 button,

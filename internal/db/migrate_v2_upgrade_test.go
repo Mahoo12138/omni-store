@@ -162,6 +162,14 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 	if prefColumns["default_image_bed_storage_source_id"] {
 		t.Fatal("user_preferences still has image bed source preference")
 	}
+	// 1.1.x 存量用户没有主题列，升级后必须落到默认值 system。
+	if !prefColumns["theme"] {
+		t.Fatal("user_preferences is missing the theme column")
+	}
+	var upgradedTheme string
+	if err := conn.QueryRowContext(ctx, `SELECT theme FROM user_preferences WHERE user_id = 1`).Scan(&upgradedTheme); err != nil || upgradedTheme != "system" {
+		t.Fatalf("upgraded user theme=%q err=%v, want system", upgradedTheme, err)
+	}
 
 	// 旧表删除、数据保全。
 	var count int

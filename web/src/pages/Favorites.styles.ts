@@ -57,8 +57,8 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   'justifyContent': 'center',
-  'color': 'oklch(0.6 0.13 70)',
-  'background': 'oklch(0.95 0.05 80)',
+  'color': 'var(--colorPaletteDarkOrangeForeground1)',
+  'background': 'var(--colorPaletteDarkOrangeBackground1)',
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   },
   identity: {

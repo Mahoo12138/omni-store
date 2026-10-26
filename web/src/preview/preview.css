@@ -1,13 +1,36 @@
 /* 统一预览层样式(1.2.0):文件管理器弹层与分享页内嵌共用同一套渲染器。
    由 Preview.css.ts(vanilla-extract)一次性转换为普通 CSS;
-   类名常量见 Preview.classes.ts,颜色/字体随 Fluent 主题变量。 */
+   类名常量见 Preview.classes.ts。
+
+   深浅策略(2.0 Stage 6):
+   - 遮罩与工具条(--pv-scrim / --pv-onScrim / --pv-chrome / --pv-surface)是 **always-dark surface**,
+     不接全局主题反转:它们画在半透明黑遮罩上,深色主题下若跟随 token 会变成白字压白底。
+     字面色集中在 global.css 的 :root,这里只起局部别名。
+   - 内容面板(文本/代码/Markdown/图片底)继续跟随 Fluent 主题变量,深浅两套自动切换;
+     prism 语法色改用 colorPalette*Foreground 一族(实测 light/dark 两套都有值),
+     不再用按白底调的 oklch 字面量。 */
+
+/* 恒深底一族的局部别名。
+   声明在 :root 而不是弹层根:分享页的内嵌预览(PublicShare.embedPreview)不在
+   .omnistore-preview-overlay 子树内,挂在弹层根上会取不到变量。
+   命名仍属 preview 私有 —— 值恒深、不随 [data-theme] 反转,只有本文件消费。 */
+:root {
+  --pv-scrim: var(--omnistore-scrim);
+  --pv-onScrim: var(--omnistore-on-scrim);
+  --pv-chrome: var(--omnistore-chrome);
+  --pv-chromeStrong: var(--omnistore-chrome-strong);
+  --pv-surface: var(--omnistore-surface-dark);
+  --pv-codeSurface: var(--omnistore-code-surface);
+  --pv-codeOnSurface: var(--omnistore-code-on-surface);
+  --pv-zIndex: var(--omnistore-z-preview);
+}
 
 /* overlay */
 .omnistore-preview-overlay {
   position: fixed;
   inset: 0px;
-  z-index: 40;
-  background: oklch(0.2 0.03 258 / 0.72);
+  z-index: var(--pv-zIndex);
+  background: var(--pv-scrim);
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(4px);
@@ -19,7 +42,7 @@
   align-items: center;
   gap: 16px;
   padding: 8px 16px;
-  color: var(--colorNeutralForegroundOnBrand);
+  color: var(--pv-onScrim);
   flex-wrap: wrap;
 }
 
@@ -52,7 +75,7 @@
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--colorNeutralForegroundOnBrand);
+  color: var(--pv-onScrim);
   border-radius: var(--borderRadiusSmall);
   padding: 8px;
   display: inline-flex;
@@ -62,10 +85,10 @@
   font-size: 13px;
   text-decoration: none;
   :hover {
-    background: oklch(1 0 0 / 0.14);
+    background: var(--pv-chrome);
   }
   :focus-visible {
-    outline: 2px solid var(--colorNeutralForegroundOnBrand);
+    outline: 2px solid var(--pv-onScrim);
     outline-offset: 2px;
   }
   :disabled {
@@ -145,7 +168,7 @@
   max-width: min(920px, 100%);
   width: 100%;
   border-radius: var(--borderRadiusMedium);
-  background: oklch(0.18 0.02 258);
+  background: var(--pv-surface);
   box-shadow: var(--shadow16);
   :focus-visible {
     outline: 2px solid var(--colorBrandBackground);
@@ -213,8 +236,8 @@
   width: 64px;
   height: 64px;
   border-radius: var(--borderRadiusMedium);
-  background: oklch(0.94 0.045 262);
-  color: oklch(0.55 0.2 262);
+  background: var(--colorBrandBackground2);
+  color: var(--colorBrandForeground1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -240,7 +263,7 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  color: var(--colorNeutralForegroundOnBrand);
+  color: var(--pv-onScrim);
   font-size: 13px;
 }
 
@@ -249,8 +272,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 3px solid oklch(1 0 0 / 0.25);
-  border-top-color: var(--colorNeutralForegroundOnBrand);
+  border: 3px solid var(--pv-chromeStrong);
+  border-top-color: var(--pv-onScrim);
   animation: omnistore-preview-spin 0.9s linear infinite;
 }
 
@@ -258,8 +281,8 @@
 .omnistore-preview-retryBtn {
   appearance: none;
   border: none;
-  background: oklch(1 0 0 / 0.16);
-  color: var(--colorNeutralForegroundOnBrand);
+  background: var(--pv-chrome);
+  color: var(--pv-onScrim);
   border-radius: var(--borderRadiusSmall);
   padding: 4px 16px;
   cursor: pointer;
@@ -268,10 +291,10 @@
   align-items: center;
   gap: 4px;
   :hover {
-    background: oklch(1 0 0 / 0.26);
+    background: var(--pv-chromeStrong);
   }
   :focus-visible {
-    outline: 2px solid var(--colorNeutralForegroundOnBrand);
+    outline: 2px solid var(--pv-onScrim);
     outline-offset: 2px;
   }
 }
@@ -281,7 +304,7 @@
   appearance: none;
   border: none;
   background: var(--colorBrandBackground);
-  color: var(--colorNeutralForegroundOnBrand);
+  color: var(--pv-onScrim);
   border-radius: var(--borderRadiusSmall);
   padding: 8px 16px;
   cursor: pointer;
@@ -311,10 +334,10 @@
   border-radius: var(--borderRadiusSmall);
   display: inline-flex;
   :hover {
-    background: oklch(1 0 0 / 0.14);
+    background: var(--pv-chrome);
   }
   :focus-visible {
-    outline: 2px solid var(--colorNeutralForegroundOnBrand);
+    outline: 2px solid var(--pv-onScrim);
     outline-offset: 2px;
   }
   :disabled {
@@ -395,9 +418,9 @@
   bottom: 0px;
   padding: 40px 4px 4px;
   font-size: 12px;
-  color: #fff;
+  color: var(--pv-onScrim);
   text-align: left;
-  background: linear-gradient(transparent, oklch(0.2 0.03 258 / 0.7));
+  background: linear-gradient(transparent, var(--pv-scrim));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -431,7 +454,7 @@
 }
 
 .omnistore-prism .token.comment, .omnistore-prism .token.prolog, .omnistore-prism .token.doctype, .omnistore-prism .token.cdata {
-  color: oklch(0.52 0.02 258);
+  color: var(--colorNeutralForeground3);
   font-style: italic;
 }
 
@@ -440,32 +463,32 @@
 }
 
 .omnistore-prism .token.string, .omnistore-prism .token.char, .omnistore-prism .token.attr-value, .omnistore-prism .token.inserted {
-  color: oklch(0.5 0.12 150);
+  color: var(--colorPaletteGreenForeground1);
 }
 
 .omnistore-prism .token.boolean, .omnistore-prism .token.number, .omnistore-prism .token.constant {
-  color: oklch(0.55 0.12 60);
+  color: var(--colorPaletteDarkOrangeForeground1);
 }
 
 .omnistore-prism .token.keyword, .omnistore-prism .token.atrule {
-  color: oklch(0.45 0.19 275);
+  color: var(--colorPalettePurpleForeground2);
 }
 
 .omnistore-prism .token.function, .omnistore-prism .token.class-name {
-  color: oklch(0.45 0.11 210);
+  color: var(--colorPaletteTealForeground2);
 }
 
 .omnistore-prism .token.tag, .omnistore-prism .token.deleted {
-  color: oklch(0.5 0.18 27);
+  color: var(--colorPaletteRedForeground1);
 }
 
 .omnistore-prism .token.operator, .omnistore-prism .token.entity, .omnistore-prism .token.url {
-  color: oklch(0.42 0.09 257);
+  color: var(--colorNeutralForeground2);
   background: transparent;
 }
 
 .omnistore-prism .token.attr-name, .omnistore-prism .token.selector {
-  color: oklch(0.45 0.19 275);
+  color: var(--colorPalettePurpleForeground2);
 }
 
 .omnistore-markdown h1, .omnistore-markdown h2, .omnistore-markdown h3, .omnistore-markdown h4, .omnistore-markdown h5, .omnistore-markdown h6 {
@@ -516,8 +539,8 @@
 }
 
 .omnistore-markdown pre {
-  background: oklch(0.24 0.03 258);
-  color: oklch(0.93 0.01 258);
+  background: var(--pv-codeSurface);
+  color: var(--pv-codeOnSurface);
   border-radius: var(--borderRadiusMedium);
   padding: 16px;
   overflow: auto;

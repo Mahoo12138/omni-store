@@ -14,7 +14,7 @@ export const useStyles = makeStyles({
   'placeItems': 'center',
   ...shorthands.border(`2px dashed var(--colorBrandBackground)`),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'backgroundColor': 'oklch(0.955 0.025 257 / 0.88)',
+  'backgroundColor': 'color-mix(in oklab, var(--colorBrandBackground2) 88%, transparent)',
   'pointerEvents': 'none',
   },
   'dropOverlayCard': {
@@ -402,7 +402,7 @@ export const useStyles = makeStyles({
   'flexWrap': 'wrap',
   ...shorthands.gap('8px'),
   ...shorthands.padding('8px', '16px'),
-  'backgroundColor': 'oklch(1 0 0 / 0.7)',
+  'backgroundColor': 'color-mix(in oklab, var(--colorNeutralBackground1) 70%, transparent)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   [media.sm]: {
@@ -799,7 +799,7 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   'justifyContent': 'center',
-  'color': 'oklch(0.75 0.12 230)',
+  'color': 'color-mix(in oklab, var(--colorBrandForeground1) 55%, var(--colorNeutralBackground1))',
   'marginBottom': '24px',
   'animation': 'omnistore-float 4s ease-in-out infinite',
   },
@@ -836,7 +836,7 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   'justifyContent': 'center',
-  'color': 'oklch(0.75 0.12 230)',
+  'color': 'color-mix(in oklab, var(--colorBrandForeground1) 55%, var(--colorNeutralBackground1))',
   ...shorthands.margin('0', 'auto'),
   },
   'emptySideName': {
@@ -889,5 +889,30 @@ export const useStyles = makeStyles({
   '&:hover': {
     'backgroundColor': 'var(--colorBrandBackground2)',
   },
+  },
+
+  // 空状态插画配色(行内 SVG 的形状类)。原本是一组按白底调好的 oklch 字面量,
+  // 深色下会变成白板黑字;改成主题中性阶:bg1 是纸面、bg3 是纸面下的细节
+  // (两套主题里都保持"纸比细节亮"的次序),描边与投影走 stroke1/stroke2。
+  'illShadow': {
+    'fill': 'var(--colorNeutralStroke2)',
+  },
+  'illPaper': {
+    'fill': 'var(--colorNeutralBackground1)',
+    'stroke': 'var(--colorNeutralStroke1)',
+  },
+  'illDetail': {
+    'fill': 'var(--colorNeutralBackground3)',
+  },
+  'illBadge': {
+    'fill': 'var(--colorNeutralBackground1)',
+    'stroke': 'var(--colorNeutralStroke1)',
+  },
+  'illCurve': {
+    'stroke': 'var(--colorNeutralStroke1)',
+    'fill': 'none',
+  },
+  'illGlyph': {
+    'fill': 'var(--colorBrandForeground1)',
   },
 })

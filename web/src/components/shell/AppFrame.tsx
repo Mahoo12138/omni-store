@@ -6,6 +6,10 @@ import {
   Avatar,
   Button,
   Menu as FluentMenu,
+  MenuDivider,
+  MenuGroup,
+  MenuGroupHeader,
+  MenuItemRadio,
   MenuList,
   MenuPopover,
   MenuTrigger,
@@ -14,6 +18,9 @@ import {
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
 import { SearchDialog, openSearchDialog } from '../search/SearchDialog'
+import { THEME_MENU_GROUP_LABEL, THEME_MENU_RADIO_NAME, THEME_OPTIONS } from '../theme/themeOptions'
+import { isThemeMode } from '../../utils/themeMode'
+import { setThemeMode, useTheme } from '../../utils/useTheme'
 import {
   IconChevronDown,
   IconCloud,
@@ -157,17 +164,32 @@ function AppFrameLoading() {
 function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
   const css = useAppFrameStyles()
   const navigate = useNavigate()
+  const { mode } = useTheme()
 
   const items: MenuOption[] = [
     { id: 'settings', label: '设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }) },
     { id: 'image-bed', label: '图床', icon: <IconImage size={16} />, onSelect: () => navigate({ to: '/app/image-bed' }) },
     { id: 'about', label: '使用帮助', icon: <IconQuestion size={16} />, onSelect: () => navigate({ to: '/about' }) },
-    { id: 'logout', label: '退出登录', icon: <IconLogout size={16} />, danger: true, onSelect: onLogout },
   ]
+  const logoutItem: MenuOption = {
+    id: 'logout',
+    label: '退出登录',
+    icon: <IconLogout size={16} />,
+    danger: true,
+    onSelect: onLogout,
+  }
 
   return (
     <div className={css.userArea}>
-      <FluentMenu>
+      <FluentMenu
+        checkedValues={{ [THEME_MENU_RADIO_NAME]: [mode] }}
+        hasCheckmarks
+        hasIcons
+        onCheckedValueChange={(_, data) => {
+          const [next] = data.checkedItems
+          if (isThemeMode(next)) setThemeMode(next)
+        }}
+      >
         <MenuTrigger>
           <Button
             appearance="subtle"
@@ -187,6 +209,21 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
             {items.map((item) => (
               <ItemView key={item.id} item={item} />
             ))}
+            <MenuGroup>
+              <MenuGroupHeader>{THEME_MENU_GROUP_LABEL}</MenuGroupHeader>
+              {THEME_OPTIONS.map((option) => (
+                <MenuItemRadio
+                  key={option.value}
+                  name={THEME_MENU_RADIO_NAME}
+                  value={option.value}
+                  icon={<option.icon size={16} />}
+                >
+                  {option.label}
+                </MenuItemRadio>
+              ))}
+            </MenuGroup>
+            <MenuDivider />
+            <ItemView item={logoutItem} />
           </MenuList>
         </MenuPopover>
       </FluentMenu>

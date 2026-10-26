@@ -18,12 +18,19 @@ export const layout = {
   readingMaxWidth: '68ch',
   stateMinHeight: '270px',
 
-  // 弹层
-  dialogWidth: '480px',
-  dialogWideWidth: '640px',
-  toastMaxWidth: '420px',
-  toastOffset: '24px',
+  // 弹层。数值用 px 结尾的数字形式：同一常量既喂 CSS（`${x}px`），
+  // 也喂 Fluent 组件的数值 props（如 Toaster 的 offset），只有一处事实。
+  dialogWidthPx: 480,
+  dialogWideWidthPx: 640,
+  toastMaxWidthPx: 420,
+  toastOffsetPx: 24,
+  toastGapPx: 8,
+  // 浮层与视口边缘的最小留白（窄屏上弹窗/任务卡不得贴边）。
+  viewportInsetPx: 32,
 
   // 堆叠层级(仅外壳与浮层允许,其余页面写 zIndex 说明堆叠模型已被破坏)
+  // 预览弹层的 40 在 global.css 的 --omnistore-z-preview（plain CSS 读不到本文件）。
   zIndexSidebar: 20,
+  zIndexDialog: 40,
+  zIndexTaskLayer: 50,
 }

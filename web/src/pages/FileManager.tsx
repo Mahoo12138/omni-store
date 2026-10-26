@@ -66,6 +66,8 @@ import {
   IconUpload,
 } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
+import { entryTiles, pickThemeColor } from '../styles/fileTypes'
+import { useTheme } from '../utils/useTheme'
 import { resolvePreview } from '../preview/resolver'
 import { PreviewModal } from '../preview/PreviewModal'
 import type { PreviewItem } from '../preview/PreviewContent'
@@ -1928,6 +1930,7 @@ function GridView({
   contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
   const css = useStyles()
+  const { resolved } = useTheme()
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
   if (loading) {
     return <div style={{ padding: 32, textAlign: 'center', color: 'var(--colorNeutralForeground2)' }}>加载中…</div>
@@ -1997,7 +2000,9 @@ function GridView({
             onClick={() => e.type === 'dir' && onOpenDir(e.name)}
           >
             {/* 通过名称展示类型图标 */}
-            {e.type === 'dir' ? <IconCloud size={48} style={{ color: 'oklch(0.72 0.13 75)' }} /> : (
+            {e.type === 'dir' ? (
+              <IconCloud size={48} style={{ color: pickThemeColor(entryTiles.dir.fg, resolved) }} />
+            ) : (
               <EntryIcon name={e.name} type={e.type} />
             )}
           </div>
@@ -2647,34 +2652,36 @@ function pageRange(current: number, total: number): (number | '…')[] {
   return [1, '…', current - 1, current, current + 1, '…', total]
 }
 
-// --- 空状态插画（行内 SVG，避免外部依赖） ---
+// --- 空状态插画（行内 SVG，避免外部依赖；配色类见 FileManager.styles 的 ill* 一族） ---
 
 function NoSourceIllustration() {
+  const css = useStyles()
   return (
     <svg width="180" height="180" viewBox="0 0 180 180" fill="none" aria-hidden="true">
-      <ellipse cx="90" cy="156" rx="58" ry="6" fill="oklch(0.92 0.01 240)" />
-      <rect x="56" y="56" width="68" height="80" rx="6" fill="oklch(0.95 0.04 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
-      <rect x="56" y="56" width="68" height="14" rx="6" fill="oklch(0.88 0.08 230)" />
-      <rect x="68" y="84" width="44" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <rect x="68" y="98" width="36" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <rect x="68" y="112" width="28" height="6" rx="3" fill="oklch(0.86 0.06 230)" />
-      <circle cx="120" cy="50" r="16" fill="oklch(0.93 0.06 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="2" />
-      <text x="120" y="56" textAnchor="middle" fontSize="20" fontWeight="700" fill="oklch(0.55 0.15 230)">?</text>
-      <path d="M30 110 q-12 -8 -4 -20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M150 110 q12 -8 4 -20" stroke="oklch(0.85 0.06 230)" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <ellipse className={css.illShadow} cx="90" cy="156" rx="58" ry="6" />
+      <rect className={css.illPaper} x="56" y="56" width="68" height="80" rx="6" strokeWidth="2" />
+      <rect className={css.illDetail} x="56" y="56" width="68" height="14" rx="6" />
+      <rect className={css.illDetail} x="68" y="84" width="44" height="6" rx="3" />
+      <rect className={css.illDetail} x="68" y="98" width="36" height="6" rx="3" />
+      <rect className={css.illDetail} x="68" y="112" width="28" height="6" rx="3" />
+      <circle className={css.illBadge} cx="120" cy="50" r="16" strokeWidth="2" />
+      <text className={css.illGlyph} x="120" y="56" textAnchor="middle" fontSize="20" fontWeight="700">?</text>
+      <path className={css.illCurve} d="M30 110 q-12 -8 -4 -20" strokeWidth="2" strokeLinecap="round" />
+      <path className={css.illCurve} d="M150 110 q12 -8 4 -20" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
 
 function NoSourceSmallIllustration() {
+  const css = useStyles()
   return (
     <svg width="100" height="100" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <ellipse cx="50" cy="86" rx="32" ry="4" fill="oklch(0.92 0.01 240)" />
-      <rect x="28" y="30" width="44" height="46" rx="4" fill="oklch(0.95 0.04 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="1.5" />
-      <rect x="28" y="30" width="44" height="8" rx="4" fill="oklch(0.88 0.08 230)" />
-      <path d="M70 30 l8 -10 l8 10" fill="oklch(0.93 0.06 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="1.5" />
-      <circle cx="80" cy="24" r="8" fill="oklch(0.93 0.06 230)" stroke="oklch(0.75 0.1 230)" strokeWidth="1.5" />
-      <text x="80" y="28" textAnchor="middle" fontSize="12" fontWeight="700" fill="oklch(0.55 0.15 230)">?</text>
+      <ellipse className={css.illShadow} cx="50" cy="86" rx="32" ry="4" />
+      <rect className={css.illPaper} x="28" y="30" width="44" height="46" rx="4" strokeWidth="1.5" />
+      <rect className={css.illDetail} x="28" y="30" width="44" height="8" rx="4" />
+      <path className={css.illBadge} d="M70 30 l8 -10 l8 10" strokeWidth="1.5" />
+      <circle className={css.illBadge} cx="80" cy="24" r="8" strokeWidth="1.5" />
+      <text className={css.illGlyph} x="80" y="28" textAnchor="middle" fontSize="12" fontWeight="700">?</text>
     </svg>
   )
 }

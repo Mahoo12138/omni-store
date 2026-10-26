@@ -383,3 +383,16 @@ OPTIONS /assets/{public_asset_id}/{relative_path...}
 `GET /api/v1/system/status` 无需登录，除原有 `s3`、`webdav`、`file_preview`、`anonymous` 外，返回 `public_drive`、`image_bed`、`transfer_center`。各项均为 `{ enabled, status, hint }`；三个站点服务的 `enabled` 表示当前开关已启用、已绑定且存储源与根目录可用，而不是仅返回数据库开关。`status` 区分未绑定、已关闭、存储源已禁用、目录不可用与已启用；公开响应不包含源身份、真实路径或底层错误。
 
 `anonymous.enabled` 同时依赖匿名上传开关与图床实际可用状态。`transfer_center.enabled` 描述当前绑定用于创建新任务的可用性；已有取件与收集按其自身任务状态、原存储位置、取件码 / 收件码与密码授权访问，不由当前绑定状态推断其是否失效。
+
+## 18. 账号偏好
+
+```http
+GET   /api/v1/me/preferences
+PATCH /api/v1/me/preferences
+```
+
+需要登录 Session；PATCH 与其他写操作一样要求 `X-CSRF-Token`。请求体只接受 `theme`，取值为 `light`、`dark`、`system` 三档，其它值返回 400 `VALIDATION_ERROR`，未知字段同样拒绝。
+
+返回 `data = { theme, updated_at }`。账号从未设置过偏好时 GET 返回 `{ "theme": "system" }` 且 `updated_at` 为空，读操作不建库记录。
+
+偏好是**账号级**外观选择，只覆盖登录用户；匿名访客与冷启动阶段的取值由前端本地存储提供，见 [设计系统](DESIGN_SYSTEM.md) 的主题条款。

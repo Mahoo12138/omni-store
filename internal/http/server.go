@@ -137,6 +137,8 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 
 	// 用户自助
 	mux.HandleFunc("PATCH /api/v1/me/profile", s.requireAuth(s.handleUpdateProfile))
+	mux.HandleFunc("GET /api/v1/me/preferences", s.requireAuth(s.handleMyPreferences))
+	mux.HandleFunc("PATCH /api/v1/me/preferences", s.requireAuth(s.handleUpdatePreferences))
 	mux.HandleFunc("POST /api/v1/me/password", s.requireAuth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/v1/me/activity", s.requireAuth(s.handleMyActivity))
 	mux.HandleFunc("GET /api/v1/me/recent-files", s.requireAuth(s.handleMyRecentFiles))
