@@ -19,10 +19,11 @@ test('anonymous visitor can browse, preview and download the public drive', asyn
   await expect(page.getByRole('row', { name: /guides/ })).toHaveCount(0)
   await filter.clear()
 
-  await page.getByRole('tab', { name: '网格视图' }).click()
-  await expect(page.getByRole('tab', { name: '网格视图' })).toHaveAttribute('aria-selected', 'true')
+  // 视图切换没有 tabpanel，语义是单选组（role=radio / aria-checked），不是标签页。
+  await page.getByRole('radio', { name: '网格视图' }).click()
+  await expect(page.getByRole('radio', { name: '网格视图' })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByTitle('README.txt')).toBeVisible()
-  await page.getByRole('tab', { name: '列表视图' }).click()
+  await page.getByRole('radio', { name: '列表视图' }).click()
 
   await page.getByRole('button', { name: 'guides', exact: true }).click()
   await expect(page).toHaveURL(/\/public\/guides$/)

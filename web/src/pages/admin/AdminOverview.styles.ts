@@ -872,10 +872,6 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'marginBottom': '24px',
   },
-  'sourceConfigTab': {
-  'minHeight': '44px',
-  'fontSize': '14px',
-  },
   'sourceConfigPanel': {
 
   'display': 'flex',

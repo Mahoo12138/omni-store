@@ -24,8 +24,6 @@ import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
 import { transferFilePath, type TransferRecordKind, type TransferWorkspaceSearch } from '../../utils/transfer-workspace'
 import { useStyles } from './TransferWorkspace.styles'
-import { useStyles as useOutlineStyles } from '../ui/Outline.styles'
-import { mergeClasses } from '@fluentui/react-components'
 
 type WorkspaceProps = {
   search: TransferWorkspaceSearch
@@ -62,7 +60,6 @@ export function TransferServiceSummary() {
 
 export function TransferWorkspace({ search, onNavigate, framed = false }: WorkspaceProps) {
   const css = useStyles()
-  const o = useOutlineStyles()
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 0 })
   const identity = useQuery({ queryKey: ['transfer-identity', auth.data?.authenticated], queryFn: fetchTransferIdentity, retry: false, enabled: auth.isSuccess, staleTime: 0 })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false, staleTime: 0 })
@@ -78,16 +75,16 @@ export function TransferWorkspace({ search, onNavigate, framed = false }: Worksp
   if (search.record && search.id) { params.set('record', search.record); params.set('id', String(search.id)) }
   return <div className={framed ? css.workspace : css.publicWorkspace}>
     <Tabs.Root key={owner?.owner_key ?? 'pending'} value={search.view} onValueChange={(value) => { if (!writing) onNavigate({ view: value as TransferWorkspaceSearch['view'] }) }}>
-      <Tabs.List className={framed ? css.tabs : mergeClasses(o.outlineList, css.publicTabs)} aria-label="中转功能">
-        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="send" disabled={writing}>发送文件</Tabs.Tab>
-        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="collect" disabled={writing}>收集文件</Tabs.Tab>
-        <Tabs.Tab className={framed ? css.tab : mergeClasses(o.outlineTab, css.publicTab)} value="history" disabled={writing}>收发记录</Tabs.Tab>
+      <Tabs.List aria-label="中转功能">
+        <Tabs.Tab value="send" disabled={writing}>发送文件</Tabs.Tab>
+        <Tabs.Tab value="collect" disabled={writing}>收集文件</Tabs.Tab>
+        <Tabs.Tab value="history" disabled={writing}>收发记录</Tabs.Tab>
       </Tabs.List>
       {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : auth.isError || identity.isError ? (
         <div className={css.notice}>
           <span role="alert">收发身份暂时无法恢复，请重新检查。</span>
           <Button variant="secondary" onClick={() => { if (auth.isError) void auth.refetch(); else void identity.refetch() }}>重新检查收发身份</Button>
-          <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={mergeClasses(o.outlineTab, css.link)}>登录并继续</Link>
+          <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={css.link}>登录并继续</Link>
         </div>
       ) : guest ? <p className={css.text}>你正在以访客身份使用。记录保存在当前浏览器，清除 Cookie 或更换设备后无法恢复。访客身份有效期至 {new Date(identity.data!.expires_at!).toLocaleString()}，任务最晚于此时结束。</p> : null}
       {service?.hint ? <p className={css.text}>{service.hint}</p> : null}
@@ -107,10 +104,10 @@ function Settings({ kind, config, setConfig, disabled, guest }: { kind: Transfer
     <summary>{collect ? '收集设置' : '发送设置'}<IconChevronDown size={16} /></summary>
     <fieldset className={css.fields} disabled={disabled}>
       <Tabs.Root defaultValue="basic">
-        <Tabs.List className={css.settingTabs} aria-label={collect ? '收集设置分类' : '发送设置分类'}>
-          <Tabs.Tab value="basic" className={css.tab}>基础</Tabs.Tab>
-          {collect ? <Tabs.Tab value="information" className={css.tab}>收集信息</Tabs.Tab> : null}
-          <Tabs.Tab value="files" className={css.tab}>文件</Tabs.Tab>
+        <Tabs.List aria-label={collect ? '收集设置分类' : '发送设置分类'}>
+          <Tabs.Tab value="basic">基础</Tabs.Tab>
+          {collect ? <Tabs.Tab value="information">收集信息</Tabs.Tab> : null}
+          <Tabs.Tab value="files">文件</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="basic" className={css.panel}><div className={css.fields}>
           <Field label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></Field>
@@ -302,7 +299,7 @@ function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID
   return <section className={css.stack} aria-label="收发记录">
     <div className={css.stack}><h2 className={css.heading}>收发记录</h2><p className={css.text}>管理你发出的文件与发起的收集，查看收集到的文件和提交信息。</p></div>
     <Tabs.Root value={category} onValueChange={(value) => setCategory(value as TransferRecordKind)}>
-      <Tabs.List className={css.settingTabs} aria-label="记录类型"><Tabs.Tab value="send" className={css.tab}>我发送的</Tabs.Tab><Tabs.Tab value="collect" className={css.tab}>我收集的</Tabs.Tab></Tabs.List>
+      <Tabs.List className={css.settingTabs} aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
       {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <div className={css.stack}><p role="alert" className={css.error}>{message(current.error)}</p><div className={css.actions}><Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button></div></div> : null}
       <div className={css.recordList}>
         {current.data?.length === 0 ? <p className={css.text}>{category === 'send' ? '还没有发送记录。选择「发送文件」开始一次交付。' : '还没有收集任务。选择「收集文件」生成上传链接。'}</p> : null}

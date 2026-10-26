@@ -70,8 +70,8 @@ test('directory share supports gallery view, streaming zip and qr code', async (
   const zipLink = page.getByRole('link', { name: '打包下载当前目录 ZIP' })
   await expect(zipLink).toHaveAttribute('href', /\/share\/shr-[a-f0-9]+\/archive/)
 
-  // 画廊视图：两张图片，点击进入同一套预览弹层。
-  await page.getByRole('button', { name: '画廊' }).click()
+  // 画廊视图：两张图片，点击进入同一套预览弹层。视图切换是单选组，不是标签页。
+  await page.getByRole('radio', { name: '画廊' }).click()
   const images = page.locator('button[aria-label^="预览图片 "]')
   await expect(images).toHaveCount(2)
   await images.first().click()

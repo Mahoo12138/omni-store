@@ -1,9 +1,4 @@
-import {
-  TabList as FluentTabList,
-  Tab as FluentTab,
-  mergeClasses,
-  tabClassNames,
-} from '@fluentui/react-components'
+import { TabList as FluentTabList, Tab as FluentTab } from '@fluentui/react-components'
 import {
   createContext,
   useContext,
@@ -71,17 +66,14 @@ function TabsList({
   )
 }
 
-// Fluent Tab 默认外观已品牌化;页面级 className(原 outlineTab 等)经 mergeClasses
-// 叠加,组件样式在其后插入可覆盖默认。
+// Fluent Tab 保持原生外观；页面不再注入 className 覆盖（原 outline 描边标签已废止）。
 function TabsTab({
   value,
-  className,
   disabled,
   ariaLabel,
   children,
 }: {
   value: string
-  className?: string
   disabled?: boolean
   /** 纯图标 tab 的可访问名（icon svg aria-hidden，children 不产生名称） */
   ariaLabel?: string
@@ -93,7 +85,6 @@ function TabsTab({
       disabled={disabled}
       id={`omnistore-tab-${value}`}
       aria-label={ariaLabel}
-      className={mergeClasses(tabClassNames.root, className ?? '')}
     >
       {children}
     </FluentTab>

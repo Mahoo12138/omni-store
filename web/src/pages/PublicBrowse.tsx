@@ -18,9 +18,9 @@ import {
 import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
 import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
+import { ViewSwitcher } from '../components/shell/ViewSwitcher'
 import { useStyles } from './PublicBrowse.styles'
 import { useStyles as useHomeStyles } from './Home.styles'
-import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
 
 type ViewMode = 'list' | 'grid'
 
@@ -29,7 +29,6 @@ export function PublicBrowsePage() {
   const ft = useFtStyles()
   const home = useHomeStyles()
   const css = useStyles()
-  const o = useOutlineStyles()
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -94,28 +93,16 @@ export function PublicBrowsePage() {
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </span>
-              <div className={o.outlineList} role="tablist" aria-label="视图切换">
-                <button
-                  role="tab"
-                  aria-selected={view === 'list'}
-                  className={o.outlineTab}
-                  onClick={() => setView('list')}
-                  title="列表视图"
-                  aria-label="列表视图"
-                >
-                  <IconList size={16} />
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={view === 'grid'}
-                  className={o.outlineTab}
-                  onClick={() => setView('grid')}
-                  title="网格视图"
-                  aria-label="网格视图"
-                >
-                  <IconGrid size={16} />
-                </button>
-              </div>
+              <ViewSwitcher
+                ariaLabel="视图切换"
+                iconOnly
+                value={view}
+                onChange={(next) => setView(next as ViewMode)}
+                options={[
+                  { value: 'list', label: '列表视图', icon: <IconList size={16} />, title: '列表视图' },
+                  { value: 'grid', label: '网格视图', icon: <IconGrid size={16} />, title: '网格视图' },
+                ]}
+              />
               <Button
                 variant="ghost"
                 aria-label="刷新目录"

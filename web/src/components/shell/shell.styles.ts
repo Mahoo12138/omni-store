@@ -41,6 +41,11 @@ export const useShellStyles = makeStyles({
   'lineHeight': tokens.lineHeightBase400,
   },
 
+  viewSwitcher: {
+  'flexShrink': 0,
+  'minWidth': '0px',
+  },
+
   measure: {
   'width': '100%',
   'minWidth': '0px',

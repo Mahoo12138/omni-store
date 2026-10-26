@@ -21,7 +21,7 @@ import { IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconKey, IconL
 import { formatDate } from '../utils/format'
 import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { useStyles } from './PublicShare.styles'
-import { useStyles as useOutlineStyles } from '../components/ui/Outline.styles'
+import { ViewSwitcher } from '../components/shell/ViewSwitcher'
 
 export function PublicSharePage() {
   const css = useStyles()
@@ -125,7 +125,6 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
 function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; info: PublicShareInfo; path: string; page: number }) {
   const ft = useFtStyles()
   const css = useStyles()
-  const o = useOutlineStyles()
   const navigateRoute = useNavigate()
   const [view, setView] = useState<'list' | 'gallery'>('list')
   const [previewState, setPreviewState] = useState<{ items: PreviewItem[]; index: number } | null>(null)
@@ -204,26 +203,21 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
               <IconDownload size={15} /> 下载全部 (ZIP)
             </a>
           ) : null}
-          <div className={o.outlineList}>
-            <button
-              type="button"
-              className={o.outlineTab}
-              onClick={() => setView('list')}
-              aria-pressed={view === 'list'}
-            >
-              <IconList size={14} /> 列表
-            </button>
-            <button
-              type="button"
-              className={o.outlineTab}
-              onClick={() => setView('gallery')}
-              aria-pressed={view === 'gallery'}
-              disabled={galleryImages.length === 0}
-              title={galleryImages.length === 0 ? '当前目录没有图片' : undefined}
-            >
-              <IconGrid size={14} /> 画廊
-            </button>
-          </div>
+          <ViewSwitcher
+            ariaLabel="视图切换"
+            value={view}
+            onChange={(next) => setView(next as 'list' | 'gallery')}
+            options={[
+              { value: 'list', label: '列表', icon: <IconList size={14} /> },
+              {
+                value: 'gallery',
+                label: '画廊',
+                icon: <IconGrid size={14} />,
+                disabled: galleryImages.length === 0,
+                title: galleryImages.length === 0 ? '当前目录没有图片' : undefined,
+              },
+            ]}
+          />
         </div>
       </div>
       {view === 'gallery' && galleryImages.length > 0 ? (

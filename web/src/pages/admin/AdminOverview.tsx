@@ -1628,8 +1628,8 @@ function EditSourceDialog({
     >
       <Tabs.Root defaultValue="protocols" className={css.sourceConfig}>
         <Tabs.List className={css.sourceConfigTabs} aria-label="存储源配置">
-          <Tabs.Tab className={css.sourceConfigTab} value="protocols">访问协议</Tabs.Tab>
-          <Tabs.Tab className={css.sourceConfigTab} value="storage">存储设置</Tabs.Tab>
+          <Tabs.Tab value="protocols">访问协议</Tabs.Tab>
+          <Tabs.Tab value="storage">存储设置</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="protocols" className={css.sourceConfigPanel} keepMounted>
           <div className={css.protocolList}>

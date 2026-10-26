@@ -1,14 +1,6 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../../styles/media'
 
-// TODO(人工复核):
-// - publicTabs 组合跨文件基类 outlineList
-// - publicTabs 组合本文件 outlineList:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - publicTab 组合跨文件基类 outlineTab
-// - publicTab 组合本文件 outlineTab:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - link 组合跨文件基类 outlineTab
-// - link 组合本文件 outlineTab:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-
 export const useStyles = makeStyles({
   workspace: {
   'minWidth': '0px',
@@ -25,54 +17,6 @@ export const useStyles = makeStyles({
   'display': 'grid',
   ...shorthands.gap('24px'),
   'minWidth': '0px',
-  },
-  publicTabs: {
-  'marginBottom': '40px',
-  },
-  publicTab: {
-  'minHeight': '44px',
-  },
-  tabs: {
-  'display': 'grid',
-  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
-  ...shorthands.gap('0px'),
-  ...shorthands.margin('0', '-32px', '32px'),
-  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  [media.sm]: {
-    ...shorthands.margin('0', '-18px', '24px'),
-  },
-  },
-  tab: {
-  'appearance': 'none',
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.gap('4px'),
-  'minHeight': '58px',
-  ...shorthands.padding('0', '12px'),
-  'borderTopWidth': '0px', 'borderRightWidth': '0px', 'borderLeftWidth': '0px',
-  'borderBottomWidth': '2px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'transparent',
-  ...shorthands.borderRadius('0px'),
-  'background': 'transparent',
-  'color': 'var(--colorNeutralForeground2)',
-  'font': 'inherit',
-  'fontSize': '14px',
-  'fontWeight': 500,
-  'whiteSpace': 'nowrap',
-  'cursor': 'pointer',
-  'transitionProperty': 'background-color, color, border-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  '&:hover:not(:disabled)': {
-    'backgroundColor': 'var(--colorNeutralBackground1Hover)',
-    'color': 'var(--colorNeutralForeground1)',
-  },
-  '&:focus-visible': {
-    'outline': `2px solid var(--colorBrandBackground)`,
-    'outlineOffset': '-2px',
-  },
-  '&:disabled': {
-    'opacity': .45,
-    'cursor': 'not-allowed',
-  },
   },
   panel: {
   'minWidth': '0px',
@@ -149,9 +93,12 @@ export const useStyles = makeStyles({
   'color': 'var(--colorBrandForeground1)',
   },
   link: {
-  'minHeight': '44px',
-  'whiteSpace': 'normal',
-  'textAlign': 'center',
+  'color': 'var(--colorBrandForeground1)',
+  'fontWeight': 'var(--fontWeightSemibold)',
+  'textDecoration': 'none',
+  '&:hover': {
+    'textDecoration': 'underline',
+  },
   },
   fields: {
   'display': 'grid',

@@ -8,7 +8,9 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   'minWidth': '0px',
   },
-  triggerWidthFull: { width: '100%' },
+  // Fluent Dropdown 根节点自带 min-width:250px，不覆盖的话 width:100% 也缩不下去，
+  // 窄屏（320px）会把页面顶出横向滚动。
+  triggerWidthFull: { width: '100%', minWidth: '0px' },
   triggerWidthContent: { width: 'max-content', minWidth: '118px' },
   triggerWidthWide: { width: 'max-content', minWidth: '190px' },
 
