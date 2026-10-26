@@ -252,20 +252,8 @@ export const useStyles = makeStyles({
     ...shorthands.padding('8px', '12px'),
   },
   },
-  'uploadToastProgressTrack': {
-  'height': '6px',
-  ...shorthands.overflow('hidden'),
-  'backgroundColor': 'var(--colorBrandBackground2)',
-  ...shorthands.borderRadius('999px'),
-  },
-  'uploadToastProgressValue': {
-  'width': '100%',
-  'height': '100%',
-  'backgroundColor': 'var(--colorBrandBackground)',
-  ...shorthands.borderRadius('999px'),
-  'transformOrigin': 'left center',
-  'transitionProperty': 'transform', 'transitionDuration': 'var(--durationSlower)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  },
+  // 上传/粘贴/删除任务的进度条改用 Fluent ProgressBar：
+  // 原本的 uploadToastProgressTrack + scaleX 内联动画两个槽位随之下线。
   'uploadToastErrorList': {
   'display': 'flex',
   'flexDirection': 'column',

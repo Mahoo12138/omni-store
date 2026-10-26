@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Image } from '@fluentui/react-components'
 import { ApiRequestError } from '../api/client'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { PublicFrame } from '../components/shell/PublicFrame'
@@ -133,7 +134,7 @@ function UploadResult({
     <article className={css.resultItem} aria-busy={isPending}>
       <div className={css.resultSummary}>
         {item.previewUrl ? (
-          <img className={css.preview} src={item.previewUrl} alt={`${item.file.name} 预览`} />
+          <Image className={css.preview} fit="cover" shape="rounded" src={item.previewUrl} alt={`${item.file.name} 预览`} />
         ) : (
           <span className={css.previewPlaceholder} aria-hidden="true"><IconImage size={22} /></span>
         )}

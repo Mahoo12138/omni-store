@@ -33,7 +33,7 @@ import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { ContextMenu } from '../components/ui/ContextMenu'
 import { FormField } from '../components/shell/FormLayout'
-import { Input } from '@fluentui/react-components'
+import { Input, ProgressBar } from '@fluentui/react-components'
 import { Menu, type MenuOption } from '../components/ui/Menu'
 import { Select } from '../components/ui/Select'
 import { getTaskToastLayer, toastError, toastInfo, toastSuccess } from '../components/ui/Toast'
@@ -1369,9 +1369,7 @@ function UploadTaskToast({
           }}>关闭</button>
         )}
       </div>
-      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`上传进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
-      </div>
+      <ProgressBar aria-label={`上传进度 ${percent}%`} value={percent / 100} />
       {task.failedFiles > 0 && (
         <ul className={css.uploadToastErrorList}>
           {task.items.filter((item) => item.status === 'failed').slice(0, 3).map((item) => (
@@ -1499,9 +1497,7 @@ function PasteTaskToast({
           }}>关闭</button>
         )}
       </div>
-      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`粘贴进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
-      </div>
+      <ProgressBar aria-label={`粘贴进度 ${percent}%`} value={percent / 100} />
       {task.errors.length > 0 && (
         <ul className={css.uploadToastErrorList}>
           {task.errors.slice(0, 3).map((error) => <li key={error}>{error}</li>)}
@@ -1566,9 +1562,7 @@ function BatchDeleteTaskToast({ task, onClose }: {
           }}>关闭</button>
         )}
       </div>
-      <div className={css.uploadToastProgressTrack} role="progressbar" aria-label={`删除进度 ${percent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className={css.uploadToastProgressValue} style={{ transform: `scaleX(${percent / 100})` }} />
-      </div>
+      <ProgressBar aria-label={`删除进度 ${percent}%`} value={percent / 100} />
       {task.errors.length > 0 && (
         <ul className={css.uploadToastErrorList}>
           {task.errors.slice(0, 3).map((error) => <li key={error}>{error}</li>)}

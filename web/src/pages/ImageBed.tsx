@@ -15,7 +15,7 @@ import { fetchMe } from '../api/auth'
 import { AppFrame } from '../components/shell/AppFrame'
 import { PageHeader } from '../components/shell/PageHeader'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
-import { Badge, mergeClasses } from '@fluentui/react-components'
+import { Badge, Image, mergeClasses } from '@fluentui/react-components'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Select } from '../components/ui/Select'
@@ -415,7 +415,7 @@ function ImageCard({
   return (
     <article className={list ? css.imageCardList : css.imageCard}>
       <a href={image.public_url} target="_blank" rel="noreferrer" className={list ? css.thumbLinkList : css.thumbLink}>
-        <img className={list ? css.imageThumbList : css.imageThumb} src={image.thumbnail_url || image.public_url} alt={name} loading="lazy" />
+        <Image className={list ? css.imageThumbList : css.imageThumb} fit="cover" src={image.thumbnail_url || image.public_url} alt={name} loading="lazy" />
       </a>
       <div className={css.imageBody}>
         <strong className={css.imageName} title={name}>{name}</strong>

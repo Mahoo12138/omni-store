@@ -13,7 +13,7 @@ import {
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
-import { Input } from '@fluentui/react-components'
+import { Image, Input } from '@fluentui/react-components'
 import { PreviewModal } from '../preview/PreviewModal'
 import { PreviewContent, type PreviewItem } from '../preview/PreviewContent'
 import { resolvePreview } from '../preview/resolver'
@@ -230,8 +230,9 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
                 onClick={() => openPreview(entry)}
                 aria-label={`预览图片 ${entry.name}`}
               >
-                <img
+                <Image
                   className={css.galleryImg}
+                  fit="cover"
                   src={publicShareRawUrl(shareKey, childPath(entry.name))}
                   alt={entry.name}
                   loading="lazy"
