@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { Badge } from '@fluentui/react-components'
 import { fetchSetupStatus } from '../api/auth'
 import { fetchPublicSummary } from '../api/public'
-import { PublicDriveHero } from '../components/layout/PublicDriveHero'
-import { PublicShell } from '../components/layout/PublicShell'
+import { PublicFrame } from '../components/shell/PublicFrame'
+import { PageHeader } from '../components/shell/PageHeader'
 import { IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
 import { useStyles } from './Home.styles'
 
@@ -26,71 +27,75 @@ export function HomePage() {
   }
 
   return (
-    <PublicShell showHeader={false}>
-      <PublicDriveHero />
+    <PublicFrame>
+      <PageHeader
+        title="公开网盘"
+        description="这里收录此实例开放共享的目录。选择一个目录，即可浏览或下载其中的文件。"
+        actions={
+          summary.isPending ? null : (
+            <Badge
+              appearance="tint"
+              color={summary.isError || !summary.data?.enabled ? 'warning' : 'success'}
+            >
+              {summary.isError ? '目录暂不可用' : summary.data?.enabled ? '已开放' : '未开放'}
+            </Badge>
+          )
+        }
+      />
 
-      <section className={css.directorySection} aria-labelledby="directory-index-title">
-        <header className={css.directoryHeader}>
-          <div>
-            <h2 id="directory-index-title">目录索引</h2>
+      <section className={css.directoryPanel} aria-label="公开目录">
+        {summary.isPending && (
+          <div className={css.mountGrid} aria-busy="true" aria-label="正在加载公开目录">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className={css.mountSkeleton} aria-hidden="true">
+                <span className={css.mountSkeletonIcon} />
+                <span className={css.mountSkeletonLine} />
+                <span className={css.mountSkeletonLineShort} />
+              </div>
+            ))}
           </div>
-          <p>选择目录开始浏览</p>
-        </header>
-
-        <div className={css.directoryPanel}>
-          {summary.isPending && (
-            <div className={css.mountGrid} aria-busy="true" aria-label="正在加载公开目录">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className={css.mountSkeleton} aria-hidden="true">
-                  <span className={css.mountSkeletonIcon} />
-                  <span className={css.mountSkeletonLine} />
-                  <span className={css.mountSkeletonLineShort} />
-                </div>
-              ))}
+        )}
+        {summary.isSuccess && !summary.data.enabled && (
+          <div className={css.emptyState}>
+            <span className={css.emptyIcon} aria-hidden="true">
+              <IconFolderFilled size={30} />
+            </span>
+            <div>
+              <h2>公开网盘尚未开启</h2>
+              <p>管理员在「系统设置 → 站点配置 → 站点服务」中绑定公开网盘存储源后，文件入口会出现在这里。</p>
             </div>
-          )}
-          {summary.isSuccess && !summary.data.enabled && (
-            <div className={css.emptyState}>
-              <span className={css.emptyIcon} aria-hidden="true">
-                <IconFolderFilled size={30} />
-              </span>
-              <div>
-                <h2>公开网盘尚未开启</h2>
-                <p>管理员在「系统设置 → 站点配置 → 站点服务」中绑定公开网盘存储源后，文件入口会出现在这里。</p>
-              </div>
+          </div>
+        )}
+        {summary.isError && (
+          <div className={css.errorState} role="alert">
+            <div>
+              <h2>无法读取公开目录</h2>
+              <p>请检查网络连接后重新加载。</p>
             </div>
-          )}
-          {summary.isError && (
-            <div className={css.errorState} role="alert">
-              <div>
-                <h2>无法读取公开目录</h2>
-                <p>请检查网络连接后重新加载。</p>
-              </div>
-              <button type="button" onClick={() => summary.refetch()}>重新加载目录</button>
-            </div>
-          )}
-          {summary.isSuccess && summary.data.enabled && (
-            <div className={css.mountGrid} aria-label="公开目录">
-              <button
-                key={summary.data.source_key}
-                type="button"
-                className={css.mountCard}
-                onClick={openPublicDrive}
-                aria-label={`打开目录 ${summary.data.source_name}`}
-              >
-                <span className={css.mountCardTop}>
-                  <span className={css.mountIcon} aria-hidden="true">
-                    <IconHardDrive size={22} />
-                  </span>
-                  <span className={css.mountKind}>公开目录</span>
+            <button type="button" onClick={() => summary.refetch()}>重新加载目录</button>
+          </div>
+        )}
+        {summary.isSuccess && summary.data.enabled && (
+          <div className={css.mountGrid}>
+            <button
+              key={summary.data.source_key}
+              type="button"
+              className={css.mountCard}
+              onClick={openPublicDrive}
+              aria-label={`打开目录 ${summary.data.source_name}`}
+            >
+              <span className={css.mountCardTop}>
+                <span className={css.mountIcon} aria-hidden="true">
+                  <IconHardDrive size={22} />
                 </span>
-                <span className={css.mountName}>{summary.data.source_name || '公开网盘'}</span>
-                <span className={css.mountDescription}>浏览此实例开放共享的全部文件。</span>
-              </button>
-            </div>
-          )}
-        </div>
+                <span className={css.mountKind}>公开目录</span>
+              </span>
+              <span className={css.mountName}>{summary.data.source_name || '公开网盘'}</span>
+              <span className={css.mountDescription}>浏览此实例开放共享的全部文件。</span>
+            </button>
+          </div>
+        )}
       </section>
-    </PublicShell>
+    </PublicFrame>
   )
 }

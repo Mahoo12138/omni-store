@@ -4,8 +4,8 @@ import { fetchAuthStatus } from '../../api/auth'
 import { IconCloud, IconFolder, IconGrid, IconImage, IconUser } from '../ui/Icon'
 import { useStyles } from './PublicNavigation.styles'
 
-// Public pages share one set of destinations, account state and button styles.
-export function PublicNavigation({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
+// 公开侧页面共用同一组入口、同一套账号状态与同一组链接样式。
+export function PublicNavigation() {
   const css = useStyles()
   const { pathname } = useLocation()
   const disk = pathname === '/' || pathname.startsWith('/public/')
@@ -14,7 +14,7 @@ export function PublicNavigation({ tone = 'dark' }: { tone?: 'dark' | 'light' })
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 60_000 })
 
   return (
-    <nav className={`${css.navigation} ${tone === 'dark' ? css.dark : css.light}`} aria-label="主导航">
+    <nav className={css.navigation} aria-label="主导航">
       <Link to="/" activeOptions={{ exact: true }} className={css.link} aria-current={disk ? 'page' : undefined}><IconFolder size={14} />公开网盘</Link>
       <Link to="/upload" activeOptions={{ exact: true }} className={css.link} aria-current={upload ? 'page' : undefined}><IconImage size={14} />匿名图床</Link>
       <Link to="/transfer" search={{ view: 'send' }} activeOptions={{ exact: true }} className={css.link} aria-current={transfer ? 'page' : undefined}><IconCloud size={14} />文件中转</Link>

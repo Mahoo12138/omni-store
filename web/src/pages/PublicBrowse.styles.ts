@@ -37,7 +37,12 @@ export const useStyles = makeStyles({
   'minHeight': '56px',
   },
   browsePanel: {
-  'paddingTop': '8px',
+  'minWidth': '0px',
+  ...shorthands.padding('var(--spacingVerticalL)'),
+  ...shorthands.border('1px', 'solid', 'var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
+  'backgroundColor': 'var(--colorNeutralBackground1)',
+  'boxShadow': 'var(--shadow4)',
   },
   grid: {
   'display': 'grid',

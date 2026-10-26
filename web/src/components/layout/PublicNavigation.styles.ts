@@ -1,76 +1,55 @@
-import { makeStyles, shorthands } from '@fluentui/react-components'
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
 import { media } from '../../styles/media'
 
-// ve 的 createVar 局部变量改为普通 CSS custom property:
-// dark/light 容器负责注入 --pnav-* 变量,link 消费。
+// 公开侧导航：一条浅底链接行。原先为深色 hero 存在的 --pnav-* 双套变量（含 7 个
+// rgba/#ffffff 字面量）已随 hero 一起废止，这里只用主题 token，深色主题可直接跟随。
 export const useStyles = makeStyles({
   navigation: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    ...shorthands.gap('6px'),
-    minWidth: 0,
-    [media.lg]: {
-      flexBasis: '100%',
-      justifyContent: 'flex-start',
-    },
+  'display': 'flex',
+  'alignItems': 'center',
+  'justifyContent': 'flex-end',
+  'flexWrap': 'wrap',
+  ...shorthands.gap(tokens.spacingHorizontalXXS),
+  'minWidth': '0px',
+  [media.lg]: {
+    'flexBasis': '100%',
+    'justifyContent': 'flex-start',
   },
-
-  dark: {
-    // 深色 hero 上的导航:半透明白字面量(不可随主题中性层变成不透明)
-    '--pnav-foreground': '#ffffff',
-    '--pnav-border': 'rgba(255, 255, 255, 0.22)',
-    '--pnav-background': 'rgba(255, 255, 255, 0.06)',
-    '--pnav-hover-border': 'rgba(255, 255, 255, 0.42)',
-    '--pnav-hover-background': 'rgba(255, 255, 255, 0.11)',
-    '--pnav-selected-border': 'rgba(255, 255, 255, 0.65)',
-    '--pnav-selected-background': 'rgba(255, 255, 255, 0.16)',
   },
-
-  light: {
-    '--pnav-foreground': 'var(--colorNeutralForeground1)',
-    '--pnav-border': 'var(--colorNeutralStroke1)',
-    '--pnav-background': 'var(--colorNeutralBackground1)',
-    '--pnav-hover-border': 'var(--colorBrandBackground)',
-    '--pnav-hover-background': 'var(--colorBrandBackground2)',
-    '--pnav-selected-border': 'var(--colorBrandBackground)',
-    '--pnav-selected-background': 'var(--colorBrandBackground2)',
-  },
-
   link: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    ...shorthands.gap('6px'),
-    height: '32px',
-    ...shorthands.padding('0', '10px'),
-    ...shorthands.border('1px', 'solid', 'var(--pnav-border)'),
-    borderRadius: 'var(--borderRadiusSmall)',
-    background: 'var(--pnav-background)',
-    color: 'var(--pnav-foreground)',
-    fontSize: '13px',
-    fontWeight: 600,
-    lineHeight: 1,
-    whiteSpace: 'nowrap',
-    textDecoration: 'none',
-    transition:
-      'background-color var(--durationNormal) var(--curveDecelerateMax), border-color var(--durationNormal) var(--curveDecelerateMax)',
-    ':hover': {
-      background: 'var(--pnav-hover-background)',
-      ...shorthands.borderColor('var(--pnav-hover-border)'),
-    },
-    '&[aria-current="page"]': {
-      background: 'var(--pnav-selected-background)',
-      ...shorthands.borderColor('var(--pnav-selected-border)'),
-    },
-    ':focus-visible': {
-      outline: '2px solid var(--pnav-foreground)',
-      outlineOffset: '3px',
-    },
-    '& svg': { flexShrink: 0 },
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'gap': tokens.spacingHorizontalXXS,
+  'minHeight': '32px',
+  ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalMNudge),
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  'color': tokens.colorNeutralForeground2,
+  'fontSize': tokens.fontSizeBase300,
+  'fontWeight': tokens.fontWeightSemibold,
+  'lineHeight': tokens.lineHeightBase300,
+  'whiteSpace': 'nowrap',
+  'textDecoration': 'none',
+  'transitionProperty': 'background-color, color',
+  'transitionDuration': tokens.durationFast,
+  'transitionTimingFunction': tokens.curveDecelerateMax,
+  '&:hover': {
+    'backgroundColor': tokens.colorNeutralBackground1Hover,
+    'color': tokens.colorNeutralForeground1,
   },
-
-  accountPending: { cursor: 'wait' },
+  '&:focus-visible': {
+    'outline': `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
+    'outlineOffset': '2px',
+  },
+  '&[aria-current="page"]': {
+    'backgroundColor': tokens.colorBrandBackground2,
+    'color': tokens.colorBrandForeground1,
+  },
+  '& svg': {
+    'flexShrink': 0,
+  },
+  },
+  accountPending: {
+  'cursor': 'wait',
+  },
 })

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { ApiRequestError } from '../api/client'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
-import { PublicShell } from '../components/layout/PublicShell'
-import { PublicNavigation } from '../components/layout/PublicNavigation'
+import { PublicFrame } from '../components/shell/PublicFrame'
+import { PageHeader } from '../components/shell/PageHeader'
 import {
   IconCheck,
   IconCopy,
@@ -12,7 +11,6 @@ import {
   IconImage,
   IconRefresh,
   IconUpload,
-  LogoMark,
 } from '../components/ui/Icon'
 import { useStyles } from './AnonymousUpload.styles'
 
@@ -297,27 +295,14 @@ export function AnonymousUploadPage() {
   }
 
   return (
-    <PublicShell showHeader={false}>
+    <PublicFrame>
       <section className={css.page}>
-        <header className={css.hero}>
-          <div className={css.masthead}>
-            <Link to="/" className={css.brand} aria-label="返回 OmniStore 公开网盘">
-              <LogoMark size={32} />
-              <span>
-                <strong>OmniStore</strong>
-                <small>IMAGE BED</small>
-              </span>
-            </Link>
-            <PublicNavigation />
-          </div>
-
-          <div className={css.heroBody}>
-            <div className={css.heroCopy}>
-              <span>公开匿名图片托管</span>
-              <h1>匿名图床</h1>
-              <p>把图片放进来，立即获取适用于网页、论坛和文档的链接。</p>
-            </div>
-            <div className={css.serviceBadge} aria-live="polite">
+        <PageHeader
+          eyebrow="公开匿名图片托管"
+          title="匿名图床"
+          description="把图片放进来，立即获取适用于网页、论坛和文档的链接。"
+          actions={
+            <span className={css.serviceBadge} aria-live="polite">
               <span
                 className={
                   status.isPending
@@ -342,9 +327,9 @@ export function AnonymousUploadPage() {
                         : '暂未开放'}
                 </strong>
               </span>
-            </div>
-          </div>
-        </header>
+            </span>
+          }
+        />
 
         <div className={css.workbenchStage}>
           {status.isPending && (
@@ -470,6 +455,6 @@ export function AnonymousUploadPage() {
         <p className={css.privacyNote}>无需登录 · 不保留上传历史 · 请自行保存需要的链接</p>
         <div className={css.srStatus} aria-live="polite">{copyError || (copiedKey ? '链接已复制' : '')}</div>
       </section>
-    </PublicShell>
+    </PublicFrame>
   )
 }

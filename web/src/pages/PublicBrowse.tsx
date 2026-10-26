@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { browsePublic, rawUrl } from '../api/public'
-import { PublicDriveHero } from '../components/layout/PublicDriveHero'
-import { PublicBreadcrumb, PublicShell } from '../components/layout/PublicShell'
+import { PublicBreadcrumb } from '../components/shell/PublicBreadcrumb'
+import { PublicFrame } from '../components/shell/PublicFrame'
+import { PageHeader } from '../components/shell/PageHeader'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
 import {
@@ -20,14 +21,12 @@ import type { FileEntry } from '../api/sources'
 import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
 import { useStyles } from './PublicBrowse.styles'
-import { useStyles as useHomeStyles } from './Home.styles'
 
 type ViewMode = 'list' | 'grid'
 
 // 公开目录浏览 /public/*（2.0 固定入口）：匿名只读，文件点击即在新页打开 raw。
 export function PublicBrowsePage() {
   const ft = useFtStyles()
-  const home = useHomeStyles()
   const css = useStyles()
   const location = useLocation()
   const navigate = useNavigate()
@@ -65,17 +64,14 @@ export function PublicBrowsePage() {
   }, [browse.data, filter])
 
   return (
-    <PublicShell showHeader={false}>
-      <PublicDriveHero />
-      <section
-        className={home.directorySection}
-        aria-label={`公开目录：${segments.join('/')}`}
-      >
-        <header className={`${home.directoryHeader} ${css.browseHeader}`}>
+    <PublicFrame>
+      <PageHeader title="公开网盘" />
+      <section aria-label={`公开目录：${segments.join('/')}`}>
+        <header className={css.browseHeader}>
           <PublicBreadcrumb segments={segments} onNavigate={goTo} />
         </header>
 
-        <div className={`${home.directoryPanel} ${css.browsePanel}`}>
+        <div className={css.browsePanel}>
           <div className={ft.toolbar}>
             <div className={css.readOnlyNotice} role="note">
               <IconInfo size={15} />
@@ -164,7 +160,7 @@ export function PublicBrowsePage() {
           )}
         </div>
       </section>
-    </PublicShell>
+    </PublicFrame>
   )
 }
 

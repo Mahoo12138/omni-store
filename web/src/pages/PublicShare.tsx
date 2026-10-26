@@ -10,7 +10,7 @@ import {
   unlockPublicShare,
   type PublicShareInfo,
 } from '../api/shares'
-import { PublicShell } from '../components/layout/PublicShell'
+import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -41,7 +41,7 @@ export function PublicSharePage() {
     onError: (error) => setPasswordError(error instanceof ApiRequestError ? error.message : '验证失败，请重试。'),
   })
 
-  if (info.isPending) return <PublicShell><div className={css.empty}>正在加载分享…</div></PublicShell>
+  if (info.isPending) return <PublicFrame><div className={css.empty}>正在加载分享…</div></PublicFrame>
 
   // 1.2.0：过期 / 次数用完不再伪装成 404，访客能看到明确状态（docs/design/share-preview-system.md）。
   if (info.isError || !info.data) {
@@ -62,7 +62,7 @@ export function PublicSharePage() {
 
   if (info.data.protected && !info.data.access_granted) {
     return (
-      <PublicShell>
+      <PublicFrame>
         <div className={css.unlockWrap}>
           <section className={css.unlockCard}>
             <span className={css.unlockIcon}><IconKey size={28} /></span>
@@ -75,7 +75,7 @@ export function PublicSharePage() {
             </form>
           </section>
         </div>
-      </PublicShell>
+      </PublicFrame>
     )
   }
 
@@ -87,13 +87,13 @@ export function PublicSharePage() {
 function ShareStatus({ title, hint }: { title: string; hint: string }) {
   const css = useStyles()
   return (
-    <PublicShell>
+    <PublicFrame>
       <div className={css.empty}>
         <span className={css.unlockIcon}><IconLink size={28} /></span>
         <h1>{title}</h1>
         <p>{hint}</p>
       </div>
-    </PublicShell>
+    </PublicFrame>
   )
 }
 
@@ -108,7 +108,7 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
   }
   const previewable = resolvePreview({ name: info.name, size: info.size }) !== 'unsupported'
   return (
-    <PublicShell>
+    <PublicFrame>
       <ShareHero info={info}>
         <a className={css.linkButton} href={publicShareRawUrl(shareKey, '', true)}><IconDownload size={16} /> 下载文件</a>
       </ShareHero>
@@ -117,7 +117,7 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
           <PreviewContent item={item} />
         </div>
       ) : null}
-    </PublicShell>
+    </PublicFrame>
   )
 }
 
@@ -187,7 +187,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
     : '打包下载当前目录'
 
   return (
-    <PublicShell>
+    <PublicFrame>
       <ShareHero info={info} />
       <div className={css.toolbar}>
         <nav className={css.crumbs} aria-label="分享目录位置">
@@ -277,7 +277,7 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
           onClose={() => setPreviewState(null)}
         />
       ) : null}
-    </PublicShell>
+    </PublicFrame>
   )
 }
 

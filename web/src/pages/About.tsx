@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { fetchAuthStatus } from '../api/auth'
 import { fetchSystemStatus } from '../api/system'
-import { PublicShell } from '../components/layout/PublicShell'
+import { PublicFrame } from '../components/shell/PublicFrame'
 import {
   IconChevronRight,
   IconCloud,
@@ -97,7 +97,7 @@ export function AboutPage() {
   })
 
   return (
-    <PublicShell>
+    <PublicFrame>
       <div className={css.page}>
         <section className={css.hero} aria-labelledby="about-title">
           <div className={css.heroCopy}>
@@ -211,6 +211,6 @@ export function AboutPage() {
           </div>
         </section>
       </div>
-    </PublicShell>
+    </PublicFrame>
   )
 }

@@ -152,9 +152,11 @@ async function checkRouteMatrix(page: Page, account: AccountName) {
         sharedClassName ??= button.className
         expect(button.className, `${route.path}: shared navigation button class`).toBe(sharedClassName)
         expect(button.height, `${route.path}: compact navigation button height`).toBeCloseTo(32, 1)
-        expect(button.structure.padding).toBe('0px 10px')
-        expect(button.structure.gap).toBe('6px')
-        expect(button.structure['border-radius']).toBe('2px')
+        // 几何值现在来自 Fluent token（spacingVerticalXXS 2 / spacingHorizontalMNudge 10 /
+        // borderRadiusMedium 4），钉的是"跨页完全一致"，不是旧自造规范的特定像素。
+        expect(button.structure.padding).toBe('2px 10px')
+        expect(button.structure.gap).toBe('2px')
+        expect(button.structure['border-radius']).toBe('4px')
         const baseline = dimensions.get(button.name)
         if (baseline) {
           expect(button.width, `${route.path}: ${button.name} width`).toBeCloseTo(baseline.width, 1)
