@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   'dropSurface': {
@@ -43,7 +44,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) 320px',
   ...shorthands.gap('24px'),
   'alignItems': 'start',
-  '@media screen and (max-width: 1400px)': {
+  [media.xxl]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
@@ -59,7 +60,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('16px'),
   'position': 'sticky',
   'top': '88px',
-  '@media screen and (max-width: 1400px)': {
+  [media.xxl]: {
     'position': 'static',
   },
   },
@@ -69,7 +70,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   ...shorthands.padding('0', '0', '34px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     'paddingBottom': '24px',
@@ -135,7 +136,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'color': 'var(--colorNeutralForeground1)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'alignItems': 'stretch',
     'flexWrap': 'wrap',
   },
@@ -178,11 +179,11 @@ export const useStyles = makeStyles({
   ...shorthands.gap('4px'),
   'marginLeft': 'auto',
   'flexShrink': 0,
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': '100%',
     'marginLeft': '42px',
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'marginLeft': '0px',
     'flexWrap': 'wrap',
   },
@@ -246,7 +247,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minHeight': '44px',
     ...shorthands.padding('8px', '12px'),
   },
@@ -294,7 +295,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minHeight': '44px',
     ...shorthands.padding('8px', '12px'),
   },
@@ -325,7 +326,7 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   ...shorthands.gap('8px'),
   'marginLeft': 'auto',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '100%',
     'marginLeft': '0px',
     'flexWrap': 'wrap',
@@ -338,7 +339,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'cursor': 'pointer',
   'fontSize': '13px',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'minHeight': '44px',
     ...shorthands.padding('8px', '12px'),
   },
@@ -404,7 +405,7 @@ export const useStyles = makeStyles({
   'backgroundColor': 'oklch(1 0 0 / 0.7)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.padding('8px'),
   },
   },
@@ -419,7 +420,7 @@ export const useStyles = makeStyles({
   ...shorthands.overflow('hidden'),
   'textOverflow': 'ellipsis',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'display': 'none',
   },
   },
@@ -427,7 +428,7 @@ export const useStyles = makeStyles({
   'position': 'relative',
   'display': 'inline-flex',
   'alignItems': 'center',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '100%',
   },
   },
@@ -456,7 +457,7 @@ export const useStyles = makeStyles({
   '&:focus': {
     ...shorthands.borderColor('var(--colorBrandBackground)'),
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '100%',
     'height': '44px',
     'fontSize': '16px',
@@ -478,7 +479,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorNeutralBackground1Hover)',
     'color': 'var(--colorNeutralForeground1)',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '44px',
     'height': '44px',
   },
@@ -510,7 +511,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorBrandBackground2)',
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '44px',
     'height': '44px',
   },
@@ -531,7 +532,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorBrandBackground2)',
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '44px',
     'height': '44px',
   },
@@ -558,7 +559,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorBrandBackground2)',
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '44px',
     'height': '44px',
   },
@@ -572,7 +573,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
@@ -584,7 +585,7 @@ export const useStyles = makeStyles({
   ...shorthands.padding('12px'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'transitionProperty': 'background-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'display': 'grid',
     'gridTemplateColumns': '48px minmax(0, 1fr)',
     ...shorthands.gap('4px 12px'),
@@ -599,7 +600,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('6px'),
   'fontSize': '12px',
   'cursor': 'pointer',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridColumn': '1px',
     'gridRow': '1px',
     'width': '44px',
@@ -613,7 +614,7 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   'justifyContent': 'center',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridColumn': '1px',
     'gridRow': '2px',
     'width': '48px',
@@ -639,7 +640,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridColumn': '2px',
     'gridRow': '1px',
     'minHeight': '44px',
@@ -653,7 +654,7 @@ export const useStyles = makeStyles({
   'flexWrap': 'wrap',
   'justifyContent': 'center',
   ...shorthands.gap('4px'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridColumn': '2px',
     'gridRow': '2px',
     'justifyContent': 'flex-start',
@@ -676,7 +677,7 @@ export const useStyles = makeStyles({
   'display': 'inline-flex',
   'alignItems': 'center',
   ...shorthands.gap('4px'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'flexWrap': 'wrap',
   },
   },
@@ -702,7 +703,7 @@ export const useStyles = makeStyles({
     'opacity': 0.4,
     'cursor': 'not-allowed',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'minWidth': '44px',
     'height': '44px',
   },
@@ -720,7 +721,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'fontSize': '13px',
   'fontVariantNumeric': 'tabular-nums',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'minWidth': '44px',
     'height': '44px',
   },
@@ -779,7 +780,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) 320px',
   ...shorthands.gap('24px'),
   'alignItems': 'start',
-  '@media screen and (max-width: 1400px)': {
+  [media.xxl]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },

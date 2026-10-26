@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   pageHeader: {
@@ -21,7 +22,7 @@ export const useStyles = makeStyles({
   'fontWeight': 700,
   'letterSpacing': '-0.04em',
   'color': 'var(--colorNeutralForeground1)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'fontSize': '32px',
   },
   },
@@ -59,7 +60,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },

@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 // 项目内的标签页和视图切换统一使用的 outline 外观基类
 //（griffel 版：由消费方经 mergeClasses 组合变体）。
@@ -42,7 +43,7 @@ export const useStyles = makeStyles({
       outlineOffset: '2px',
     },
     ':disabled': { opacity: 0.45, cursor: 'not-allowed' },
-    '@media screen and (max-width: 820px)': { minHeight: '44px' },
-    '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+    [media.md]: { minHeight: '44px' },
+    [media.reducedMotion]: { transition: 'none' },
   },
 })

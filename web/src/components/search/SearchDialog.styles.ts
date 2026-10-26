@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 // 全局搜索弹窗内容样式(原 /app/search 页面 Search.styles 的弹窗化精简版)。
 export const useStyles = makeStyles({
@@ -13,7 +14,7 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   ...shorthands.gap('8px'),
   'marginBottom': '16px',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': '1fr',
   },
   },
@@ -119,7 +120,7 @@ export const useStyles = makeStyles({
   '&:hover': {
     'background': 'var(--colorNeutralBackground1Hover)',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'gridTemplateColumns': '36px minmax(0, 1fr) auto',
     ...shorthands.gap('8px'),
   },
@@ -167,7 +168,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'fontSize': '12px',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },

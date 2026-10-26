@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   archiveHero: {
@@ -20,11 +21,11 @@ export const useStyles = makeStyles({
     ...shorthands.borderRadius('50%'),
     'pointerEvents': 'none',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minHeight': '0px',
     ...shorthands.padding('16px', '24px', '64px'),
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.padding('16px', '16px', '56px'),
   },
   },
@@ -38,7 +39,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('24px'),
   'paddingBottom': '24px',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'color-mix(in oklch, var(--colorNeutralBackground1) 14%, transparent)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     ...shorthands.gap('16px'),
@@ -77,7 +78,7 @@ export const useStyles = makeStyles({
   'alignItems': 'end',
   ...shorthands.gap('40px'),
   'paddingTop': '48px',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': '1fr',
     'alignItems': 'start',
     ...shorthands.gap('24px'),
@@ -105,10 +106,10 @@ export const useStyles = makeStyles({
   'position': 'relative',
   'zIndex': 2,
   ...shorthands.margin('-32px', '24px', '0'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     ...shorthands.margin('-28px', '12px', '0'),
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.margin('-24px', '0', '0'),
   },
   },
@@ -124,7 +125,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)', 'var(--borderRadiusLarge)', '0', '0'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': `0 -8px 28px oklch(0.18 0.03 258 / 0.08)`,
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.padding('0', '16px'),
   },
   },
@@ -145,7 +146,7 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
   ...shorthands.gap('8px'),
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'gridTemplateColumns': '1fr',
   },
   },
@@ -272,7 +273,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('24px'),
   ...shorthands.padding('40px', '24px'),
   'textAlign': 'left',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'justifyContent': 'flex-start',
     ...shorthands.padding('40px', '16px'),
@@ -296,7 +297,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   ...shorthands.padding('40px'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     ...shorthands.padding('24px'),

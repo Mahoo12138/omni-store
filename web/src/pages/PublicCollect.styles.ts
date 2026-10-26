@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   workbench: {
@@ -55,7 +56,7 @@ export const useStyles = makeStyles({
   '&[aria-disabled="true"]': {
     'opacity': 0.65,
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'minHeight': '210px',
     ...shorthands.padding('16px'),
   },
@@ -96,7 +97,7 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   ...shorthands.padding('16px', '0'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.gap('8px'),
   },
   },
@@ -147,7 +148,7 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr)',
   ...shorthands.gap('24px'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
@@ -188,7 +189,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('16px'),
   'flexWrap': 'wrap',
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'flexDirection': 'column',
     'alignItems': 'stretch',
   },
@@ -241,7 +242,7 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   ...shorthands.padding('16px', '0'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.gap('8px'),
     'alignItems': 'start',
   },

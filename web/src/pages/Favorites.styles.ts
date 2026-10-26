@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   header: {
@@ -58,7 +59,7 @@ export const useStyles = makeStyles({
   '&:hover': {
     'background': 'var(--colorNeutralBackground1Hover)',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'gridTemplateColumns': '36px minmax(0, 1fr) 44px 44px',
     ...shorthands.gap('4px'),
     ...shorthands.padding('12px'),
@@ -138,7 +139,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'fontSize': '12px',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -166,7 +167,7 @@ export const useStyles = makeStyles({
     'opacity': .5,
     'cursor': 'not-allowed',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': '44px',
     'height': '44px',
   },
@@ -174,7 +175,7 @@ export const useStyles = makeStyles({
   actionPlaceholder: {
   'width': '32px',
   'height': '32px',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': '44px',
     'height': '44px',
   },

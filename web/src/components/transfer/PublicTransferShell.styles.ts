@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
   brand: {
@@ -27,13 +28,13 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': 'var(--shadow16)',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     ...shorthands.padding('40px'),
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.padding('24px'),
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.padding('16px'),
   },
   },

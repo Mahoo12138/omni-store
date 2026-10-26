@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   pageHeader: {
@@ -7,7 +8,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   'marginBottom': '40px',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     'marginBottom': '32px',
@@ -32,7 +33,7 @@ export const useStyles = makeStyles({
   'fontWeight': 700,
   'letterSpacing': '-0.04em',
   'color': 'var(--colorNeutralForeground1)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'fontSize': '32px',
   },
   },
@@ -75,7 +76,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.padding('20px', '16px', '8px'),
   },
   },
@@ -183,7 +184,7 @@ export const useStyles = makeStyles({
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },
@@ -196,7 +197,7 @@ export const useStyles = makeStyles({
   ...shorthands.padding('24px', '16px'),
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': 'auto 1fr',
   },
   },
@@ -258,7 +259,7 @@ export const useStyles = makeStyles({
   '&:hover': {
     'background': 'var(--colorNeutralBackground1Hover)',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'gridTemplateColumns': '36px minmax(0, 1fr) 44px',
     ...shorthands.gap('8px'),
     ...shorthands.padding('12px', '16px'),
@@ -349,7 +350,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '1px',
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '44px',
     'height': '44px',
   },

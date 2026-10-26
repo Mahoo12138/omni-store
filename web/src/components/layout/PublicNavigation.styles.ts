@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 // ve 的 createVar 局部变量改为普通 CSS custom property:
 // dark/light 容器负责注入 --pnav-* 变量,link 消费。
@@ -10,7 +11,7 @@ export const useStyles = makeStyles({
     flexWrap: 'wrap',
     ...shorthands.gap('6px'),
     minWidth: 0,
-    '@media screen and (max-width: 980px)': {
+    [media.lg]: {
       flexBasis: '100%',
       justifyContent: 'flex-start',
     },

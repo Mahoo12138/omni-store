@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 // TODO(人工复核):
 // - publicTabs 组合跨文件基类 outlineList
@@ -15,7 +16,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('20px'),
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.padding('0', '18px', '24px'),
     ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
@@ -37,7 +38,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('0px'),
   ...shorthands.margin('0', '-32px', '32px'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     ...shorthands.margin('0', '-18px', '24px'),
   },
   },
@@ -90,7 +91,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('40px'),
   'alignItems': 'start',
   'minWidth': '0px',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
     ...shorthands.gap('32px'),
   },
@@ -235,7 +236,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1Hover)',
   'fontSize': '13px',
   'minWidth': '0px',
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'gridTemplateColumns': 'minmax(0, 1fr) auto',
     ...shorthands.gap('8px'),
   },
@@ -333,7 +334,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 288px)',
   ...shorthands.gap('32px'),
   'minWidth': '0px',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
@@ -351,7 +352,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr) auto',
   ...shorthands.gap('8px'),
   'minWidth': '0px',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },

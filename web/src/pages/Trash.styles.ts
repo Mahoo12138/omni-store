@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 // TODO(人工复核):
 // - action 组合本文件 actionBase:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
@@ -11,7 +12,7 @@ export const useStyles = makeStyles({
   'alignItems': 'flex-end',
   ...shorthands.gap('24px'),
   'marginBottom': '28px',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },
@@ -64,7 +65,7 @@ export const useStyles = makeStyles({
   'borderCollapse': 'collapse',
   'color': 'var(--colorNeutralForeground1)',
   'fontSize': '13px',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'minWidth': '0px',
   },
   },
@@ -82,19 +83,19 @@ export const useStyles = makeStyles({
   'fontFamily': 'var(--fontFamilyMonospace)',
   'textOverflow': 'ellipsis',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'none',
   },
   },
   timeCell: {
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
   sizeCell: {
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     'display': 'none',
   },
   },

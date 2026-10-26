@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
   toolbar: {
@@ -45,7 +46,7 @@ export const useStyles = makeStyles({
   '&:focus': {
     ...shorthands.borderColor('var(--colorBrandBackground)'),
   },
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'width': '150px',
   },
   },
@@ -54,7 +55,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'overflowX': 'auto',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'overflowX': 'hidden',
   },
   },
@@ -80,7 +81,7 @@ export const useStyles = makeStyles({
   'fontSize': '13px',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'none',
   },
   },
@@ -94,7 +95,7 @@ export const useStyles = makeStyles({
   'width': '42px',
   'paddingRight': '0px',
   'textAlign': 'center',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'width': '44px',
     ...shorthands.padding('12px', '0px'),
   },
@@ -106,13 +107,13 @@ export const useStyles = makeStyles({
   },
   },
   mobileRow: {
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'grid',
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
   selectableRow: {
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'grid',
     'gridTemplateColumns': '44px minmax(0, 1fr)',
   },
@@ -131,7 +132,7 @@ export const useStyles = makeStyles({
   ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'none',
   },
   },
@@ -142,7 +143,7 @@ export const useStyles = makeStyles({
   'width': '42px',
   'paddingRight': '0px',
   'textAlign': 'center',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'width': '44px',
     ...shorthands.padding('12px', '0px'),
   },
@@ -152,7 +153,7 @@ export const useStyles = makeStyles({
   'alignItems': 'center',
   'justifyContent': 'center',
   'cursor': 'pointer',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'width': '44px',
     'height': '44px',
   },
@@ -161,13 +162,13 @@ export const useStyles = makeStyles({
   ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     ...shorthands.padding('12px', '0px'),
   },
   },
   mobileMeta: {
   'display': 'none',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'display': 'block',
     ...shorthands.margin('6px', '0', '0', '32px'),
     'color': 'var(--colorNeutralForeground2)',
@@ -203,7 +204,7 @@ export const useStyles = makeStyles({
   ...shorthands.padding('10px', '16px'),
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     ...shorthands.padding('12px', '0px'),
   },
   },
@@ -228,7 +229,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorBrandBackground2)',
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'width': '44px',
     'height': '44px',
   },
@@ -249,7 +250,7 @@ export const useStyles = makeStyles({
     'backgroundColor': 'var(--colorBrandBackground2)',
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 980px)': {
+  [media.lg]: {
     'width': '44px',
     'height': '44px',
     ...shorthands.padding('12px', '0px'),

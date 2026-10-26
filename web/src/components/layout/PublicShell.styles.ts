@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
   shell: {
@@ -106,7 +107,7 @@ export const useStyles = makeStyles({
   'fontSize': '12px',
   },
   headerResponsive: {
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'justifyContent': 'space-between',
     ...shorthands.gap('8px'),
     ...shorthands.padding('8px', '16px'),

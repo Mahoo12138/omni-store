@@ -1,4 +1,5 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   hero: {
@@ -9,7 +10,7 @@ export const useStyles = makeStyles({
   'marginBottom': '24px',
   ...shorthands.padding('24px', '0'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 640px)': {
+  [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },

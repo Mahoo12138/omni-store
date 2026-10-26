@@ -1,11 +1,12 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
+import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
   shell: {
   'minHeight': '100dvh',
   'display': 'flex',
   'background': 'var(--colorNeutralBackground2)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'flexDirection': 'column',
   },
   },
@@ -21,7 +22,7 @@ export const useStyles = makeStyles({
   'top': '0px',
   'height': '100dvh',
   'zIndex': '20',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': '100%',
     'height': 'auto',
     'position': 'fixed',
@@ -34,7 +35,7 @@ export const useStyles = makeStyles({
     ...shorthands.gap('4px'),
     ...shorthands.borderRight('none'),
     'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
-    ...shorthands.padding('6px', '8px', 'max(6px,', 'env(safe-area-inset-bottom))'),
+    ...shorthands.padding('6px', '8px', 'max(6px, env(safe-area-inset-bottom))'),
     ...shorthands.overflow('visible'),
   },
   },
@@ -47,7 +48,7 @@ export const useStyles = makeStyles({
   'fontWeight': 700,
   'letterSpacing': '-0.035em',
   ...shorthands.padding('2px', '10px', '36px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -58,7 +59,7 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap('4px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minWidth': '0px',
     'flexDirection': 'row',
     'flex': 1,
@@ -73,7 +74,7 @@ export const useStyles = makeStyles({
   'fontSize': '11px',
   'fontWeight': 600,
   'letterSpacing': '0.08em',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -100,7 +101,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minWidth': '60px',
     'minHeight': '52px',
     'flex': '0 0 60px',
@@ -135,7 +136,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'minWidth': '60px',
     'minHeight': '52px',
     'flex': '0 0 60px',
@@ -148,7 +149,7 @@ export const useStyles = makeStyles({
   },
   sidebarSpacer: {
   'flex': 1,
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -157,7 +158,7 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   'display': 'flex',
   'flexDirection': 'column',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'paddingBottom': 'calc(70px + env(safe-area-inset-bottom))',
   },
   },
@@ -169,7 +170,7 @@ export const useStyles = makeStyles({
   'flexShrink': 0,
   'paddingTop': '12px',
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': 'auto',
     'paddingTop': '0px',
     ...shorthands.borderTop('0px'),
@@ -198,7 +199,7 @@ export const useStyles = makeStyles({
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '2px',
   },
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'width': '52px',
     'minHeight': '52px',
     'justifyContent': 'center',
@@ -225,7 +226,7 @@ export const useStyles = makeStyles({
   'flexDirection': 'column',
   'alignItems': 'flex-start',
   ...shorthands.gap('2px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -246,7 +247,7 @@ export const useStyles = makeStyles({
   'flexShrink': 0,
   'color': 'var(--colorNeutralForeground2)',
   'transitionProperty': 'transform', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'display': 'none',
   },
   },
@@ -261,7 +262,7 @@ export const useStyles = makeStyles({
   'boxShadow': 'var(--shadow4)',
   ...shorthands.padding('6px'),
   'zIndex': '10',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'right': '0px',
     'left': 'auto',
   },
@@ -300,10 +301,10 @@ export const useStyles = makeStyles({
   'maxWidth': '1440px',
   ...shorthands.margin('0', 'auto'),
   ...shorthands.padding('56px', 'clamp(28px, 4vw, 72px)', '80px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     ...shorthands.padding('36px', '20px', '56px'),
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.padding('28px', '16px', '44px'),
   },
   },
@@ -313,10 +314,10 @@ export const useStyles = makeStyles({
   'maxWidth': '1600px',
   ...shorthands.margin('0', 'auto'),
   ...shorthands.padding('20px', 'clamp(20px, 2vw, 32px)', '48px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     ...shorthands.padding('24px', '18px', '42px'),
   },
-  '@media screen and (max-width: 480px)': {
+  [media.xs]: {
     ...shorthands.padding('20px', '14px', '36px'),
   },
   },
@@ -325,7 +326,7 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': '240px 1fr',
   'background': 'var(--colorNeutralBackground2)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'gridTemplateColumns': '1fr',
     'gridTemplateRows': '1fr',
   },
@@ -333,7 +334,7 @@ export const useStyles = makeStyles({
   loadingSidebar: {
   'background': 'var(--colorNeutralBackground1)',
   'borderRightWidth': '1px', 'borderRightStyle': 'solid', 'borderRightColor': 'var(--colorNeutralStroke2)',
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     'height': '64px',
     'position': 'fixed',
     'right': '0px',
@@ -345,7 +346,7 @@ export const useStyles = makeStyles({
   },
   loadingContent: {
   ...shorthands.padding('32px'),
-  '@media screen and (max-width: 820px)': {
+  [media.md]: {
     ...shorthands.padding('24px', '24px', '88px'),
   },
   },
