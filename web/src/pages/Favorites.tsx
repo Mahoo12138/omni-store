@@ -4,6 +4,8 @@ import { ApiRequestError } from '../api/client'
 import { fetchMyFavorites, removeFavorite } from '../api/favorites'
 import { downloadFileUrl } from '../api/sources'
 import { AppShell } from '../components/layout/AppShell'
+import { PageHeader } from '../components/shell/PageHeader'
+import { StateView } from '../components/shell/StateView'
 import { Button } from '../components/ui/Button'
 import { IconDownload, IconFile, IconFolder, IconStar } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
@@ -33,27 +35,29 @@ export function FavoritesPage() {
 
   return (
     <AppShell title="收藏">
-      <header className={css.header}>
-        <span className={css.eyebrow}>个人空间</span>
-        <h1 className={css.title}>收藏</h1>
-        <p className={css.description}>收藏常用文件和文件夹，跨存储源快速返回；收藏不会复制或移动原文件。</p>
-      </header>
+      <PageHeader
+        eyebrow="个人空间"
+        title="收藏"
+        description="收藏常用文件和文件夹，跨存储源快速返回；收藏不会复制或移动原文件。"
+      />
 
       {favorites.isPending ? (
-        <section className={css.state} role="status" aria-busy="true">正在读取收藏…</section>
+        <StateView kind="pending" title="正在读取收藏…" />
       ) : favorites.isError ? (
-        <section className={css.state} role="alert">
-          <h2>收藏加载失败</h2>
-          <p>{favorites.error instanceof ApiRequestError ? favorites.error.message : '请检查连接后重试。'}</p>
-          <Button variant="secondary" onClick={() => favorites.refetch()}>重新加载</Button>
-        </section>
+        <StateView
+          kind="error"
+          title="收藏加载失败"
+          description={favorites.error instanceof ApiRequestError ? favorites.error.message : '请检查连接后重试。'}
+          action={<Button variant="secondary" onClick={() => favorites.refetch()}>重新加载</Button>}
+        />
       ) : items.length === 0 ? (
-        <section className={css.state}>
-          <span className={css.emptyIcon}><IconStar size={25} /></span>
-          <h2>还没有收藏</h2>
-          <p>在文件列表或网格中点按星标，即可收藏文件或文件夹。</p>
-          <Button variant="secondary" onClick={() => navigate({ to: '/app' })}>前往文件</Button>
-        </section>
+        <StateView
+          kind="empty"
+          icon={<IconStar size={22} />}
+          title="还没有收藏"
+          description="在文件列表或网格中点按星标，即可收藏文件或文件夹。"
+          action={<Button variant="secondary" onClick={() => navigate({ to: '/app' })}>前往文件</Button>}
+        />
       ) : (
         <section className={css.panel} aria-label="收藏列表">
           <div className={css.panelHeader}>

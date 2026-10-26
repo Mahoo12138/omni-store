@@ -16,6 +16,7 @@ export const layout = {
   pageGutter: 'clamp(28px, 4vw, 72px)',
   pageGutterWide: 'clamp(20px, 2vw, 32px)',
   readingMaxWidth: '68ch',
+  stateMinHeight: '270px',
 
   // 弹层
   dialogWidth: '480px',
