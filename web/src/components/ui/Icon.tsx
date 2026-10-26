@@ -1,12 +1,9 @@
-import type { CSSProperties, FC, ReactNode } from 'react'
+import type { CSSProperties, FC } from 'react'
 import {
   AddRegular,
   ArrowClockwiseRegular,
   ArrowCounterclockwiseRegular,
   ArrowDownloadRegular,
-  ArrowLeftRegular,
-  ArrowMoveRegular,
-  ArrowUpRegular,
   ArrowUploadRegular,
   CheckmarkRegular,
   ChevronDownRegular,
@@ -67,8 +64,6 @@ function shim(Icon: FluentIcon) {
 }
 
 export const IconActivity = shim(PulseRegular)
-export const IconArrowLeft = shim(ArrowLeftRegular)
-export const IconArrowUp = shim(ArrowUpRegular)
 export const IconCheck = shim(CheckmarkRegular)
 export const IconChevronDown = shim(ChevronDownRegular)
 export const IconChevronLeft = shim(ChevronLeftRegular)
@@ -95,7 +90,6 @@ export const IconLink = shim(LinkRegular)
 export const IconList = shim(ListRegular)
 export const IconLogout = shim(SignOutRegular)
 export const IconMore = shim(MoreHorizontalRegular)
-export const IconMove = shim(ArrowMoveRegular)
 export const IconPlus = shim(AddRegular)
 export const IconQr = shim(QrCodeRegular)
 export const IconQuestion = shim(QuestionCircleRegular)
@@ -211,19 +205,4 @@ export function EntryIcon({ name, type, size = 26 }: { name: string; type: strin
       <IconFile size={size * 0.6} />
     </span>
   )
-}
-
-// 彩色图标砖（存储源卡片 / 快速操作使用）。
-export function IconTile({
-  bg,
-  fg,
-  size = 44,
-  children,
-}: {
-  bg: string
-  fg: string
-  size?: number
-  children: ReactNode
-}) {
-  return <span style={{ ...tileStyle(size), background: bg, color: fg }}>{children}</span>
 }

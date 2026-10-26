@@ -45,10 +45,4 @@ export const useStyles = makeStyles({
     '@media screen and (max-width: 820px)': { minHeight: '44px' },
     '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
   },
-
-  outlineIconTab: {
-    width: '36px',
-    ...shorthands.padding(0),
-    '@media screen and (max-width: 820px)': { width: '44px' },
-  },
 })

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Toaster, useToastController } from '@fluentui/react-components'
 import type { ToastIntent } from '@fluentui/react-components'
 
-export const appStatusToastID = 'app-status'
+const appStatusToastID = 'app-status'
 
 // Fluent Toaster 的控制器单例：AppToaster 挂载时捕获，供组件外的模块级通知函数使用。
 type ToastController = ReturnType<typeof useToastController>
