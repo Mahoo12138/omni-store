@@ -25,7 +25,7 @@ import { ApiRequestError } from '../api/client'
 import { createShare, type FileShare } from '../api/shares'
 import { fetchMyQuota, type UserQuota } from '../api/auth'
 import { addFavorite, fetchMyFavorites, removeFavorite, type FavoriteItem } from '../api/favorites'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { useFileClipboard, type FileClipboardItem, type FileClipboardOperation } from '../components/files/FileClipboard'
 import { FileTable } from '../components/files/FileTable'
 import { Badge } from '../components/ui/Badge'
@@ -112,27 +112,27 @@ export function FileManagerPage() {
   // 1) 加载中
   if (sources.isPending) {
     return (
-      <AppShell title="文件">
+      <AppFrame title="文件">
         <div style={{ padding: 32, color: 'var(--colorNeutralForeground2)', textAlign: 'center' }}>加载中…</div>
-      </AppShell>
+      </AppFrame>
     )
   }
 
   // 2) 无任何存储源
   if (sources.isSuccess && sources.data.length === 0) {
     return (
-      <AppShell title="文件管理">
+      <AppFrame title="文件管理">
         <NoSourceView />
-      </AppShell>
+      </AppFrame>
     )
   }
 
   // 3) URL 里指定的 sourceKey 不可用
   if (sources.isSuccess && !source) {
     return (
-      <AppShell title="文件管理">
+      <AppFrame title="文件管理">
         <NoSourceView />
-      </AppShell>
+      </AppFrame>
     )
   }
 
@@ -722,7 +722,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
   }, [canWrite, clipboard.items, pasteDisabledReason, pasteTask?.status, selectedEntries])
 
   return (
-    <AppShell title={source.name}>
+    <AppFrame title={source.name}>
       <div
         className={css.dropSurface}
         onDragEnter={handleDragEnter}
@@ -1252,7 +1252,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
         />
       ) : null}
       </div>
-    </AppShell>
+    </AppFrame>
   )
 }
 

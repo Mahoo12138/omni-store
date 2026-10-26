@@ -88,7 +88,8 @@ import {
   IconUser,
   IconUserPlus,
 } from '../../components/ui/Icon'
-import { AdminLayout, AdminPageHeader } from './AdminLayout'
+import { AdminLayout } from './AdminLayout'
+import { PageHeader } from '../../components/shell/PageHeader'
 import { SiteSettingsSection } from './SiteSettings'
 import { formatBytes, formatDate } from '../../utils/format'
 import { auditActionLabel, auditActorLabel, auditEntryLabel } from '../../utils/audit'
@@ -226,7 +227,7 @@ export function AdminOverviewPage() {
 
   return (
     <AdminLayout>
-      <AdminPageHeader title={isAdmin ? '系统设置' : '账号设置'} />
+      <PageHeader title={isAdmin ? '系统设置' : '账号设置'} />
 
       <div className={css.settingsLayout}>
         {/* 左侧分组的子导航 */}

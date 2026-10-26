@@ -12,7 +12,7 @@ import {
 import type { ImageRecord } from '../api/imagebed'
 import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Select } from '../components/ui/Select'
@@ -45,15 +45,15 @@ export function ImageBedPage() {
 
   if (status.isPending) {
     return (
-      <AppShell title="图床">
+      <AppFrame title="图床">
         <div className={css.loadingState} aria-busy="true">正在加载图床…</div>
-      </AppShell>
+      </AppFrame>
     )
   }
 
   if (status.isError) {
     return (
-      <AppShell title="图床">
+      <AppFrame title="图床">
         <div className={css.noTargetPage} role="alert">
           <div className={css.noTargetIcon}><IconCloud size={42} /></div>
           <h1 className={css.noTargetTitle}>图床加载失败</h1>
@@ -66,15 +66,15 @@ export function ImageBedPage() {
             <Button variant="secondary" onClick={() => status.refetch()}>重新加载</Button>
           </div>
         </div>
-      </AppShell>
+      </AppFrame>
     )
   }
 
   if (status.isSuccess && !status.data.available) {
     return (
-      <AppShell title="图床">
+      <AppFrame title="图床">
         <NoTargetView isAdmin={isAdmin} />
-      </AppShell>
+      </AppFrame>
     )
   }
 
@@ -169,7 +169,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
   }
 
   return (
-    <AppShell title="图床">
+    <AppFrame title="图床">
       <div className={css.pageHeader}>
         <h1 className={css.pageTitle}>图床</h1>
       </div>
@@ -402,7 +402,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
           <p style={{ margin: 0 }}>物理文件会一并删除，请确认继续。</p>
         </DialogWrap>
       ) : null}
-    </AppShell>
+    </AppFrame>
   )
 }
 

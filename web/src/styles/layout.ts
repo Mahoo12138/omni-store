@@ -8,7 +8,7 @@
 export const layout = {
   // 应用外壳
   sidebarWidth: '240px',
-  sidebarCompactHeight: '52px',
+  navRailHeight: '52px',
   contentMaxWidth: '1440px',
   contentMaxWideWidth: '1600px',
 

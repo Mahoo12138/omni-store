@@ -2,13 +2,22 @@ import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Avatar,
+  Button,
+  Menu as FluentMenu,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  mergeClasses,
+} from '@fluentui/react-components'
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
 import { SearchDialog, openSearchDialog } from '../search/SearchDialog'
 import {
   IconChevronDown,
-  IconFolder,
   IconCloud,
+  IconFolder,
   IconImage,
   IconLink,
   IconLogout,
@@ -17,12 +26,19 @@ import {
   IconStar,
   LogoMark,
 } from '../ui/Icon'
-import { Menu, type MenuOption } from '../ui/Menu'
-import { useStyles } from './AppShell.styles'
+import { ItemView, type MenuOption } from '../ui/Menu'
+import { useAppFrameStyles } from './AppFrame.styles'
 
-// 登录侧布局：桌面使用左侧导航，窄屏切为底部导航。
+export interface AppFrameNavItem {
+  to: string
+  label: string
+  icon: ReactNode
+  active: boolean
+}
+
+// 登录侧外壳：桌面左侧导航，窄屏切为底部导航条。
 // 未登录自动跳转 /login；账号入口始终位于导航末端。
-export function AppShell({
+export function AppFrame({
   title,
   children,
   wide = false,
@@ -31,7 +47,7 @@ export function AppShell({
   children: ReactNode
   wide?: boolean
 }) {
-  const css = useStyles()
+  const css = useAppFrameStyles()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const clipboard = useFileClipboard()
@@ -60,12 +76,8 @@ export function AppShell({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  if (me.isPending) {
-    return <AppShellLoading />
-  }
-  if (me.isError) {
-    return null
-  }
+  if (me.isPending) return <AppFrameLoading />
+  if (me.isError) return null
   const user = me.data
 
   async function onLogout() {
@@ -77,7 +89,7 @@ export function AppShell({
     navigate({ to: '/login' })
   }
 
-  const navItems = [
+  const navItems: AppFrameNavItem[] = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
     { to: '/app/favorites', label: '收藏', icon: <IconStar />, active: pathname.startsWith('/app/favorites') },
     { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
@@ -90,7 +102,7 @@ export function AppShell({
     pathname === '/app/admin' || pathname.startsWith('/app/admin/') || pathname.startsWith('/app/admin?')
 
   return (
-    <div className={css.shell}>
+    <div className={css.root}>
       <aside className={css.sidebar}>
         <Link to="/app" className={css.brand}>
           <LogoMark size={30} />
@@ -99,27 +111,9 @@ export function AppShell({
         <nav ref={navRef} className={css.nav} aria-label="主导航">
           <span className={css.navLabel}>工作空间</span>
           {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              activeOptions={{ exact: true }}
-              className={item.active ? css.navLinkActive : css.navLink}
-              aria-current={item.active ? 'page' : false}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
+            <NavItem key={item.to} {...item} />
           ))}
-          {showAdmin && (
-            <Link
-              to="/app/admin"
-              className={adminActive ? css.navLinkActive : css.navLink}
-              aria-current={adminActive ? 'page' : false}
-            >
-              <IconSettings />
-              系统设置
-            </Link>
-          )}
+          {showAdmin && <NavItem to="/app/admin" label="系统设置" icon={<IconSettings />} active={adminActive} />}
         </nav>
         <div className={css.sidebarSpacer} />
         <UserMenu displayName={user.display_name} onLogout={onLogout} />
@@ -134,68 +128,68 @@ export function AppShell({
   )
 }
 
-function AppShellLoading() {
-  const css = useStyles()
+function NavItem({ to, label, icon, active }: AppFrameNavItem) {
+  const css = useAppFrameStyles()
   return (
-    <div className={css.loadingShell} aria-busy="true" aria-label="正在加载工作区">
+    <Link
+      to={to}
+      activeOptions={{ exact: true }}
+      className={active ? mergeClasses(css.navItem, css.navItemSelected) : css.navItem}
+      aria-current={active ? 'page' : false}
+    >
+      {icon}
+      {label}
+    </Link>
+  )
+}
+
+function AppFrameLoading() {
+  const css = useAppFrameStyles()
+  return (
+    <div className={css.root} aria-busy="true" aria-label="正在加载工作区">
       <div className={css.loadingSidebar} />
-      <div className={css.loadingContent}>
-        <div className={css.loadingBar} />
-        <div className={css.loadingBlock} />
-      </div>
+      <div className={css.loadingContent} />
     </div>
   )
 }
 
-// 侧栏底部用户菜单：桌面显示完整账号，窄屏收为底部导航入口。
+// 侧栏底部账号菜单：桌面显示完整账号，窄屏收为底部导航末端的一个图标。
 function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
-  const css = useStyles()
+  const css = useAppFrameStyles()
   const navigate = useNavigate()
-  const initial = displayName.slice(0, 1).toUpperCase()
 
   const items: MenuOption[] = [
-    {
-      id: 'settings',
-      label: '设置',
-      icon: <IconSettings size={16} />,
-      onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }),
-    },
-    {
-      id: 'image-bed',
-      label: '图床',
-      icon: <IconImage size={16} />,
-      onSelect: () => navigate({ to: '/app/image-bed' }),
-    },
-    {
-      id: 'about',
-      label: '使用帮助',
-      icon: <IconQuestion size={16} />,
-      onSelect: () => navigate({ to: '/about' }),
-    },
-    {
-      id: 'logout',
-      label: '退出登录',
-      icon: <IconLogout size={16} />,
-      danger: true,
-      onSelect: onLogout,
-    },
+    { id: 'settings', label: '设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }) },
+    { id: 'image-bed', label: '图床', icon: <IconImage size={16} />, onSelect: () => navigate({ to: '/app/image-bed' }) },
+    { id: 'about', label: '使用帮助', icon: <IconQuestion size={16} />, onSelect: () => navigate({ to: '/about' }) },
+    { id: 'logout', label: '退出登录', icon: <IconLogout size={16} />, danger: true, onSelect: onLogout },
   ]
 
   return (
-    <Menu
-      ariaLabel={`账号菜单：${displayName}`}
-      trigger={
-        <>
-          <span className={css.avatar}>{initial}</span>
-          <span className={css.userIdentity}>
-            <span className={css.userName}>{displayName}</span>
-            <span className={css.userCaption}>账号与设置</span>
-          </span>
-          <IconChevronDown size={14} className={css.userChevron} />
-        </>
-      }
-      triggerClassName={css.userMenuBtn}
-      items={items}
-    />
+    <div className={css.userArea}>
+      <FluentMenu>
+        <MenuTrigger>
+          <Button
+            appearance="subtle"
+            className={css.userButton}
+            aria-label={`账号菜单：${displayName}`}
+            icon={<Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />}
+          >
+            <span className={css.userStack}>
+              <span className={css.userName}>{displayName}</span>
+              <span className={css.userCaption}>账号与设置</span>
+            </span>
+            <IconChevronDown size={12} className={css.userChevron} />
+          </Button>
+        </MenuTrigger>
+        <MenuPopover>
+          <MenuList aria-label={`账号菜单：${displayName}`}>
+            {items.map((item) => (
+              <ItemView key={item.id} item={item} />
+            ))}
+          </MenuList>
+        </MenuPopover>
+      </FluentMenu>
+    </div>
   )
 }

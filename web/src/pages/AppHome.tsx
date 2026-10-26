@@ -4,7 +4,7 @@ import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { downloadFileUrl, fetchMySources, type UserSource } from '../api/sources'
 import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { Button } from '../components/ui/Button'
 import { openSearchDialog } from '../components/search/SearchDialog'
 import {
@@ -49,7 +49,7 @@ export function AppHomePage() {
   }
 
   return (
-    <AppShell title="文件">
+    <AppFrame title="文件">
       <header className={css.pageHeader}>
         <div className={css.headerCopy}>
           <time className={css.welcomeDate} dateTime={now.toISOString()}>{formatWelcomeDate(now)}</time>
@@ -120,7 +120,7 @@ export function AppHomePage() {
           onOpenParent={openRecentParent}
         />
       </div>
-    </AppShell>
+    </AppFrame>
   )
 }
 

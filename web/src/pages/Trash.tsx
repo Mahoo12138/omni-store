@@ -9,7 +9,7 @@ import {
   restoreTrash,
   type TrashEntry,
 } from '../api/sources'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Field } from '../components/ui/Field'
@@ -42,22 +42,22 @@ export function TrashPage() {
   }
 
   if (sources.isPending) {
-    return <AppShell title="回收站"><div className={css.centerState}>加载中…</div></AppShell>
+    return <AppFrame title="回收站"><div className={css.centerState}>加载中…</div></AppFrame>
   }
   if (!source) {
     return (
-      <AppShell title="回收站">
+      <AppFrame title="回收站">
         <div className={css.centerState}>
           <p>存储源不可用。</p>
           <Button variant="secondary" onClick={() => navigate({ to: '/app' })}>返回文件列表</Button>
         </div>
-      </AppShell>
+      </AppFrame>
     )
   }
 
   const entries = trash.data ?? []
   return (
-    <AppShell title={`${source.name}回收站`}>
+    <AppFrame title={`${source.name}回收站`}>
       <header className={css.header}>
         <div>
           <button className={css.back} onClick={() => navigate({
@@ -154,7 +154,7 @@ export function TrashPage() {
           }}
         />
       ) : null}
-    </AppShell>
+    </AppFrame>
   )
 }
 

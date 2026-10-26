@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiRequestError } from '../api/client'
 import { fetchMyFavorites, removeFavorite } from '../api/favorites'
 import { downloadFileUrl } from '../api/sources'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { PageHeader } from '../components/shell/PageHeader'
 import { StateView } from '../components/shell/StateView'
 import { Button } from '../components/ui/Button'
@@ -34,7 +34,7 @@ export function FavoritesPage() {
   }
 
   return (
-    <AppShell title="收藏">
+    <AppFrame title="收藏">
       <PageHeader
         eyebrow="个人空间"
         title="收藏"
@@ -100,6 +100,6 @@ export function FavoritesPage() {
           </div>
         </section>
       )}
-    </AppShell>
+    </AppFrame>
   )
 }

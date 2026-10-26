@@ -65,7 +65,7 @@ h3 {
   }
 }
 
-/* 骨架屏 pulse(AppShell/Dashboard 等复用) */
+/* 骨架屏 pulse(Dashboard 等复用) */
 @keyframes omnistore-pulse {
   0%,
   100% {

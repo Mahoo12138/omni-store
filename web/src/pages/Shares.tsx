@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchShares, revokeShare, type FileShare } from '../api/shares'
-import { AppShell } from '../components/layout/AppShell'
+import { AppFrame } from '../components/shell/AppFrame'
 import { QrCodeDialog } from '../components/share/QrCodeDialog'
 import { Badge } from '../components/ui/Badge'
 import { DialogWrap } from '../components/ui/Dialog'
@@ -32,7 +32,7 @@ export function SharesPage() {
   }
 
   return (
-    <AppShell title="分享">
+    <AppFrame title="分享">
       <header className={css.header}>
         <div>
           <h1 className={css.title}>分享</h1>
@@ -83,7 +83,7 @@ export function SharesPage() {
           <p style={{ margin: 0 }}>撤销后，现有链接会立即失效，且无法恢复。</p>
         </DialogWrap>
       ) : null}
-    </AppShell>
+    </AppFrame>
   )
 }
 

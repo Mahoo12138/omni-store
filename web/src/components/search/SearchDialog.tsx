@@ -23,7 +23,7 @@ import { Select } from '../ui/Select'
 import { formatBytes, formatDate } from '../../utils/format'
 import { useStyles } from './SearchDialog.styles'
 
-// 呼出全局搜索弹窗的窗口事件:AppShell 挂 ⌘K/Ctrl+K,页面内按钮调用 openSearchDialog()。
+// 呼出全局搜索弹窗的窗口事件:AppFrame 挂 ⌘K/Ctrl+K,页面内按钮调用 openSearchDialog()。
 const OPEN_SEARCH_EVENT = 'omnistore:open-search'
 
 export function openSearchDialog() {
