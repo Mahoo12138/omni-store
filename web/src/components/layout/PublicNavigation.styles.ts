@@ -10,7 +10,7 @@ export const useStyles = makeStyles({
     flexWrap: 'wrap',
     ...shorthands.gap('6px'),
     minWidth: 0,
-    '@media screen and (max-width: 900px)': {
+    '@media screen and (max-width: 980px)': {
       flexBasis: '100%',
       justifyContent: 'flex-start',
     },

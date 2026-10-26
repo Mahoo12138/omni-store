@@ -33,7 +33,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'boxShadow': 'var(--shadow4)',
-  '@media screen and (max-width: 680px)': {
+  '@media screen and (max-width: 820px)': {
     'gridTemplateColumns': '40px minmax(0, 1fr)',
     'alignItems': 'start',
   },
@@ -86,7 +86,7 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('4px'),
-  '@media screen and (max-width: 680px)': {
+  '@media screen and (max-width: 820px)': {
     'gridColumn': '1 / -1',
     'justifyContent': 'flex-end',
   },

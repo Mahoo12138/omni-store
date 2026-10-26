@@ -183,7 +183,7 @@ export const useStyles = makeStyles({
   'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 560px)': {
+  '@media screen and (max-width: 640px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },

@@ -11,7 +11,7 @@ export const useStyles = makeStyles({
   'alignItems': 'flex-end',
   ...shorthands.gap('24px'),
   'marginBottom': '28px',
-  '@media screen and (max-width: 620px)': {
+  '@media screen and (max-width: 640px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },
@@ -88,13 +88,13 @@ export const useStyles = makeStyles({
   },
   timeCell: {
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'display': 'none',
   },
   },
   sizeCell: {
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 520px)': {
+  '@media screen and (max-width: 480px)': {
     'display': 'none',
   },
   },

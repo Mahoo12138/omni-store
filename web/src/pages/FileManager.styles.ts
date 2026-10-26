@@ -69,7 +69,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   ...shorthands.padding('0', '0', '34px'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     'paddingBottom': '24px',
@@ -135,7 +135,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'color': 'var(--colorNeutralForeground1)',
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'alignItems': 'stretch',
     'flexWrap': 'wrap',
   },
@@ -178,11 +178,11 @@ export const useStyles = makeStyles({
   ...shorthands.gap('4px'),
   'marginLeft': 'auto',
   'flexShrink': 0,
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'width': '100%',
     'marginLeft': '42px',
   },
-  '@media screen and (max-width: 460px)': {
+  '@media screen and (max-width: 480px)': {
     'marginLeft': '0px',
     'flexWrap': 'wrap',
   },

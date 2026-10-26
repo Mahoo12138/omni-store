@@ -55,7 +55,7 @@ export const useStyles = makeStyles({
   '&[aria-disabled="true"]': {
     'opacity': 0.65,
   },
-  '@media screen and (max-width: 400px)': {
+  '@media screen and (max-width: 480px)': {
     'minHeight': '210px',
     ...shorthands.padding('16px'),
   },

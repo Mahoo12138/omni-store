@@ -333,7 +333,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 288px)',
   ...shorthands.gap('32px'),
   'minWidth': '0px',
-  '@media screen and (max-width: 900px)': {
+  '@media screen and (max-width: 980px)': {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
@@ -351,7 +351,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr) auto',
   ...shorthands.gap('8px'),
   'minWidth': '0px',
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },

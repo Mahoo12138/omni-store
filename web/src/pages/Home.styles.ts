@@ -20,7 +20,7 @@ export const useStyles = makeStyles({
     ...shorthands.borderRadius('50%'),
     'pointerEvents': 'none',
   },
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'minHeight': '0px',
     ...shorthands.padding('16px', '24px', '64px'),
   },
@@ -105,7 +105,7 @@ export const useStyles = makeStyles({
   'position': 'relative',
   'zIndex': 2,
   ...shorthands.margin('-32px', '24px', '0'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     ...shorthands.margin('-28px', '12px', '0'),
   },
   '@media screen and (max-width: 480px)': {
@@ -124,7 +124,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)', 'var(--borderRadiusLarge)', '0', '0'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': `0 -8px 28px oklch(0.18 0.03 258 / 0.08)`,
-  '@media screen and (max-width: 560px)': {
+  '@media screen and (max-width: 640px)': {
     ...shorthands.padding('0', '16px'),
   },
   },
@@ -272,7 +272,7 @@ export const useStyles = makeStyles({
   ...shorthands.gap('24px'),
   ...shorthands.padding('40px', '24px'),
   'textAlign': 'left',
-  '@media screen and (max-width: 560px)': {
+  '@media screen and (max-width: 640px)': {
     'alignItems': 'flex-start',
     'justifyContent': 'flex-start',
     ...shorthands.padding('40px', '16px'),
@@ -296,7 +296,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   ...shorthands.padding('40px'),
-  '@media screen and (max-width: 560px)': {
+  '@media screen and (max-width: 640px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     ...shorthands.padding('24px'),

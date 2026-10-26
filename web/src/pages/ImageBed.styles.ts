@@ -348,19 +348,19 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': 'repeat(5, minmax(0, 1fr))',
   ...shorthands.gap('10px'),
-  '@media screen and (max-width: 1420px)': {
+  '@media screen and (max-width: 1400px)': {
     'gridTemplateColumns': 'repeat(4, minmax(0, 1fr))',
   },
-  '@media screen and (max-width: 1180px)': {
+  '@media screen and (max-width: 1200px)': {
     'gridTemplateColumns': 'repeat(5, minmax(0, 1fr))',
   },
-  '@media screen and (max-width: 960px)': {
+  '@media screen and (max-width: 980px)': {
     'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
   },
   '@media screen and (max-width: 640px)': {
     'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
   },
-  '@media screen and (max-width: 420px)': {
+  '@media screen and (max-width: 480px)': {
     'gridTemplateColumns': '1fr',
   },
   },

@@ -119,7 +119,7 @@ export const useStyles = makeStyles({
   '&:hover': {
     'background': 'var(--colorNeutralBackground1Hover)',
   },
-  '@media screen and (max-width: 680px)': {
+  '@media screen and (max-width: 820px)': {
     'gridTemplateColumns': '36px minmax(0, 1fr) auto',
     ...shorthands.gap('8px'),
   },
@@ -167,7 +167,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'fontSize': '12px',
   'whiteSpace': 'nowrap',
-  '@media screen and (max-width: 680px)': {
+  '@media screen and (max-width: 820px)': {
     'display': 'none',
   },
   },

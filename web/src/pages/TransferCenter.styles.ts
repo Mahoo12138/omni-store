@@ -59,7 +59,7 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
   },

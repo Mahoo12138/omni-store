@@ -27,7 +27,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': 'var(--shadow16)',
-  '@media screen and (max-width: 900px)': {
+  '@media screen and (max-width: 980px)': {
     ...shorthands.padding('40px'),
   },
   '@media screen and (max-width: 640px)': {

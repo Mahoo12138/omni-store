@@ -50,7 +50,7 @@ export const useStyles = makeStyles({
     ...shorthands.borderRadius('50%'),
     'pointerEvents': 'none',
   },
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'minHeight': '0px',
     ...shorthands.padding('16px', '24px', '70px'),
   },
@@ -140,7 +140,7 @@ export const useStyles = makeStyles({
   'position': 'relative',
   'zIndex': 2,
   ...shorthands.margin('-42px', '24px', '0'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     ...shorthands.margin('-34px', '12px', '0'),
   },
   '@media screen and (max-width: 480px)': {
@@ -245,7 +245,7 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
   ...shorthands.padding('16px', '24px'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     'alignItems': 'stretch',
     'flexDirection': 'column',
     ...shorthands.gap('16px'),
@@ -276,7 +276,7 @@ export const useStyles = makeStyles({
   },
   'resultList': {
   ...shorthands.padding('0', '24px'),
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     ...shorthands.padding('0', '16px'),
   },
   },
@@ -288,7 +288,7 @@ export const useStyles = makeStyles({
   'color': 'var(--colorPaletteRedForeground1)',
   'fontSize': '13px',
   'lineHeight': 1.5,
-  '@media screen and (max-width: 720px)': {
+  '@media screen and (max-width: 820px)': {
     ...shorthands.margin('0', '16px', '16px'),
   },
   },
@@ -301,7 +301,7 @@ export const useStyles = makeStyles({
   'gridTemplateColumns': '72px minmax(0, 1fr) auto',
   'alignItems': 'center',
   ...shorthands.gap('16px'),
-  '@media screen and (max-width: 600px)': {
+  '@media screen and (max-width: 640px)': {
     'gridTemplateColumns': '64px minmax(0, 1fr)',
   },
   },
@@ -313,7 +313,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   'background': 'var(--colorNeutralBackground2)',
-  '@media screen and (max-width: 600px)': {
+  '@media screen and (max-width: 640px)': {
     'width': '64px',
     'height': '56px',
   },
@@ -328,7 +328,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'background': 'var(--colorNeutralBackground2)',
   'color': 'var(--colorNeutralForeground2)',
-  '@media screen and (max-width: 600px)': {
+  '@media screen and (max-width: 640px)': {
     'width': '64px',
     'height': '56px',
   },
@@ -366,7 +366,7 @@ export const useStyles = makeStyles({
   '&:hover': {
     'color': 'var(--colorBrandBackground)',
   },
-  '@media screen and (max-width: 600px)': {
+  '@media screen and (max-width: 640px)': {
     'gridColumn': '1 / -1',
     'width': 'fit-content',
     'marginLeft': '80px',
@@ -446,7 +446,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
   'boxShadow': 'var(--shadow4)',
-  '@media screen and (max-width: 560px)': {
+  '@media screen and (max-width: 640px)': {
     'alignItems': 'flex-start',
     'flexDirection': 'column',
     ...shorthands.padding('24px'),
