@@ -116,7 +116,9 @@ export const useStyles = makeStyles({
   },
   settings: {
   'minWidth': '0px',
-  ...shorthands.padding('20px'),
+  // 折叠本体换成 Fluent Accordion 后，内边距由 header/panel 自己负责，
+  // 外层只保留卡片式的边框与底色（原来给 <details> 写的 20px 内边距会叠加）。
+  ...shorthands.padding('0px'),
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),

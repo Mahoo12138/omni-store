@@ -196,11 +196,11 @@ test('public navigation, three workspace tabs, long branding and status retry fi
         await expect(tab).toHaveAttribute('aria-selected', 'true')
         if (tabName === '发送文件') {
           await expect(page.getByLabel('发件包标题', { exact: true })).toBeVisible()
-          await page.locator('summary').filter({ hasText: '发送设置' }).click()
+          await page.getByRole('button', { name: '发送设置', exact: true }).click()
           await expect(page.getByLabel('访问密码', { exact: true })).toBeVisible()
         } else if (tabName === '收集文件') {
           await expect(page.getByLabel('收集任务标题', { exact: true })).toBeVisible()
-          await page.locator('summary').filter({ hasText: '收集设置' }).click()
+          await page.getByRole('button', { name: '收集设置', exact: true }).click()
           await page.locator('details').getByRole('tab', { name: '文件', exact: true }).click()
           await expect(page.getByLabel('总量上限 MB', { exact: true })).toBeVisible()
           await expect(page.getByRole('button', { name: '生成收集链接', exact: true })).toBeDisabled()

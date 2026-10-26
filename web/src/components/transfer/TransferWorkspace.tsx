@@ -18,7 +18,12 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { FormField } from '../shell/FormLayout'
 import { Input } from '@fluentui/react-components'
-import { IconChevronDown } from '../ui/Icon'
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+} from '@fluentui/react-components'
 import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
@@ -100,37 +105,41 @@ function Settings({ kind, config, setConfig, disabled, guest }: { kind: Transfer
   const css = useStyles()
   const collect = kind === 'collect'
   const update = (key: keyof Config, value: string | boolean) => setConfig((old) => ({ ...old, [key]: value }))
-  return <details className={css.settings}>
-    <summary>{collect ? '收集设置' : '发送设置'}<IconChevronDown size={16} /></summary>
-    <fieldset className={css.fields} disabled={disabled}>
-      <Tabs.Root defaultValue="basic">
-        <Tabs.List aria-label={collect ? '收集设置分类' : '发送设置分类'}>
-          <Tabs.Tab value="basic">基础</Tabs.Tab>
-          {collect ? <Tabs.Tab value="information">收集信息</Tabs.Tab> : null}
-          <Tabs.Tab value="files">文件</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="basic" className={css.panel}><div className={css.fields}>
-          <FormField label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></FormField>
-          {guest ? <p className={css.text}>此处的访客任务保留 1 天；身份更早到期时，任务随之结束。</p> : null}
-          <FormField label="访问密码（可选）"><Input type="password" value={config.password} onChange={(event) => update('password', event.target.value)} aria-label={collect ? '收集任务访问密码' : '访问密码'} maxLength={128} autoComplete="new-password" /></FormField>
-          <label className={css.checkbox}><input type="checkbox" checked={config.requireCode} onChange={(event) => update('requireCode', event.target.checked)} />{collect ? '启用收件码' : '启用取件码'}</label>
-          <p className={css.text}>默认通过分享链接直接访问。设置密码或短码后，对方需要验证；短码只在创建时显示一次。</p>
-        </div></Tabs.Panel>
-        {collect ? <Tabs.Panel value="information" className={css.panel}><div className={css.fields}>
-          <label className={css.checkbox}><input type="checkbox" checked={config.requireName} onChange={(event) => update('requireName', event.target.checked)} />要求提交者姓名</label>
-          <label className={css.checkbox}><input type="checkbox" checked={config.requireNote} onChange={(event) => update('requireNote', event.target.checked)} />要求提交备注</label>
-          <p className={css.text}>提交者只能上传自己的文件，收集到的内容仅由你管理。</p>
-        </div></Tabs.Panel> : null}
-        <Tabs.Panel value="files" className={css.panel}><div className={css.fields}>
-          {collect ? <>
-            <FormField label="单文件上限 MB"><Input type="number" min="1" step="1" value={config.maxFileSize} onChange={(event) => update('maxFileSize', event.target.value)} aria-label="单文件上限 MB" /></FormField>
-            <FormField label="总量上限 MB"><Input type="number" min="1" step="1" value={config.maxTotalSize} onChange={(event) => update('maxTotalSize', event.target.value)} aria-label="总量上限 MB" /></FormField>
-            <FormField label="允许的扩展名" hint="留空表示不限制，例如 pdf png docx。"><Input value={config.allowedExts} onChange={(event) => update('allowedExts', event.target.value)} aria-label="允许的扩展名" /></FormField>
-          </> : <FormField label="下载次数上限" hint="留空表示不限制，单文件和 ZIP 下载都计入。"><Input type="number" min="1" step="1" value={config.maxDownloads} onChange={(event) => update('maxDownloads', event.target.value)} aria-label="下载次数上限" /></FormField>}
-        </div></Tabs.Panel>
-      </Tabs.Root>
-    </fieldset>
-  </details>
+  return <Accordion collapsible className={css.settings}>
+    <AccordionItem value="settings">
+      <AccordionHeader>{collect ? '收集设置' : '发送设置'}</AccordionHeader>
+      <AccordionPanel>
+        <fieldset className={css.fields} disabled={disabled}>
+          <Tabs.Root defaultValue="basic">
+            <Tabs.List aria-label={collect ? '收集设置分类' : '发送设置分类'}>
+              <Tabs.Tab value="basic">基础</Tabs.Tab>
+              {collect ? <Tabs.Tab value="information">收集信息</Tabs.Tab> : null}
+              <Tabs.Tab value="files">文件</Tabs.Tab>
+            </Tabs.List>
+            <Tabs.Panel value="basic" className={css.panel}><div className={css.fields}>
+              <FormField label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></FormField>
+              {guest ? <p className={css.text}>此处的访客任务保留 1 天；身份更早到期时，任务随之结束。</p> : null}
+              <FormField label="访问密码（可选）"><Input type="password" value={config.password} onChange={(event) => update('password', event.target.value)} aria-label={collect ? '收集任务访问密码' : '访问密码'} maxLength={128} autoComplete="new-password" /></FormField>
+              <label className={css.checkbox}><input type="checkbox" checked={config.requireCode} onChange={(event) => update('requireCode', event.target.checked)} />{collect ? '启用收件码' : '启用取件码'}</label>
+              <p className={css.text}>默认通过分享链接直接访问。设置密码或短码后，对方需要验证；短码只在创建时显示一次。</p>
+            </div></Tabs.Panel>
+            {collect ? <Tabs.Panel value="information" className={css.panel}><div className={css.fields}>
+              <label className={css.checkbox}><input type="checkbox" checked={config.requireName} onChange={(event) => update('requireName', event.target.checked)} />要求提交者姓名</label>
+              <label className={css.checkbox}><input type="checkbox" checked={config.requireNote} onChange={(event) => update('requireNote', event.target.checked)} />要求提交备注</label>
+              <p className={css.text}>提交者只能上传自己的文件，收集到的内容仅由你管理。</p>
+            </div></Tabs.Panel> : null}
+            <Tabs.Panel value="files" className={css.panel}><div className={css.fields}>
+              {collect ? <>
+                <FormField label="单文件上限 MB"><Input type="number" min="1" step="1" value={config.maxFileSize} onChange={(event) => update('maxFileSize', event.target.value)} aria-label="单文件上限 MB" /></FormField>
+                <FormField label="总量上限 MB"><Input type="number" min="1" step="1" value={config.maxTotalSize} onChange={(event) => update('maxTotalSize', event.target.value)} aria-label="总量上限 MB" /></FormField>
+                <FormField label="允许的扩展名" hint="留空表示不限制，例如 pdf png docx。"><Input value={config.allowedExts} onChange={(event) => update('allowedExts', event.target.value)} aria-label="允许的扩展名" /></FormField>
+              </> : <FormField label="下载次数上限" hint="留空表示不限制，单文件和 ZIP 下载都计入。"><Input type="number" min="1" step="1" value={config.maxDownloads} onChange={(event) => update('maxDownloads', event.target.value)} aria-label="下载次数上限" /></FormField>}
+            </div></Tabs.Panel>
+          </Tabs.Root>
+        </fieldset>
+      </AccordionPanel>
+    </AccordionItem>
+  </Accordion>
 }
 
 type PickedFile = { id: string; file: File; path: string; state: 'queued' | 'uploaded' | 'failed' }

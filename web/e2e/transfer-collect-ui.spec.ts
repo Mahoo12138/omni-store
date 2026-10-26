@@ -62,7 +62,7 @@ test('default collection opens directly, validates constraints, retries a failed
     await openCollections(page)
     await page.getByLabel('收集任务标题', { exact: true }).fill('E2E 10 月作业收集')
     await page.getByLabel('收集任务说明', { exact: true }).fill('请提交第一周作业，仅 PDF。')
-    await page.locator('summary').filter({ hasText: '收集设置' }).click()
+    await page.getByRole('button', { name: '收集设置', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: '启用收件码', exact: true })).not.toBeChecked()
     await page.locator('details').getByRole('tab', { name: '收集信息', exact: true }).click()
     await page.getByRole('checkbox', { name: '要求提交者姓名', exact: true }).check()
@@ -197,7 +197,7 @@ for (const requireCode of [true, false]) test(`collection code and password are 
   try {
     await openCollections(page, '/app/transfer')
     await page.getByLabel('收集任务标题', { exact: true }).fill(title)
-    await page.locator('summary').filter({ hasText: '收集设置' }).click()
+    await page.getByRole('button', { name: '收集设置', exact: true }).click()
     await page.getByRole('checkbox', { name: '启用收件码', exact: true }).setChecked(requireCode)
     await page.getByLabel('收集任务访问密码', { exact: true }).fill('Collect-Pass-1')
     await page.locator('details').getByRole('tab', { name: '收集信息', exact: true }).click()

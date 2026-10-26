@@ -67,7 +67,7 @@ test('send files and a real nested folder, reopen the record, download anonymous
     await openSend(page)
     await page.getByLabel('发件包标题', { exact: true }).fill('E2E UI 交付包 · 中文与目录')
     await page.getByLabel('发件包说明', { exact: true }).fill('文件与文件夹一起发送，刷新后仍可读取记录。')
-    await page.locator('summary').filter({ hasText: '发送设置' }).click()
+    await page.getByRole('button', { name: '发送设置', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: '启用取件码', exact: true })).not.toBeChecked()
     await page.getByTestId('transfer-upload-files').setInputFiles({ name: 'readme.txt', mimeType: 'text/plain', buffer: Buffer.from('README-CONTENT') })
     await page.getByTestId('transfer-upload-folder').setInputFiles(folder)
@@ -137,7 +137,7 @@ for (const requireCode of [true, false]) test(`optional pickup code and password
   try {
     await openSend(page, '/app/transfer')
     await page.getByLabel('发件包标题', { exact: true }).fill(title)
-    await page.locator('summary').filter({ hasText: '发送设置' }).click()
+    await page.getByRole('button', { name: '发送设置', exact: true }).click()
     await page.getByRole('checkbox', { name: '启用取件码', exact: true }).setChecked(requireCode)
     await page.getByLabel('访问密码', { exact: true }).fill('Pickup-Pass-1')
     await page.locator('details').getByRole('tab', { name: '文件', exact: true }).click()
