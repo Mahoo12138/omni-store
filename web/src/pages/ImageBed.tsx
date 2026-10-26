@@ -13,6 +13,9 @@ import type { ImageRecord } from '../api/imagebed'
 import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { AppFrame } from '../components/shell/AppFrame'
+import { PageHeader } from '../components/shell/PageHeader'
+import { ViewSwitcher } from '../components/shell/ViewSwitcher'
+import { Badge, mergeClasses } from '@fluentui/react-components'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Select } from '../components/ui/Select'
@@ -170,100 +173,46 @@ function ImageBedContent({ status }: { status: StatusData }) {
 
   return (
     <AppFrame title="图床">
-      <div className={css.pageHeader}>
-        <h1 className={css.pageTitle}>图床</h1>
-      </div>
+      <PageHeader
+        title="图床"
+        description={`拖拽或点击上传图片，自动生成外链。当前绑定 ${status.source_name || '已绑定存储源'}。`}
+        actions={<>
+          <Badge appearance="tint" color="success">正常</Badge>
+          <Button variant="ghost" icon={<IconInfo size={16} />} onClick={() => setInfoOpen(true)}>图床信息</Button>
+        </>}
+      />
 
-      <div className={css.workspace}>
-        <div className={css.mainColumn}>
-          <div className={css.uploadRow}>
-            <section className={css.panel} aria-labelledby="upload-title">
-              <button
-                type="button"
-                className={dragging ? css.dropZoneActive : css.dropZone}
-                disabled={uploading}
-                onClick={() => fileInput.current?.click()}
-                onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
-                onDragOver={(event) => event.preventDefault()}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
-                }}
-                onDrop={onDrop}
-              >
-                <span className={css.uploadIcon}><IconCloud size={46} /></span>
-                <strong id="upload-title" className={css.uploadTitle}>
-                  {uploading ? '正在上传图片…' : '拖拽图片到这里，或点击上传'}
-                </strong>
-                <span className={css.uploadHint}>支持 JPG、PNG、WEBP、GIF，单张不超过 10MB</span>
-              </button>
-              <input
-                ref={fileInput}
-                className={css.hiddenInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                disabled={uploading}
-                onChange={(event) => void onUpload(event.target.files ?? [])}
-              />
-            </section>
-
-            <section className={css.panel} aria-labelledby="target-title">
-              <div className={css.panelHeading}>
-                <h2 id="target-title" className={css.sectionTitle}>图床目标</h2>
-                <div className={css.panelHeadingActions}>
-                  <button
-                    type="button"
-                    className={css.infoButton}
-                    aria-haspopup="dialog"
-                    aria-expanded={infoOpen}
-                    onClick={() => setInfoOpen(true)}
-                  >
-                    <IconInfo size={14} /> 图床信息
-                  </button>
-                  <span className={css.statusBadge}>正常</span>
-                </div>
-              </div>
-
-              <div className={css.targetSummary} style={{ padding: '4px 0 8px' }}>
-                <span className={css.targetSummaryIcon}><IconImage size={19} /></span>
-                <div className={css.targetSummaryText}>
-                  <strong>{status.source_name || '已绑定存储源'}</strong>
-                  <span>由管理员在「站点服务」中统一绑定，全站唯一</span>
-                </div>
-              </div>
-
-              <div className={css.interfaceHeading}>
-                <span>接口信息</span>
-                <IconInfo size={14} />
-              </div>
-              <InfoRow
-                label="PicGo API Token"
-                value={tokenStatus.data?.image_bed.exists ? `已配置 ${tokenStatus.data.image_bed.count} 个 · 明文仅在创建时显示` : '尚未配置'}
-                action={
-                  <Link to="/app/admin" search={{ section: 'profile' }} className={css.inlineLink}>
-                    管理
-                  </Link>
-                }
-              />
-              <InfoRow
-                label="API 接口地址"
-                value={apiEndpoint}
-                action={
-                  <CopyButton copied={copied === 'api'} onClick={() => void copyText(apiEndpoint, 'api')} />
-                }
-              />
-              <InfoRow
-                label="Markdown 示例"
-                value="![图片](https://your-domain/i/xxx.jpg)"
-                action={
-                  <CopyButton
-                    copied={copied === 'markdown-example'}
-                    onClick={() => void copyText('![图片](https://your-domain/i/xxx.jpg)', 'markdown-example')}
-                  />
-                }
-              />
-            </section>
-          </div>
+      <section className={css.dropPanel} aria-labelledby="upload-title">
+        <button
+          type="button"
+          className={mergeClasses(css.dropZone, dragging ? css.dropZoneActive : '')}
+          disabled={uploading}
+          onClick={() => fileInput.current?.click()}
+          onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+          }}
+          onDrop={onDrop}
+        >
+          <span className={css.uploadIcon}><IconCloud size={28} /></span>
+          <span className={css.dropCopy}>
+            <strong id="upload-title" className={css.uploadTitle}>
+              {uploading ? '正在上传图片…' : '拖拽图片到这里，或点击上传'}
+            </strong>
+            <span className={css.uploadHint}>支持 JPG、PNG、WEBP、GIF，单张不超过 10MB</span>
+          </span>
+        </button>
+        <input
+          ref={fileInput}
+          className={css.hiddenInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
+          disabled={uploading}
+          onChange={(event) => void onUpload(event.target.files ?? [])}
+        />
+      </section>
 
           <section className={css.historySection} aria-labelledby="history-title">
             <div className={css.historyHeader}>
@@ -292,20 +241,16 @@ function ImageBedContent({ status }: { status: StatusData }) {
                   size="compact"
                   width="content"
                 />
-                <div className={css.viewSwitch} aria-label="显示方式">
-                  <button
-                    type="button"
-                    className={viewMode === 'grid' ? css.viewButtonActive : css.viewButton}
-                    aria-label="网格视图"
-                    onClick={() => setViewMode('grid')}
-                  ><IconGrid size={16} /></button>
-                  <button
-                    type="button"
-                    className={viewMode === 'list' ? css.viewButtonActive : css.viewButton}
-                    aria-label="列表视图"
-                    onClick={() => setViewMode('list')}
-                  ><IconList size={16} /></button>
-                </div>
+                <ViewSwitcher
+                  ariaLabel="显示方式"
+                  iconOnly
+                  value={viewMode}
+                  onChange={(next) => setViewMode(next as ViewMode)}
+                  options={[
+                    { value: 'grid', label: '网格视图', icon: <IconGrid size={16} /> },
+                    { value: 'list', label: '列表视图', icon: <IconList size={16} /> },
+                  ]}
+                />
               </div>
             </div>
 
@@ -347,16 +292,12 @@ function ImageBedContent({ status }: { status: StatusData }) {
               </div>
             ) : null}
           </section>
-        </div>
-
-      </div>
 
       {infoOpen ? (
         <DialogWrap
           open
           onOpenChange={(open) => { if (!open) setInfoOpen(false) }}
           title="图床信息"
-          description="当前选中的图床目标与上传统计"
           footer={<Button variant="secondary" onClick={() => setInfoOpen(false)}>关闭</Button>}
         >
           <div className={css.infoModalBody}>
@@ -366,7 +307,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
                 <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
                 <div className={css.targetSummaryText}>
                   <strong>{status.source_name || '已绑定存储源'}</strong>
-                  <span>图片由图床能力统一托管</span>
+                  <span>由管理员在「站点服务」中统一绑定，全站唯一</span>
                 </div>
                 <span className={css.statusBadge}>正常</span>
               </div>
@@ -377,6 +318,33 @@ function ImageBedContent({ status }: { status: StatusData }) {
               <Stat label="本月上传" value={`${stats.month} 张`} />
               <Stat label="当前页图片体积" value={formatBytes(stats.bytes)} />
             </dl>
+            <div className={css.infoModalSection}>
+              <p className={css.sideLabel}>接口信息</p>
+              <InfoRow
+                label="PicGo API Token"
+                value={tokenStatus.data?.image_bed.exists ? `已配置 ${tokenStatus.data.image_bed.count} 个 · 明文仅在创建时显示` : '尚未配置'}
+                action={
+                  <Link to="/app/admin" search={{ section: 'profile' }} className={css.inlineLink} onClick={() => setInfoOpen(false)}>
+                    管理
+                  </Link>
+                }
+              />
+              <InfoRow
+                label="API 接口地址"
+                value={apiEndpoint}
+                action={<CopyButton copied={copied === 'api'} onClick={() => void copyText(apiEndpoint, 'api')} />}
+              />
+              <InfoRow
+                label="Markdown 示例"
+                value="![图片](https://your-domain/i/xxx.jpg)"
+                action={
+                  <CopyButton
+                    copied={copied === 'markdown-example'}
+                    onClick={() => void copyText('![图片](https://your-domain/i/xxx.jpg)', 'markdown-example')}
+                  />
+                }
+              />
+            </div>
             <Link to="/app/admin" search={{ section: 'site', tab: 'services' }} className={css.settingsLink} onClick={() => setInfoOpen(false)}>
               <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
             </Link>
