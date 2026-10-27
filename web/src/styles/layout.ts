@@ -8,7 +8,10 @@
 export const layout = {
   // 应用外壳
   sidebarWidth: '240px',
+  // 设置页里主侧栏收成只放图标的窄栏（Outlook 式两级导航的第一级）。
+  navRailWidth: '56px',
   navRailHeight: '52px',
+  settingsPaneWidth: '232px',
   contentMaxWidth: '1440px',
   contentMaxWideWidth: '1600px',
 

@@ -1,5 +1,6 @@
-import { makeStyles, shorthands } from '@fluentui/react-components'
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
 import { media } from '../../styles/media'
+import { layout } from '../../styles/layout'
 
 export const useStyles = makeStyles({
   'grid2': {
@@ -109,33 +110,39 @@ export const useStyles = makeStyles({
   'marginRight': '6px',
   'verticalAlign': '1px',
   },
+  // 全出血两栏：主侧栏收成窄栏后，分组面板紧贴它，内容区自己管留白。
   'settingsLayout': {
   'display': 'grid',
-  'gridTemplateColumns': '220px minmax(0, 1fr)',
+  'gridTemplateColumns': `${layout.settingsPaneWidth} minmax(0, 1fr)`,
   'gap': '0px',
-  'alignItems': 'start',
-  'minHeight': 'calc(100vh - 180px)',
+  'alignItems': 'stretch',
+  'minHeight': '100dvh',
   [media.xl]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
     'minHeight': 'auto',
   },
   },
   'settingsSide': {
+  // 与窄栏同高的一整列：贴住主侧栏，版本信息沉到底部。
   'position': 'sticky',
   'top': '0px',
   'alignSelf': 'start',
   'display': 'flex',
   'flexDirection': 'column',
-  'minHeight': 'calc(100vh - 180px)',
-  ...shorthands.padding('20px', '12px'),
+  'height': '100dvh',
+  'overflowY': 'auto',
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalM),
   'background': 'var(--colorNeutralBackground2)',
-  'borderRightWidth': '1px',
-  'borderRightStyle': 'solid',
-  'borderRightColor': 'var(--colorNeutralStroke2)',
+  'borderInlineEndWidth': tokens.strokeWidthThin,
+  'borderInlineEndStyle': 'solid',
+  'borderInlineEndColor': 'var(--colorNeutralStroke2)',
+  // 同主侧栏：把 NavItem 的库底色改透明，选中仍靠蓝条 + 加粗表达。
+  '--colorNeutralBackground4': 'transparent',
   'fontSize': '13px',
   [media.xl]: {
     'position': 'static',
     'flexDirection': 'row',
+    'height': 'auto',
     'minHeight': 'auto',
     'alignItems': 'center',
     ...shorthands.padding('8px', '0'),
@@ -253,10 +260,10 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   'display': 'flex',
   'flexDirection': 'column',
-  ...shorthands.gap('24px'),
-  ...shorthands.padding('32px', '0', '32px', '32px'),
+  ...shorthands.gap(tokens.spacingVerticalXXL),
+  ...shorthands.padding('56px', layout.pageGutter, '72px'),
   [media.xl]: {
-    ...shorthands.padding('0px'),
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXL, '96px'),
   },
   },
   'profilePage': {

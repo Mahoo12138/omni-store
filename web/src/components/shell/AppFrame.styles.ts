@@ -21,6 +21,10 @@ export const useAppFrameStyles = makeStyles({
   'flexDirection': 'column',
   'width': layout.sidebarWidth,
   'flexShrink': 0,
+  // 进入/离开设置页时窄栏收放有 1 帧过渡，避免整块版面跳一下。
+  'transitionProperty': 'width',
+  'transitionDuration': tokens.durationNormal,
+  'transitionTimingFunction': tokens.curveDecelerateMax,
   'position': 'sticky',
   'top': '0px',
   'height': '100dvh',
@@ -44,6 +48,50 @@ export const useAppFrameStyles = makeStyles({
     ...shorthands.borderTop(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
     ...shorthands.padding('6px', tokens.spacingHorizontalS, 'max(6px, env(safe-area-inset-bottom))'),
   },
+  // 设置页：主侧栏收成图标窄栏。用属性选择器而不是第二个 class ——
+  // 两个类都声明 width 时，谁生效取决于 Griffel 原子的插入顺序，不确定。
+  '&[data-compact]': {
+  'width': layout.navRailWidth,
+  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalXXS),
+  },
+  },
+  // 设置页的窄栏态：只放图标，文字与分组标题不渲染（可访问名走 aria-label）。
+  sidebarRail: {
+  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalXXS),
+  'alignItems': 'stretch',
+  // ≤820 侧栏变成底部条，窄栏的内边距必须退回与常规侧栏同一套值，
+  // 否则桌面态那 32px 纵向留白会把底部条撑得很高。
+  [media.md]: {
+    ...shorthands.padding('6px', tokens.spacingHorizontalS, 'max(6px, env(safe-area-inset-bottom))'),
+  },
+  },
+  brandRail: {
+  'justifyContent': 'center',
+  ...shorthands.padding('2px', '0px', tokens.spacingVerticalXXXL),
+  },
+  navItemRail: {
+  'justifyContent': 'center',
+  ...shorthands.padding(tokens.spacingVerticalMNudge, '0px'),
+  },
+  userButtonRail: {
+  'justifyContent': 'center',
+  ...shorthands.padding(tokens.spacingVerticalXS, '0px'),
+  },
+  // 窄栏 + 全出血内容区：留白由设置页自己的两栏负责，外壳不再加 padding。
+  mainFlush: {
+  'flexGrow': 1,
+  'width': '100%',
+  'maxWidth': 'none',
+  ...shorthands.margin('0px'),
+  // 桌面全出血（留白由设置页两栏自己给）；窄屏仍要常规页边距，
+  // 因为这里替换的是 main，不是叠加在它上面。
+  ...shorthands.padding('0px'),
+  [media.md]: {
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXL, tokens.spacingVerticalXXXL),
+  },
+  [media.xs]: {
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL, tokens.spacingVerticalXXXL),
+  },
   },
   brand: {
   'display': 'flex',
@@ -57,6 +105,10 @@ export const useAppFrameStyles = makeStyles({
   'textDecoration': 'none',
   [media.md]: {
     'display': 'none',
+  },
+  '&[data-compact]': {
+  'justifyContent': 'center',
+  ...shorthands.padding('2px', '0px', tokens.spacingVerticalXXXL),
   },
   },
   brandName: {
@@ -108,6 +160,10 @@ export const useAppFrameStyles = makeStyles({
     'minHeight': layout.navRailHeight,
     'gap': tokens.spacingVerticalXXS,
     'fontSize': tokens.fontSizeBase200,
+  },
+  '&[data-compact]': {
+  'justifyContent': 'center',
+  ...shorthands.padding(tokens.spacingVerticalMNudge, '0px'),
   },
   },
   sidebarSpacer: {
@@ -162,6 +218,9 @@ export const useAppFrameStyles = makeStyles({
   },
   userButton: {
   'width': '100%',
+  // Fluent Button 自带 min-width:96px：窄栏（56px）与底部导航条（52px）都放不下，
+  // 常规侧栏里 width:100% 已经大于它，所以放在基槽里对三种形态都安全。
+  'minWidth': '0px',
   'justifyContent': 'flex-start',
   ...shorthands.padding(tokens.spacingVerticalXS),
   'color': tokens.colorNeutralForeground1,
@@ -172,6 +231,12 @@ export const useAppFrameStyles = makeStyles({
     'minWidth': '0px',
     'justifyContent': 'center',
     ...shorthands.padding('0px'),
+  },
+  '&[data-compact]': {
+  'justifyContent': 'center',
+  // Fluent Button 自带 min-width:96px，窄栏只有 56px。
+  'minWidth': '0px',
+  ...shorthands.padding(tokens.spacingVerticalXS, '0px'),
   },
   },
   // Button 的 children 直接落在 root 上（Fluent 没有 content 槽），

@@ -107,16 +107,23 @@ export function AppFrame({
   ]
   // Nav 用 value 判定选中态；active 的分组规则（如 /app/sources 也算「文件」）在这里折算。
   const selectedNav = navItems.find((item) => item.active)?.to ?? ''
+  // 设置页把主侧栏收成图标窄栏，腾出的横向空间给「设置分组」面板（紧贴窄栏）。
+  const compact = pathname === '/app/admin' || pathname.startsWith('/app/admin/')
 
   return (
     <div className={css.root}>
-      <aside className={css.sidebar}>
-        <Link to="/app" className={css.brand}>
+      <aside className={css.sidebar} data-compact={compact ? '' : undefined}>
+        <Link
+          to="/app"
+          className={css.brand}
+          data-compact={compact ? '' : undefined}
+          aria-label={compact ? 'OmniStore' : undefined}
+        >
           <LogoMark size={30} />
-          <span className={css.brandName}>OmniStore</span>
+          {compact ? null : <span className={css.brandName}>OmniStore</span>}
         </Link>
         <nav ref={navRef} className={css.nav} aria-label="主导航">
-          <NavSectionHeader as="div" className={css.navLabel}>工作空间</NavSectionHeader>
+          {compact ? null : <NavSectionHeader as="div" className={css.navLabel}>工作空间</NavSectionHeader>}
           <Nav selectedValue={selectedNav} className={css.navList}>
             {navItems.map((item) => (
               <FluentNavItem
@@ -125,6 +132,10 @@ export function AppFrame({
                 href={item.to}
                 icon={item.icon}
                 className={css.navListItem}
+                data-compact={compact ? '' : undefined}
+                // 窄栏不渲染文字，可访问名与悬停提示改由这两个属性承担。
+                aria-label={compact ? item.label : undefined}
+                title={compact ? item.label : undefined}
                 aria-current={item.active ? 'page' : undefined}
                 onClick={(event) => {
                   // href 保留中键 / ⌘ 点击的新标签语义，左键走客户端跳转。
@@ -133,7 +144,7 @@ export function AppFrame({
                   navigate({ to: item.to })
                 }}
               >
-                {item.label}
+                {compact ? null : item.label}
               </FluentNavItem>
             ))}
           </Nav>
@@ -142,12 +153,16 @@ export function AppFrame({
         <UserMenu
           displayName={user.display_name}
           showAdminEntry={user.role === 'super_admin'}
+          compact={compact}
           onLogout={onLogout}
         />
       </aside>
 
       <div className={css.content}>
-        <main className={wide ? css.mainWide : css.main} aria-label={title}>{children}</main>
+        <main
+          className={compact ? css.mainFlush : wide ? css.mainWide : css.main}
+          aria-label={title}
+        >{children}</main>
       </div>
 
       <SearchDialog />
@@ -169,11 +184,14 @@ function AppFrameLoading() {
 function UserMenu({
   displayName,
   showAdminEntry,
+  compact,
   onLogout,
 }: {
   displayName: string
   /** super_admin 才有；系统设置已从侧栏移到这里。 */
   showAdminEntry: boolean
+  /** 窄栏态：只留头像，文字与箭头不渲染。 */
+  compact: boolean
   onLogout: () => void
 }) {
   const css = useAppFrameStyles()
@@ -209,15 +227,20 @@ function UserMenu({
           <Button
             appearance="subtle"
             className={css.userButton}
+            data-compact={compact ? '' : undefined}
             aria-label={`账号菜单：${displayName}`}
           >
             <span className={css.userRow}>
               <Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />
-              <span className={css.userStack}>
-                <span className={css.userName}>{displayName}</span>
-                <span className={css.userCaption}>账号与设置</span>
-              </span>
-              <IconChevronDown size={12} className={css.userChevron} />
+              {compact ? null : (
+                <>
+                  <span className={css.userStack}>
+                    <span className={css.userName}>{displayName}</span>
+                    <span className={css.userCaption}>账号与设置</span>
+                  </span>
+                  <IconChevronDown size={12} className={css.userChevron} />
+                </>
+              )}
             </span>
           </Button>
         </MenuTrigger>

@@ -64,7 +64,16 @@ import {
   type S3Credential,
 } from '../../api/s3'
 import { fetchMySources } from '../../api/sources'
-import { Checkbox, Radio, RadioGroup, Input, Textarea } from '@fluentui/react-components'
+import {
+  Checkbox,
+  Nav,
+  NavItem,
+  NavSectionHeader,
+  Radio,
+  RadioGroup,
+  Input,
+  Textarea,
+} from '@fluentui/react-components'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
@@ -111,7 +120,7 @@ type SectionKey =
   | 'audit'
   | 'site'
 
-const baseNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
+const baseNav: { key: SectionKey; label: string; icon: React.ReactElement }[] = [
   { key: 'profile', label: '我的', icon: <IconUser size={15} /> },
   { key: 'preferences', label: '偏好设置', icon: <IconSettings size={15} /> },
 ]
@@ -185,7 +194,7 @@ const emptyAuditFilters: AuditFilters = {
   searchText: '',
 }
 
-const adminNav: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
+const adminNav: { key: SectionKey; label: string; icon: React.ReactElement }[] = [
   { key: 'stats', label: '仪表盘', icon: <IconInfo size={15} /> },
   { key: 'sources', label: '存储源', icon: <IconServer size={15} /> },
   { key: 'policies', label: '访问策略', icon: <IconShield size={15} /> },
@@ -230,48 +239,36 @@ export function AdminOverviewPage() {
 
   return (
     <AdminLayout>
-      <PageHeader title={isAdmin ? '系统设置' : '账号设置'} />
-
       <div className={css.settingsLayout}>
-        {/* 左侧分组的子导航 */}
+        {/*
+          分组子导航与主侧栏用同一套 Fluent Nav：两级导航只有一种语言。
+          不传 href → NavItem 渲染 <button>，getByRole('button') 与 aria-current 契约不变。
+        */}
         <nav ref={settingsNavRef} className={css.settingsSide} aria-label="设置分组">
-          <div className={css.settingsGroup}>
-            <span className={css.settingsGroupTitle}>基础</span>
+          <Nav selectedValue={section} onNavItemSelect={(_, data) => setSection(data.value as SectionKey)}>
+            <NavSectionHeader as="div" className={css.settingsGroupTitle}>基础</NavSectionHeader>
             {baseNav.map((item) => (
-              <button
-                type="button"
-                key={item.key}
-                className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
-                onClick={() => setSection(item.key)}
-                aria-current={section === item.key ? 'page' : undefined}
-              >
-                {item.icon}
+              <NavItem key={item.key} value={item.key} icon={item.icon}>
                 {item.label}
-              </button>
+              </NavItem>
             ))}
-          </div>
-          {isAdmin ? (
-            <div className={css.settingsGroup}>
-              <span className={css.settingsGroupTitle}>管理</span>
-              {adminNav.map((item) => (
-                <button
-                  type="button"
-                  key={item.key}
-                  className={section === item.key ? css.settingsNavLinkActive : css.settingsNavLink}
-                  onClick={() => setSection(item.key)}
-                  aria-current={section === item.key ? 'page' : undefined}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+            {isAdmin ? (
+              <>
+                <NavSectionHeader as="div" className={css.settingsGroupTitle}>管理</NavSectionHeader>
+                {adminNav.map((item) => (
+                  <NavItem key={item.key} value={item.key} icon={item.icon}>
+                    {item.label}
+                  </NavItem>
+                ))}
+              </>
+            ) : null}
+          </Nav>
           <VersionFooter />
         </nav>
 
         {/* 右侧内容 */}
         <div className={css.settingsContent}>
+          <PageHeader title={isAdmin ? '系统设置' : '账号设置'} />
           {section === 'profile' && <ProfileSection />}
           {section === 'preferences' && <PreferencesSection />}
           {section === 'stats' && <DashboardSection />}
