@@ -1,18 +1,20 @@
 import { useEffect, useRef } from 'react'
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Avatar,
   Button,
   Menu as FluentMenu,
+  Nav,
+  NavItem as FluentNavItem,
+  NavSectionHeader,
   MenuDivider,
   MenuItem,
   MenuItemRadio,
   MenuList,
   MenuPopover,
   MenuTrigger,
-  mergeClasses,
 } from '@fluentui/react-components'
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
@@ -38,7 +40,8 @@ import { useAppFrameStyles } from './AppFrame.styles'
 export interface AppFrameNavItem {
   to: string
   label: string
-  icon: ReactNode
+  /** Fluent NavItem 的 icon 槽要求元素（不是任意 ReactNode）。 */
+  icon: ReactElement
   active: boolean
 }
 
@@ -106,6 +109,11 @@ export function AppFrame({
   const showAdmin = user.role === 'super_admin'
   const adminActive =
     pathname === '/app/admin' || pathname.startsWith('/app/admin/') || pathname.startsWith('/app/admin?')
+  const allNavItems = showAdmin
+    ? [...navItems, { to: '/app/admin', label: '系统设置', icon: <IconSettings />, active: adminActive }]
+    : navItems
+  // Nav 用 value 判定选中态；active 的分组规则（如 /app/sources 也算「文件」）在这里折算。
+  const selectedNav = allNavItems.find((item) => item.active)?.to ?? ''
 
   return (
     <div className={css.root}>
@@ -115,11 +123,27 @@ export function AppFrame({
           <span className={css.brandName}>OmniStore</span>
         </Link>
         <nav ref={navRef} className={css.nav} aria-label="主导航">
-          <span className={css.navLabel}>工作空间</span>
-          {navItems.map((item) => (
-            <NavItem key={item.to} {...item} />
-          ))}
-          {showAdmin && <NavItem to="/app/admin" label="系统设置" icon={<IconSettings />} active={adminActive} />}
+          <NavSectionHeader as="div" className={css.navLabel}>工作空间</NavSectionHeader>
+          <Nav selectedValue={selectedNav} className={css.navList}>
+            {allNavItems.map((item) => (
+              <FluentNavItem
+                key={item.to}
+                value={item.to}
+                href={item.to}
+                icon={item.icon}
+                className={css.navListItem}
+                aria-current={item.active ? 'page' : undefined}
+                onClick={(event) => {
+                  // href 保留中键 / ⌘ 点击的新标签语义，左键走客户端跳转。
+                  if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                  event.preventDefault()
+                  navigate({ to: item.to })
+                }}
+              >
+                {item.label}
+              </FluentNavItem>
+            ))}
+          </Nav>
         </nav>
         <div className={css.sidebarSpacer} />
         <UserMenu displayName={user.display_name} onLogout={onLogout} />
@@ -131,21 +155,6 @@ export function AppFrame({
 
       <SearchDialog />
     </div>
-  )
-}
-
-function NavItem({ to, label, icon, active }: AppFrameNavItem) {
-  const css = useAppFrameStyles()
-  return (
-    <Link
-      to={to}
-      activeOptions={{ exact: true }}
-      className={active ? mergeClasses(css.navItem, css.navItemSelected) : css.navItem}
-      aria-current={active ? 'page' : false}
-    >
-      {icon}
-      {label}
-    </Link>
   )
 }
 

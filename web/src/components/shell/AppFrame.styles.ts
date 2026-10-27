@@ -85,62 +85,24 @@ export const useAppFrameStyles = makeStyles({
     'display': 'none',
   },
   },
-  navItem: {
-  'position': 'relative',
-  'display': 'flex',
-  'alignItems': 'center',
-  'minHeight': '40px',
-  ...shorthands.gap(tokens.spacingHorizontalMNudge),
-  ...shorthands.padding(tokens.spacingVerticalMNudge, tokens.spacingHorizontalS, tokens.spacingVerticalMNudge, tokens.spacingHorizontalMNudge),
-  ...shorthands.borderRadius(tokens.borderRadiusMedium),
-  'color': tokens.colorNeutralForeground2,
-  'fontSize': tokens.fontSizeBase300,
-  'fontWeight': tokens.fontWeightRegular,
-  'whiteSpace': 'nowrap',
-  'textDecoration': 'none',
-  'transitionProperty': 'background-color, color',
-  'transitionDuration': tokens.durationFast,
-  'transitionTimingFunction': tokens.curveDecelerateMax,
-  '&:hover': {
-    'backgroundColor': tokens.colorNeutralBackground1Hover,
-    'color': tokens.colorNeutralForeground1,
-  },
-  '&:focus-visible': {
-    'outline': `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
-    'outlineOffset': '2px',
-  },
+  // Nav / NavItem 的外观（悬停底色、选中左条、字重、密度）全部交回 Fluent，
+  // 这里只负责窄屏把竖排导航压成底部横条：布局走 root 槽，不穿透 .fui-* 类。
+  navList: {
   [media.md]: {
+    'flexDirection': 'row',
+    'flexWrap': 'nowrap',
+    ...shorthands.gap(tokens.spacingHorizontalXXS),
+    'width': '100%',
+    ...shorthands.overflow('hidden'),
+  },
+  },
+  navListItem: {
+  [media.md]: {
+    'flexDirection': 'column',
     'flex': '0 0 60px',
     'minHeight': layout.navRailHeight,
-    'flexDirection': 'column',
-    'justifyContent': 'center',
-    ...shorthands.gap(tokens.spacingVerticalXXS),
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalXXS),
+    'gap': tokens.spacingVerticalXXS,
     'fontSize': tokens.fontSizeBase200,
-  },
-  },
-  navItemSelected: {
-  'color': tokens.colorNeutralForeground1,
-  'fontWeight': tokens.fontWeightSemibold,
-  '::after': {
-    'content': '""',
-    'position': 'absolute',
-    'insetInlineStart': `calc(-1 * ${tokens.spacingHorizontalL})`,
-    'insetBlockStart': '50%',
-    'width': '4px',
-    'height': '20px',
-    'transform': 'translateY(-50%)',
-    ...shorthands.borderRadius(tokens.borderRadiusCircular),
-    'backgroundColor': tokens.colorCompoundBrandForeground1,
-  },
-  [media.md]: {
-    '::after': {
-      'insetInlineStart': '50%',
-      'insetBlockStart': '0px',
-      'width': '20px',
-      'height': '4px',
-      'transform': 'translateX(-50%)',
-    },
   },
   },
   sidebarSpacer: {
