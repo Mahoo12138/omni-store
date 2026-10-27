@@ -68,6 +68,7 @@ import { Checkbox, Radio, RadioGroup, Input, Textarea } from '@fluentui/react-co
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
+import { Banner } from '../../components/shell/Banner'
 import { FormField } from '../../components/shell/FormLayout'
 import { Select } from '../../components/ui/Select'
 import {
@@ -266,6 +267,7 @@ export function AdminOverviewPage() {
               ))}
             </div>
           ) : null}
+          <VersionFooter />
         </nav>
 
         {/* 右侧内容 */}
@@ -281,7 +283,6 @@ export function AdminOverviewPage() {
         </div>
       </div>
 
-      <VersionFooter />
     </AdminLayout>
   )
 }
@@ -1645,28 +1646,29 @@ function EditSourceDialog({
       }
     >
       <Tabs.Root defaultValue="protocols" className={css.sourceConfig}>
-        <Tabs.List className={css.sourceConfigTabs} aria-label="存储源配置">
+        <Tabs.List aria-label="存储源配置">
           <Tabs.Tab value="protocols">访问协议</Tabs.Tab>
           <Tabs.Tab value="storage">存储设置</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="protocols" className={css.sourceConfigPanel} keepMounted>
+        <Tabs.Panel value="protocols" keepMounted>
+          <div className={css.sourceConfigPanelBody}>
           <div className={css.protocolList}>
-            <label className={css.protocolRow}>
+            <div className={css.protocolRow}>
               <span className={css.protocolCopy}>
                 <span className={css.protocolName}>WebDAV</span>
                 <span className={css.protocolHint}>凭据访问 · 通过客户端挂载此存储源。</span>
               </span>
-              <input type="checkbox" className={css.protocolCheckbox} aria-label="启用 WebDAV" checked={webdavEnabled}
-                onChange={(event) => { setWebdavOn(event.target.checked); setMsg('') }} />
-            </label>
-            <label className={css.protocolRow}>
+              <Checkbox aria-label="启用 WebDAV" checked={webdavEnabled}
+                onChange={(_, data) => { setWebdavOn(!!data.checked); setMsg('') }} />
+            </div>
+            <div className={css.protocolRow}>
               <span className={css.protocolCopy}>
                 <span className={css.protocolName}>S3</span>
                 <span className={css.protocolHint}>凭据访问 · 作为 Path-style Bucket 连接 CLI 或 SDK。</span>
               </span>
-              <input type="checkbox" className={css.protocolCheckbox} aria-label="启用 S3" checked={s3Enabled}
-                onChange={(event) => { setS3On(event.target.checked); setMsg('') }} />
-            </label>
+              <Checkbox aria-label="启用 S3" checked={s3Enabled}
+                onChange={(_, data) => { setS3On(!!data.checked); setMsg('') }} />
+            </div>
             <div className={css.protocolRow}>
               <div className={css.protocolCopy}>
                 <span className={css.protocolName}>静态 HTTP</span>
@@ -1685,8 +1687,10 @@ function EditSourceDialog({
           <div id={`static-access-${sourceKey}`} hidden={!staticExpanded}>
             <div className={css.staticAccessStack}><StaticAssetsSection sourceKey={sourceKey} /></div>
           </div>
+          </div>
         </Tabs.Panel>
-        <Tabs.Panel value="storage" className={css.sourceConfigPanel} keepMounted>
+        <Tabs.Panel value="storage" keepMounted>
+          <div className={css.sourceConfigPanelBody}>
           <FormField
             label="存储源硬配额"
             hint={`当前已使用 ${formatBytes(detail.data.quota.usage_bytes)}；填 0 表示不限制。配额不会删除已有文件。`}
@@ -1734,6 +1738,7 @@ function EditSourceDialog({
               {reconcileMut.isPending ? '校准中…' : '扫描并校准台账'}
             </Button>
           </FormField>
+          </div>
         </Tabs.Panel>
       </Tabs.Root>
       {msg && (
@@ -2146,11 +2151,7 @@ function PolicyDialog({
           ))}
         </div>
       </FormField>
-      {message ? (
-        <p role="status" style={{ margin: 0, color: 'var(--colorPaletteRedForeground1)', fontSize: '13px' }}>
-          {message}
-        </p>
-      ) : null}
+      {message ? <Banner intent="error">{message}</Banner> : null}
     </DialogWrap>
   )
 }
@@ -2381,7 +2382,7 @@ function UserQuotaDialog({
           aria-label="用户配额 GiB"
         />
       </FormField>
-      {message ? <p role="alert">{message}</p> : null}
+      {message ? <Banner intent="error">{message}</Banner> : null}
     </DialogWrap>
   )
 }
@@ -2641,11 +2642,7 @@ function AuditSection() {
             没有符合条件的日志
           </div>
         )}
-        {logs.isError && (
-          <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorPaletteRedForeground1)', fontSize: '13px' }}>
-            加载失败
-          </div>
-        )}
+        {logs.isError ? <Banner intent="error">加载失败</Banner> : null}
       </HorizontalDataRegion>
       <nav className={css.auditPagination} aria-label="审计日志分页">
         <span aria-live="polite">
@@ -2720,7 +2717,7 @@ function StaticAssetsSection({ sourceKey }: { sourceKey: string }) {
       </section>
     )
   }
-  if (config.isError) return <p role="alert">{config.error.message}</p>
+  if (config.isError) return <Banner intent="error">{config.error.message}</Banner>
   const data = config.data
   if (!data?.public_asset_id) {
     return <StaticAssetsConfigureForm sourceKey={sourceKey} />
@@ -2800,7 +2797,7 @@ function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
             {preflight.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
           </div>
         )}
-        {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
+        {err && <Banner intent="error">{err}</Banner>}
       </div>
     </section>
   )
@@ -2937,8 +2934,8 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
           {!config.enabled && <Button variant="dangerGhost" disabled={removeMut.isPending} onClick={() => {
             if (window.confirm('撤销此源的静态公开地址？已有 URL 将失效，磁盘文件会保留。')) removeMut.mutate()
           }}>移除静态访问配置</Button>}
-          {msg && <div style={{ fontSize: '13px', color: 'var(--colorNeutralForeground2)' }}>{msg}</div>}
-          {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
+          {msg && <Banner intent="success">{msg}</Banner>}
+          {err && <Banner intent="error">{err}</Banner>}
         </div>
       </section>
 
@@ -3057,7 +3054,7 @@ function StaticAssetsRebindDialog({
           />
         </FormField>
       )}
-      {err && <div style={{ fontSize: '13px', color: 'var(--colorPaletteRedForeground1)' }}>{err}</div>}
+      {err && <Banner intent="error">{err}</Banner>}
     </DialogWrap>
   )
 }
@@ -3131,10 +3128,9 @@ function DashboardSection() {
         <div className={css.sectionHeader}><h2 className={css.sectionTitle}>系统状态</h2></div>
         <div className={css.sectionBody}>
           {overview.isPending ? <span role="status" className={css.kvLabel}>正在加载仪表盘…</span> : (
-            <>
-              <div role="alert">仪表盘加载失败：{overview.error?.message || '无法获取系统状态'}</div>
-              <Button variant="secondary" onClick={() => void overview.refetch()}>重试</Button>
-            </>
+            <Banner intent="error" action={<Button variant="secondary" onClick={() => void overview.refetch()}>重试</Button>}>
+              仪表盘加载失败：{overview.error?.message || '无法获取系统状态'}
+            </Banner>
           )}
         </div>
       </section>
@@ -3166,7 +3162,7 @@ function DashboardSection() {
         </header>
         <div className={css.sectionBody}>
           {overview.isError ? (
-            <div role="alert" className={css.dashboardError}>状态刷新失败：{overview.error.message}。当前显示上次成功获取的数据，请点击刷新重试。</div>
+            <Banner intent="error">状态刷新失败：{overview.error.message}。当前显示上次成功获取的数据，请点击刷新重试。</Banner>
           ) : null}
           <dl className={css.dashboardFacts}>
             <div><dt>运行版本</dt><dd>{data.version}</dd></div>
@@ -3199,7 +3195,7 @@ function DashboardSection() {
               </span>
             </div>
           ) : null}
-          {err ? <div role="alert" className={css.dashboardError}>{err}</div> : null}
+          {err ? <Banner intent="error">{err}</Banner> : null}
         </div>
       </section>
 
@@ -3285,7 +3281,7 @@ function DashboardSection() {
             </tbody>
           </table>
         </HorizontalDataRegion>
-        {msg ? <div role="status" className={css.sectionBody}>{msg}</div> : null}
+        {msg ? <Banner intent="info" className={css.sectionBody}>{msg}</Banner> : null}
       </section>
 
       <section className={css.section}>

@@ -110,33 +110,39 @@ export const useStyles = makeStyles({
   'verticalAlign': '1px',
   },
   'settingsLayout': {
-
-  'gridTemplateColumns': 'minmax(160px, 200px) minmax(0, 1fr)',
   'display': 'grid',
-  ...shorthands.gap('24px'),
+  'gridTemplateColumns': '220px minmax(0, 1fr)',
+  'gap': '0px',
   'alignItems': 'start',
-  'marginTop': '0px',
+  'minHeight': 'calc(100vh - 180px)',
   [media.xl]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
+    'minHeight': 'auto',
   },
   },
   'settingsSide': {
-
   'position': 'sticky',
-  'flexDirection': 'column',
-  'top': '32px',
+  'top': '0px',
+  'alignSelf': 'start',
   'display': 'flex',
-  ...shorthands.gap('16px'),
-  ...shorthands.padding('10px'),
-  'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow4)',
+  'flexDirection': 'column',
+  'minHeight': 'calc(100vh - 180px)',
+  ...shorthands.padding('20px', '12px'),
+  'background': 'var(--colorNeutralBackground2)',
+  'borderRightWidth': '1px',
+  'borderRightStyle': 'solid',
+  'borderRightColor': 'var(--colorNeutralStroke2)',
   'fontSize': '13px',
   [media.xl]: {
     'position': 'static',
     'flexDirection': 'row',
-    ...shorthands.gap('8px'),
+    'minHeight': 'auto',
+    'alignItems': 'center',
+    ...shorthands.padding('8px', '0'),
+    'borderRightWidth': '0px',
+    'borderBottomWidth': '1px',
+    'borderBottomStyle': 'solid',
+    'borderBottomColor': 'var(--colorNeutralStroke2)',
     'overflowX': 'auto',
     'overscrollBehaviorX': 'contain',
     'scrollbarColor': `var(--colorNeutralStroke1) transparent`,
@@ -144,37 +150,40 @@ export const useStyles = makeStyles({
   },
   },
   'settingsGroup': {
-
-  'flexDirection': 'column',
   'display': 'flex',
+  'flexDirection': 'column',
   ...shorthands.gap('2px'),
+  'marginBottom': '16px',
+  '&:last-of-type': {
+    'marginBottom': '0px',
+  },
   [media.xl]: {
     'flexDirection': 'row',
     'alignItems': 'center',
     'flexShrink': 0,
     ...shorthands.gap('4px'),
+    'marginBottom': '0px',
   },
   },
   'settingsGroupTitle': {
-  ...shorthands.padding('4px', '16px'),
-  'fontSize': '12px',
+  ...shorthands.padding('2px', '12px', '6px'),
+  'fontSize': '11px',
   'fontWeight': 600,
   'color': 'var(--colorNeutralForeground2)',
   'textTransform': 'uppercase',
-  'letterSpacing': '0.04em',
+  'letterSpacing': '0.08em',
   'userSelect': 'none',
   [media.xl]: {
     'display': 'none',
   },
   },
   'settingsNavLink': {
-
   'color': 'var(--colorNeutralForeground2)',
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('8px'),
-  'minHeight': '44px',
-  ...shorthands.padding('6px', '16px'),
+  'minHeight': '36px',
+  ...shorthands.padding('4px', '12px'),
   ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'background': 'transparent',
@@ -200,18 +209,32 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   ...shorthands.gap('8px'),
-  'minHeight': '44px',
-  ...shorthands.padding('6px', '16px'),
-  ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
+  'minHeight': '36px',
+  'paddingTop': '4px',
+  'paddingRight': '12px',
+  'paddingBottom': '4px',
+  'paddingLeft': '9px',
+  'borderLeftWidth': '3px',
+  'borderLeftStyle': 'solid',
+  'borderLeftColor': 'var(--colorBrandBackground)',
+  'borderTopWidth': '0px',
+  'borderTopStyle': 'solid',
+  'borderRightWidth': '0px',
+  'borderRightStyle': 'solid',
+  'borderBottomWidth': '0px',
+  'borderBottomStyle': 'solid',
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'transparent',
+  'backgroundColor': 'var(--colorBrandBackground2)',
+  'color': 'var(--colorBrandBackground)',
   'fontFamily': 'var(--fontFamilyBase)',
   'fontSize': '13px',
+  'fontWeight': 600,
   'textAlign': 'left',
   'textDecoration': 'none',
   'cursor': 'pointer',
   'transitionProperty': 'background-color, color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
   '&:hover': {
+    'backgroundColor': 'var(--colorBrandBackground2)',
   },
   '&:focus-visible': {
     'outline': `2px solid var(--colorBrandBackground)`,
@@ -219,16 +242,22 @@ export const useStyles = makeStyles({
   },
   [media.xl]: {
     'whiteSpace': 'nowrap',
+    'paddingLeft': '12px',
+    'borderLeftWidth': '0px',
+    'borderBottomWidth': '2px',
+    'borderBottomStyle': 'solid',
+    'borderBottomColor': 'var(--colorBrandBackground)',
   },
-    'backgroundColor': 'var(--colorBrandBackground2)',
-    'color': 'var(--colorBrandBackground)',
-    'fontWeight': 500,
   },
   'settingsContent': {
   'minWidth': '0px',
   'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap('24px'),
+  ...shorthands.padding('32px', '0', '32px', '32px'),
+  [media.xl]: {
+    ...shorthands.padding('0px'),
+  },
   },
   'profilePage': {
   'display': 'flex',
@@ -657,8 +686,11 @@ export const useStyles = makeStyles({
   },
   },
   'settingsFooter': {
-  'marginTop': '40px',
-  'paddingTop': '16px',
+  'marginTop': 'auto',
+  ...shorthands.padding('16px', '12px', '8px'),
+  'borderTopWidth': '1px',
+  'borderTopStyle': 'solid',
+  'borderTopColor': 'var(--colorNeutralStroke2)',
   'fontSize': '12px',
   'color': 'var(--colorNeutralForeground2)',
   'fontFamily': 'var(--fontFamilyMonospace)',
@@ -674,7 +706,8 @@ export const useStyles = makeStyles({
   ...shorthands.overflow('hidden'),
   },
   'sectionHeader': {
-  ...shorthands.padding('16px', '24px'),
+  ...shorthands.padding('20px', '28px'),
+  'backgroundColor': 'var(--colorNeutralBackground1)',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   },
   'sectionTitle': {
@@ -689,18 +722,18 @@ export const useStyles = makeStyles({
   'fontSize': '13px',
   },
   'sectionBody': {
-  ...shorthands.padding('24px'),
+  ...shorthands.padding('24px', '28px'),
   'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap('16px'),
   },
   'sectionHeaderWithAction': {
-
   'alignItems': 'center',
   'display': 'flex',
   'justifyContent': 'space-between',
   ...shorthands.gap('24px'),
-  ...shorthands.padding('16px', '24px'),
+  ...shorthands.padding('20px', '28px'),
+  'backgroundColor': 'var(--colorNeutralBackground1)',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   [media.lg]: {
     'alignItems': 'stretch',
@@ -864,23 +897,19 @@ export const useStyles = makeStyles({
   'fontSize': '12px',
   'lineHeight': 1.4,
   },
+  // 间距全部由外层容器给：TabList 与 Tabs.Panel 不再被注入外观，
+  // Fluent tab 保持默认观感，panel 的 hidden 也不会被 display 打败。
   'sourceConfig': {
   'minWidth': '0px',
   'flexShrink': 0,
+  'display': 'grid',
+  ...shorthands.gap('var(--spacingVerticalXXL)'),
   },
-  'sourceConfigTabs': {
-  'display': 'flex',
-  'marginBottom': '24px',
-  },
-  'sourceConfigPanel': {
-
+  'sourceConfigPanelBody': {
   'display': 'flex',
   'flexDirection': 'column',
-  ...shorthands.gap('24px'),
+  ...shorthands.gap('var(--spacingVerticalXXL)'),
   'minWidth': '0px',
-  '&[hidden]': {
-    'display': 'none',
-  },
   },
   'protocolList': {
   'display': 'flex',
@@ -921,13 +950,6 @@ export const useStyles = makeStyles({
   },
   'protocolControl': {
   'flexShrink': 0,
-  },
-  'protocolCheckbox': {
-  'width': '20px',
-  'height': '20px',
-  ...shorthands.margin('8px'),
-  'accentColor': 'var(--colorBrandBackground)',
-  'cursor': 'pointer',
   },
   'sourceConfigNote': {
   ...shorthands.margin('0px'),
@@ -1074,16 +1096,6 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground1)',
   'fontSize': '13px',
   'lineHeight': 1.55,
-  },
-  'exportMessage': {
-  ...shorthands.margin('0px'),
-  'color': 'var(--colorPaletteGreenForeground1)',
-  'fontSize': '13px',
-  },
-  exportMessageError: {
-  ...shorthands.margin('0px'),
-  'fontSize': '13px',
-  'color': 'var(--colorPaletteRedForeground1)',
   },
   'auditFilters': {
   'display': 'flex',
@@ -1266,13 +1278,9 @@ export const useStyles = makeStyles({
     'paddingLeft': '0px',
   },
   },
+  // Checkbox 的排版交回 Fluent，这里只保留 flex 子项防溢出。
   'policyEditorIdentity': {
-  'display': 'flex',
-  'alignItems': 'center',
-  ...shorthands.gap('8px'),
   'minWidth': '0px',
-  'color': 'var(--colorNeutralForeground1)',
-  'fontSize': '13px',
   },
   'policyEditorMeta': {
   'color': 'var(--colorNeutralForeground2)',
@@ -1510,9 +1518,10 @@ export const useStyles = makeStyles({
   },
   // Fluent Textarea 的外观补充：替换原 ui/Field.utils.css 的 omnistore-field-textarea。
   // 根是 <span>,宽高与最小高落在根上,等宽字体落在内部真实 textarea 元素上。
+  // 根槽是 <span>（Fluent 用它画描边），宽度只能落在这里；
+  // 等宽字体是凭据/JSON 输入的语义排版，穿透到真实 <textarea>，其余交回 Fluent。
   'formTextarea': {
   'width': '100%',
-  'minHeight': '100px',
   '& textarea': {
     'fontFamily': 'var(--fontFamilyMonospace)',
   },

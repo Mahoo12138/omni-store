@@ -44,21 +44,20 @@ function TabsRoot({
 }
 
 function TabsList({
-  className,
   'aria-label': ariaLabel,
   children,
 }: {
-  className?: string
   'aria-label': string
   children: ReactNode
 }) {
   const ctx = useContext(TabsContext)
   if (!ctx) throw new Error('Tabs.List 必须在 Tabs.Root 内使用')
+  // 不接受 className：Fluent TabList/Tab 保持默认下划线观感，
+  // 间距由外层容器负责（见 shell 层的 tabs 容器）。
   return (
     <FluentTabList
       selectedValue={ctx.value}
       onTabSelect={(_, data) => ctx.setValue(String(data.value))}
-      className={className}
       aria-label={ariaLabel}
     >
       {children}

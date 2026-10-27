@@ -119,7 +119,7 @@ export function DialogWrap({
             {description ? <p className={css.description}>{description}</p> : null}
             <DialogContent>{children}</DialogContent>
             {footer ? (
-              <DialogActions style={{ justifyContent: 'flex-end' }}>{footer}</DialogActions>
+              <DialogActions className={css.actions}>{footer}</DialogActions>
             ) : null}
           </DialogBody>
         </DialogSurface>

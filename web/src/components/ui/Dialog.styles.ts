@@ -35,4 +35,8 @@ export const useStyles = makeStyles({
     color: 'var(--colorNeutralForeground2)',
     overflowWrap: 'anywhere',
   },
+  // Fluent DialogActions 默认左对齐；底部操作区靠右是本产品的约定。
+  'actions': {
+  'justifyContent': 'flex-end',
+  },
 })

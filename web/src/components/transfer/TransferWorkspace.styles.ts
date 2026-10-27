@@ -19,10 +19,8 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   },
   panel: {
+  // 只做防溢出；Tabs.Panel 的 hidden 语义交给浏览器默认样式。
   'minWidth': '0px',
-  '&[hidden]': {
-    'display': 'none',
-  },
   },
   stack: {
   'display': 'grid',
@@ -69,29 +67,6 @@ export const useStyles = makeStyles({
   'maxWidth': '65ch',
   'overflowWrap': 'anywhere',
   },
-  error: {
-  ...shorthands.margin('0px'),
-  ...shorthands.padding('10px', '12px'),
-  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
-  'background': 'var(--colorPaletteRedBackground1)',
-  'color': 'var(--colorPaletteRedForeground1)',
-  'fontSize': '13px',
-  'lineHeight': 1.6,
-  'overflowWrap': 'anywhere',
-  },
-  notice: {
-  'display': 'flex',
-  'alignItems': 'center',
-  'flexWrap': 'wrap',
-  ...shorthands.gap('16px'),
-  'marginBottom': '24px',
-  ...shorthands.padding('16px'),
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorBrandBackground2)',
-  'fontSize': '13px',
-  'lineHeight': 1.6,
-  'color': 'var(--colorBrandForeground1)',
-  },
   link: {
   'color': 'var(--colorBrandForeground1)',
   'fontWeight': 'var(--fontWeightSemibold)',
@@ -115,32 +90,8 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   },
   settings: {
+  // Fluent Accordion 自带 header/panel 排版与内边距，这里只防窄屏溢出。
   'minWidth': '0px',
-  // 折叠本体换成 Fluent Accordion 后，内边距由 header/panel 自己负责，
-  // 外层只保留卡片式的边框与底色（原来给 <details> 写的 20px 内边距会叠加）。
-  ...shorthands.padding('0px'),
-  'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  },
-  settingTabs: {
-  'display': 'flex',
-  'flexWrap': 'wrap',
-  'alignItems': 'center',
-  ...shorthands.gap('4px'),
-  'marginBottom': '20px',
-  ...shorthands.padding('4px'),
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorNeutralBackground1Hover)',
-  },
-  checkbox: {
-  'display': 'flex',
-  'alignItems': 'center',
-  ...shorthands.gap('8px'),
-  'fontSize': '13px',
-  'lineHeight': 1.5,
-  'minHeight': '36px',
-  'cursor': 'pointer',
   },
   dropZone: {
   'display': 'grid',

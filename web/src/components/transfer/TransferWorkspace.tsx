@@ -17,13 +17,15 @@ import { QrCodeDialog } from '../share/QrCodeDialog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { FormField } from '../shell/FormLayout'
-import { Input } from '@fluentui/react-components'
 import {
   Accordion,
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
+  Checkbox,
+  Input,
 } from '@fluentui/react-components'
+import { Banner } from '../shell/Banner'
 import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
@@ -86,11 +88,15 @@ export function TransferWorkspace({ search, onNavigate, framed = false }: Worksp
         <Tabs.Tab value="history" disabled={writing}>收发记录</Tabs.Tab>
       </Tabs.List>
       {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : auth.isError || identity.isError ? (
-        <div className={css.notice}>
-          <span role="alert">收发身份暂时无法恢复，请重新检查。</span>
-          <Button variant="secondary" onClick={() => { if (auth.isError) void auth.refetch(); else void identity.refetch() }}>重新检查收发身份</Button>
-          <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={css.link}>登录并继续</Link>
-        </div>
+        <Banner
+          intent="error"
+          action={
+            <>
+              <Button variant="secondary" onClick={() => { if (auth.isError) void auth.refetch(); else void identity.refetch() }}>重新检查收发身份</Button>
+              <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={css.link}>登录并继续</Link>
+            </>
+          }
+        >收发身份暂时无法恢复，请重新检查。</Banner>
       ) : guest ? <p className={css.text}>你正在以访客身份使用。记录保存在当前浏览器，清除 Cookie 或更换设备后无法恢复。访客身份有效期至 {new Date(identity.data!.expires_at!).toLocaleString()}，任务最晚于此时结束。</p> : null}
       {service?.hint ? <p className={css.text}>{service.hint}</p> : null}
       {service && !service.enabled ? <p className={css.text}>新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。</p> : null}
@@ -120,12 +126,12 @@ function Settings({ kind, config, setConfig, disabled, guest }: { kind: Transfer
               <FormField label={collect ? '收集任务有效期' : '有效期'}><Select value={config.expiry} onValueChange={(value) => update('expiry', value)} options={guest ? expiryOptions.filter((option) => option.value === '24') : expiryOptions} ariaLabel={collect ? '收集任务有效期' : '有效期'} /></FormField>
               {guest ? <p className={css.text}>此处的访客任务保留 1 天；身份更早到期时，任务随之结束。</p> : null}
               <FormField label="访问密码（可选）"><Input type="password" value={config.password} onChange={(event) => update('password', event.target.value)} aria-label={collect ? '收集任务访问密码' : '访问密码'} maxLength={128} autoComplete="new-password" /></FormField>
-              <label className={css.checkbox}><input type="checkbox" checked={config.requireCode} onChange={(event) => update('requireCode', event.target.checked)} />{collect ? '启用收件码' : '启用取件码'}</label>
+              <Checkbox checked={config.requireCode} onChange={(_, data) => update('requireCode', !!data.checked)} label={collect ? '启用收件码' : '启用取件码'} />
               <p className={css.text}>默认通过分享链接直接访问。设置密码或短码后，对方需要验证；短码只在创建时显示一次。</p>
             </div></Tabs.Panel>
             {collect ? <Tabs.Panel value="information" className={css.panel}><div className={css.fields}>
-              <label className={css.checkbox}><input type="checkbox" checked={config.requireName} onChange={(event) => update('requireName', event.target.checked)} />要求提交者姓名</label>
-              <label className={css.checkbox}><input type="checkbox" checked={config.requireNote} onChange={(event) => update('requireNote', event.target.checked)} />要求提交备注</label>
+              <Checkbox checked={config.requireName} onChange={(_, data) => update('requireName', !!data.checked)} label="要求提交者姓名" />
+              <Checkbox checked={config.requireNote} onChange={(_, data) => update('requireNote', !!data.checked)} label="要求提交备注" />
               <p className={css.text}>提交者只能上传自己的文件，收集到的内容仅由你管理。</p>
             </div></Tabs.Panel> : null}
             <Tabs.Panel value="files" className={css.panel}><div className={css.fields}>
@@ -187,7 +193,7 @@ function ShareLinks({ kind, task, code, onRecord }: { kind: TransferRecordKind; 
       <Button type="button" variant="secondary" onClick={() => setQR(true)}>二维码</Button>
       {onRecord ? <Button type="button" variant="secondary" onClick={() => onRecord(kind, task.id)}>查看收发记录</Button> : null}
     </div>
-    {error ? <p role="alert" className={css.error}>{error}</p> : null}
+    {error ? <Banner intent="error">{error}</Banner> : null}
     {qr ? <QrCodeDialog url={url} name={task.title} onClose={() => setQR(false)} /> : null}
   </div>
 }
@@ -210,7 +216,7 @@ function CollectionComposer({ canCreate, onRecord, guest }: { canCreate: boolean
         <FormField label="收集任务标题" required><Input aria-label="收集任务标题" required maxLength={200} value={config.title} onChange={(event) => setConfig({ ...config, title: event.target.value })} placeholder="例如：十月作业、项目资料" /></FormField>
         <FormField label="收集任务说明"><Input aria-label="收集任务说明" maxLength={2000} value={config.description} onChange={(event) => setConfig({ ...config, description: event.target.value })} placeholder="告诉对方需要提交什么" /></FormField>
       </fieldset>
-      {create.isError ? <p role="alert" className={css.error}>{message(create.error)}</p> : null}
+      {create.isError ? <Banner intent="error">{message(create.error)}</Banner> : null}
       <div className={css.actions}><Button type="submit" disabled={!canCreate || create.isPending}>{create.isPending ? '正在创建…' : '生成收集链接'}</Button></div>
     </div>
     <Settings kind="collect" config={config} setConfig={setConfig} disabled={create.isPending} guest={guest} />
@@ -286,7 +292,7 @@ function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: 
         <FilePicker files={picked} onFiles={select} onRemove={(id) => setPicked((old) => old.filter((item) => item.id !== id))} disabled={!canCreate || busy} onStore={canUseStore ? () => { if (!config.title.trim()) { setError('请先填写发件包标题。'); return } store.mutate() } : undefined} />
         {draftFiles.data?.length ? <p className={css.text}>草稿已保存 {draftFiles.data.length} 个文件 · {formatBytes(draftFiles.data.reduce((total, file) => total + file.size, 0))}</p> : null}
         {draft?.pickup_code && !send.isPending ? <><p className={css.text}>请先保存取件码，此码只显示一次。</p><code data-testid="transfer-code" className={css.code}>{draft.pickup_code}</code></> : null}
-        {error ? <p role="alert" className={css.error}>{error}</p> : null}
+        {error ? <Banner intent="error">{error}</Banner> : null}
         <div className={css.actions}>
           <Button type="submit" disabled={!canCreate || busy || (!picked.length && !draftFiles.data?.length)}>{send.isPending ? '正在发送…' : draft ? '重试未完成文件' : '发送文件'}</Button>
           {draft ? <Button type="button" variant="secondary" disabled={busy} onClick={() => onRecord('send', draft.send.id)}>继续编辑草稿</Button> : null}
@@ -308,8 +314,8 @@ function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID
   return <section className={css.stack} aria-label="收发记录">
     <div className={css.stack}><h2 className={css.heading}>收发记录</h2><p className={css.text}>管理你发出的文件与发起的收集，查看收集到的文件和提交信息。</p></div>
     <Tabs.Root value={category} onValueChange={(value) => setCategory(value as TransferRecordKind)}>
-      <Tabs.List className={css.settingTabs} aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
-      {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <div className={css.stack}><p role="alert" className={css.error}>{message(current.error)}</p><div className={css.actions}><Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button></div></div> : null}
+      <Tabs.List aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
+      {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button>}>{message(current.error)}</Banner> : null}
       <div className={css.recordList}>
         {current.data?.length === 0 ? <p className={css.text}>{category === 'send' ? '还没有发送记录。选择「发送文件」开始一次交付。' : '还没有收集任务。选择「收集文件」生成上传链接。'}</p> : null}
         {current.data?.map((task) => <article key={task.id} className={css.recordRow} aria-label={`${category === 'send' ? '发件包' : '收集任务'} ${task.title || task.public_key}`}>
@@ -344,11 +350,11 @@ function RecordDetail({ ownerID, canUseStore, kind, id, onBack }: { ownerID: str
   })
   return <section className={css.stack} aria-label="任务详情">
     <div className={css.actions}><Button variant="ghost" disabled={writing || stop.isPending} onClick={onBack}>返回收发记录</Button><Button variant="secondary" disabled={writing || stop.isPending || task.isFetching} onClick={() => void refreshRecord()}>刷新记录</Button></div>
-    {task.isPending ? <p className={css.text}>正在加载任务…</p> : task.isError || !task.data ? <div className={css.stack}><h2 className={css.heading}>任务无法访问</h2><p role="alert" className={css.error}>{message(task.error)}</p></div> : <>
+    {task.isPending ? <p className={css.text}>正在加载任务…</p> : task.isError || !task.data ? <div className={css.stack}><h2 className={css.heading}>任务无法访问</h2><Banner intent="error">{message(task.error)}</Banner></div> : <>
       <div className={css.detailHeader}><div className={css.stack}><h2 className={css.heading}>{task.data.title || '未命名任务'}</h2><TaskMeta task={task.data} />{task.data.description ? <p className={css.text}>{task.data.description}</p> : null}</div>
         <div className={css.actions}>{(task.data.status === 'active' || task.data.status === 'draft') ? <Button variant="dangerGhost" disabled={stop.isPending || writing} onClick={() => stop.mutate()}>{kind === 'send' ? '撤销' : '关闭收集'}</Button> : null}</div>
       </div>
-      {stop.isError ? <p role="alert" className={css.error}>{message(stop.error)}</p> : null}
+      {stop.isError ? <Banner intent="error">{message(stop.error)}</Banner> : null}
       <div className={css.detail}>
         <div>{kind === 'send' ? <SendRecord canUseStore={canUseStore} send={task.data as TransferSend} onChanged={() => task.refetch()} /> : <CollectionInbox canUseStore={canUseStore} collection={task.data as TransferCollection} />}</div>
         <aside className={css.stack} aria-label="任务管理"><h3 className={css.subheading}>任务管理</h3><p className={css.text}>访问密码：{task.data.has_password ? '已设置' : '未设置'}<br />{kind === 'send' ? '取件码' : '收件码'}：{task.data.require_code ? '已启用，请使用创建时保存的短码' : '未启用，直接打开链接'}</p>
@@ -400,13 +406,13 @@ function SendRecord({ send, onChanged, canUseStore }: { send: TransferSend; canU
   }
   return <div className={css.stack}>
     <h3 className={css.subheading}>文件</h3>
-    {files.isPending ? <p className={css.text}>正在加载文件…</p> : files.isError ? <p role="alert" className={css.error}>{message(files.error)}</p> : !files.data?.length ? <p className={css.text}>还没有文件：上传文件或从已有文件添加。</p> : <ul className={css.fileList} aria-label="发件包文件">{files.data.map((file) => <li className={css.fileRow} key={file.id}><span className={css.fileName}>{file.relative_path}</span><span className={css.fileMeta}>{formatBytes(file.size)}</span></li>)}</ul>}
+    {files.isPending ? <p className={css.text}>正在加载文件…</p> : files.isError ? <Banner intent="error">{message(files.error)}</Banner> : !files.data?.length ? <p className={css.text}>还没有文件：上传文件或从已有文件添加。</p> : <ul className={css.fileList} aria-label="发件包文件">{files.data.map((file) => <li className={css.fileRow} key={file.id}><span className={css.fileName}>{file.relative_path}</span><span className={css.fileMeta}>{formatBytes(file.size)}</span></li>)}</ul>}
     {send.status === 'draft' ? <>
       <div className={css.actions}><Button variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>上传文件</Button><Button variant="secondary" disabled={busy} onClick={() => folderInput.current?.click()}>上传文件夹</Button>{canUseStore ? <Button variant="secondary" disabled={busy} onClick={() => setStoreOpen(true)}>从已有文件添加</Button> : null}</div>
       <input ref={fileInput} className={css.hiddenInput} type="file" multiple data-testid="transfer-record-upload-files" disabled={busy} onChange={(event) => { pick(event.target.files); event.target.value = '' }} />
       <input ref={folderInput} className={css.hiddenInput} type="file" multiple {...{ webkitdirectory: '', directory: '' }} data-testid="transfer-record-upload-folder" disabled={busy} onChange={(event) => { pick(event.target.files); event.target.value = '' }} />
       {picked.length ? <><ul className={css.fileList} aria-label="待上传文件">{picked.map((file) => <li className={css.fileRow} key={file.id}><span className={css.fileName}>{file.path} · {file.state === 'uploaded' ? '已上传' : file.state === 'failed' ? '上传失败' : '待上传'}</span>{file.state !== 'uploaded' ? <Button variant="ghost" disabled={busy} onClick={() => setPicked((old) => old.filter((item) => item.id !== file.id))}>移除</Button> : null}</li>)}</ul><div className={css.actions}><Button disabled={busy} onClick={() => upload.mutate()}>{upload.isError ? '重试未完成文件' : '上传所选文件'}</Button></div></> : null}
-      {upload.isError || finalize.isError ? <p role="alert" className={css.error}>{message(upload.error ?? finalize.error)}</p> : null}
+      {upload.isError || finalize.isError ? <Banner intent="error">{message(upload.error ?? finalize.error)}</Banner> : null}
       <div className={css.actions}><Button disabled={busy || picked.some((item) => item.state !== 'uploaded') || !files.data?.length} onClick={() => finalize.mutate()}>{finalize.isPending ? '定稿中…' : '定稿并生成取件链接'}</Button></div>
       {storeOpen ? <StoreBrowserDialog onClose={() => setStoreOpen(false)} onAdd={(sourceKey, paths) => copy.mutateAsync({ sourceKey, paths })} /> : null}
     </> : null}
@@ -417,7 +423,7 @@ function CollectionInbox({ collection, canUseStore }: { collection: TransferColl
   const css = useStyles()
   const submissions = useQuery({ queryKey: ['transfer-inbox', collection.id], queryFn: () => listSubmissions(collection.id), retry: false })
   return <div className={css.stack}><h3 className={css.subheading}>收到的文件</h3>
-    {submissions.isPending ? <p className={css.text}>正在加载提交…</p> : submissions.isError ? <div className={css.stack}><p role="alert" className={css.error}>{message(submissions.error)}</p><div className={css.actions}><Button variant="secondary" onClick={() => void submissions.refetch()}>重新加载提交</Button></div></div> : !submissions.data?.length ? <p className={css.text}>还没有收到提交。分享收集链接，对方可直接打开上传。</p> : submissions.data.map((submission) => <SubmissionFiles key={submission.id} canUseStore={canUseStore} collectionID={collection.id} submission={submission} />)}
+    {submissions.isPending ? <p className={css.text}>正在加载提交…</p> : submissions.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void submissions.refetch()}>重新加载提交</Button>}>{message(submissions.error)}</Banner> : !submissions.data?.length ? <p className={css.text}>还没有收到提交。分享收集链接，对方可直接打开上传。</p> : submissions.data.map((submission) => <SubmissionFiles key={submission.id} canUseStore={canUseStore} collectionID={collection.id} submission={submission} />)}
   </div>
 }
 
@@ -445,7 +451,7 @@ function SubmissionFiles({ collectionID, submission, canUseStore }: { collection
       <Input value={path} onChange={(event) => setPath(event.target.value)} aria-label="保存目标目录" placeholder="目标目录（源内相对路径）" />
       <Button variant="secondary" disabled={save.isPending || !sourceKey} onClick={() => save.mutate()}>{save.isPending ? '保存中…' : '保存到文件'}</Button>
     </div> : null}
-    {canUseStore && sources.isError ? <p role="alert" className={css.error}>{message(sources.error)}</p> : null}
-    {save.isError || downloadError ? <p role="alert" className={css.error}>{downloadError || message(save.error)}</p> : null}
+    {canUseStore && sources.isError ? <Banner intent="error">{message(sources.error)}</Banner> : null}
+    {save.isError || downloadError ? <Banner intent="error">{downloadError || message(save.error)}</Banner> : null}
   </section>
 }

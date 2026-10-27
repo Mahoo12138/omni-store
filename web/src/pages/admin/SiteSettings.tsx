@@ -13,6 +13,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Checkbox, Input } from '@fluentui/react-components'
+import { Banner } from '../../components/shell/Banner'
 import { FormField, FormLayout } from '../../components/shell/FormLayout'
 import { IconDownload } from '../../components/ui/Icon'
 import { Select } from '../../components/ui/Select'
@@ -49,15 +50,17 @@ export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabC
         <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
       </div>
       <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={site.tabs}>
-        <Tabs.List className={site.tabList} aria-label="站点配置">
+        <Tabs.List aria-label="站点配置">
           <Tabs.Tab value="services">站点服务</Tabs.Tab>
           <Tabs.Tab value="general">通用配置</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="services" className={site.panel}><SiteServicesSection /></Tabs.Panel>
-        <Tabs.Panel value="general" className={site.panel}>
-          <BrandingSection />
-          <SiteRuntimeSection />
-          <BackupSection />
+        <Tabs.Panel value="services"><div className={site.panelBody}><SiteServicesSection /></div></Tabs.Panel>
+        <Tabs.Panel value="general">
+          <div className={site.panelBody}>
+            <BrandingSection />
+            <SiteRuntimeSection />
+            <BackupSection />
+          </div>
         </Tabs.Panel>
       </Tabs.Root>
     </div>
@@ -81,7 +84,7 @@ function SiteServicesSection() {
     const error = capabilities.error || sources.error
     return (
       <section className={css.section}><div className={css.sectionBody}>
-        {error ? <><div role="alert" className={site.error}>站点服务加载失败：{error.message}</div><Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button></>
+        {error ? <Banner intent="error" action={<Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button>}>站点服务加载失败：{error.message}</Banner>
           : <span role="status" className={css.kvLabel}>正在加载站点服务…</span>}
       </div></section>
     )
@@ -118,7 +121,7 @@ function SiteServicesSection() {
                 </dd></div>
               </dl>
               {service.key === 'image_bed' && binding ? <ImageBedOptions usable={binding.enabled && !!source && !source.is_disabled} /> : null}
-              {message?.key === service.key ? <div role="status" className={site.message}>{message.text}</div> : null}
+              {message?.key === service.key ? <Banner intent="success">{message.text}</Banner> : null}
             </div>
           </article>
         )
@@ -185,7 +188,7 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
           options={[{ value: '', label: '未绑定' }, ...sources.map((source) => ({ value: source.key, label: `${source.name}${source.is_disabled ? '（已禁用）' : ''}`, disabled: source.is_disabled }))]} />
       </FormField>
       {sourceKey ? <p className={site.path}>{sources.find((source) => source.key === sourceKey)?.root_path}</p> : null}
-      {conflict ? <div role="alert" className={site.error}>{conflict}</div> : error ? <div role="alert" className={site.error}>{error}</div> : null}
+      {conflict ? <Banner intent="warning">{conflict}</Banner> : error ? <Banner intent="error">{error}</Banner> : null}
     </DialogWrap>
   )
 }
@@ -226,21 +229,20 @@ function ImageBedOptions({ usable }: { usable: boolean }) {
             : settings.data.enabled ? `任何人都可通过 /upload 上传图片${status.data ? `，单张最大 ${status.data.max_file_size_mb} MB` : ''}。`
               : '匿名上传已关闭，登录用户仍可使用图床。'}{mutation.isPending ? ' 正在保存…' : ''}</p>
         </>
-      ) : settings.isError ? <div role="alert" className={site.error}>匿名设置读取失败：{settings.error.message} <Button variant="ghost" onClick={() => void settings.refetch()}>重试</Button></div>
+      ) : settings.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void settings.refetch()}>重试</Button>}>匿名设置读取失败：{settings.error.message}</Banner>
         : <span className={site.hint}>正在加载匿名上传设置…</span>}
-      {error ? <div role="alert" className={site.error}>{error}</div> : null}
+      {error ? <Banner intent="error">{error}</Banner> : null}
       <div className={site.featureRow}>
         <p className={site.hint}>{retention.data ? `图片保留：登录用户${days(retention.data.user_retention_days)} · 匿名上传${days(retention.data.anonymous_retention_days)}` : '图片保留策略尚未加载。'}</p>
         <Button variant="secondary" disabled={!retention.data || retention.isFetching} onClick={() => setRetentionOpen(true)}>保留策略</Button>
       </div>
-      {retention.isError ? <div role="alert" className={site.error}>保留策略读取失败：{retention.error.message} <Button variant="ghost" onClick={() => void retention.refetch()}>重试</Button></div> : null}
+      {retention.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void retention.refetch()}>重试</Button>}>保留策略读取失败：{retention.error.message}</Banner> : null}
       {retentionOpen && retention.data ? <ImageRetentionDialog retention={retention.data} onClose={() => setRetentionOpen(false)} /> : null}
     </div>
   )
 }
 
 function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedRetention; onClose: () => void }) {
-  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const [userDays, setUserDays] = useState(String(retention.user_retention_days))
   const [anonymousDays, setAnonymousDays] = useState(String(retention.anonymous_retention_days))
@@ -264,7 +266,7 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
         <FormField label="登录用户图片保留天数"><Input type="number" min="0" step="1" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} /></FormField>
         <FormField label="匿名图片保留天数"><Input type="number" min="0" step="1" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} /></FormField>
       </FormLayout>
-      {error ? <div role="alert" className={site.error}>{error}</div> : null}
+      {error ? <Banner intent="error">{error}</Banner> : null}
     </DialogWrap>
   )
 }
@@ -282,7 +284,7 @@ function SiteRuntimeSection() {
           <div><dt>运行版本</dt><dd>{health.data?.version ?? '—'}</dd></div>
           <div><dt>对外地址</dt><dd>{system.data?.public_url || '—'}</dd></div>
         </dl>
-        {system.isError ? <div role="alert" className={site.error}>运行信息读取失败：{system.error.message} <Button variant="ghost" onClick={() => void system.refetch()}>重试</Button></div> : null}
+        {system.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void system.refetch()}>重试</Button>}>运行信息读取失败：{system.error.message}</Banner> : null}
         <p className={site.hint}>监听地址、对外地址和上传限制由 config.yaml 与 OMNISTORE_* 环境变量管理，修改后需重启服务。</p>
       </div>
     </section>
@@ -327,11 +329,7 @@ function BackupSection() {
           <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
           <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
         </div>
-        {message ? (
-          <p className={exportMutation.isError ? css.exportMessageError : css.exportMessage} role="status">
-            {message}
-          </p>
-        ) : null}
+        {message ? <Banner intent={exportMutation.isError ? 'error' : 'success'}>{message}</Banner> : null}
       </div>
     </section>
   )
@@ -340,7 +338,6 @@ function BackupSection() {
 
 function BrandingSection() {
   const css = useStyles()
-  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const branding = useQuery({ queryKey: ['admin-branding'], queryFn: adminGetBranding, retry: false })
   const [name, setName] = useState('')
@@ -404,7 +401,7 @@ function BrandingSection() {
             </div>
           </form>
         ) : (
-          branding.isError ? <div role="alert" className={site.error}>品牌信息读取失败：{branding.error.message} <Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button></div> : <div className={css.kvRow}>
+          branding.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button>}>品牌信息读取失败：{branding.error.message}</Banner> : <div className={css.kvRow}>
             <span className={css.kvLabel}>实例名称</span>
             <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
           </div>

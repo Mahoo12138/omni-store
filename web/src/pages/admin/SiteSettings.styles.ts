@@ -1,10 +1,4 @@
-import { makeStyles, shorthands } from '@fluentui/react-components'
-
-// TODO(人工复核):
-// - tabList 组合跨文件基类 outlineList
-// - tabList 组合本文件 outlineList:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - tab 组合跨文件基类 outlineTab
-// - tab 组合本文件 outlineTab:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
 
 export const useStyles = makeStyles({
   root: {
@@ -13,20 +7,18 @@ export const useStyles = makeStyles({
   'flexDirection': 'column',
   ...shorthands.gap('16px'),
   },
+  // 间距由外层容器负责：TabList 与 Tabs.Panel 都不再被注入外观，
+  // 因此 Fluent tab 保持默认下划线观感，panel 的 hidden 也不会被 display 打败。
   tabs: {
   'minWidth': '0px',
+  'display': 'grid',
+  ...shorthands.gap(tokens.spacingVerticalXXL),
   },
-  tabList: {
-  'marginBottom': '24px',
-  },
-  panel: {
+  panelBody: {
   'display': 'flex',
   'flexDirection': 'column',
-  ...shorthands.gap('24px'),
+  ...shorthands.gap(tokens.spacingVerticalXXL),
   'minWidth': '0px',
-  '&[hidden]': {
-    'display': 'none',
-  },
   },
   source: {
   'display': 'flex',
@@ -57,18 +49,6 @@ export const useStyles = makeStyles({
   },
   hint: {
   ...shorthands.margin('0px'),
-  'fontSize': '13px',
-  'lineHeight': 1.6,
-  'color': 'var(--colorNeutralForeground2)',
-  'overflowWrap': 'anywhere',
-  },
-  error: {
-  'fontSize': '13px',
-  'lineHeight': 1.6,
-  'color': 'var(--colorPaletteRedForeground1)',
-  'overflowWrap': 'anywhere',
-  },
-  message: {
   'fontSize': '13px',
   'lineHeight': 1.6,
   'color': 'var(--colorNeutralForeground2)',
