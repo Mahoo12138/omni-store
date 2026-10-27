@@ -115,12 +115,8 @@ export function TrashPage() {
                     <td className={css.timeCell}>{formatDate(entry.deleted_at)}</td>
                     <td>
                       <span className={css.actions}>
-                        <button className={css.action} title="恢复" onClick={() => setRestoreTarget(entry)}>
-                          <IconRestore size={15} />
-                        </button>
-                        <button className={css.dangerAction} title="永久删除" onClick={() => setPurgeTarget(entry)}>
-                          <IconTrash size={15} />
-                        </button>
+                        <Button variant="ghost" title="恢复" aria-label="恢复" icon={<IconRestore size={15} />} onClick={() => setRestoreTarget(entry)} />
+                        <Button variant="dangerGhost" title="永久删除" aria-label="永久删除" icon={<IconTrash size={15} />} onClick={() => setPurgeTarget(entry)} />
                       </span>
                     </td>
                   </tr>

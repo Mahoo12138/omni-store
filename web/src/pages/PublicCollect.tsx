@@ -196,7 +196,7 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
             {constraints ? <p className={css.hint}>{constraints}</p> : null}
           </div>
           {picked.length > 0 ? <ul className={css.fileList}>{picked.map((item, index) => <li key={item.id} className={css.fileRow}>
-            <div className={css.fileDetails}><span className={css.filePath}>{item.relativePath}</span>{violations[index] ? <span className={css.error}>{violations[index]}</span> : null}</div><span className={css.fileSize}>{formatBytes(item.file.size)}</span><button className={css.removeButton} type="button" aria-label={`移除 ${item.relativePath}`} disabled={busy} onClick={() => setPicked((current) => current.filter((file) => file.id !== item.id))}><IconClose size={17} /></button>
+            <div className={css.fileDetails}><span className={css.filePath}>{item.relativePath}</span>{violations[index] ? <span className={css.error}>{violations[index]}</span> : null}</div><span className={css.fileSize}>{formatBytes(item.file.size)}</span><Button variant="dangerGhost" aria-label={`移除 ${item.relativePath}`} disabled={busy} icon={<IconClose size={17} />} onClick={() => setPicked((current) => current.filter((file) => file.id !== item.id))} />
           </li>)}</ul> : null}
         </section>
         <div className={css.fields}>

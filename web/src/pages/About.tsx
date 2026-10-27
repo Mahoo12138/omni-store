@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { fetchAuthStatus } from '../api/auth'
 import { fetchSystemStatus } from '../api/system'
 import { PublicFrame } from '../components/shell/PublicFrame'
+import { ExternalLinkButton, LinkButton } from '../components/ui/LinkButton'
 import {
   IconChevronRight,
   IconCloud,
@@ -107,14 +107,11 @@ export function AboutPage() {
               文件留在你的设备上，权限和入口由你掌握。
             </p>
             <div className={css.heroActions}>
-              <Link to="/" className={css.primaryAction}>
+              <LinkButton to="/" size="large" icon={<IconChevronRight size={16} />} iconPosition="after">
                 浏览公开网盘
-                <IconChevronRight size={16} />
-              </Link>
-              <Link to="/upload" className={css.secondaryAction}>
-                图床入口
-              </Link>
-              <Link to="/transfer" search={{ view: 'send' }} className={css.secondaryAction}>文件中转</Link>
+              </LinkButton>
+              <LinkButton to="/upload" size="large" variant="secondary">图床入口</LinkButton>
+              <LinkButton to="/transfer" search={{ view: 'send' }} size="large" variant="secondary">文件中转</LinkButton>
             </div>
           </div>
 
@@ -195,19 +192,21 @@ export function AboutPage() {
             </div>
           </div>
           <div className={css.releaseActions}>
-            <Link to={authStatus.data?.authenticated ? '/app' : '/login'} className={css.primaryAction}>
-              开始使用
-              <IconChevronRight size={16} />
-            </Link>
-            <a
+            <LinkButton
+              to={authStatus.data?.authenticated ? '/app' : '/login'}
+              size="large"
+              icon={<IconChevronRight size={16} />}
+              iconPosition="after"
+            >开始使用</LinkButton>
+            <ExternalLinkButton
               href="https://github.com/omni-store/omnistore/tree/main/docs"
-              className={css.secondaryAction}
+              variant="secondary"
+              size="large"
               target="_blank"
               rel="noreferrer"
-            >
-              查看项目文档
-              <IconExternalLink size={15} />
-            </a>
+              icon={<IconExternalLink size={15} />}
+              iconPosition="after"
+            >查看项目文档</ExternalLinkButton>
           </div>
         </section>
       </div>

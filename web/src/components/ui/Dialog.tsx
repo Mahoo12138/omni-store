@@ -1,5 +1,6 @@
 import { createContext, useContext, useLayoutEffect, type ReactNode } from 'react'
 import {
+  Button,
   Dialog as FluentDialog,
   DialogActions,
   DialogBody,
@@ -110,9 +111,12 @@ export function DialogWrap({
           }}
         >
           <DialogTrigger action="close">
-            <button type="button" className={css.close} aria-label="关闭弹窗">
-              <CloseIcon />
-            </button>
+            <Button
+              appearance="subtle"
+              className={css.close}
+              aria-label="关闭弹窗"
+              icon={<CloseIcon />}
+            />
           </DialogTrigger>
           <DialogBody>
             <DialogTitle>{title}</DialogTitle>

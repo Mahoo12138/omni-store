@@ -17,10 +17,10 @@ import { PageHeader } from '../components/shell/PageHeader'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
 import { Badge, Image, mergeClasses } from '@fluentui/react-components'
 import { Button } from '../components/ui/Button'
+import { LinkButton } from '../components/ui/LinkButton'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Select } from '../components/ui/Select'
 import {
-  IconChevronRight,
   IconCloud,
   IconCopy,
   IconGrid,
@@ -98,9 +98,9 @@ function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
           : '图床能力未开启或未绑定存储源，请联系管理员。'}
       </p>
       {isAdmin ? (
-        <Link to="/app/admin" search={{ section: 'site', tab: 'services' }} className={css.primaryLink}>
-          前往系统设置 <IconChevronRight size={15} />
-        </Link>
+        <LinkButton to="/app/admin" search={{ section: 'site', tab: 'services' }} variant="secondary">
+          前往系统设置
+        </LinkButton>
       ) : null}
     </div>
   )
@@ -324,7 +324,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
                 label="PicGo API Token"
                 value={tokenStatus.data?.image_bed.exists ? `已配置 ${tokenStatus.data.image_bed.count} 个 · 明文仅在创建时显示` : '尚未配置'}
                 action={
-                  <Link to="/app/admin" search={{ section: 'profile' }} className={css.inlineLink} onClick={() => setInfoOpen(false)}>
+                  <Link to="/app/admin" search={{ section: 'profile' }} onClick={() => setInfoOpen(false)}>
                     管理
                   </Link>
                 }
@@ -345,9 +345,13 @@ function ImageBedContent({ status }: { status: StatusData }) {
                 }
               />
             </div>
-            <Link to="/app/admin" search={{ section: 'site', tab: 'services' }} className={css.settingsLink} onClick={() => setInfoOpen(false)}>
-              <IconSettings size={16} /> 查看图床设置 <IconChevronRight size={14} />
-            </Link>
+            <LinkButton
+              to="/app/admin"
+              search={{ section: 'site', tab: 'services' }}
+              variant="secondary"
+              icon={<IconSettings size={16} />}
+              onClick={() => setInfoOpen(false)}
+            >查看图床设置</LinkButton>
           </div>
         </DialogWrap>
       ) : null}
@@ -388,11 +392,14 @@ function InfoRow({ label, value, action }: { label: string; value: string; actio
 }
 
 function CopyButton({ copied, onClick }: { copied: boolean; onClick: () => void }) {
-  const css = useStyles()
   return (
-    <button type="button" className={css.copyButton} onClick={onClick} aria-label="复制">
-      <IconCopy size={14} /> {copied ? '已复制' : '复制'}
-    </button>
+    <Button
+      variant="ghost"
+      onClick={onClick}
+      aria-label="复制"
+      title="复制"
+      icon={<IconCopy size={14} />}
+    >{copied ? '已复制' : '复制'}</Button>
   )
 }
 

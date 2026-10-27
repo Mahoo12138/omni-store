@@ -8,6 +8,7 @@ import { QrCodeDialog } from '../components/share/QrCodeDialog'
 import { Badge } from '../components/ui/Badge'
 import { DialogWrap } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
+import { ExternalLinkButton } from '../components/ui/LinkButton'
 import { IconCopy, IconExternalLink, IconFile, IconFolder, IconLink, IconQr, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatDate } from '../utils/format'
@@ -113,10 +114,10 @@ function ShareRow({ share, onCopy, onQr, onRevoke }: { share: FileShare; onCopy:
         </div>
       </div>
       <div className={css.actions}>
-        <button className={css.linkButton} onClick={onCopy} aria-label={`复制 ${share.name} 的分享链接`} title="复制链接"><IconCopy size={16} /></button>
-        <button className={css.linkButton} onClick={onQr} aria-label={`查看 ${share.name} 的二维码`} title="二维码"><IconQr size={16} /></button>
-        <a className={css.linkButton} href={share.url} target="_blank" rel="noreferrer" aria-label={`打开 ${share.name} 的分享`} title="打开分享"><IconExternalLink size={16} /></a>
-        <button className={css.dangerButton} onClick={onRevoke} aria-label={`撤销 ${share.name} 的分享`} title="撤销分享"><IconTrash size={16} /></button>
+        <Button variant="ghost" onClick={onCopy} aria-label={`复制 ${share.name} 的分享链接`} title="复制链接" icon={<IconCopy size={16} />} />
+        <Button variant="ghost" onClick={onQr} aria-label={`查看 ${share.name} 的二维码`} title="二维码" icon={<IconQr size={16} />} />
+        <ExternalLinkButton variant="ghost" href={share.url} target="_blank" rel="noreferrer" aria-label={`打开 ${share.name} 的分享`} title="打开分享" icon={<IconExternalLink size={16} />} />
+        <Button variant="dangerGhost" onClick={onRevoke} aria-label={`撤销 ${share.name} 的分享`} title="撤销分享" icon={<IconTrash size={16} />} />
       </div>
     </article>
   )

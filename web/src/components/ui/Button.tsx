@@ -11,6 +11,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 // Fluent Button 原生外观；Fluent 没有内置 danger 变体，用调色板红 token 补齐
 //（社区通行做法）。其余 variant 直接映射 appearance。
+// variant → Fluent appearance + 追加类；LinkButton 复用同一份映射，
+// 保证「按钮」和「按钮样式的链接」在页面里只有一套语言。
 const useStyles = makeStyles({
   danger: {
     backgroundColor: tokens.colorPaletteRedBackground3,
@@ -32,20 +34,26 @@ const useStyles = makeStyles({
   },
 })
 
-export function Button({ variant = 'primary', className, icon, children, ...props }: ButtonProps) {
+export function useButtonVariant(variant: ButtonVariant) {
   const styles = useStyles()
-  const appearance =
-    variant === 'primary' || variant === 'danger'
-      ? 'primary'
-      : variant === 'secondary'
-        ? 'secondary'
-        : 'subtle'
-  const extra =
-    variant === 'danger'
-      ? styles.danger
-      : variant === 'dangerGhost'
-        ? styles.dangerGhost
-        : undefined
+  return {
+    appearance:
+      variant === 'primary' || variant === 'danger'
+        ? 'primary'
+        : variant === 'secondary'
+          ? 'secondary'
+          : 'subtle',
+    extra:
+      variant === 'danger'
+        ? styles.danger
+        : variant === 'dangerGhost'
+          ? styles.dangerGhost
+          : undefined,
+  } as const
+}
+
+export function Button({ variant = 'primary', className, icon, children, ...props }: ButtonProps) {
+  const { appearance, extra } = useButtonVariant(variant)
   return (
     <FluentButton
       appearance={appearance}

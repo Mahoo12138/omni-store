@@ -118,35 +118,6 @@ export const useStyles = makeStyles({
     'display': 'none',
   },
   },
-  action: {
-  'width': '32px',
-  'height': '32px',
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.padding('0px'),
-  ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
-  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
-  'background': 'transparent',
-  'color': 'var(--colorBrandBackground)',
-  'cursor': 'pointer',
-  'textDecoration': 'none',
-  '&:hover': {
-    'background': 'var(--colorBrandBackground2)',
-  },
-  '&:focus-visible': {
-    'outline': `2px solid var(--colorBrandBackground)`,
-    'outlineOffset': '1px',
-  },
-  '&:disabled': {
-    'opacity': .5,
-    'cursor': 'not-allowed',
-  },
-  [media.md]: {
-    'width': '44px',
-    'height': '44px',
-  },
-  },
   actionPlaceholder: {
   'width': '32px',
   'height': '32px',

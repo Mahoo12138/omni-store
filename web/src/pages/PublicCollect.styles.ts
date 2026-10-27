@@ -118,32 +118,6 @@ export const useStyles = makeStyles({
   'whiteSpace': 'nowrap',
   'fontVariantNumeric': 'tabular-nums',
   },
-  removeButton: {
-  'appearance': 'none',
-  'width': '44px',
-  'height': '44px',
-  ...shorthands.padding('0px'),
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
-  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
-  'background': 'transparent',
-  'color': 'var(--colorNeutralForeground2)',
-  'cursor': 'pointer',
-  '&:hover': {
-    'background': 'var(--colorPaletteRedBackground1)',
-    'color': 'var(--colorPaletteRedForeground1)',
-  },
-  '&:focus-visible': {
-    'outline': `2px solid var(--colorBrandBackground)`,
-    'outlineOffset': '2px',
-  },
-  '&:disabled': {
-    'opacity': 0.5,
-    'cursor': 'default',
-  },
-  },
   fields: {
   'display': 'grid',
   'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr)',

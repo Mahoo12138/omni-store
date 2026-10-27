@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
@@ -7,6 +7,7 @@ import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
 import { AppFrame } from '../components/shell/AppFrame'
 import { Banner } from '../components/shell/Banner'
 import { Button } from '../components/ui/Button'
+import { LinkButton } from '../components/ui/LinkButton'
 import { openSearchDialog } from '../components/search/SearchDialog'
 import {
   IconChevronRight,
@@ -160,9 +161,9 @@ function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
         <p>{isAdmin ? '连接服务器上的目录后，就可以上传、整理和共享文件。' : '请联系系统管理员分配访问权限。'}</p>
       </div>
       {isAdmin && (
-        <Link to="/app/admin" search={{ section: 'sources' }} className={css.textAction}>
-          配置存储源 <IconChevronRight size={15} />
-        </Link>
+        <LinkButton to="/app/admin" search={{ section: 'sources' }} variant="secondary">
+          配置存储源
+        </LinkButton>
       )}
     </div>
   )

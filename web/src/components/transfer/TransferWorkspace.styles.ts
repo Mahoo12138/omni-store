@@ -277,15 +277,4 @@ export const useStyles = makeStyles({
     'background': 'var(--colorPaletteGreenForeground1)',
   },
   },
-  retry: {
-  'minHeight': '44px',
-  ...shorthands.borderWidth('0px'), ...shorthands.borderStyle('solid'),
-  ...shorthands.padding('0', '8px'),
-  'background': 'transparent',
-  'color': 'inherit',
-  'font': 'inherit',
-  'cursor': 'pointer',
-  'textDecoration': 'underline',
-  'textUnderlineOffset': '4px',
-  },
 })

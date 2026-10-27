@@ -61,7 +61,7 @@ export function TransferServiceSummary() {
   return <div className={css.service} aria-live="polite">
     <span className={css.serviceDot} data-enabled={!!service?.enabled} aria-hidden="true" />
     <div className={css.serviceText}><small>新任务服务</small><strong>{system.isPending ? '正在检查…' : !service ? '状态未知' : service.status}</strong></div>
-    {system.isError || (!system.isPending && !service) ? <button type="button" className={css.retry} onClick={() => void system.refetch()}>重新检查</button> : null}
+    {system.isError || (!system.isPending && !service) ? <Button variant="ghost" onClick={() => void system.refetch()}>重新检查</Button> : null}
   </div>
 }
 

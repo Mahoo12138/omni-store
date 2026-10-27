@@ -7,6 +7,7 @@ import { AppFrame } from '../components/shell/AppFrame'
 import { PageHeader } from '../components/shell/PageHeader'
 import { StateView } from '../components/shell/StateView'
 import { Button } from '../components/ui/Button'
+import { ExternalLinkButton } from '../components/ui/LinkButton'
 import { IconDownload, IconFile, IconFolder, IconStar } from '../components/ui/Icon'
 import { formatBytes, formatDate } from '../utils/format'
 import { useStyles } from './Favorites.styles'
@@ -81,20 +82,23 @@ export function FavoritesPage() {
                   <time dateTime={item.created_at}>收藏于 {formatDate(item.created_at)}</time>
                 </div>
                 {item.type === 'file' ? (
-                  <a className={css.action} href={downloadFileUrl(item.source_key, `/${item.path}`)} download={item.name} aria-label={`下载 ${item.name}`} title={`下载 ${item.name}`}>
-                    <IconDownload size={16} />
-                  </a>
+                  <ExternalLinkButton
+                    variant="ghost"
+                    href={downloadFileUrl(item.source_key, `/${item.path}`)}
+                    download={item.name}
+                    aria-label={`下载 ${item.name}`}
+                    title={`下载 ${item.name}`}
+                    icon={<IconDownload size={16} />}
+                  />
                 ) : <span className={css.actionPlaceholder} aria-hidden="true" />}
-                <button
-                  type="button"
-                  className={css.action}
+                <Button
+                  variant="dangerGhost"
                   aria-label={`取消收藏 ${item.name}`}
                   title="取消收藏"
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(item.id)}
-                >
-                  <IconStar size={16} />
-                </button>
+                  icon={<IconStar size={16} />}
+                />
               </article>
             ))}
           </div>

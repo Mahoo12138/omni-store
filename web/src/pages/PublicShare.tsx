@@ -13,6 +13,7 @@ import {
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
+import { ExternalLinkButton } from '../components/ui/LinkButton'
 import { Banner } from '../components/shell/Banner'
 import { Image, Input } from '@fluentui/react-components'
 import { PreviewModal } from '../preview/PreviewModal'
@@ -111,7 +112,10 @@ function PublicFile({ shareKey, info }: { shareKey: string; info: PublicShareInf
   return (
     <PublicFrame>
       <ShareHero info={info}>
-        <a className={css.linkButton} href={publicShareRawUrl(shareKey, '', true)}><IconDownload size={16} /> 下载文件</a>
+        <ExternalLinkButton
+          href={publicShareRawUrl(shareKey, '', true)}
+          icon={<IconDownload size={16} />}
+        >下载文件</ExternalLinkButton>
       </ShareHero>
       {previewable ? (
         <div className={css.embedPreview}>
@@ -200,9 +204,13 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
         </nav>
         <div className={css.toolbarActions}>
           {remaining === null || remaining > 0 ? (
-            <a className={css.zipButton} href={publicShareArchiveUrl(shareKey, path)} title={zipHint} aria-label="打包下载当前目录 ZIP">
-              <IconDownload size={15} /> 下载全部 (ZIP)
-            </a>
+            <ExternalLinkButton
+              variant="secondary"
+              href={publicShareArchiveUrl(shareKey, path)}
+              title={zipHint}
+              aria-label="打包下载当前目录 ZIP"
+              icon={<IconDownload size={15} />}
+            >下载全部 (ZIP)</ExternalLinkButton>
           ) : null}
           <ViewSwitcher
             ariaLabel="视图切换"

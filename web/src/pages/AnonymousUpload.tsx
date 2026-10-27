@@ -5,6 +5,7 @@ import { ApiRequestError } from '../api/client'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { PageHeader } from '../components/shell/PageHeader'
+import { Button } from '../components/ui/Button'
 import {
   IconCheck,
   IconCopy,
@@ -102,15 +103,12 @@ function ResultLinks({
             <label htmlFor={key}>{option.label}</label>
             <div className={css.linkControl}>
               <input id={key} value={option.value} readOnly onFocus={(event) => event.currentTarget.select()} />
-              <button
-                type="button"
-                className={mergeClasses(css.copyButton, copied ? css.copyButtonSuccess : '')}
+              <Button
+                variant="secondary"
                 onClick={() => onCopy(option.value, key)}
                 aria-label={`复制${option.label}`}
-              >
-                {copied ? <IconCheck size={15} /> : <IconCopy size={15} />}
-                <span>{copied ? '已复制' : '复制'}</span>
-              </button>
+                icon={copied ? <IconCheck size={15} /> : <IconCopy size={15} />}
+              >{copied ? '已复制' : '复制'}</Button>
             </div>
           </div>
         )
@@ -428,18 +426,14 @@ export function AnonymousUploadPage() {
                       </p>
                     </div>
                     <div className={css.resultActions}>
-                      <button type="button" className={css.secondaryButton} onClick={() => fileInputRef.current?.click()}>
-                        <IconUpload size={16} /> 继续上传
-                      </button>
-                      <button
-                        type="button"
-                        className={css.primaryButton}
+                      <Button variant="secondary" icon={<IconUpload size={16} />} onClick={() => fileInputRef.current?.click()}>
+                        继续上传
+                      </Button>
+                      <Button
                         disabled={successItems.length === 0}
                         onClick={copyAllDirectLinks}
-                      >
-                        {copiedKey === 'all-direct' ? <IconCheck size={16} /> : <IconCopy size={16} />}
-                        {copiedKey === 'all-direct' ? '已复制全部直链' : '复制全部直链'}
-                      </button>
+                        icon={copiedKey === 'all-direct' ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                      >{copiedKey === 'all-direct' ? '已复制全部直链' : '复制全部直链'}</Button>
                     </div>
                   </div>
                   {copyError && <Banner intent="error" className={css.bannerInset}>{copyError}</Banner>}

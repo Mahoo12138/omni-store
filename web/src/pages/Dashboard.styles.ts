@@ -199,20 +199,6 @@ export const useStyles = makeStyles({
   'background': 'var(--colorPaletteDarkOrangeBackground1)',
   'color': 'var(--colorPaletteDarkOrangeForeground1)',
   },
-  textAction: {
-  'minHeight': '36px',
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  ...shorthands.gap('3px'),
-  ...shorthands.padding('0', '4px'),
-  ...shorthands.borderRadius('var(--borderRadiusSmall)'),
-  'color': 'var(--colorBrandBackground)',
-  'fontSize': '13px',
-  'fontWeight': 550,
-  '&:hover': {
-    'background': 'var(--colorBrandBackground2)',
-  },
-  },
   recentPanel: {
   'minWidth': '0px',
   'background': 'var(--colorNeutralBackground1)',
