@@ -53,7 +53,9 @@ export const useAppFrameStyles = makeStyles({
   // 两个类都声明 width 时，谁生效取决于 Griffel 原子的插入顺序，不确定。
   '&[data-compact]': {
   'width': layout.navRailWidth,
-  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalXXS),
+  // 三值写全：两值的 padding(32px, 4px) 会把基类的 12px 底边距又覆盖回 32px，
+  // 窄栏里头像就会悬在离底 48px 的位置。
+  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalXXS, tokens.spacingVerticalM),
   },
   },
   // 设置页的窄栏态：只放图标，文字与分组标题不渲染（可访问名走 aria-label）。
