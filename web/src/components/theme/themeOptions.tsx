@@ -16,8 +16,8 @@ export const THEME_OPTIONS: ThemeOption[] = [
   { value: 'dark', label: '深色', icon: IconThemeDark },
 ]
 
-/** 账号菜单里这一组的分组标题。 */
-export const THEME_MENU_GROUP_LABEL = '外观'
+/** 账号菜单里「外观」二级弹出层的入口标签。 */
+export const THEME_MENU_LABEL = '外观'
 
 /** MenuItemRadio 的 name（MenuList 的 checkedValues 键）。 */
 export const THEME_MENU_RADIO_NAME = 'theme-mode'

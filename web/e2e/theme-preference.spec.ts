@@ -22,10 +22,20 @@ async function expectTheme(page: Page, theme: 'light' | 'dark') {
   await expect(page.locator('.fui-FluentProvider').first()).toHaveCSS('background-color', surface)
 }
 
-async function chooseThemeFromAccountMenu(page: Page, label: '跟随系统' | '浅色' | '深色') {
+/**
+ * 账号菜单 → 「外观」二级弹出层 → 选档。
+ * 档位从主菜单的一组分项改成了二级层，所以必须先进入「外观」。
+ */
+async function openAppearanceSubmenu(page: Page) {
   await page.getByRole('button', { name: /^账号菜单/ }).click()
+  await page.getByRole('menuitem', { name: '外观', exact: true }).click()
+  await expect(page.getByRole('menuitemradio', { name: '跟随系统', exact: true })).toBeVisible()
+}
+
+async function chooseThemeFromAccountMenu(page: Page, label: '跟随系统' | '浅色' | '深色') {
+  await openAppearanceSubmenu(page)
   await page.getByRole('menuitemradio', { name: label, exact: true }).click()
-  await expect(page.getByRole('menu')).toBeHidden()
+  await expect(page.getByRole('menu')).toHaveCount(0)
 }
 
 test('system dark drives the whole app, and switching back is picked up', async ({ page }) => {
@@ -74,7 +84,7 @@ test('the chosen mode is persisted to the account, not only to localStorage', as
   expect(preferences.data.theme).toBe('dark')
 
   // 账号菜单里的勾选态与解析结果一致（MenuItemRadio 的 aria-checked）。
-  await page.getByRole('button', { name: /^账号菜单/ }).click()
+  await openAppearanceSubmenu(page)
   await expect(page.getByRole('menuitemradio', { name: '深色', exact: true })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByRole('menuitemradio', { name: '浅色', exact: true })).toHaveAttribute('aria-checked', 'false')
 })
@@ -101,10 +111,10 @@ test('the preferences pane exposes the same three modes as a radiogroup', async 
   await group.getByRole('radio', { name: '浅色' }).check()
   await expectTheme(page, 'light')
   // 账号菜单与偏好页共用同一个 store：切换后菜单里的勾选态要跟着变。
-  await page.getByRole('button', { name: /^账号菜单/ }).click()
+  await openAppearanceSubmenu(page)
   await expect(page.getByRole('menuitemradio', { name: '浅色', exact: true })).toHaveAttribute('aria-checked', 'true')
   await page.getByRole('menuitemradio', { name: '跟随系统', exact: true }).click()
-  await expect(page.getByRole('menu')).toBeHidden()
+  await expect(page.getByRole('menu')).toHaveCount(0)
   await expectTheme(page, 'dark')
 })
 

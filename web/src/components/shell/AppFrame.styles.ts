@@ -201,8 +201,24 @@ export const useAppFrameStyles = makeStyles({
   [media.md]: {
     'width': layout.navRailHeight,
     'minHeight': layout.navRailHeight,
+    // Fluent Button 自带 min-width:96px，窄屏导航条里会把账号格撑破，交回内容宽度。
+    'minWidth': '0px',
     'justifyContent': 'center',
     ...shorthands.padding('0px'),
+  },
+  },
+  // Button 的 children 直接落在 root 上（Fluent 没有 content 槽），
+  // 所以头像 / 两行文字 / 箭头的排布由这一行自己负责。
+  userRow: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'gap': tokens.spacingHorizontalMNudge,
+  'flexGrow': 1,
+  'minWidth': '0px',
+  'textAlign': 'start',
+  [media.md]: {
+    'gap': '0px',
+    'justifyContent': 'center',
   },
   },
   userStack: {
@@ -216,6 +232,7 @@ export const useAppFrameStyles = makeStyles({
   },
   userChevron: {
   'flexShrink': 0,
+  'marginInlineStart': 'auto',
   'color': tokens.colorNeutralForeground3,
   [media.md]: {
     'display': 'none',

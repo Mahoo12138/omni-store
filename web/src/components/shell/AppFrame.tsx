@@ -7,8 +7,7 @@ import {
   Button,
   Menu as FluentMenu,
   MenuDivider,
-  MenuGroup,
-  MenuGroupHeader,
+  MenuItem,
   MenuItemRadio,
   MenuList,
   MenuPopover,
@@ -18,7 +17,7 @@ import {
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
 import { SearchDialog, openSearchDialog } from '../search/SearchDialog'
-import { THEME_MENU_GROUP_LABEL, THEME_MENU_RADIO_NAME, THEME_OPTIONS } from '../theme/themeOptions'
+import { THEME_MENU_LABEL, THEME_MENU_RADIO_NAME, THEME_OPTIONS } from '../theme/themeOptions'
 import { isThemeMode } from '../../utils/themeMode'
 import { setThemeMode, useTheme } from '../../utils/useTheme'
 import {
@@ -165,6 +164,8 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
   const css = useAppFrameStyles()
   const navigate = useNavigate()
   const { mode } = useTheme()
+  // 入口图标跟随当前档位，未展开也能看出现在是哪一档。
+  const ModeIcon = (THEME_OPTIONS.find((option) => option.value === mode) ?? THEME_OPTIONS[0]).icon
 
   const items: MenuOption[] = [
     { id: 'settings', label: '设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }) },
@@ -181,27 +182,25 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
 
   return (
     <div className={css.userArea}>
-      <FluentMenu
-        checkedValues={{ [THEME_MENU_RADIO_NAME]: [mode] }}
-        hasCheckmarks
-        hasIcons
-        onCheckedValueChange={(_, data) => {
-          const [next] = data.checkedItems
-          if (isThemeMode(next)) setThemeMode(next)
-        }}
-      >
+      <FluentMenu hasIcons>
         <MenuTrigger>
+          {/*
+            头像不能走 Button 的 icon 槽：Fluent 把该槽钉死为 20×20，32px 的 Avatar
+            会被压扁。renderButton 直接把 children 放进 root，所以整行自己排布。
+          */}
           <Button
             appearance="subtle"
             className={css.userButton}
             aria-label={`账号菜单：${displayName}`}
-            icon={<Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />}
           >
-            <span className={css.userStack}>
-              <span className={css.userName}>{displayName}</span>
-              <span className={css.userCaption}>账号与设置</span>
+            <span className={css.userRow}>
+              <Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />
+              <span className={css.userStack}>
+                <span className={css.userName}>{displayName}</span>
+                <span className={css.userCaption}>账号与设置</span>
+              </span>
+              <IconChevronDown size={12} className={css.userChevron} />
             </span>
-            <IconChevronDown size={12} className={css.userChevron} />
           </Button>
         </MenuTrigger>
         <MenuPopover>
@@ -209,19 +208,33 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
             {items.map((item) => (
               <ItemView key={item.id} item={item} />
             ))}
-            <MenuGroup>
-              <MenuGroupHeader>{THEME_MENU_GROUP_LABEL}</MenuGroupHeader>
-              {THEME_OPTIONS.map((option) => (
-                <MenuItemRadio
-                  key={option.value}
-                  name={THEME_MENU_RADIO_NAME}
-                  value={option.value}
-                  icon={<option.icon size={16} />}
-                >
-                  {option.label}
-                </MenuItemRadio>
-              ))}
-            </MenuGroup>
+            {/* 外观档位收进二级弹出层：主菜单只留一个入口，勾选态由内层 Menu 自己管。 */}
+            <FluentMenu
+              hasCheckmarks
+              checkedValues={{ [THEME_MENU_RADIO_NAME]: [mode] }}
+              onCheckedValueChange={(_, data) => {
+                const [next] = data.checkedItems
+                if (isThemeMode(next)) setThemeMode(next)
+              }}
+            >
+              <MenuTrigger disableButtonEnhancement>
+                <MenuItem hasSubmenu icon={<ModeIcon size={16} />}>{THEME_MENU_LABEL}</MenuItem>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList aria-label={THEME_MENU_LABEL}>
+                  {THEME_OPTIONS.map((option) => (
+                    <MenuItemRadio
+                      key={option.value}
+                      name={THEME_MENU_RADIO_NAME}
+                      value={option.value}
+                      icon={<option.icon size={16} />}
+                    >
+                      {option.label}
+                    </MenuItemRadio>
+                  ))}
+                </MenuList>
+              </MenuPopover>
+            </FluentMenu>
             <MenuDivider />
             <ItemView item={logoutItem} />
           </MenuList>
