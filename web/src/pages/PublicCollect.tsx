@@ -5,6 +5,7 @@ import { ApiRequestError } from '../api/client'
 import { lookupCollection, submitToCollection, unlockCollection, type CollectionPublicInfo } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
+import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
 import { Input, Textarea } from '@fluentui/react-components'
 import { IconCheck, IconClose, IconFolder, IconKey, IconUpload } from '../components/ui/Icon'
@@ -137,18 +138,18 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
     <div className={css.workbench}>
       {protectedTask ? <section className={css.auth}>
         <div className={css.authHeader}><span className={css.authIcon}><IconKey size={28} /></span><h2>验证后提交文件</h2><p className={css.hint}>请填写收集者提供的{requiresCode ? '收件码' : ''}{requiresCode && info.data.has_password ? '和' : ''}{info.data.has_password ? '访问密码' : ''}。</p></div>
-        {sessionMessage ? <p className={css.hint} role="status">{sessionMessage}</p> : null}
+        {sessionMessage ? <Banner intent="info">{sessionMessage}</Banner> : null}
         <form className={css.form} onSubmit={(event) => {
           event.preventDefault(); setAuthError('');
           unlock.mutate({ code: requiresCode ? code.trim() : '', password: info.data.has_password ? password : '' })
         }}>
           {requiresCode ? <FormField label="收件码"><Input autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /></FormField> : null}
           {info.data.has_password ? <FormField label="访问密码"><Input aria-label="收集任务访问密码" type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /></FormField> : null}
-          {authError ? <p className={css.error} role="alert">{authError}</p> : null}
+          {authError ? <Banner intent="error">{authError}</Banner> : null}
           <Button type="submit" disabled={unlock.isPending || (requiresCode && !code.trim()) || (info.data.has_password && !password)}>{unlock.isPending ? '验证中…' : '继续提交'}</Button>
         </form>
       </section> : <div className={css.state}>
-        {authError ? <><h2>暂时无法进入收集任务</h2><p role="alert">{authError}</p><Button variant="secondary" onClick={() => { setAuthError(''); unlock.mutate({ code: '', password: '' }) }}>重试</Button></> : <p role="status">正在准备上传…</p>}
+        {authError ? <><h2>暂时无法进入收集任务</h2><Banner intent="error">{authError}</Banner><Button variant="secondary" onClick={() => { setAuthError(''); unlock.mutate({ code: '', password: '' }) }}>重试</Button></> : <p role="status">正在准备上传…</p>}
       </div>}
     </div>
   </PublicTransferShell>
@@ -206,8 +207,8 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
             <Textarea aria-label="提交备注" rows={4} resize="vertical" value={note} onChange={(event) => setNote(event.target.value)} required={info.data.require_note} disabled={busy} />
           </FormField>
         </div>
-        {sessionMessage ? <p className={css.hint} role="status">{sessionMessage}</p> : null}
-        {error ? <p className={css.error} role="alert">{error}</p> : null}
+        {sessionMessage ? <Banner intent="info">{sessionMessage}</Banner> : null}
+        {error ? <Banner intent="error">{error}</Banner> : null}
         <div className={css.footer}><p className={css.hint}>文件仅发送给收集者，你的提交不会展示给其他访客。</p><Button type="submit" disabled={busy || picked.length === 0}>{submit.isPending ? '提交中…' : '提交文件'}</Button></div>
       </form>
     </div>

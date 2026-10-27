@@ -32,6 +32,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
 import { ContextMenu } from '../components/ui/ContextMenu'
+import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
 import { Input, ProgressBar } from '@fluentui/react-components'
 import { Menu, type MenuOption } from '../components/ui/Menu'
@@ -2459,7 +2460,7 @@ function BatchShareDialog({ sourceKey, currentPath, entries, onClose }: {
           </ul>}
         </div>
       )}
-      {validationError && started && <p role="alert" style={{ color: 'var(--colorPaletteRedForeground1)' }}>{validationError}</p>}
+      {validationError && started && <Banner intent="error">{validationError}</Banner>}
     </DialogWrap>
   )
 }

@@ -5,6 +5,7 @@ import { ApiRequestError } from '../api/client'
 import { downloadBlob, fetchTransferBlob, listTransferFiles, lookupTransfer, unlockTransfer, type TransferFile } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
+import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
 import { Input } from '@fluentui/react-components'
 import { IconDownload, IconFile, IconKey } from '../components/ui/Icon'
@@ -142,29 +143,29 @@ function PickupTask({ publicKey }: { publicKey: string }) {
     <div className={css.workbench}>
       {!access ? protectedTask ? <section className={css.auth}>
         <div className={css.authHeader}><span className={css.authIcon}><IconKey size={28} /></span><h2>验证后领取文件</h2><p className={css.hint}>请填写分享者提供的{requiresCode ? '取件码' : ''}{requiresCode && info.data.has_password ? '和' : ''}{info.data.has_password ? '访问密码' : ''}。</p></div>
-        {sessionMessage ? <p className={css.hint} role="status">{sessionMessage}</p> : null}
+        {sessionMessage ? <Banner intent="info">{sessionMessage}</Banner> : null}
         <form className={css.form} onSubmit={(event) => {
           event.preventDefault(); setAuthError('');
           unlock.mutate({ code: requiresCode ? code.trim() : '', password: info.data.has_password ? password : '' })
         }}>
           {requiresCode ? <FormField label="取件码"><Input autoFocus value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} autoComplete="off" required disabled={unlock.isPending} /></FormField> : null}
           {info.data.has_password ? <FormField label="访问密码"><Input type="password" autoFocus={!requiresCode} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required disabled={unlock.isPending} /></FormField> : null}
-          {authError ? <p className={css.error} role="alert">{authError}</p> : null}
+          {authError ? <Banner intent="error">{authError}</Banner> : null}
           <Button type="submit" disabled={unlock.isPending || (requiresCode && !code.trim()) || (info.data.has_password && !password)}>{unlock.isPending ? '验证中…' : '领取文件'}</Button>
         </form>
       </section> : <div className={css.state}>
-        {authError ? <><h2>暂时无法领取文件</h2><p role="alert">{authError}</p><Button variant="secondary" onClick={() => { setAuthError(''); unlock.mutate({ code: '', password: '' }) }}>重试</Button></> : <p role="status">正在准备取件…</p>}
+        {authError ? <><h2>暂时无法领取文件</h2><Banner intent="error">{authError}</Banner><Button variant="secondary" onClick={() => { setAuthError(''); unlock.mutate({ code: '', password: '' }) }}>重试</Button></> : <p role="status">正在准备取件…</p>}
       </div> : <>
         <div className={css.toolbar}><h2>文件列表</h2><Button onClick={() => void download(null)} disabled={downloading || !files.data?.length}><IconDownload size={16} /> {downloading ? '正在准备下载…' : '全部下载（ZIP）'}</Button></div>
         {files.isPending ? <div className={css.state} role="status">正在加载文件…</div> : null}
-        {files.isError ? <div className={css.state}><p role="alert">{errorMessage(files.error, '无法获取文件列表。')}</p><Button variant="secondary" onClick={() => void files.refetch()}>重新加载文件</Button></div> : null}
+        {files.isError ? <div className={css.state}><Banner intent="error" action={<Button variant="secondary" onClick={() => void files.refetch()}>重新加载文件</Button>}>{errorMessage(files.error, '无法获取文件列表。')}</Banner></div> : null}
         {files.data && files.data.length === 0 ? <div className={css.state}>发件包中没有文件。</div> : null}
         {files.data && files.data.length > 0 ? <ul className={css.fileList}>{files.data.map((entry) => <li key={entry.id} className={css.downloadRow}>
           <div className={css.downloadDetails}><span className={css.fileIcon}><IconFile size={19} /></span><div className={css.fileDetails}><span className={css.filePath}>{entry.relative_path}</span><span className={css.fileSize}>{formatBytes(entry.size)}</span></div></div>
           <Button variant="secondary" disabled={downloading} onClick={() => void download(entry)} aria-label={`下载 ${entry.relative_path}`}><IconDownload size={15} /> 下载</Button>
         </li>)}</ul> : null}
-        {sessionMessage ? <p className={css.hint} role="status">{sessionMessage}</p> : null}
-        {error ? <p role="alert" className={css.error}>{error}</p> : null}
+        {sessionMessage ? <Banner intent="info">{sessionMessage}</Banner> : null}
+        {error ? <Banner intent="error">{error}</Banner> : null}
       </>}
     </div>
   </PublicTransferShell>

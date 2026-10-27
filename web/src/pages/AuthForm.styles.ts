@@ -14,7 +14,6 @@ export const useStyles = makeStyles({
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow4)',
   ...shorthands.padding('40px'),
   },
   brand: {
@@ -40,11 +39,6 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap('16px'),
-  },
-  error: {
-  'fontSize': '13px',
-  'color': 'var(--colorPaletteRedForeground1)',
-  ...shorthands.margin('0px'),
   },
   footer: {
   'marginTop': '16px',

@@ -34,7 +34,6 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'backgroundColor': 'var(--colorNeutralBackground1)',
   ...shorthands.overflow('hidden'),
-  'boxShadow': 'var(--shadow4)',
   },
   mountGrid: {
   'display': 'grid',
@@ -59,11 +58,10 @@ export const useStyles = makeStyles({
   'textAlign': 'left',
   'fontFamily': 'var(--fontFamilyBase)',
   'cursor': 'pointer',
-  'transitionProperty': 'background-color, border-color, box-shadow, transform', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  'transitionProperty': 'background-color, border-color, transform', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
   '&:hover': {
     ...shorthands.borderColor('var(--colorNeutralStroke1)'),
     'backgroundColor': 'var(--colorNeutralBackground1Hover)',
-    'boxShadow': 'var(--shadow4)',
     'transform': 'translateY(-1px)',
   },
   '&:focus-visible': {
@@ -98,7 +96,6 @@ export const useStyles = makeStyles({
   'marginLeft': 'auto',
   'color': 'var(--colorNeutralForeground2)',
   'transitionProperty': 'transform, color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
-  // TODO 未解析 selector: [`${mountCard}:hover &`]: { color: 'var(--colorBrandBackgrou
   },
   mountName: {
   ...shorthands.overflow('hidden'),
@@ -183,18 +180,5 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   'background': 'var(--colorBrandBackground2)',
   'color': 'var(--colorBrandBackground)',
-  },
-  errorState: {
-  'minHeight': '216px',
-  'display': 'flex',
-  'alignItems': 'center',
-  'justifyContent': 'space-between',
-  ...shorthands.gap('24px'),
-  ...shorthands.padding('40px'),
-  [media.sm]: {
-    'alignItems': 'flex-start',
-    'flexDirection': 'column',
-    ...shorthands.padding('24px'),
-  },
   },
 })

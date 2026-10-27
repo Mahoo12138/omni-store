@@ -87,6 +87,10 @@ export const useShellStyles = makeStyles({
   stateInline: {
   'minWidth': '0px',
   },
+  banner: {
+  'minWidth': '0px',
+  'overflowWrap': 'anywhere',
+  },
   stateTitle: {
   'color': tokens.colorNeutralForeground1,
   ...shorthands.margin('0px'),

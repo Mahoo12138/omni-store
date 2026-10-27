@@ -10,6 +10,7 @@ import {
   type TrashEntry,
 } from '../api/sources'
 import { AppFrame } from '../components/shell/AppFrame'
+import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
@@ -215,7 +216,7 @@ function PurgeDialog({ sourceKey, entry, onClose, onSuccess }: {
       description={`“${entry.name}”删除后无法恢复，并会释放其占用的用户配额。`}
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="danger" onClick={() => mutation.mutate()} disabled={mutation.isPending}>{mutation.isPending ? '删除中…' : '永久删除'}</Button></>}
     >
-      {error ? <p className={css.dialogError} role="alert">{error}</p> : <p className={css.dialogText}>请确认这是你想永久清理的内容。</p>}
+      {error ? <Banner intent="error">{error}</Banner> : <p className={css.dialogText}>请确认这是你想永久清理的内容。</p>}
     </DialogWrap>
   )
 }

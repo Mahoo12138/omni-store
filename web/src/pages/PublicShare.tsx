@@ -13,6 +13,7 @@ import {
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
+import { Banner } from '../components/shell/Banner'
 import { Image, Input } from '@fluentui/react-components'
 import { PreviewModal } from '../preview/PreviewModal'
 import { PreviewContent, type PreviewItem } from '../preview/PreviewContent'
@@ -70,7 +71,7 @@ export function PublicSharePage() {
             <p>输入分享者提供的访问密码以查看「{info.data.name}」。</p>
             <form className={css.unlockForm} onSubmit={(event) => { event.preventDefault(); setPasswordError(''); unlock.mutate() }}>
               <Input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="访问密码" aria-label="访问密码" />
-              {passwordError ? <span className={css.error} role="alert">{passwordError}</span> : null}
+              {passwordError ? <Banner intent="error">{passwordError}</Banner> : null}
               <Button type="submit" disabled={unlock.isPending || !password}>{unlock.isPending ? '验证中…' : '查看分享'}</Button>
             </form>
           </section>

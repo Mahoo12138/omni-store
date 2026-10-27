@@ -158,10 +158,11 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   },
   skeletonIcon: {
-  // TODO 未解析: ...skeletonBase
   'width': '42px',
   'height': '42px',
   ...shorthands.borderRadius('var(--borderRadiusMedium)'),
+  'background': `linear-gradient(90deg, var(--colorNeutralBackground1Hover) 25%, var(--colorNeutralStroke2) 50%, var(--colorNeutralBackground1Hover) 75%)`,
+  'backgroundSize': '200% 100%',
   },
   skeletonText: {
   'display': 'flex',
@@ -169,25 +170,12 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   },
   skeletonMeta: {
-  // TODO 未解析: ...skeletonBase
   'gridColumn': '1 / -1',
   'width': '120px',
   'height': '10px',
   ...shorthands.borderRadius('var(--borderRadiusSmall)'),
-  },
-  inlineState: {
-  'display': 'flex',
-  'alignItems': 'center',
-  'justifyContent': 'space-between',
-  ...shorthands.gap('16px'),
-  ...shorthands.padding('24px', '16px'),
-  'borderTopWidth': '1px', 'borderTopStyle': 'solid', 'borderTopColor': 'var(--colorNeutralStroke2)',
-  'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  'color': 'var(--colorNeutralForeground2)',
-  [media.sm]: {
-    'alignItems': 'flex-start',
-    'flexDirection': 'column',
-  },
+  'background': `linear-gradient(90deg, var(--colorNeutralBackground1Hover) 25%, var(--colorNeutralStroke2) 50%, var(--colorNeutralBackground1Hover) 75%)`,
+  'backgroundSize': '200% 100%',
   },
   emptyState: {
   'display': 'grid',
@@ -385,20 +373,6 @@ export const useStyles = makeStyles({
     ...shorthands.borderRadius('var(--borderRadiusSmall)'),
     'background': 'var(--colorNeutralBackground1Hover)',
   },
-  },
-  recentState: {
-  'display': 'flex',
-  'flexDirection': 'column',
-  'alignItems': 'flex-start',
-  ...shorthands.gap('10px'),
-  ...shorthands.padding('22px', '20px', '28px'),
-  'color': 'var(--colorNeutralForeground2)',
-  'fontSize': '13px',
-  },
-  recentStateTitle: {
-  'color': 'var(--colorNeutralForeground1)',
-  'fontSize': '14px',
-  'fontWeight': 650,
   },
   recentEmpty: {
   'display': 'flex',

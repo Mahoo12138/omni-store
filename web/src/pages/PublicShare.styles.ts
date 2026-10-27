@@ -89,7 +89,6 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow16)',
   'textAlign': 'center',
   },
   unlockIcon: {
@@ -106,11 +105,6 @@ export const useStyles = makeStyles({
   unlockForm: {
   'display': 'grid',
   ...shorthands.gap('8px'),
-  },
-  error: {
-  'color': 'var(--colorPaletteRedForeground1)',
-  'fontSize': '13px',
-  'textAlign': 'left',
   },
   empty: {
   'minHeight': '420px',
@@ -219,10 +213,10 @@ export const useStyles = makeStyles({
     'outlineOffset': '2px',
   },
   },
+  // 尺寸与撑满由这里负责，object-fit 交给 <Image fit="cover"> 的原生 prop。
   galleryImg: {
   'width': '100%',
   'height': '100%',
-  'objectFit': 'cover',
   'display': 'block',
   },
   galleryName: {

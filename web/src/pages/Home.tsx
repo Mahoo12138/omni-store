@@ -5,6 +5,8 @@ import { Badge } from '@fluentui/react-components'
 import { fetchSetupStatus } from '../api/auth'
 import { fetchPublicSummary } from '../api/public'
 import { PublicFrame } from '../components/shell/PublicFrame'
+import { Banner } from '../components/shell/Banner'
+import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/shell/PageHeader'
 import { IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
 import { useStyles } from './Home.styles'
@@ -67,13 +69,11 @@ export function HomePage() {
           </div>
         )}
         {summary.isError && (
-          <div className={css.errorState} role="alert">
-            <div>
-              <h2>无法读取公开目录</h2>
-              <p>请检查网络连接后重新加载。</p>
-            </div>
-            <button type="button" onClick={() => summary.refetch()}>重新加载目录</button>
-          </div>
+          <Banner
+            intent="error"
+            title="无法读取公开目录"
+            action={<Button variant="secondary" onClick={() => summary.refetch()}>重新加载目录</Button>}
+          >请检查网络连接后重新加载。</Banner>
         )}
         {summary.isSuccess && summary.data.enabled && (
           <div className={css.mountGrid}>

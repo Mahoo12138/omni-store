@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Image } from '@fluentui/react-components'
+import { Image, mergeClasses } from '@fluentui/react-components'
 import { ApiRequestError } from '../api/client'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { PublicFrame } from '../components/shell/PublicFrame'
@@ -13,6 +13,7 @@ import {
   IconRefresh,
   IconUpload,
 } from '../components/ui/Icon'
+import { Banner } from '../components/shell/Banner'
 import { useStyles } from './AnonymousUpload.styles'
 
 const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
@@ -103,7 +104,7 @@ function ResultLinks({
               <input id={key} value={option.value} readOnly onFocus={(event) => event.currentTarget.select()} />
               <button
                 type="button"
-                className={copied ? css.copyButtonSuccess : css.copyButton}
+                className={mergeClasses(css.copyButton, copied ? css.copyButtonSuccess : '')}
                 onClick={() => onCopy(option.value, key)}
                 aria-label={`复制${option.label}`}
               >
@@ -379,7 +380,7 @@ export function AnonymousUploadPage() {
                 }}
               />
               <div
-                className={dragActive ? css.dropZoneActive : css.dropZone}
+                className={mergeClasses(css.dropZone, dragActive && css.dropZoneActive)}
                 role="button"
                 tabIndex={0}
                 aria-label="选择或拖入要上传的图片"
@@ -441,7 +442,7 @@ export function AnonymousUploadPage() {
                       </button>
                     </div>
                   </div>
-                  {copyError && <p className={css.copyError} role="alert">{copyError}</p>}
+                  {copyError && <Banner intent="error" className={css.bannerInset}>{copyError}</Banner>}
                   <div className={css.resultList}>
                     {items.map((item) => (
                       <UploadResult key={item.id} item={item} copiedKey={copiedKey} onCopy={copyValue} />
@@ -454,7 +455,7 @@ export function AnonymousUploadPage() {
         </div>
 
         <p className={css.privacyNote}>无需登录 · 不保留上传历史 · 请自行保存需要的链接</p>
-        <div className={css.srStatus} aria-live="polite">{copyError || (copiedKey ? '链接已复制' : '')}</div>
+        <div className={css.srStatus} aria-live="polite">{copiedKey ? '链接已复制' : ''}</div>
       </section>
     </PublicFrame>
   )

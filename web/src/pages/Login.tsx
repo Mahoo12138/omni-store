@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import { ApiRequestError } from '../api/client'
 import { Button } from '../components/ui/Button'
+import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
 import { Input } from '@fluentui/react-components'
 import { LogoMark } from '../components/ui/Icon'
@@ -67,7 +68,7 @@ export function LoginPage() {
               required
             />
           </FormField>
-          {error && <p className={css.error}>{error}</p>}
+          {error && <Banner intent="error">{error}</Banner>}
           <Button type="submit" disabled={submitting}>
             {submitting ? '登录中…' : '登录'}
           </Button>

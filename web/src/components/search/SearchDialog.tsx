@@ -9,6 +9,7 @@ import {
   searchFiles,
 } from '../../api/sources'
 import { DialogWrap } from '../ui/Dialog'
+import { Banner } from '../shell/Banner'
 import { Button } from '../ui/Button'
 import {
   IconChevronLeft,
@@ -119,11 +120,11 @@ export function SearchDialog() {
       ) : results.isPending ? (
         <section className={css.emptyState} aria-busy="true">正在搜索索引…</section>
       ) : results.isError ? (
-        <section className={css.emptyState} role="alert">
-          <h2 className={css.emptyTitle}>搜索失败</h2>
-          <span>{results.error instanceof ApiRequestError ? results.error.message : '请稍后重试。'}</span>
-          <Button variant="secondary" onClick={() => results.refetch()}>重试</Button>
-        </section>
+        <Banner
+          intent="error"
+          title="搜索失败"
+          action={<Button variant="secondary" onClick={() => results.refetch()}>重试</Button>}
+        >{results.error instanceof ApiRequestError ? results.error.message : '请稍后重试。'}</Banner>
       ) : data && data.total === 0 ? (
         <section className={css.emptyState}>
           <span className={css.emptyIcon}><IconFile size={24} /></span>

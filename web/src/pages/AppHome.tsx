@@ -5,6 +5,7 @@ import { fetchMe } from '../api/auth'
 import { downloadFileUrl, fetchMySources, type UserSource } from '../api/sources'
 import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
 import { AppFrame } from '../components/shell/AppFrame'
+import { Banner } from '../components/shell/Banner'
 import { Button } from '../components/ui/Button'
 import { openSearchDialog } from '../components/search/SearchDialog'
 import {
@@ -78,11 +79,11 @@ export function AppHomePage() {
           {sources.isPending ? (
             <SourceListLoading />
           ) : sources.isError ? (
-            <RetryState
+            <Banner
+              intent="error"
               title="无法加载存储源"
-              message="请检查网络连接后重试。"
-              onRetry={() => sources.refetch()}
-            />
+              action={<Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>}
+            >请检查网络连接后重试。</Banner>
           ) : sourceList.length === 0 ? (
             <NoSourceView isAdmin={isAdmin} />
           ) : (
@@ -149,27 +150,6 @@ function SourceListLoading() {
   )
 }
 
-function RetryState({
-  title,
-  message,
-  onRetry,
-}: {
-  title: string
-  message: string
-  onRetry: () => void
-}) {
-  const css = useStyles()
-  return (
-    <div className={css.inlineState} role="alert">
-      <div>
-        <strong>{title}</strong>
-        <span>{message}</span>
-      </div>
-      <Button variant="secondary" onClick={onRetry}>重新加载</Button>
-    </div>
-  )
-}
-
 function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
   const css = useStyles()
   return (
@@ -220,11 +200,11 @@ function RecentFilesPanel({
           ))}
         </div>
       ) : error ? (
-        <div className={css.recentState} role="alert">
-          <strong className={css.recentStateTitle}>最近文件加载失败</strong>
-          <span>{error instanceof ApiRequestError ? error.message : '请检查连接后重试。'}</span>
-          <Button variant="secondary" onClick={onRetry}>重新加载</Button>
-        </div>
+        <Banner
+          intent="error"
+          title="最近文件加载失败"
+          action={<Button variant="secondary" onClick={onRetry}>重新加载</Button>}
+        >{error instanceof ApiRequestError ? error.message : '请检查连接后重试。'}</Banner>
       ) : items.length === 0 ? (
         <div className={css.recentEmpty}>
           <span className={css.recentEmptyIcon}><IconFile size={22} /></span>

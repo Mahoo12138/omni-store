@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { Banner } from './Banner'
 import { PageHeader } from './PageHeader'
 import { StateView } from './StateView'
 
@@ -49,5 +50,30 @@ describe('StateView', () => {
     const html = renderToStaticMarkup(<StateView kind="error" layout="inline" description="网络不可用" />)
     expect(html).toContain('role="alert"')
     expect(html).toContain('role="group"')
+  })
+})
+
+describe('Banner', () => {
+  it('gives error and warning banners the alert role and info/success the status role', () => {
+    expect(renderToStaticMarkup(<Banner intent="error">失败</Banner>)).toContain('role="alert"')
+    expect(renderToStaticMarkup(<Banner intent="warning">冲突</Banner>)).toContain('role="alert"')
+    expect(renderToStaticMarkup(<Banner intent="info">已进入只读</Banner>)).toContain('role="status"')
+    expect(renderToStaticMarkup(<Banner intent="success">已保存</Banner>)).toContain('role="status"')
+  })
+
+  it('renders the message text inside the native MessageBar group', () => {
+    const html = renderToStaticMarkup(<Banner intent="error">文件列表加载失败</Banner>)
+    expect(html).toContain('role="group"')
+    expect(html).toContain('文件列表加载失败')
+  })
+
+  it('defaults to info and keeps title and action reachable', () => {
+    const html = renderToStaticMarkup(
+      <Banner title="读取失败" action={<button type="button">重试</button>}>明细</Banner>,
+    )
+    expect(html).toContain('role="status"')
+    expect(html).toContain('读取失败')
+    expect(html).toContain('重试')
+    expect(html).toContain('明细')
   })
 })

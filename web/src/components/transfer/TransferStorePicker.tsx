@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchMySources, listFiles } from '../../api/sources'
 import { Button } from '../ui/Button'
 import { DialogWrap } from '../ui/Dialog'
+import { Banner } from '../shell/Banner'
 import { FormField } from '../shell/FormLayout'
 import { Select } from '../ui/Select'
 import { formatBytes } from '../../utils/format'
@@ -94,8 +95,8 @@ export function StoreBrowserDialog({ onAdd, onClose }: {
           placeholder="选择存储源…"
         />
       </FormField>
-      {error ? <p role="alert">{error}</p> : null}
-      {sources.isError || listing.isError ? <p role="alert">文件列表加载失败，请重新选择存储源或目录。</p> : null}
+      {error ? <Banner intent="error">{error}</Banner> : null}
+      {sources.isError || listing.isError ? <Banner intent="error">文件列表加载失败，请重新选择存储源或目录。</Banner> : null}
       {sourceKey ? breadcrumb() : null}
       <div className={css.browserList} role="listbox" aria-label="文件列表">
         {sourceKey && listing.isPending ? <div className={css.browserEmpty}>加载中…</div> : null}
