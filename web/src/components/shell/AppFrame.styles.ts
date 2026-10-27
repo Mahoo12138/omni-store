@@ -10,7 +10,8 @@ export const useAppFrameStyles = makeStyles({
   root: {
   'display': 'flex',
   'minHeight': '100dvh',
-  'backgroundColor': tokens.colorNeutralBackground2,
+  // 内容区是白色画布，导航栏退到灰底上（Fluent inline nav 的分层方式）。
+  'backgroundColor': tokens.colorNeutralBackground1,
   [media.md]: {
     'flexDirection': 'column',
   },
@@ -24,7 +25,7 @@ export const useAppFrameStyles = makeStyles({
   'top': '0px',
   'height': '100dvh',
   'zIndex': layout.zIndexSidebar,
-  'backgroundColor': tokens.colorNeutralBackground1,
+  'backgroundColor': tokens.colorNeutralBackground3,
   'borderInlineEndWidth': tokens.strokeWidthThin,
   'borderInlineEndStyle': 'solid',
   'borderInlineEndColor': tokens.colorNeutralStroke2,
@@ -88,6 +89,10 @@ export const useAppFrameStyles = makeStyles({
   // Nav / NavItem 的外观（悬停底色、选中左条、字重、密度）全部交回 Fluent，
   // 这里只负责窄屏把竖排导航压成底部横条：布局走 root 槽，不穿透 .fui-* 类。
   navList: {
+  // Fluent 的 sharedNavStyles 给每个 NavItem 打了 background-color: var(--colorNeutralBackground4)，
+  // 在灰侧栏上会连成一整块灰板。这里只把这个 token 在导航作用域内改成透明，
+  // 悬停（--colorNeutralBackground4Hover）与选中蓝条仍走库的原生值。
+  '--colorNeutralBackground4': 'transparent',
   [media.md]: {
     'flexDirection': 'row',
     'flexWrap': 'nowrap',

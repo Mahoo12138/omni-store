@@ -15,9 +15,11 @@ test('private routes require login and logout invalidates the session', async ({
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page).toHaveURL(/\/app$/)
   await expect(page.getByRole('navigation', { name: '主导航' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '系统设置' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '文件', exact: true })).toBeVisible()
 
+  // 系统设置入口在账号菜单里，且只对 super_admin 渲染；普通用户看不到，但仍能退出。
   await page.getByRole('button', { name: '账号菜单：演示用户' }).click()
+  await expect(page.getByRole('menuitem', { name: '系统设置', exact: true })).toHaveCount(0)
   await page.getByRole('menuitem', { name: '退出登录' }).click()
   await expect(page).toHaveURL(/\/login$/)
 

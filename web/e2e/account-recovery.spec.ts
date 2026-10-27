@@ -16,7 +16,9 @@ test('password change closes other sessions and administrator can revoke all cre
   const recoveredPassword = 'Recovery-Changed-2026!'
 
   await login(page, 'admin', adminPassword)
-  await page.getByRole('link', { name: '系统设置' }).click()
+  // 系统设置已从侧栏移到账号菜单里。
+  await page.getByRole('button', { name: /^账号菜单/ }).click()
+  await page.getByRole('menuitem', { name: '系统设置', exact: true }).click()
   await page.getByRole('button', { name: '用户', exact: true }).click()
   await page.getByRole('button', { name: '创建用户' }).click()
   const createDialog = page.getByRole('dialog', { name: '创建用户' })

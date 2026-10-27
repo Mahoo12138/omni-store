@@ -105,15 +105,8 @@ export function AppFrame({
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
     { to: '/app/transfer', label: '流转', icon: <IconCloud />, active: pathname.startsWith('/app/transfer') },
   ]
-  // 仅 super_admin 显示"系统设置"入口。
-  const showAdmin = user.role === 'super_admin'
-  const adminActive =
-    pathname === '/app/admin' || pathname.startsWith('/app/admin/') || pathname.startsWith('/app/admin?')
-  const allNavItems = showAdmin
-    ? [...navItems, { to: '/app/admin', label: '系统设置', icon: <IconSettings />, active: adminActive }]
-    : navItems
   // Nav 用 value 判定选中态；active 的分组规则（如 /app/sources 也算「文件」）在这里折算。
-  const selectedNav = allNavItems.find((item) => item.active)?.to ?? ''
+  const selectedNav = navItems.find((item) => item.active)?.to ?? ''
 
   return (
     <div className={css.root}>
@@ -125,7 +118,7 @@ export function AppFrame({
         <nav ref={navRef} className={css.nav} aria-label="主导航">
           <NavSectionHeader as="div" className={css.navLabel}>工作空间</NavSectionHeader>
           <Nav selectedValue={selectedNav} className={css.navList}>
-            {allNavItems.map((item) => (
+            {navItems.map((item) => (
               <FluentNavItem
                 key={item.to}
                 value={item.to}
@@ -146,7 +139,11 @@ export function AppFrame({
           </Nav>
         </nav>
         <div className={css.sidebarSpacer} />
-        <UserMenu displayName={user.display_name} onLogout={onLogout} />
+        <UserMenu
+          displayName={user.display_name}
+          showAdminEntry={user.role === 'super_admin'}
+          onLogout={onLogout}
+        />
       </aside>
 
       <div className={css.content}>
@@ -169,7 +166,16 @@ function AppFrameLoading() {
 }
 
 // 侧栏底部账号菜单：桌面显示完整账号，窄屏收为底部导航末端的一个图标。
-function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
+function UserMenu({
+  displayName,
+  showAdminEntry,
+  onLogout,
+}: {
+  displayName: string
+  /** super_admin 才有；系统设置已从侧栏移到这里。 */
+  showAdminEntry: boolean
+  onLogout: () => void
+}) {
   const css = useAppFrameStyles()
   const navigate = useNavigate()
   const { mode } = useTheme()
@@ -180,6 +186,9 @@ function UserMenu({ displayName, onLogout }: { displayName: string; onLogout: ()
     { id: 'settings', label: '设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }) },
     { id: 'image-bed', label: '图床', icon: <IconImage size={16} />, onSelect: () => navigate({ to: '/app/image-bed' }) },
     { id: 'about', label: '使用帮助', icon: <IconQuestion size={16} />, onSelect: () => navigate({ to: '/about' }) },
+    ...(showAdminEntry
+      ? [{ id: 'admin', label: '系统设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin' }) }]
+      : []),
   ]
   const logoutItem: MenuOption = {
     id: 'logout',
