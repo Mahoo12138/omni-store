@@ -2,24 +2,6 @@ import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
-  header: {
-  'display': 'flex',
-  'alignItems': 'flex-start',
-  'justifyContent': 'space-between',
-  ...shorthands.gap('16px'),
-  'marginBottom': '24px',
-  },
-  title: {
-  ...shorthands.margin('0px'),
-  'color': 'var(--colorNeutralForeground1)',
-  'fontSize': '32px',
-  'letterSpacing': '-0.04em',
-  },
-  description: {
-  ...shorthands.margin('8px', '0', '0'),
-  'color': 'var(--colorNeutralForeground2)',
-  'lineHeight': 1.6,
-  },
   list: {
   'display': 'grid',
   ...shorthands.gap('8px'),
@@ -33,7 +15,6 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow4)',
   [media.md]: {
     'gridTemplateColumns': '40px minmax(0, 1fr)',
     'alignItems': 'start',
@@ -127,42 +108,13 @@ export const useStyles = makeStyles({
   ...shorthands.borderRadius('var(--borderRadiusSmall)'),
   'cursor': 'pointer',
   'textDecoration': 'none',
-  ':focus-visible': {
+  '&:focus-visible': {
     'outline': `2px solid var(--colorBrandBackground)`,
     'outlineOffset': '1px',
   },
-  ':hover': {
+  '&:hover': {
     'color': 'var(--colorPaletteRedForeground1)',
     'background': 'var(--colorPaletteRedBackground1)',
   },
-  },
-  empty: {
-  'minHeight': '320px',
-  'display': 'flex',
-  'flexDirection': 'column',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.gap('8px'),
-  'color': 'var(--colorNeutralForeground2)',
-  'textAlign': 'center',
-  'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  },
-  emptyIcon: {
-  'width': '58px',
-  'height': '58px',
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  'marginBottom': '4px',
-  'color': 'var(--colorBrandBackground)',
-  'background': 'var(--colorBrandBackground2)',
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  },
-  loading: {
-  ...shorthands.padding('40px'),
-  'color': 'var(--colorNeutralForeground2)',
-  'textAlign': 'center',
   },
 })

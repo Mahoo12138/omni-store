@@ -1,10 +1,6 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../styles/media'
 
-// TODO(人工复核):
-// - action 组合本文件 actionBase:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - dangerAction 组合本文件 actionBase:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-
 export const useStyles = makeStyles({
   header: {
   'display': 'flex',
@@ -54,7 +50,6 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow4)',
   },
   tableWrap: {
   'overflowX': 'auto',
@@ -154,7 +149,15 @@ export const useStyles = makeStyles({
   'textAlign': 'center',
   },
   empty: {
-  // TODO 未解析: [centerState]
+  'minHeight': '240px',
+  'display': 'flex',
+  'flexDirection': 'column',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  ...shorthands.gap('16px'),
+  ...shorthands.padding('40px'),
+  'color': 'var(--colorNeutralForeground2)',
+  'textAlign': 'center',
   },
   emptyIcon: {
   'width': '54px',
@@ -169,11 +172,6 @@ export const useStyles = makeStyles({
   dialogText: {
   ...shorthands.margin('0px'),
   'color': 'var(--colorNeutralForeground2)',
-  'lineHeight': 1.6,
-  },
-  dialogError: {
-  ...shorthands.margin('0px'),
-  'color': 'var(--colorPaletteRedForeground1)',
   'lineHeight': 1.6,
   },
 })

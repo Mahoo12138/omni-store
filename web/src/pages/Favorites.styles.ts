@@ -7,7 +7,6 @@ export const useStyles = makeStyles({
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'boxShadow': 'var(--shadow4)',
   },
   panelHeader: {
   'display': 'flex',

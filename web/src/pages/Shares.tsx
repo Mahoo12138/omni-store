@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchShares, revokeShare, type FileShare } from '../api/shares'
 import { AppFrame } from '../components/shell/AppFrame'
+import { PageHeader } from '../components/shell/PageHeader'
+import { StateView } from '../components/shell/StateView'
 import { QrCodeDialog } from '../components/share/QrCodeDialog'
 import { Badge } from '../components/ui/Badge'
 import { DialogWrap } from '../components/ui/Dialog'
@@ -33,27 +35,30 @@ export function SharesPage() {
 
   return (
     <AppFrame title="分享">
-      <header className={css.header}>
-        <div>
-          <h1 className={css.title}>分享</h1>
-          <p className={css.description}>集中查看、复制和撤销文件与目录分享。</p>
-        </div>
-      </header>
+      <PageHeader
+        title="分享"
+        description="集中查看、复制和撤销文件与目录分享。"
+      />
 
-      {shares.isPending ? <div className={css.loading}>正在加载分享…</div> : null}
+      {shares.isPending ? (
+        <StateView kind="pending" title="正在加载分享…" />
+      ) : null}
       {shares.isError ? (
-        <div className={css.empty}>
-          <span className={css.emptyIcon}><IconLink size={28} /></span>
-          <h2>分享加载失败</h2>
-          <p>请稍后刷新页面重试。</p>
-        </div>
+        <StateView
+          kind="error"
+          icon={<IconLink size={22} />}
+          title="分享加载失败"
+          description="请稍后刷新页面重试。"
+          action={<Button variant="secondary" onClick={() => shares.refetch()}>重新加载</Button>}
+        />
       ) : null}
       {shares.isSuccess && shares.data.length === 0 ? (
-        <div className={css.empty}>
-          <span className={css.emptyIcon}><IconLink size={28} /></span>
-          <h2>还没有分享</h2>
-          <p>在文件管理中选择文件或文件夹，点击链接图标即可创建分享。</p>
-        </div>
+        <StateView
+          kind="empty"
+          icon={<IconLink size={22} />}
+          title="还没有分享"
+          description="在文件管理中选择文件或文件夹，点击链接图标即可创建分享。"
+        />
       ) : null}
       {shares.isSuccess && shares.data.length > 0 ? (
         <div className={css.list}>

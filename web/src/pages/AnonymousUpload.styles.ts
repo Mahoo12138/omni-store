@@ -1,19 +1,8 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../styles/media'
 
-// TODO(人工复核):
-// - serviceDotPending 组合本文件 serviceDot:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - serviceDotError 组合本文件 serviceDot:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - serviceDotEnabled 组合本文件 serviceDot:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - serviceDotDisabled 组合本文件 serviceDot:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - dropZoneActive 组合本文件 dropZone:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - secondaryButton 组合本文件 actionButton:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - primaryButton 组合本文件 actionButton:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - statusUploading 组合本文件 statusText:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - statusSuccess 组合本文件 statusText:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - statusError 组合本文件 statusText:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-// - copyButtonSuccess 组合本文件 copyButton:需把基类属性复制进来(仅 hover 态覆盖时,可只保留差异)
-
+// AnonymousUpload 专用样式；serviceDot* 变体已内联全量属性，dropZoneActive 仅保留差异（由
+// AnonymousUpload.tsx 通过 mergeClasses(css.dropZone, dragActive && css.dropZoneActive) 叠加）。
 export const useStyles = makeStyles({
   'page': {
   'width': '100%',
@@ -66,7 +55,6 @@ export const useStyles = makeStyles({
   ...shorthands.border('1px', 'solid', 'var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
-  'boxShadow': 'var(--shadow4)',
   },
   'visuallyHidden': {
   'position': 'absolute',
@@ -173,20 +161,46 @@ export const useStyles = makeStyles({
   'flexWrap': 'wrap',
   },
   'secondaryButton': {
-    'border': `1px solid var(--colorNeutralStroke2)`,
-    'background': 'var(--colorNeutralBackground1)',
-    'color': 'var(--colorNeutralForeground1)',
-    'selectors': {
-      '&:hover:not(:disabled)': { ...shorthands.borderColor('var(--colorNeutralStroke1)'), 'background': 'var(--colorNeutralBackground1Hover)' },
-    },
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('6px'),
+  ...shorthands.padding('0', '12px'),
+  'height': '32px',
+  ...shorthands.border('1px', 'solid', 'var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
+  'background': 'var(--colorNeutralBackground1)',
+  'color': 'var(--colorNeutralForeground1)',
+  'fontSize': '13px',
+  'fontWeight': 500,
+  'cursor': 'pointer',
+  'whiteSpace': 'nowrap',
+  '&:hover:not(:disabled)': {
+    ...shorthands.borderColor('var(--colorNeutralStroke1)'),
+    'background': 'var(--colorNeutralBackground1Hover)',
+  },
   },
   'primaryButton': {
-    'border': `1px solid var(--colorBrandBackground)`,
-    'background': 'var(--colorBrandBackground)',
-    'color': 'var(--colorNeutralForegroundOnBrand)',
-    'selectors': {
-      '&:hover:not(:disabled)': { ...shorthands.borderColor('var(--colorBrandBackgroundHover)'), 'background': 'var(--colorBrandBackgroundHover)' },
-    },
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('6px'),
+  ...shorthands.padding('0', '12px'),
+  'height': '32px',
+  ...shorthands.border('1px', 'solid', 'var(--colorBrandBackground)'),
+  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
+  'background': 'var(--colorBrandBackground)',
+  'color': 'var(--colorNeutralForegroundOnBrand)',
+  'fontSize': '13px',
+  'fontWeight': 500,
+  'cursor': 'pointer',
+  'whiteSpace': 'nowrap',
+  '&:hover:not(:disabled)': {
+    ...shorthands.borderColor('var(--colorBrandBackgroundHover)'),
+    'background': 'var(--colorBrandBackgroundHover)',
+  },
+  '&:disabled': {
+    'opacity': 0.6,
+    'cursor': 'not-allowed',
+  },
   },
   'resultList': {
   ...shorthands.padding('0', '24px'),
@@ -194,14 +208,9 @@ export const useStyles = makeStyles({
     ...shorthands.padding('0', '16px'),
   },
   },
-  'copyError': {
+  // 横幅本体由 shell/Banner 提供配色，这里只负责与卡片内边距对齐。
+  'bannerInset': {
   ...shorthands.margin('0', '24px', '16px'),
-  ...shorthands.padding('8px', '16px'),
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorPaletteRedBackground1)',
-  'color': 'var(--colorPaletteRedForeground1)',
-  'fontSize': '13px',
-  'lineHeight': 1.5,
   [media.md]: {
     ...shorthands.margin('0', '16px', '16px'),
   },
@@ -219,12 +228,11 @@ export const useStyles = makeStyles({
     'gridTemplateColumns': '64px minmax(0, 1fr)',
   },
   },
+  // 尺寸/占位底色留在这里；object-fit 与圆角由 <Image fit="cover" shape="rounded"> 负责。
   'preview': {
   'width': '72px',
   'height': '60px',
   'display': 'block',
-  'objectFit': 'cover',
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   'background': 'var(--colorNeutralBackground2)',
   [media.sm]: {
@@ -251,12 +259,24 @@ export const useStyles = makeStyles({
   'minWidth': '0px',
   },
   'statusUploading': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('6px'),
+  'fontSize': '12px',
   'color': 'var(--colorBrandBackground)',
   },
   'statusSuccess': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('6px'),
+  'fontSize': '12px',
   'color': 'var(--colorPaletteGreenForeground1)',
   },
   'statusError': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap('6px'),
+  'fontSize': '12px',
   'color': 'var(--colorPaletteRedForeground1)',
   },
   'spinner': {
@@ -343,11 +363,9 @@ export const useStyles = makeStyles({
   },
   },
   'copyButtonSuccess': {
-    'background': 'var(--colorPaletteGreenBackground1)',
-    'color': 'var(--colorPaletteGreenForeground1)',
-    'selectors': {
-      '&:hover': { 'background': 'var(--colorPaletteGreenBackground1)' },
-    },
+  'background': 'var(--colorPaletteGreenBackground1)',
+  'color': 'var(--colorPaletteGreenForeground1)',
+  '&:hover': { 'background': 'var(--colorPaletteGreenBackground1)' },
   },
   'serviceState': {
   'minHeight': '220px',
@@ -359,7 +377,6 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'background': 'var(--colorNeutralBackground1)',
-  'boxShadow': 'var(--shadow4)',
   [media.sm]: {
     'alignItems': 'flex-start',
     'flexDirection': 'column',

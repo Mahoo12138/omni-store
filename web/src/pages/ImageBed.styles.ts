@@ -3,11 +3,13 @@ import { media } from '../styles/media'
 
 export const useStyles = makeStyles({
   'loadingState': {
-  // TODO 未解析: ...card
   'minHeight': '320px',
   'display': 'grid',
   'placeItems': 'center',
   'color': 'var(--colorNeutralForeground2)',
+  'background': 'var(--colorNeutralBackground1)',
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
   // 上传区：整幅横向拖放条。主任务不需要一个 288px 高的空方框占掉半屏。
   // dropZoneActive 只放差异，由组件 mergeClasses 叠加在 dropZone 上。
@@ -212,9 +214,11 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   },
   'imageCard': {
-  // TODO 未解析: ...card
   'minWidth': '0px',
   ...shorthands.overflow('hidden'),
+  'background': 'var(--colorNeutralBackground1)',
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'transitionProperty': 'border-color, transform', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
   '&:hover': {
     ...shorthands.borderColor('var(--colorNeutralStroke1)'),
@@ -234,11 +238,11 @@ export const useStyles = makeStyles({
   'thumbLinkList': {
   'height': '70px',
   },
+  // aspectRatio/占位底色是布局；object-fit 交给 <Image fit="cover">。
   'imageThumb': {
   'width': '100%',
   'aspectRatio': '1.62',
   'display': 'block',
-  'objectFit': 'cover',
   'background': 'var(--colorNeutralBackground2)',
   },
   'imageThumbList': {
@@ -308,7 +312,6 @@ export const useStyles = makeStyles({
   },
   },
   'historyEmpty': {
-  // TODO 未解析: ...card
   'minHeight': '180px',
   'display': 'flex',
   'flexDirection': 'column',
@@ -317,6 +320,9 @@ export const useStyles = makeStyles({
   ...shorthands.gap('7px'),
   'color': 'var(--colorNeutralForeground2)',
   'fontSize': '13px',
+  'background': 'var(--colorNeutralBackground1)',
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
   'emptyImageIcon': {
   'width': '46px',
@@ -398,7 +404,6 @@ export const useStyles = makeStyles({
   },
   },
   'noTargetPage': {
-  // TODO 未解析: ...card
   'minHeight': '520px',
   'display': 'flex',
   'flexDirection': 'column',
@@ -406,6 +411,9 @@ export const useStyles = makeStyles({
   'justifyContent': 'center',
   ...shorthands.padding('32px'),
   'textAlign': 'center',
+  'background': 'var(--colorNeutralBackground1)',
+  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
+  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
   'noTargetIcon': {
   'width': '76px',

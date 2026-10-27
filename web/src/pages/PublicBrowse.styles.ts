@@ -42,7 +42,6 @@ export const useStyles = makeStyles({
   ...shorthands.border('1px', 'solid', 'var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   'backgroundColor': 'var(--colorNeutralBackground1)',
-  'boxShadow': 'var(--shadow4)',
   },
   grid: {
   'display': 'grid',
