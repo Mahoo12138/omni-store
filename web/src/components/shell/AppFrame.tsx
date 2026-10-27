@@ -230,7 +230,7 @@ function UserMenu({
             data-compact={compact ? '' : undefined}
             aria-label={`账号菜单：${displayName}`}
           >
-            <span className={css.userRow}>
+            <span className={css.userRow} data-compact={compact ? '' : undefined}>
               <Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />
               {compact ? null : (
                 <>

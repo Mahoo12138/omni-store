@@ -33,7 +33,8 @@ export const useAppFrameStyles = makeStyles({
   'borderInlineEndWidth': tokens.strokeWidthThin,
   'borderInlineEndStyle': 'solid',
   'borderInlineEndColor': tokens.colorNeutralStroke2,
-  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalL),
+  // 底部留白交给账号区（userArea）自己分配，这里只留 12px 贴边。
+  ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalL, tokens.spacingVerticalM),
   [media.md]: {
     'width': '100%',
     'height': 'auto',
@@ -209,10 +210,14 @@ export const useAppFrameStyles = makeStyles({
   'display': 'flex',
   'alignItems': 'center',
   'flexShrink': 0,
-  'paddingBlockStart': tokens.spacingVerticalM,
+  // 上下对称：账号块在「分隔线 → 视口底」这条带里垂直居中，
+  // 而不是紧贴分隔线、下面空出一截。
+  'paddingBlockStart': tokens.spacingVerticalL,
+  'paddingBlockEnd': tokens.spacingVerticalL,
   ...shorthands.borderTop(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
   [media.md]: {
     'paddingBlockStart': '0px',
+    'paddingBlockEnd': '0px',
     ...shorthands.borderTop('0px'),
   },
   },
@@ -248,6 +253,13 @@ export const useAppFrameStyles = makeStyles({
   'flexGrow': 1,
   'minWidth': '0px',
   'textAlign': 'start',
+  // 窄栏里这一行只有头像，而它已经 flexGrow 撑满按钮，
+  // 按钮自身的 justify-content 管不到行内 —— 必须在行内居中，
+  // 否则头像会贴左边缘，与上方 logo / 导航图标错开约 8px。
+  '&[data-compact]': {
+    'justifyContent': 'center',
+    'gap': '0px',
+  },
   [media.md]: {
     'gap': '0px',
     'justifyContent': 'center',
