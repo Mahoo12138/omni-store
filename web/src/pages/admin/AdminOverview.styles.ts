@@ -692,18 +692,8 @@ export const useStyles = makeStyles({
     'flexDirection': 'column',
   },
   },
-  'settingsFooter': {
-  'marginTop': 'auto',
-  ...shorthands.padding('16px', '12px', '8px'),
-  'borderTopWidth': '1px',
-  'borderTopStyle': 'solid',
-  'borderTopColor': 'var(--colorNeutralStroke2)',
-  'fontSize': '12px',
-  'color': 'var(--colorNeutralForeground2)',
-  'fontFamily': 'var(--fontFamilyMonospace)',
-  'whiteSpace': 'pre-line',
-  'lineHeight': 1.5,
-  },
+  // 一行身份标识，不画横线：面板底部与窄栏头像共处同一收束带，
+  // 左缘对齐分组标题（同为 12px 内缩）。
   'section': {
 
   'overflow': 'hidden',

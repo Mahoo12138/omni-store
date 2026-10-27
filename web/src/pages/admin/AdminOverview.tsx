@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -263,7 +263,6 @@ export function AdminOverviewPage() {
               </>
             ) : null}
           </Nav>
-          <VersionFooter />
         </nav>
 
         {/* 右侧内容 */}
@@ -2670,25 +2669,6 @@ function AuditSection() {
 
 // --- 页脚：版本号 + git commit（仿 docs/settings-layout.png 左下角）---
 
-function VersionFooter() {
-  const css = useStyles()
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => apiFetch<{ version: string; commit?: string; build_time?: string }>('/api/v1/health'),
-  })
-  const version = health.data?.version ?? '...'
-  const commit = (health.data as { commit?: string })?.commit
-  const buildTime = (health.data as { build_time?: string })?.build_time
-  const lines = useMemo(
-    () => [
-      `版本: ${version}`,
-      commit ? `Commit: ${commit}` : null,
-      buildTime ? `Build:  ${buildTime}` : null,
-    ].filter(Boolean) as string[],
-    [version, commit, buildTime],
-  )
-  return <div className={css.settingsFooter}>{lines.join('\n')}</div>
-}
 
 // --- 存储源静态 HTTP：按源独立配置 + 固定公开标识 ---
 
@@ -3078,6 +3058,8 @@ function DashboardSection() {
   const overview = useQuery({
     queryKey: ['admin-overview'], queryFn: fetchAdminOverview, refetchInterval: 30_000, retry: false,
   })
+  // 构建元信息（commit / build 时间）只在 /health 上有，与侧栏共用同一份缓存。
+  const health = useQuery({ queryKey: ['health'], queryFn: () => apiFetch<{ commit?: string; build_time?: string }>('/api/v1/health') })
   const queryClient = useQueryClient()
   const [integrity, setIntegrity] = useState<IntegrityReport | null>(null)
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null)
@@ -3163,6 +3145,8 @@ function DashboardSection() {
           ) : null}
           <dl className={css.dashboardFacts}>
             <div><dt>运行版本</dt><dd>{data.version}</dd></div>
+            <div><dt>构建 Commit</dt><dd>{health.data?.commit || '—'}</dd></div>
+            <div><dt>构建时间</dt><dd>{health.data?.build_time || '—'}</dd></div>
             <div><dt>主服务端口</dt><dd>{portOf(sys.http_addr)}</dd></div>
             <div><dt>存储源</dt><dd>{data.sources.length} 个</dd></div>
             <div><dt>用户</dt><dd>{data.database.table_rows.users ?? '—'} 个</dd></div>
