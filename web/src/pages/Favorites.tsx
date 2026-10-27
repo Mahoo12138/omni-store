@@ -83,6 +83,7 @@ export function FavoritesPage() {
                 </div>
                 {item.type === 'file' ? (
                   <ExternalLinkButton
+                    size="large"
                     variant="ghost"
                     href={downloadFileUrl(item.source_key, `/${item.path}`)}
                     download={item.name}
@@ -92,6 +93,7 @@ export function FavoritesPage() {
                   />
                 ) : <span className={css.actionPlaceholder} aria-hidden="true" />}
                 <Button
+                  size="large"
                   variant="dangerGhost"
                   aria-label={`取消收藏 ${item.name}`}
                   title="取消收藏"

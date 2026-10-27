@@ -7,6 +7,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   /** Fluent 风格图标槽:渲染在 children 之前,仅 icon 无 children 时为图标按钮 */
   icon?: ReactElement
+  /** Fluent 尺寸档：large=40px，用于触屏行内操作（原自研样式里的 44px 目标） */
+  size?: 'small' | 'medium' | 'large'
+  /** 图标可放文字前后 */
+  iconPosition?: 'before' | 'after'
 }
 
 // Fluent Button 原生外观；Fluent 没有内置 danger 变体，用调色板红 token 补齐
@@ -52,13 +56,15 @@ export function useButtonVariant(variant: ButtonVariant) {
   } as const
 }
 
-export function Button({ variant = 'primary', className, icon, children, ...props }: ButtonProps) {
+export function Button({ variant = 'primary', className, icon, size, iconPosition, children, ...props }: ButtonProps) {
   const { appearance, extra } = useButtonVariant(variant)
   return (
     <FluentButton
       appearance={appearance}
       className={[extra, className].filter(Boolean).join(' ')}
       icon={icon}
+      size={size}
+      iconPosition={iconPosition}
       {...props}
     >
       {children}
