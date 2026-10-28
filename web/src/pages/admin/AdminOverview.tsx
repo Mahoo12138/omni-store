@@ -3143,17 +3143,45 @@ function DashboardSection() {
           {overview.isError ? (
             <Banner intent="error">状态刷新失败：{overview.error.message}。当前显示上次成功获取的数据，请点击刷新重试。</Banner>
           ) : null}
-          <dl className={css.dashboardFacts}>
-            <div><dt>运行版本</dt><dd>{data.version}</dd></div>
-            <div><dt>构建 Commit</dt><dd>{health.data?.commit || '—'}</dd></div>
-            <div><dt>构建时间</dt><dd>{health.data?.build_time || '—'}</dd></div>
-            <div><dt>主服务端口</dt><dd>{portOf(sys.http_addr)}</dd></div>
-            <div><dt>存储源</dt><dd>{data.sources.length} 个</dd></div>
-            <div><dt>用户</dt><dd>{data.database.table_rows.users ?? '—'} 个</dd></div>
-            <div><dt>S3 状态</dt><dd>{sys.s3_status}</dd></div>
-            <div><dt>WebDAV 状态</dt><dd>{sys.webdav_status}</dd></div>
-            <div className={css.dashboardDataDir}><dt>数据目录</dt><dd>{data.data_dir}</dd></div>
+          {/*
+            三层信息：运行指标（数值）→ 服务状态（徽章）→ 构建元信息与路径（安静的一行）。
+            原先九项平铺、同样的字号与等宽值，读起来像调试输出。
+          */}
+          <dl className={css.metricGrid}>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>存储源</dt>
+              <dd className={css.metricValue}>{data.sources.length}<span className={css.metricUnit}> 个</span></dd>
+            </div>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>用户</dt>
+              <dd className={css.metricValue}>{data.database.table_rows.users ?? '—'}<span className={css.metricUnit}> 个</span></dd>
+            </div>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>主服务端口</dt>
+              <dd className={css.metricValue}>{portOf(sys.http_addr)}</dd>
+            </div>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>运行版本</dt>
+              <dd className={css.metricValue}>{data.version}</dd>
+            </div>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>S3</dt>
+              <dd className={css.metricBadge}>
+                <Badge color={sys.s3_status === '已启用' ? 'green' : 'gray'}>{sys.s3_status}</Badge>
+              </dd>
+            </div>
+            <div className={css.metricTile}>
+              <dt className={css.metricLabel}>WebDAV</dt>
+              <dd className={css.metricBadge}>
+                <Badge color={sys.webdav_status === '已启用' ? 'green' : 'gray'}>{sys.webdav_status}</Badge>
+              </dd>
+            </div>
           </dl>
+          <div className={css.metricMeta}>
+            <span>Commit {health.data?.commit || 'unknown'}</span>
+            <span>构建 {health.data?.build_time || 'unknown'}</span>
+            <span className={css.metricPath}>数据目录 {data.data_dir}</span>
+          </div>
           {integrity ? (
             <div className={css.kvRow} role="status">
               <span className={css.kvLabel}>完整性检查</span>

@@ -94,14 +94,6 @@ export const useStyles = makeStyles({
   ...shorthands.padding('24px'),
   'fontSize': '13px',
   },
-  'statusLabel': {
-  'color': 'var(--colorNeutralForeground2)',
-  },
-  'statusValue': {
-  'color': 'var(--colorNeutralForeground1)',
-  'fontWeight': 500,
-  'wordBreak': 'break-all',
-  },
   'statusDot': {
   'display': 'inline-block',
   'width': '6px',
@@ -1472,6 +1464,76 @@ export const useStyles = makeStyles({
   },
   'dashboardDataDir': {
   'gridColumn': '1 / -1',
+  },
+  // 运行指标：数值在上、标签在下（DOM 仍是 dt→dd，可访问性不受视觉顺序影响）。
+  // 固定 3 列两行：6 个指标正好排满，不会出现「4 + 1」那种孤格。
+  'metricGrid': {
+  'display': 'grid',
+  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
+  ...shorthands.gap(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL),
+  ...shorthands.margin('0px'),
+  [media.sm]: {
+    'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
+  },
+  [media.xs]: {
+    'gridTemplateColumns': 'minmax(0, 1fr)',
+  },
+  },
+  'metricTile': {
+  'display': 'flex',
+  'flexDirection': 'column-reverse',
+  'alignItems': 'flex-start',
+  ...shorthands.gap(tokens.spacingVerticalXXS),
+  'minWidth': '0px',
+  },
+  'metricValue': {
+  ...shorthands.margin('0px'),
+  // 数值行与徽章行同高，横向的标签才会落在同一条基线上。
+  'display': 'flex',
+  'alignItems': 'center',
+  'minHeight': '24px',
+  'fontSize': tokens.fontSizeBase400,
+  'fontWeight': tokens.fontWeightSemibold,
+  'lineHeight': tokens.lineHeightBase400,
+  'color': tokens.colorNeutralForeground1,
+  'fontVariantNumeric': 'tabular-nums',
+  },
+  'metricBadge': {
+  ...shorthands.margin('0px'),
+  'display': 'flex',
+  'alignItems': 'center',
+  'minHeight': '24px',
+  },
+  'metricUnit': {
+  'fontSize': tokens.fontSizeBase200,
+  'fontWeight': tokens.fontWeightRegular,
+  'color': tokens.colorNeutralForeground3,
+  },
+  'metricLabel': {
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  'letterSpacing': '0.02em',
+  },
+  // 构建元信息与数据目录：一行安静的小字，不参与指标竞争。
+  'metricMeta': {
+  'display': 'flex',
+  'flexWrap': 'wrap',
+  'columnGap': tokens.spacingHorizontalXL,
+  'rowGap': tokens.spacingVerticalXS,
+  'marginTop': tokens.spacingVerticalXXL,
+  ...shorthands.padding(tokens.spacingVerticalL, '0px', '0px'),
+  'borderTopWidth': tokens.strokeWidthThin,
+  'borderTopStyle': 'solid',
+  'borderTopColor': tokens.colorNeutralStroke2,
+  'fontSize': tokens.fontSizeBase100,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  'fontFamily': tokens.fontFamilyMonospace,
+  },
+  'metricPath': {
+  'flexBasis': '100%',
+  'overflowWrap': 'anywhere',
   },
   'dashboardError': {
   'color': 'var(--colorPaletteRedForeground1)',
