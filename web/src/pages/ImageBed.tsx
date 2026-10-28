@@ -15,6 +15,7 @@ import { fetchMe } from '../api/auth'
 import { AppFrame } from '../components/shell/AppFrame'
 import { PageHeader } from '../components/shell/PageHeader'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
+import { StateView } from '../components/shell/StateView'
 import { Badge, Image, mergeClasses } from '@fluentui/react-components'
 import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
@@ -254,13 +255,18 @@ function ImageBedContent({ status }: { status: StatusData }) {
               </div>
             </div>
 
-            {history.isPending ? <div className={css.historyEmpty}>正在加载图片…</div> : null}
+            {history.isPending ? <StateView kind="pending" title="正在加载图片…" /> : null}
             {history.isSuccess && visibleImages.length === 0 ? (
-              <div className={css.historyEmpty}>
-                <span className={css.emptyImageIcon}><IconImage size={26} /></span>
-                <strong>{timeFilter === 'all' ? '还没有上传过图片' : '这个时间范围内没有图片'}</strong>
-                <span>上传后的图片会出现在这里，方便复制链接和管理。</span>
-              </div>
+              timeFilter === 'all'
+                ? (
+                  <StateView
+                    kind="empty"
+                    icon={<IconImage size={22} />}
+                    title="还没有上传过图片"
+                    description="上传后的图片会出现在这里，方便复制链接和管理。"
+                  />
+                )
+                : <StateView kind="filtered" icon={<IconImage size={22} />} title="这个时间范围内没有图片" />
             ) : null}
 
             <div className={viewMode === 'grid' ? css.imageGrid : css.imageList}>

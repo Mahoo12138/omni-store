@@ -8,6 +8,7 @@ import { PublicFrame } from '../components/shell/PublicFrame'
 import { Banner } from '../components/shell/Banner'
 import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/shell/PageHeader'
+import { StateView } from '../components/shell/StateView'
 import { IconFolderFilled, IconHardDrive } from '../components/ui/Icon'
 import { useStyles } from './Home.styles'
 
@@ -58,15 +59,12 @@ export function HomePage() {
           </div>
         )}
         {summary.isSuccess && !summary.data.enabled && (
-          <div className={css.emptyState}>
-            <span className={css.emptyIcon} aria-hidden="true">
-              <IconFolderFilled size={30} />
-            </span>
-            <div>
-              <h2>公开网盘尚未开启</h2>
-              <p>管理员在「系统设置 → 站点配置 → 站点服务」中绑定公开网盘存储源后，文件入口会出现在这里。</p>
-            </div>
-          </div>
+          <StateView
+            kind="unavailable"
+            icon={<IconFolderFilled size={22} />}
+            title="公开网盘尚未开启"
+            description="管理员在「系统设置 → 站点配置 → 站点服务」中绑定公开网盘存储源后，文件入口会出现在这里。"
+          />
         )}
         {summary.isError && (
           <Banner

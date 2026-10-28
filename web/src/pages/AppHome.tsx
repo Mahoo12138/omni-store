@@ -5,6 +5,7 @@ import { fetchMe } from '../api/auth'
 import { downloadFileUrl, fetchMySources, type UserSource } from '../api/sources'
 import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
 import { AppFrame } from '../components/shell/AppFrame'
+import { StateView } from '../components/shell/StateView'
 import { Banner } from '../components/shell/Banner'
 import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
@@ -202,11 +203,12 @@ function RecentFilesPanel({
           action={<Button variant="secondary" onClick={onRetry}>重新加载</Button>}
         >{error instanceof ApiRequestError ? error.message : '请检查连接后重试。'}</Banner>
       ) : items.length === 0 ? (
-        <div className={css.recentEmpty}>
-          <span className={css.recentEmptyIcon}><IconFile size={22} /></span>
-          <strong className={css.recentEmptyTitle}>还没有最近文件</strong>
-          <span>上传、下载或整理文件后，它们会出现在这里。</span>
-        </div>
+        <StateView
+          layout="plain"
+          kind="empty"
+          title="还没有最近文件"
+          description="上传、下载或整理文件后，它们会出现在这里。"
+        />
       ) : (
         <div className={css.recentList}>
           {items.map((file) => {

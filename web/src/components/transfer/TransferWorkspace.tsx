@@ -26,6 +26,7 @@ import {
   Input,
 } from '@fluentui/react-components'
 import { Banner } from '../shell/Banner'
+import { StateView } from '../shell/StateView'
 import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
@@ -317,7 +318,11 @@ function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID
       <Tabs.List aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
       {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button>}>{message(current.error)}</Banner> : null}
       <div className={css.recordList}>
-        {current.data?.length === 0 ? <p className={css.text}>{category === 'send' ? '还没有发送记录。选择「发送文件」开始一次交付。' : '还没有收集任务。选择「收集文件」生成上传链接。'}</p> : null}
+        {current.data?.length === 0 ? (
+          category === 'send'
+            ? <StateView layout="plain" kind="empty" title="还没有发送记录" description="选择「发送文件」开始一次交付。" />
+            : <StateView layout="plain" kind="empty" title="还没有收集任务" description="选择「收集文件」生成上传链接。" />
+        ) : null}
         {current.data?.map((task) => <article key={task.id} className={css.recordRow} aria-label={`${category === 'send' ? '发件包' : '收集任务'} ${task.title || task.public_key}`}>
           <div className={css.recordMain}><h3 className={css.subheading}>{task.title || '未命名任务'}</h3><TaskMeta task={task} /></div>
           <div className={css.actions}><Button variant="secondary" onClick={() => onNavigate({ view: 'history', record: category, id: task.id })}>查看任务</Button></div>
@@ -406,7 +411,7 @@ function SendRecord({ send, onChanged, canUseStore }: { send: TransferSend; canU
   }
   return <div className={css.stack}>
     <h3 className={css.subheading}>文件</h3>
-    {files.isPending ? <p className={css.text}>正在加载文件…</p> : files.isError ? <Banner intent="error">{message(files.error)}</Banner> : !files.data?.length ? <p className={css.text}>还没有文件：上传文件或从已有文件添加。</p> : <ul className={css.fileList} aria-label="发件包文件">{files.data.map((file) => <li className={css.fileRow} key={file.id}><span className={css.fileName}>{file.relative_path}</span><span className={css.fileMeta}>{formatBytes(file.size)}</span></li>)}</ul>}
+    {files.isPending ? <p className={css.text}>正在加载文件…</p> : files.isError ? <Banner intent="error">{message(files.error)}</Banner> : !files.data?.length ? <StateView layout="plain" kind="empty" title="还没有文件" description="上传文件，或从已有文件添加。" /> : <ul className={css.fileList} aria-label="发件包文件">{files.data.map((file) => <li className={css.fileRow} key={file.id}><span className={css.fileName}>{file.relative_path}</span><span className={css.fileMeta}>{formatBytes(file.size)}</span></li>)}</ul>}
     {send.status === 'draft' ? <>
       <div className={css.actions}><Button variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>上传文件</Button><Button variant="secondary" disabled={busy} onClick={() => folderInput.current?.click()}>上传文件夹</Button>{canUseStore ? <Button variant="secondary" disabled={busy} onClick={() => setStoreOpen(true)}>从已有文件添加</Button> : null}</div>
       <input ref={fileInput} className={css.hiddenInput} type="file" multiple data-testid="transfer-record-upload-files" disabled={busy} onChange={(event) => { pick(event.target.files); event.target.value = '' }} />
@@ -423,7 +428,7 @@ function CollectionInbox({ collection, canUseStore }: { collection: TransferColl
   const css = useStyles()
   const submissions = useQuery({ queryKey: ['transfer-inbox', collection.id], queryFn: () => listSubmissions(collection.id), retry: false })
   return <div className={css.stack}><h3 className={css.subheading}>收到的文件</h3>
-    {submissions.isPending ? <p className={css.text}>正在加载提交…</p> : submissions.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void submissions.refetch()}>重新加载提交</Button>}>{message(submissions.error)}</Banner> : !submissions.data?.length ? <p className={css.text}>还没有收到提交。分享收集链接，对方可直接打开上传。</p> : submissions.data.map((submission) => <SubmissionFiles key={submission.id} canUseStore={canUseStore} collectionID={collection.id} submission={submission} />)}
+    {submissions.isPending ? <p className={css.text}>正在加载提交…</p> : submissions.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void submissions.refetch()}>重新加载提交</Button>}>{message(submissions.error)}</Banner> : !submissions.data?.length ? <StateView layout="plain" kind="empty" title="还没有收到提交" description="分享收集链接，对方可直接打开上传。" /> : submissions.data.map((submission) => <SubmissionFiles key={submission.id} canUseStore={canUseStore} collectionID={collection.id} submission={submission} />)}
   </div>
 }
 
