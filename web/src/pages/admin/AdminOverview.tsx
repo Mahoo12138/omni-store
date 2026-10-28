@@ -1246,27 +1246,10 @@ function SourcesSection() {
                   <span className={css.sourceIcon} aria-hidden="true"><IconServer size={18} /></span>
                   <div className={css.sourceCopy}>
                     <div className={css.sourceHeading}>
-                      <h3 className={css.sourceName}>{s.name}</h3>
+                      <h3 className={css.sourceName} title={s.name}>{s.name}</h3>
                       <Badge color={s.is_disabled ? 'gray' : 'green'}>{s.is_disabled ? '已禁用' : '正常'}</Badge>
                     </div>
                     <code className={css.sourcePath} title={s.root_path}>{s.root_path}</code>
-                  </div>
-                </div>
-                <div className={css.sourceMeta} aria-label={`${s.name} 状态信息`}>
-                  <div className={css.sourceMetaItem}>
-                    <span className={css.sourceMetaLabel}>配额</span>
-                    <span className={css.sourceMetaValue}>{s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}</span>
-                  </div>
-                  <div className={css.sourceMetaItem}>
-                    <span className={css.sourceMetaLabel}>访问协议</span>
-                    <div className={css.sourceProtocols}>
-                      {[
-                        s.webdav_enabled ? 'WebDAV' : null,
-                        s.s3_enabled ? 'S3' : null,
-                        s.static_enabled ? '静态 HTTP' : null,
-                      ].filter(Boolean).map((protocol) => <span key={protocol} className={css.sourceProtocolTag}>{protocol}</span>)}
-                      {!s.webdav_enabled && !s.s3_enabled && !s.static_enabled && <span className={css.sourceMetaMuted}>均未启用</span>}
-                    </div>
                   </div>
                 </div>
                 <div className={css.sourceActions} aria-label={`${s.name} 操作`}>
@@ -1284,6 +1267,23 @@ function SourcesSection() {
                   <Button variant="dangerGhost" onClick={() => setDeleting(s)} aria-label={`删除存储源 ${s.name}`}>
                     <IconTrash size={14} /> 删除
                   </Button>
+                </div>
+                <div className={css.sourceMeta} aria-label={`${s.name} 状态信息`}>
+                  <div className={css.sourceMetaItem}>
+                    <span className={css.sourceMetaLabel}>配额</span>
+                    <span className={css.sourceMetaValue}>{s.quota_bytes > 0 ? formatBytes(s.quota_bytes) : '不限'}</span>
+                  </div>
+                  <div className={css.sourceMetaItem}>
+                    <span className={css.sourceMetaLabel}>访问协议</span>
+                    <div className={css.sourceProtocols}>
+                      {[
+                        s.webdav_enabled ? 'WebDAV' : null,
+                        s.s3_enabled ? 'S3' : null,
+                        s.static_enabled ? '静态 HTTP' : null,
+                      ].filter(Boolean).map((protocol) => <span key={protocol} className={css.sourceProtocolTag}>{protocol}</span>)}
+                      {!s.webdav_enabled && !s.s3_enabled && !s.static_enabled && <span className={css.sourceMetaMuted}>均未启用</span>}
+                    </div>
+                  </div>
                 </div>
               </article>
             ))}
@@ -1831,8 +1831,9 @@ function PoliciesSection() {
                     <div className={css.formRow}>
                       <Button variant="ghost" onClick={() => setEditing(policy)}>编辑</Button>
                       <Button
-                        variant="danger"
+                        variant="dangerGhost"
                         aria-label={`删除策略 ${policy.name}`}
+                        title="删除策略"
                         onClick={() => setDeleting(policy)}
                       >
                         <IconTrash size={14} />
