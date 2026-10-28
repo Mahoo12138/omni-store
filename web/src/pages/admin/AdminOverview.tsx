@@ -76,6 +76,7 @@ import {
 } from '@fluentui/react-components'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { toastError, toastSuccess } from '../../components/ui/Toast'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Banner } from '../../components/shell/Banner'
 import { FormField } from '../../components/shell/FormLayout'
@@ -1576,10 +1577,10 @@ function EditSourceDialog({
   const reconcileMut = useMutation({
     mutationFn: () => adminReconcileSource(sourceKey),
     onSuccess: (result) => {
-      setMsg(`台账已校准：扫描 ${result.scanned_files} 个文件，新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
+      toastSuccess(`台账已校准：扫描 ${result.scanned_files} 个文件，新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
       refresh()
     },
-    onError: (err) => setMsg(err instanceof ApiRequestError ? err.message : '校准失败'),
+    onError: (err) => toastError(err instanceof ApiRequestError ? err.message : '校准失败'),
   })
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['admin-source', sourceKey] })
@@ -3077,7 +3078,6 @@ function DashboardSection() {
   const queryClient = useQueryClient()
   const [integrity, setIntegrity] = useState<IntegrityReport | null>(null)
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null)
-  const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin-overview'] })
 
@@ -3099,9 +3099,9 @@ function DashboardSection() {
   })
   const reconcileMut = useMutation({
     mutationFn: ({ key }: { key: string; name: string }) => adminReconcileSource(key),
-    onMutate: () => { setErr(''); setMsg('') },
+    onMutate: () => { setErr('') },
     onSuccess: async (result, source) => {
-      setMsg(`${source.name} 台账已校准：新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
+      toastSuccess(`${source.name} 台账已校准：新增 ${result.added}，更新 ${result.updated}，移除 ${result.removed}`)
       await Promise.all([
         refresh(),
         queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),
@@ -3109,7 +3109,7 @@ function DashboardSection() {
       ])
     },
     onError: async (e) => {
-      setErr(e instanceof ApiRequestError ? e.message : '校准失败')
+      toastError(e instanceof ApiRequestError ? e.message : '校准失败')
       await refresh()
     },
   })
@@ -3304,7 +3304,6 @@ function DashboardSection() {
             </tbody>
           </table>
         </HorizontalDataRegion>
-        {msg ? <Banner intent="info" className={css.sectionBody}>{msg}</Banner> : null}
       </section>
 
       <section className={css.section}>

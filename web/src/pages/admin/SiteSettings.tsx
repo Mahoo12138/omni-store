@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Checkbox, Input } from '@fluentui/react-components'
 import { Banner } from '../../components/shell/Banner'
+import { toastError, toastSuccess } from '../../components/ui/Toast'
 import { FormField, FormLayout } from '../../components/shell/FormLayout'
 import { IconDownload } from '../../components/ui/Icon'
 import { Select } from '../../components/ui/Select'
@@ -74,7 +75,6 @@ function SiteServicesSection() {
   const capabilities = useQuery({ queryKey: ['admin-capabilities'], queryFn: adminListCapabilities, retry: false })
   const sources = useQuery({ queryKey: ['admin-sources'], queryFn: adminListSources, retry: false })
   const [editing, setEditing] = useState<SiteCapability | null>(null)
-  const [message, setMessage] = useState<{ key: SiteCapability; text: string } | null>(null)
   const refresh = async () => {
     await Promise.all(['admin-capabilities', 'admin-anon-settings', 'anon-status', 'system-status', 'admin-overview'].map(
       (key) => queryClient.invalidateQueries({ queryKey: [key] }),
@@ -103,7 +103,7 @@ function SiteServicesSection() {
                 <h3 className={css.sectionTitle}>{service.name}</h3>
                 <p className={css.sectionHint}>{service.description}</p>
               </div>
-              <Button variant="secondary" disabled={!binding} onClick={() => { setEditing(service.key); setMessage(null) }}>配置</Button>
+              <Button variant="secondary" disabled={!binding} onClick={() => setEditing(service.key)}>配置</Button>
             </header>
             <div className={css.sectionBody}>
               <dl className={site.facts}>
@@ -121,7 +121,6 @@ function SiteServicesSection() {
                 </dd></div>
               </dl>
               {service.key === 'image_bed' && binding ? <ImageBedOptions usable={binding.enabled && !!source && !source.is_disabled} /> : null}
-              {message?.key === service.key ? <Banner intent="success">{message.text}</Banner> : null}
             </div>
           </article>
         )
@@ -130,7 +129,7 @@ function SiteServicesSection() {
         <SiteServiceDialog
           key={editingBinding.capability} binding={editingBinding} service={editingService} sources={sources.data}
           onClose={() => setEditing(null)}
-          onSaved={async () => { await refresh(); setMessage({ key: editingBinding.capability, text: `${editingService.name}设置已保存。` }); setEditing(null) }}
+          onSaved={async () => { await refresh(); toastSuccess(`${editingService.name}设置已保存。`); setEditing(null) }}
         />
       ) : null}
     </>
@@ -292,11 +291,10 @@ function SiteRuntimeSection() {
 }
 function BackupSection() {
   const css = useStyles()
-  const [message, setMessage] = useState('')
   const exportMutation = useMutation({
     mutationFn: adminExportSystemConfig,
-    onSuccess: (filename) => setMessage(`已生成并下载 ${filename}`),
-    onError: (error) => setMessage(error instanceof ApiRequestError ? error.message : '导出失败，请稍后重试'),
+    onSuccess: (filename) => toastSuccess(`已生成并下载 ${filename}`),
+    onError: (error) => toastError(error instanceof ApiRequestError ? error.message : '导出失败，请稍后重试'),
   })
 
   return (
@@ -314,10 +312,7 @@ function BackupSection() {
           </div>
           <div className={css.exportAction}>
             <Button
-              onClick={() => {
-                setMessage('')
-                exportMutation.mutate()
-              }}
+              onClick={() => exportMutation.mutate()}
               disabled={exportMutation.isPending}
             >
               <IconDownload size={16} />
@@ -329,7 +324,6 @@ function BackupSection() {
           <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
           <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
         </div>
-        {message ? <Banner intent={exportMutation.isError ? 'error' : 'success'}>{message}</Banner> : null}
       </div>
     </section>
   )
