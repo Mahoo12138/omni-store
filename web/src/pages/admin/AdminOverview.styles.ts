@@ -1007,29 +1007,6 @@ export const useStyles = makeStyles({
   'flexWrap': 'wrap',
   ...shorthands.gap('8px'),
   },
-  'sourceState': {
-  'display': 'flex',
-  'flexDirection': 'column',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.gap('8px'),
-  'minHeight': '160px',
-  ...shorthands.padding('24px'),
-  'color': 'var(--colorNeutralForeground2)',
-  'fontSize': '13px',
-  'textAlign': 'center',
-  },
-  'sourceStateTitle': {
-  ...shorthands.margin('0px'),
-  'color': 'var(--colorNeutralForeground1)',
-  'fontSize': '14px',
-  'fontWeight': 600,
-  },
-  'sourceStateHint': {
-  ...shorthands.margin('0px'),
-  'maxWidth': '46ch',
-  'lineHeight': 1.55,
-  },
   'exportSummary': {
 
   'gridTemplateColumns': '44px minmax(0, 1fr) auto',

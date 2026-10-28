@@ -56,11 +56,6 @@ export function AppHomePage() {
         <div className={css.headerCopy}>
           <time className={css.welcomeDate} dateTime={now.toISOString()}>{formatWelcomeDate(now)}</time>
           <h1 className={css.pageTitle}>{displayName ? `${timeGreeting(now)}，${displayName}` : '我的文件'}</h1>
-          <p className={css.pageLead}>
-            {sourceList.length > 0
-              ? `${sourceList.length} 个存储源已连接，选择一个继续管理文件。`
-              : '选择一个存储源，开始管理文件。'}
-          </p>
         </div>
         <Button variant="secondary" onClick={openSearchDialog}>
           <IconSearch size={16} />

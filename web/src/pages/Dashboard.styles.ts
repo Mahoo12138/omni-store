@@ -37,14 +37,6 @@ export const useStyles = makeStyles({
     'fontSize': '32px',
   },
   },
-  pageLead: {
-  ...shorthands.margin('8px', '0', '0'),
-  'maxWidth': '65ch',
-  'color': 'var(--colorNeutralForeground2)',
-  'fontSize': '16px',
-  'lineHeight': 1.65,
-  'textWrap': 'pretty',
-  },
   // 单列堆叠：上存储源，下最近文件。
   workspace: {
   'display': 'flex',

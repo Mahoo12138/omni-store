@@ -32,7 +32,7 @@ export function HomePage() {
     <PublicFrame>
       <PageHeader
         title="公开网盘"
-        description="这里收录此实例开放共享的目录。选择一个目录，即可浏览或下载其中的文件。"
+        description="这里收录此实例开放共享的目录。"
         actions={
           summary.isPending ? null : (
             <Badge

@@ -800,7 +800,7 @@ function ImageBedTokenManager() {
   return (
     <section className={css.credentialGroup} aria-label="图床 API">
       <CredentialGroupHeader
-        hint="为每台 PicGo 或第三方客户端创建独立 Token；最多 10 个，明文仅显示一次。"
+        hint="最多 10 个，明文仅显示一次。"
         status={tokens.isPending ? (
           <span className={css.statusBadgeMuted}>正在读取</span>
         ) : tokens.isError ? (
@@ -827,12 +827,7 @@ function ImageBedTokenManager() {
           <StateView layout="plain" kind="error" title="Token 列表加载失败" description="请刷新页面后重试。" />
         ) : null}
         {tokens.isSuccess && tokenItems.length === 0 ? (
-          <StateView
-            layout="plain"
-            kind="unavailable"
-            title="暂无图床 Token"
-            description="为每台客户端创建独立凭据，撤销时不会影响其他客户端。"
-          />
+          <StateView layout="plain" kind="unavailable" title="暂无图床 Token" />
         ) : null}
         {tokenItems.length > 0 ? (
           <div className={css.credentialList} role="list" aria-label="图床 Token 列表">
@@ -995,7 +990,7 @@ function S3CredentialManager() {
   return (
     <section className={css.credentialGroup} aria-label="S3 Access Key">
       <CredentialGroupHeader
-        hint="供 AWS CLI、rclone 等客户端访问已授权存储源；最多 10 个，Secret 仅显示一次。"
+        hint="最多 10 个，Secret 仅显示一次。"
         status={credentials.isPending ? (
           <span className={css.statusBadgeMuted}>正在读取</span>
         ) : credentials.isError ? (
@@ -1024,12 +1019,7 @@ function S3CredentialManager() {
           <StateView layout="plain" kind="error" title="S3 凭据列表加载失败" description="请刷新页面后重试。" />
         ) : null}
         {credentials.isSuccess && items.length === 0 ? (
-          <StateView
-            layout="plain"
-            kind="unavailable"
-            title="暂无 S3 凭据"
-            description="建议为每台客户端创建独立 Access Key。"
-          />
+          <StateView layout="plain" kind="unavailable" title="暂无 S3 凭据" />
         ) : null}
         {items.length > 0 ? (
           <div className={css.credentialList} role="list" aria-label="S3 凭据列表">
@@ -1175,7 +1165,6 @@ function PreferencesSection() {
     <section className={css.section}>
       <div className={css.sectionHeader}>
         <h2 className={css.sectionTitle}>偏好设置</h2>
-        <p className={css.sectionHint}>个性化设置（语言、列表密度等）仍在规划中，当前可配置外观主题。</p>
       </div>
       <div className={css.sectionBody}>
         <RadioGroup
@@ -1247,15 +1236,15 @@ function SourcesSection() {
         </header>
         <div role="region" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
           <div className={css.sourceList} role="list" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
-            {sources.isPending ? (
-              <div className={css.sourceState} role="status">正在加载存储源…</div>
-            ) : null}
+            {sources.isPending ? <StateView layout="plain" kind="pending" title="正在加载存储源…" /> : null}
             {sources.isError ? (
-              <div className={css.sourceState} role="alert">
-                <p className={css.sourceStateTitle}>无法加载存储源</p>
-                <p className={css.sourceStateHint}>请检查服务状态后重试。</p>
-                <Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>
-              </div>
+              <StateView
+                layout="plain"
+                kind="error"
+                title="无法加载存储源"
+                description="请检查服务状态后重试。"
+                action={<Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>}
+              />
             ) : null}
             {sources.data?.map((s) => (
               <article key={s.key} className={css.sourceItem} role="listitem" aria-label={`存储源 ${s.name}`}>
@@ -1305,10 +1294,7 @@ function SourcesSection() {
               </article>
             ))}
             {sources.isSuccess && sources.data.length === 0 && (
-              <div className={css.sourceState}>
-                <p className={css.sourceStateTitle}>还没有存储源</p>
-                <p className={css.sourceStateHint}>使用右上角的“新建存储源”连接第一个真实目录。</p>
-              </div>
+              <StateView layout="plain" kind="empty" title="还没有存储源" />
             )}
           </div>
         </div>
