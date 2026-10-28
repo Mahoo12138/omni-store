@@ -1,6 +1,7 @@
-import type { ComponentProps, ReactNode } from 'react'
+import { Fragment, type ComponentProps, type ReactNode } from 'react'
 import {
   Menu as FluentMenu,
+  MenuDivider,
   MenuItem,
   MenuList,
   MenuPopover,
@@ -16,6 +17,8 @@ export interface MenuOption {
   current?: boolean
   danger?: boolean
   disabled?: boolean
+  /** 在该项之前插一条分隔线（把破坏性操作与常规操作隔开）。 */
+  dividerBefore?: boolean
   onSelect: () => void
 }
 
@@ -24,6 +27,8 @@ interface MenuProps {
   trigger: ReactNode
   items: MenuOption[]
   triggerClassName?: string
+  /** 图标触发器没有可见文字，补一个 title 给鼠标用户。 */
+  triggerTitle?: string
 }
 
 export function ItemView({ item }: { item: MenuOption }) {
@@ -45,19 +50,27 @@ export function ItemView({ item }: { item: MenuOption }) {
 }
 
 /** 通用下拉菜单：触发器、定位和键盘交互统一交给 Fluent Menu。 */
-export function Menu({ ariaLabel, trigger, items, triggerClassName }: MenuProps) {
+export function Menu({ ariaLabel, trigger, items, triggerClassName, triggerTitle }: MenuProps) {
   const css = useStyles()
   return (
     <FluentMenu>
       <MenuTrigger>
-        <button type="button" className={triggerClassName ?? css.trigger} aria-label={ariaLabel}>
+        <button
+          type="button"
+          className={triggerClassName ?? css.trigger}
+          aria-label={ariaLabel}
+          title={triggerTitle}
+        >
           {trigger}
         </button>
       </MenuTrigger>
       <MenuPopover>
         <MenuList aria-label={ariaLabel}>
           {items.map((item) => (
-            <ItemView key={item.id} item={item} />
+            <Fragment key={item.id}>
+              {item.dividerBefore ? <MenuDivider /> : null}
+              <ItemView item={item} />
+            </Fragment>
           ))}
         </MenuList>
       </MenuPopover>

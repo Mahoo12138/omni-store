@@ -79,6 +79,7 @@ import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Banner } from '../../components/shell/Banner'
 import { FormField } from '../../components/shell/FormLayout'
+import { Menu } from '../../components/ui/Menu'
 import { Select } from '../../components/ui/Select'
 import {
   IconActivity,
@@ -89,6 +90,7 @@ import {
   IconImage,
   IconInfo,
   IconLink,
+  IconMore,
   IconPlus,
   IconServer,
   IconSettings,
@@ -2234,19 +2236,35 @@ function UsersSection() {
                   <td className={css.compactTd}>
                     {u.id !== me.data?.id ? (
                       <div className={css.formRow}>
+                        {/* 高频、无风险的操作留在行内；其余收进行尾「更多」菜单。 */}
                         <Button variant="ghost" onClick={() => setQuotaEditing(u)}>配额</Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => disableMut.mutate({ id: u.id, disabled: !u.is_disabled })}
-                        >
-                          {u.is_disabled ? '启用' : '禁用'}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setRevokingCredentials(u)}>
-                          撤销凭据
-                        </Button>
-                        <Button variant="danger" onClick={() => setDeleting(u)}>
-                          <IconTrash size={14} />
-                        </Button>
+                        <Menu
+                          ariaLabel={`用户 ${u.username} 的更多操作`}
+                          triggerTitle={`用户 ${u.username} 的更多操作`}
+                          trigger={<IconMore size={16} />}
+                          triggerClassName={css.rowMenuTrigger}
+                          items={[
+                            {
+                              id: 'toggle',
+                              label: u.is_disabled ? '启用用户' : '禁用用户',
+                              disabled: disableMut.isPending,
+                              onSelect: () => disableMut.mutate({ id: u.id, disabled: !u.is_disabled }),
+                            },
+                            {
+                              id: 'revoke',
+                              label: '撤销访问凭据',
+                              onSelect: () => setRevokingCredentials(u),
+                            },
+                            {
+                              id: 'delete',
+                              label: '删除用户',
+                              icon: <IconTrash size={14} />,
+                              danger: true,
+                              dividerBefore: true,
+                              onSelect: () => setDeleting(u),
+                            },
+                          ]}
+                        />
                       </div>
                     ) : (
                       <div className={css.formRow}>
