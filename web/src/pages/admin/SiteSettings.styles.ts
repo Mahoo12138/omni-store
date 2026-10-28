@@ -54,9 +54,61 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'overflowWrap': 'anywhere',
   },
+  // 服务卡头部：图标 + 名称/状态 + 描述，操作在右。
+  serviceHeader: {
+  'display': 'flex',
+  'alignItems': 'flex-start',
+  'gap': tokens.spacingHorizontalM,
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
+  'borderBottomWidth': tokens.strokeWidthThin,
+  'borderBottomStyle': 'solid',
+  'borderBottomColor': tokens.colorNeutralStroke2,
+  },
+  serviceIcon: {
+  'display': 'grid',
+  'placeItems': 'center',
+  'width': tokens.spacingHorizontalXXXL,
+  'height': tokens.spacingHorizontalXXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  'backgroundColor': tokens.colorNeutralBackground3,
+  'color': tokens.colorNeutralForeground2,
+  },
+  serviceCopy: {
+  'minWidth': '0px',
+  'flexGrow': 1,
+  },
+  serviceTitleRow: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'flexWrap': 'wrap',
+  'gap': tokens.spacingHorizontalS,
+  'minWidth': '0px',
+  },
+  serviceBody: {
+  'display': 'flex',
+  'flexDirection': 'column',
+  'gap': tokens.spacingVerticalM,
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
+  },
+  // 键值行：标签固定宽度在左，值在右（长路径落在值列内换行）。
   facts: {
   ...shorthands.margin('0px'),
   'display': 'grid',
-  ...shorthands.gap('16px'),
+  'gap': tokens.spacingVerticalS,
+  '& > div': {
+    'display': 'grid',
+    'gridTemplateColumns': '72px minmax(0, 1fr)',
+    'columnGap': tokens.spacingHorizontalM,
+    'alignItems': 'baseline',
+  },
+  '& dt': {
+    'color': tokens.colorNeutralForeground3,
+    'fontSize': tokens.fontSizeBase200,
+  },
+  '& dd': {
+    ...shorthands.margin('0px'),
+    'minWidth': '0px',
+  },
   },
 })

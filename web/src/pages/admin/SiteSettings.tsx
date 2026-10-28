@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactElement } from 'react'
 import { Tabs } from '../../components/ui/Tabs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -16,25 +16,25 @@ import { Checkbox, Input } from '@fluentui/react-components'
 import { Banner } from '../../components/shell/Banner'
 import { toastError, toastSuccess } from '../../components/ui/Toast'
 import { FormField, FormLayout } from '../../components/shell/FormLayout'
-import { IconDownload } from '../../components/ui/Icon'
+import { IconCloud, IconDownload, IconGlobe, IconImage } from '../../components/ui/Icon'
 import { Select } from '../../components/ui/Select'
 import { useStyles } from './AdminOverview.styles'
 import { useStyles as useSiteStyles } from './SiteSettings.styles'
 
 type SiteTab = 'services' | 'general'
-const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string }[] = [
+const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string; icon: ReactElement }[] = [
   {
-    key: 'public_drive', name: '公开网盘',
+    key: 'public_drive', name: '公开网盘', icon: <IconGlobe size={18} />,
     description: '全站唯一的匿名只读文件空间，可浏览和下载绑定源中的普通文件。',
     bindingHint: '启用后，任何人都可浏览绑定源中的普通文件。更换源会立即切换公开目录。',
   },
   {
-    key: 'image_bed', name: '快速图床',
+    key: 'image_bed', name: '快速图床', icon: <IconImage size={18} />,
     description: '统一管理登录上传、匿名上传和图片保留策略。',
     bindingHint: '新上传使用绑定源；换源或停用服务不会撤销已有图片地址。',
   },
   {
-    key: 'transfer_center', name: '文件中转',
+    key: 'transfer_center', name: '文件中转', icon: <IconCloud size={18} />,
     description: '通过发件包交付文件，或创建收集任务接收文件。',
     bindingHint: '新任务使用绑定源；已有任务保留原来的存储位置和有效期。停用服务不等于撤销已有链接。',
   },
@@ -98,24 +98,26 @@ function SiteServicesSection() {
         const source = sources.data.find((item) => item.key === binding?.source_key)
         return (
           <article className={css.section} key={service.key} aria-label={`站点服务 ${service.name}`}>
-            <header className={css.sectionHeaderWithAction}>
-              <div className={css.sectionHeaderCopy}>
-                <h3 className={css.sectionTitle}>{service.name}</h3>
-                <p className={css.sectionHint}>{service.description}</p>
-              </div>
-              <Button variant="secondary" disabled={!binding} onClick={() => setEditing(service.key)}>配置</Button>
-            </header>
-            <div className={css.sectionBody}>
-              <dl className={site.facts}>
-                <div><dt>服务状态</dt><dd>
+            <header className={site.serviceHeader}>
+              <span className={site.serviceIcon} aria-hidden="true">{service.icon}</span>
+              <div className={site.serviceCopy}>
+                {/* 状态直接跟在服务名后面，不再单列一行「服务状态」。 */}
+                <div className={site.serviceTitleRow}>
+                  <h3 className={css.sectionTitle}>{service.name}</h3>
                   {!binding ? <Badge color="red">配置缺失</Badge>
                     : !binding.source_key ? <Badge color="gray">未绑定</Badge>
                     : !binding.enabled ? <Badge color="gray">已关闭</Badge>
                     : !source ? <Badge color="red">绑定源不存在</Badge>
                     : source.is_disabled ? <Badge color="red">存储源已禁用</Badge>
                     : <Badge color="green">已启用</Badge>}
-                </dd></div>
-                <div><dt>绑定存储源</dt><dd className={site.source}>
+                </div>
+                <p className={css.sectionHint}>{service.description}</p>
+              </div>
+              <Button variant="secondary" disabled={!binding} onClick={() => setEditing(service.key)}>配置</Button>
+            </header>
+            <div className={site.serviceBody}>
+              <dl className={site.facts}>
+                <div><dt>存储源</dt><dd className={site.source}>
                   <span>{binding?.source_name || '未绑定'}</span>
                   {source ? <span className={site.path}>{source.root_path}</span> : null}
                 </dd></div>
