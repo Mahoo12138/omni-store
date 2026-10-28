@@ -103,7 +103,6 @@ export function TransferWorkspace({ search, onNavigate }: WorkspaceProps) {
           }
         >收发身份暂时无法恢复，请重新检查。</Banner>
       ) : guest ? <p className={css.text}>访客身份保留至 {new Date(identity.data!.expires_at!).toLocaleString()}；记录仅存于当前浏览器，清除 Cookie 或更换设备后不可恢复。</p> : null}
-      {service?.hint ? <p className={css.text}>{service.hint}</p> : null}
       {service && !service.enabled ? <p className={css.text}>新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。</p> : null}
       <Tabs.Panel keepMounted value="send" className={css.panel}>{owner ? <SendComposer canCreate={canCreate} canUseStore={canUseStore} guest={guest} onRecord={record} /> : null}</Tabs.Panel>
       <Tabs.Panel keepMounted value="collect" className={css.panel}>{owner ? <CollectionComposer canCreate={canCreate} guest={guest} onRecord={record} /> : null}</Tabs.Panel>
@@ -313,7 +312,6 @@ function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID
   if (search.record && search.id) return <RecordDetail key={`${search.record}-${search.id}`} ownerID={ownerID} canUseStore={canUseStore} kind={search.record} id={search.id} onBack={() => onNavigate({ view: 'history' })} />
   const current = category === 'send' ? sends : collections
   return <section className={css.stack} aria-label="收发记录">
-    <div className={css.stack}><h2 className={css.heading}>收发记录</h2><p className={css.text}>管理你发出的文件与发起的收集，查看收集到的文件和提交信息。</p></div>
     <Tabs.Root value={category} onValueChange={(value) => setCategory(value as TransferRecordKind)}>
       <Tabs.List aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
       {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button>}>{message(current.error)}</Banner> : null}
