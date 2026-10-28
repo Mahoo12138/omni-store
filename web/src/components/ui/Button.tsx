@@ -20,9 +20,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const useStyles = makeStyles({
   danger: {
     backgroundColor: tokens.colorPaletteRedBackground3,
-    color: tokens.colorPaletteRedForeground3,
-    ':hover': { backgroundColor: tokens.colorPaletteRedBackground2 },
-    ':active': { backgroundColor: tokens.colorPaletteRedBackground2 },
+    // 实心红底上必须用 onBrand 近白前景：colorPaletteRedForeground3 与
+    // RedBackground3 是同一个红值，此前文字/图标等于隐形。
+    color: tokens.colorNeutralForegroundOnBrand,
+    ':hover': {
+      backgroundColor: tokens.colorPaletteRedForeground1,
+      color: tokens.colorNeutralForegroundOnBrand,
+    },
+    ':active': { backgroundColor: tokens.colorPaletteRedForeground1 },
     // disabled 态回退 Fluent 原生灰,否则灰字落在被覆盖的红底上不可见
     ':disabled': {
       backgroundColor: tokens.colorNeutralBackgroundDisabled,
