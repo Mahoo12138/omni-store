@@ -135,9 +135,27 @@ export function FileTable({
                       {entry.name}
                     </button>
                   ) : entry.type === 'file' && onOpenFile ? (
-                    <button className={css.nameLink} onClick={() => onOpenFile(entry)}>
-                      {entry.name}
-                    </button>
+                    fileHref ? (
+                      // 同时给了 href 时保留链接语义（中键/复制链接/新标签仍可用），
+                      // 只把左键点击接管成页内预览。
+                      <a
+                        className={css.nameLink}
+                        href={fileHref(entry)}
+                        target={fileTarget}
+                        rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
+                        onClick={(event) => {
+                          if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                          event.preventDefault()
+                          onOpenFile(entry)
+                        }}
+                      >
+                        {entry.name}
+                      </a>
+                    ) : (
+                      <button className={css.nameLink} onClick={() => onOpenFile(entry)}>
+                        {entry.name}
+                      </button>
+                    )
                   ) : entry.type === 'file' && fileHref ? (
                     <a
                       className={css.nameLink}
