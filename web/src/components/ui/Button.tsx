@@ -34,6 +34,10 @@ const useStyles = makeStyles({
       color: tokens.colorNeutralForegroundDisabled,
     },
   },
+  // 窄弹窗里「保存保留策略」曾被挤成两行；按钮文案一律不换行。
+  nowrap: {
+    whiteSpace: 'nowrap',
+  },
   dangerGhost: {
     color: tokens.colorPaletteRedForeground1,
     ':hover': {
@@ -52,12 +56,10 @@ export function useButtonVariant(variant: ButtonVariant) {
         : variant === 'secondary'
           ? 'secondary'
           : 'subtle',
-    extra:
-      variant === 'danger'
-        ? styles.danger
-        : variant === 'dangerGhost'
-          ? styles.dangerGhost
-          : undefined,
+    extra: [
+      styles.nowrap,
+      variant === 'danger' ? styles.danger : variant === 'dangerGhost' ? styles.dangerGhost : undefined,
+    ].filter(Boolean).join(' '),
   } as const
 }
 

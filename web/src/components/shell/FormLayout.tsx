@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Field, mergeClasses } from '@fluentui/react-components'
+import { Field, InfoLabel, mergeClasses } from '@fluentui/react-components'
 import { useStyles } from './FormLayout.styles'
 
 // 表单与字段骨架（Stage 7）：字段本体一律用 Fluent 原生 Field ——
@@ -19,6 +19,11 @@ export interface FormFieldProps {
    */
   htmlFor?: string
   hint?: string
+  /**
+   * 约束/后果类说明：渲染为 label 旁的信息按钮（Fluent InfoLabel），
+   * 点开才展开，不占常驻布局。输入示例这类必须常驻的提示仍用 hint。
+   */
+  info?: string
   /** 错误文案：渲染为 Field 的 validationMessage，红色并带 role="alert"。 */
   error?: string
   required?: boolean
@@ -26,12 +31,17 @@ export interface FormFieldProps {
   children: ReactNode
 }
 
-export function FormField({ label, htmlFor, hint, error, required, className, children }: FormFieldProps) {
+export function FormField({ label, htmlFor, hint, info, error, required, className, children }: FormFieldProps) {
   const css = useStyles()
+  const labelSlot = label === undefined
+    ? undefined
+    : info
+      ? <InfoLabel info={info} label={{ children: label, htmlFor }} />
+      : htmlFor ? { children: label, htmlFor } : label
   return (
     <Field
       className={mergeClasses(css.field, className)}
-      label={label === undefined ? undefined : htmlFor ? { children: label, htmlFor } : label}
+      label={labelSlot}
       hint={hint}
       required={required}
       validationMessage={error}

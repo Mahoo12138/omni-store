@@ -119,8 +119,14 @@ export function DialogWrap({
             />
           </DialogTrigger>
           <DialogBody>
-            <DialogTitle>{title}</DialogTitle>
-            {description ? <p className={css.description}>{description}</p> : null}
+            {/*
+              DialogBody 是显式三行网格（title/content/actions），游离的 <p> 会被
+              自动排到底部、挤占按钮区。整块包进 title 行。
+            */}
+            <div className={css.titleBlock}>
+              <DialogTitle>{title}</DialogTitle>
+              {description ? <p className={css.description}>{description}</p> : null}
+            </div>
             <DialogContent>{children}</DialogContent>
             {footer ? (
               <DialogActions className={css.actions}>{footer}</DialogActions>

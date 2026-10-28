@@ -179,12 +179,15 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
     setError(''); setConflict(''); mutation.mutate()
   }
   return (
-    <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title={`配置：${service.name}`} description={service.bindingHint}
+    <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title={`配置：${service.name}`}
       footer={<><Button variant="ghost" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={mutation.isPending || (enabled && !sourceKey)} onClick={submit}>{mutation.isPending ? '保存中…' : '保存服务设置'}</Button></>}
     >
       <Checkbox label="启用服务" checked={enabled} disabled={mutation.isPending}
         onChange={(_, data) => setEnabled(!!data.checked)} />
-      <FormField label="绑定存储源" hint="选择“未绑定”并关闭服务，即可解除当前绑定。">
+      <FormField
+        label="绑定存储源"
+        info={`${service.bindingHint}选择「未绑定」并关闭服务，即可解除当前绑定。`}
+      >
         <Select ariaLabel="绑定存储源" value={sourceKey} disabled={mutation.isPending} onValueChange={setSourceKey}
           options={[{ value: '', label: '未绑定' }, ...sources.map((source) => ({ value: source.key, label: `${source.name}${source.is_disabled ? '（已禁用）' : ''}`, disabled: source.is_disabled }))]} />
       </FormField>
@@ -260,12 +263,19 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
     setError(''); mutation.mutate()
   }
   return (
-    <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title="图片保留策略" description="0 表示不自动过期；到期后图片直链与缩略图停止提供，历史记录保留供清理。"
+    <DialogWrap open onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }} title="图片保留策略"
       footer={<><Button variant="ghost" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={mutation.isPending} onClick={submit}>{mutation.isPending ? '保存中…' : '保存保留策略'}</Button></>}
     >
       <FormLayout columns={2}>
-        <FormField label="登录用户图片保留天数"><Input type="number" min="0" step="1" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} /></FormField>
-        <FormField label="匿名图片保留天数"><Input type="number" min="0" step="1" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} /></FormField>
+        <FormField
+          label="登录用户图片保留天数"
+          info="0 表示不自动过期；到期后图片直链与缩略图停止提供，历史记录保留供清理。"
+        >
+          <Input type="number" min="0" step="1" value={userDays} disabled={mutation.isPending} onChange={(event) => setUserDays(event.target.value)} />
+        </FormField>
+        <FormField label="匿名图片保留天数" info="0 表示不自动过期。">
+          <Input type="number" min="0" step="1" value={anonymousDays} disabled={mutation.isPending} onChange={(event) => setAnonymousDays(event.target.value)} />
+        </FormField>
       </FormLayout>
       {error ? <Banner intent="error">{error}</Banner> : null}
     </DialogWrap>
@@ -389,7 +399,7 @@ function BrandingSection() {
       <div className={css.sectionBody}>
         {editing ? (
           <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-            <FormField label="实例名称" required error={msg} hint="1-64 个字符，展示于公开侧页面。">
+            <FormField label="实例名称" required error={msg} info="1-64 个字符，展示于公开侧页面。">
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
             </FormField>
             <div style={{ display: 'flex', gap: 8 }}>
