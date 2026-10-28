@@ -2,20 +2,15 @@ import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
-  workspace: {
-  'minWidth': '0px',
-  ...shorthands.padding('0', '32px', '36px'),
-  'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('20px'),
-  [media.sm]: {
-    ...shorthands.padding('0', '18px', '24px'),
-    ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  },
-  },
   publicWorkspace: {
   'display': 'grid',
   ...shorthands.gap('24px'),
+  'minWidth': '0px',
+  },
+  // Tab 列表与面板之间、以及服务提示与表单之间统一的纵向节奏。
+  tabsRoot: {
+  'display': 'grid',
+  ...shorthands.gap('16px'),
   'minWidth': '0px',
   },
   panel: {
@@ -29,9 +24,11 @@ export const useStyles = makeStyles({
   },
   composer: {
   'display': 'grid',
-  'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 304px)',
+  // 表单列封顶 720px：公开页画布最宽 1440，不封顶时输入框会拉成一整行。
+  'gridTemplateColumns': 'minmax(0, 720px) minmax(240px, 304px)',
   ...shorthands.gap('40px'),
   'alignItems': 'start',
+  'justifyContent': 'start',
   'minWidth': '0px',
   [media.lg]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',

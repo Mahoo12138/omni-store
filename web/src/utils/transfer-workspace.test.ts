@@ -4,7 +4,8 @@ import { validateTransferRedirect, validateTransferSearch } from './transfer-wor
 describe('transfer record navigation', () => {
   it('keeps a valid record deep link through login', () => {
     expect(validateTransferRedirect('/transfer?view=history&record=collect&id=201')).toBe('/transfer?view=history&record=collect&id=201')
-    expect(validateTransferRedirect('/app/transfer')).toBe('/app/transfer?view=send')
+    // 登录侧的 /app/transfer 已并入公开页：旧链接归一为 /transfer。
+    expect(validateTransferRedirect('/app/transfer')).toBe('/transfer?view=send')
   })
   it.each(['//evil.test/transfer', '/\\evil.test/transfer', 'https://evil.test/transfer', '/app/admin', '/transfer#hidden', '/transfer?view=unknown', '/transfer?view=history&record=collect&id=-1', '/transfer?next=https://evil.test'])('rejects an unsafe or invalid return path %s', (path) => {
     expect(validateTransferRedirect(path)).toBeUndefined()

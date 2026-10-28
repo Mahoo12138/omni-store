@@ -195,7 +195,7 @@ for (const requireCode of [true, false]) test(`collection code and password are 
   const visitor = await browser.newContext({ baseURL })
   let id: number | undefined
   try {
-    await openCollections(page, '/app/transfer')
+    await openCollections(page, '/transfer')
     await page.getByLabel('收集任务标题', { exact: true }).fill(title)
     await page.getByRole('button', { name: '收集设置', exact: true }).click()
     await page.getByRole('checkbox', { name: '启用收件码', exact: true }).setChecked(requireCode)

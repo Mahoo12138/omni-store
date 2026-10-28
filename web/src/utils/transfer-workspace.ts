@@ -27,7 +27,8 @@ export function validateTransferRedirect(value: unknown): string | undefined {
   if ((raw.record || raw.id) && (!search.record || !search.id)) return undefined
   const params = new URLSearchParams({ view: search.view })
   if (search.record && search.id) { params.set('record', search.record); params.set('id', String(search.id)) }
-  return `${url.pathname}?${params}`
+  // 登录侧的 /app/transfer 已并入公开页，旧链接一并归一为 /transfer。
+  return `/transfer?${params}`
 }
 
 export function transferFilePath(file: File): string {

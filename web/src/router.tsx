@@ -4,6 +4,7 @@ import {
   createRouter,
   lazyRouteComponent,
   Outlet,
+  redirect,
 } from '@tanstack/react-router'
 import { validateTransferRedirect, validateTransferSearch } from './utils/transfer-workspace'
 
@@ -125,10 +126,14 @@ const imageBedRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ImageBed'), 'ImageBedPage'),
 })
 
+// 登录侧不再维护单独的「流转中心」：旧链接、书签与登录回跳一律并到公开页 /transfer，
+// 登录身份在公开页同样生效（发件包仍可用「从已有文件添加」等需要登录的能力）。
 const transferCenterRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/transfer',
-  component: lazyRouteComponent(() => import('./pages/TransferCenter'), 'TransferCenterPage'),
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/transfer', search })
+  },
   validateSearch: validateTransferSearch,
 })
 

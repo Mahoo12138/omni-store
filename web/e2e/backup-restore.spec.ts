@@ -57,7 +57,7 @@ test('admin exports backup via UI; backup validates and restores offline', async
   await page.getByLabel('用户名').fill('admin')
   await page.getByLabel('密码').fill('OmniStore-Test-Admin!')
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page.getByRole('link', { name: '流转' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '图床' })).toBeVisible()
   await page.goto('/app/admin?section=site&tab=general')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: /导出配置包/ }).click()

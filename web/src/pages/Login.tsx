@@ -33,7 +33,7 @@ export function LoginPage() {
       queryClient.setQueryData(['auth-status'], { authenticated: true })
       if (search.redirect) {
         const redirect = new URL(search.redirect, window.location.origin)
-        await navigate({ to: redirect.pathname === '/transfer' ? '/transfer' : '/app/transfer', search: validateTransferSearch(Object.fromEntries(redirect.searchParams)) })
+        await navigate({ to: '/transfer', search: validateTransferSearch(Object.fromEntries(redirect.searchParams)) })
       } else await navigate({ to: '/app' })
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '登录失败，请稍后重试')

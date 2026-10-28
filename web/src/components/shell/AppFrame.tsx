@@ -24,7 +24,6 @@ import { isThemeMode } from '../../utils/themeMode'
 import { setThemeMode, useTheme } from '../../utils/useTheme'
 import {
   IconChevronDown,
-  IconCloud,
   IconFolder,
   IconImage,
   IconLink,
@@ -65,7 +64,7 @@ export function AppFrame({
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
   useEffect(() => {
-    if (me.isError && pathname.startsWith('/app')) navigate({ to: '/login', search: pathname === '/app/transfer' ? { redirect: '/app/transfer' } : {} })
+    if (me.isError && pathname.startsWith('/app')) navigate({ to: '/login' })
   }, [me.isError, navigate, pathname])
 
   useEffect(() => {
@@ -103,7 +102,6 @@ export function AppFrame({
     { to: '/app/favorites', label: '收藏', icon: <IconStar />, active: pathname.startsWith('/app/favorites') },
     { to: '/app/shares', label: '分享', icon: <IconLink />, active: pathname.startsWith('/app/shares') },
     { to: '/app/image-bed', label: '图床', icon: <IconImage />, active: pathname.startsWith('/app/image-bed') },
-    { to: '/app/transfer', label: '流转', icon: <IconCloud />, active: pathname.startsWith('/app/transfer') },
   ]
   // Nav 用 value 判定选中态；active 的分组规则（如 /app/sources 也算「文件」）在这里折算。
   const selectedNav = navItems.find((item) => item.active)?.to ?? ''

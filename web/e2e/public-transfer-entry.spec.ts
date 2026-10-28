@@ -230,7 +230,9 @@ test('public navigation, three workspace tabs, long branding and status retry fi
     await expect(page.getByText(unavailableHint, { exact: true })).toBeVisible()
     await expect(page.getByText('状态未知', { exact: true })).toHaveCount(0)
     await page.goto('/app/transfer')
-    await expect(page.getByRole('heading', { name: '流转中心', exact: true })).toBeVisible()
+    // 登录侧的流转已并入公开页：旧地址重定向到 /transfer。
+    await expect(page).toHaveURL(/\/transfer(\?|$)/)
+    await expect(page.getByRole('heading', { name: '文件中转', exact: true })).toBeVisible()
     for (const name of ['发送文件', '收集文件', '收发记录']) await expect(page.getByRole('tab', { name, exact: true })).toBeVisible()
     await expectNoOverflow(page)
     expect(errors).toEqual([])
@@ -387,9 +389,8 @@ test('UI logout and a second login never show the previous owner cache when iden
     const firstResponse = await firstLogin
     expect(firstResponse.status()).toBe(200)
     const csrf = (await firstResponse.json()).data.csrf_token as string
-    await expect(page.getByRole('link', { name: '流转', exact: true })).toBeVisible()
     send = (await mutate<{ send: Send }>(page, csrf, '/api/v1/transfers', 'POST', { title, require_code: false })).send
-    await page.getByRole('link', { name: '流转', exact: true }).click()
+    await page.goto('/transfer')
     await page.getByRole('tab', { name: '收发记录', exact: true }).click()
     const record = page.getByRole('article', { name: `发件包 ${title}`, exact: true })
     await expect(record).toBeVisible()
@@ -408,9 +409,8 @@ test('UI logout and a second login never show the previous owner cache when iden
     await page.getByLabel('用户名', { exact: true }).fill('admin')
     await page.getByLabel('密码', { exact: true }).fill('OmniStore-Test-Admin!')
     await page.getByRole('button', { name: '登录', exact: true }).click()
-    await expect(page.getByRole('link', { name: '流转', exact: true })).toBeVisible()
-    // Use SPA links, not page.goto/reload: a fresh document would erase the cache under test.
-    await page.getByRole('link', { name: '流转', exact: true }).click()
+    // 侧栏入口已移除；登录身份在公开页同样生效，故直接走 /transfer。
+    await page.goto('/transfer')
     await expect(page.getByRole('alert')).toContainText('收发身份暂时无法恢复')
     await page.getByRole('tab', { name: '收发记录', exact: true }).click()
     await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0)

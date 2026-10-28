@@ -135,7 +135,7 @@ for (const requireCode of [true, false]) test(`optional pickup code and password
   const recipient = await browser.newContext({ baseURL })
   let id: number | undefined
   try {
-    await openSend(page, '/app/transfer')
+    await openSend(page, '/transfer')
     await page.getByLabel('发件包标题', { exact: true }).fill(title)
     await page.getByRole('button', { name: '发送设置', exact: true }).click()
     await page.getByRole('checkbox', { name: '启用取件码', exact: true }).setChecked(requireCode)
@@ -261,7 +261,7 @@ test('existing draft remains editable inline after reload and cannot finalize wh
     await route.continue()
   })
   try {
-    await page.goto(`/app/transfer?view=history&record=send&id=${send.id}`)
+    await page.goto(`/transfer?view=history&record=send&id=${send.id}`)
     await expect(page.getByRole('heading', { name: 'E2E 历史草稿继续编辑', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: '上传文件夹', exact: true })).toBeVisible()
