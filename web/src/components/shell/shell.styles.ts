@@ -10,6 +10,10 @@ export const useShellStyles = makeStyles({
   ...shorthands.gap(tokens.spacingVerticalXS),
   ...shorthands.margin('0px', '0px', tokens.spacingVerticalXXXL),
   'minWidth': '0px',
+  // 设置类页面用 24px 标题，与内容之间也只留 24px。
+  '&[data-compact]': {
+    'marginBottom': tokens.spacingVerticalXXL,
+  },
   },
   pageHeadline: {
   'display': 'flex',

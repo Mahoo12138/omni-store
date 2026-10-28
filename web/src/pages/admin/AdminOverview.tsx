@@ -221,6 +221,7 @@ export function AdminOverviewPage() {
   const siteTab = search.tab === 'general' || legacySiteTab === 'general' ? 'general' : 'services'
   const section: SectionKey = (availableNav.find((n) => n.key === requestedSection)?.key ??
     'profile') as SectionKey
+  const currentSection = availableNav.find((item) => item.key === section) ?? baseNav[0]
 
   useEffect(() => {
     settingsNavRef.current
@@ -271,7 +272,11 @@ export function AdminOverviewPage() {
 
         {/* 右侧内容 */}
         <div className={css.settingsContent}>
-          <PageHeader title={isAdmin ? '系统设置' : '账号设置'} />
+          {/*
+            头部只表达"你在哪"：eyebrow 是产品名，h1 是当前分区。
+            各分区内部原本同名的那层 h2 一并移除，避免同名标题出现两次。
+          */}
+          <PageHeader size="compact" eyebrow={isAdmin ? '系统设置' : '账号设置'} title={currentSection.label} />
           {section === 'profile' && <ProfileSection />}
           {section === 'preferences' && <PreferencesSection />}
           {section === 'stats' && <DashboardSection />}
@@ -289,12 +294,10 @@ export function AdminOverviewPage() {
 
 function HorizontalDataRegion({
   name,
-  labelledBy,
   busy,
   children,
 }: {
   name: string
-  labelledBy: string
   busy?: boolean
   children: React.ReactNode
 }) {
@@ -305,7 +308,6 @@ function HorizontalDataRegion({
         className={css.dataScroll}
         role="region"
         tabIndex={0}
-        aria-labelledby={labelledBy}
         aria-label={name}
         aria-busy={busy}
       >
@@ -1164,9 +1166,6 @@ function PreferencesSection() {
   const { mode } = useTheme()
   return (
     <section className={css.section}>
-      <div className={css.sectionHeader}>
-        <h2 className={css.sectionTitle}>偏好设置</h2>
-      </div>
       <div className={css.sectionBody}>
         <RadioGroup
           aria-label={THEME_PREFERENCES_LABEL}
@@ -1224,7 +1223,6 @@ function SourcesSection() {
       <section className={css.sourcesSection}>
         <header className={css.sourcesHeader}>
           <div className={css.sectionHeaderCopy}>
-            <h2 id="storage-sources-title" className={css.sectionTitle}>存储源</h2>
             <p className={css.sectionHint}>
               共 {sources.data?.length ?? 0} 个 · 连接真实目录并统一管理访问能力。
             </p>
@@ -1235,8 +1233,8 @@ function SourcesSection() {
             </Button>
           </div>
         </header>
-        <div role="region" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
-          <div className={css.sourceList} role="list" aria-labelledby="storage-sources-title" aria-busy={sources.isPending}>
+        <div role="region" aria-label="存储源" aria-busy={sources.isPending}>
+          <div className={css.sourceList} role="list" aria-label="存储源" aria-busy={sources.isPending}>
             {sources.isPending ? <StateView layout="plain" kind="pending" title="正在加载存储源…" /> : null}
             {sources.isError ? (
               <StateView
@@ -1786,7 +1784,6 @@ function PoliciesSection() {
       <section className={css.section}>
         <header className={css.sectionHeaderWithAction}>
           <div className={css.sectionHeaderCopy}>
-            <h2 id="access-policies-title" className={css.sectionTitle}>访问策略</h2>
             <p className={css.sectionHint}>
               共 {policies.data?.length ?? 0} 个 · 将多个存储源权限组合成策略，再统一绑定用户。
             </p>
@@ -1797,7 +1794,7 @@ function PoliciesSection() {
             </Button>
           </div>
         </header>
-        <HorizontalDataRegion name="访问策略" labelledBy="access-policies-title">
+        <HorizontalDataRegion name="访问策略">
           <table className={`${css.compactTable} ${css.compactTableWide}`}>
             <thead>
               <tr>
@@ -2192,7 +2189,6 @@ function UsersSection() {
       <section className={css.section}>
         <header className={css.sectionHeaderWithAction}>
           <div className={css.sectionHeaderCopy}>
-            <h2 id="users-title" className={css.sectionTitle}>用户</h2>
             <p className={css.sectionHint}>共 {users.data?.length ?? 0} 个 · 用户首次登录后可自行修改密码。</p>
           </div>
           <div className={css.sectionHeaderAction}>
@@ -2201,7 +2197,7 @@ function UsersSection() {
             </Button>
           </div>
         </header>
-        <HorizontalDataRegion name="用户" labelledBy="users-title">
+        <HorizontalDataRegion name="用户">
           <table className={`${css.compactTable} ${css.compactTableWide}`}>
             <thead>
               <tr>
@@ -2550,7 +2546,6 @@ function AuditSection() {
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
-        <h2 id="audit-log-title" className={css.sectionTitle}>审计日志</h2>
         <p className={css.sectionHint}>按主体、入口、结果或关键字筛选实例上的关键操作。</p>
       </div>
       <form className={css.auditFilters} onSubmit={applyFilters}>
@@ -2604,7 +2599,7 @@ function AuditSection() {
           <Button type="button" variant="secondary" onClick={resetFilters}>重置</Button>
         </div>
       </form>
-      <HorizontalDataRegion name="审计日志" labelledBy="audit-log-title" busy={logs.isFetching}>
+      <HorizontalDataRegion name="审计日志" busy={logs.isFetching}>
         <table className={`${css.compactTable} ${css.compactTableAudit}`}>
           <thead>
             <tr>
@@ -3255,7 +3250,7 @@ function DashboardSection() {
           <h2 id="dashboard-sources-title" className={css.sectionTitle}>存储源健康</h2>
           <p className={css.sectionHint}>真实目录、协议和用量统一查看；配置请前往“存储源”。</p>
         </div>
-        <HorizontalDataRegion name="存储源健康" labelledBy="dashboard-sources-title" busy={overview.isFetching}>
+        <HorizontalDataRegion name="存储源健康" busy={overview.isFetching}>
           <table className={`${css.compactTable} ${css.dashboardSourceTable}`}>
             <thead><tr>
               <th className={css.compactTh}>存储源 / 真实路径</th>

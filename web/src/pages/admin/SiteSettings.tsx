@@ -46,10 +46,7 @@ export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabC
   const site = useSiteStyles()
   return (
     <div className={site.root}>
-      <div>
-        <h2 className={css.sectionTitle}>站点配置</h2>
-        <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
-      </div>
+      <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
       <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={site.tabs}>
         <Tabs.List aria-label="站点配置">
           <Tabs.Tab value="services">站点服务</Tabs.Tab>

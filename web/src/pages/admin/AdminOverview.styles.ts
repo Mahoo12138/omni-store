@@ -253,7 +253,7 @@ export const useStyles = makeStyles({
   'display': 'flex',
   'flexDirection': 'column',
   ...shorthands.gap(tokens.spacingVerticalXXL),
-  ...shorthands.padding('56px', layout.pageGutter, '72px'),
+  ...shorthands.padding(tokens.spacingVerticalXXXL, layout.pageGutter, '72px'),
   [media.xl]: {
     ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXL, '96px'),
   },
