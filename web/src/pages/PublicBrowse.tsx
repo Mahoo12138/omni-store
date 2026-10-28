@@ -20,6 +20,9 @@ import { formatBytes, formatDate } from '../utils/format'
 import type { FileEntry } from '../api/sources'
 import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
+import { PreviewModal } from '../preview/PreviewModal'
+import type { PreviewItem } from '../preview/PreviewContent'
+import { resolvePreview } from '../preview/resolver'
 import { useStyles } from './PublicBrowse.styles'
 
 type ViewMode = 'list' | 'grid'
@@ -54,6 +57,25 @@ export function PublicBrowsePage() {
     } else {
       navigate({ to: '/public/$', params: { _splat: p } })
     }
+  }
+
+  // 页内预览：只收当前目录里可预览的文件，左右键在其中切换。
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const previewItems = useMemo<PreviewItem[]>(() => {
+    const files = browse.data?.items ?? []
+    return files
+      .filter((entry) => entry.type === 'file' && resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported')
+      .map((entry) => {
+        const path = `${virtualPath}/${entry.name}`
+        return { name: entry.name, size: entry.size, url: rawUrl(path), downloadUrl: rawUrl(path, true) }
+      })
+  }, [browse.data, virtualPath])
+
+  function openPreview(entry: FileEntry) {
+    const index = previewItems.findIndex((item) => item.name === entry.name)
+    if (index >= 0) { setPreviewIndex(index); return }
+    // 不可预览的类型保持原行为：直接下载。
+    window.location.href = rawUrl(`${virtualPath}/${entry.name}`, true)
   }
 
   const entries = useMemo(() => {
@@ -117,6 +139,7 @@ export function PublicBrowsePage() {
               emptyTitle={browse.isError ? '路径不存在或不可访问' : filter ? '没有匹配的条目' : '目录为空'}
               emptyHint={browse.isError ? '目录可能已被取消公开。' : undefined}
               onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+              onOpenFile={openPreview}
               fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
               fileTarget="_blank"
               renderActions={(entry) =>
@@ -139,9 +162,19 @@ export function PublicBrowsePage() {
               entries={browse.isError ? [] : entries}
               loading={browse.isPending}
               onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+              onOpenFile={openPreview}
               virtualPath={virtualPath}
             />
           )}
+
+          {previewIndex !== null && previewItems.length > 0 ? (
+            <PreviewModal
+              items={previewItems}
+              index={Math.min(previewIndex, previewItems.length - 1)}
+              onIndexChange={setPreviewIndex}
+              onClose={() => setPreviewIndex(null)}
+            />
+          ) : null}
 
           {browse.isSuccess && (browse.data.has_next || page > 1) && (
             <div className={ft.pager}>
@@ -169,11 +202,13 @@ function FileGrid({
   entries,
   loading,
   onOpenDir,
+  onOpenFile,
   virtualPath,
 }: {
   entries: FileEntry[]
   loading?: boolean
   onOpenDir: (name: string) => void
+  onOpenFile: (entry: FileEntry) => void
   virtualPath: string
 }) {
   const css = useStyles()
@@ -206,6 +241,7 @@ function FileGrid({
           key={entry.name}
           entry={entry}
           onOpenDir={onOpenDir}
+          onOpenFile={onOpenFile}
           href={rawUrl(`${virtualPath}/${entry.name}`)}
         />
       ))}
@@ -216,10 +252,12 @@ function FileGrid({
 function GridCard({
   entry,
   onOpenDir,
+  onOpenFile,
   href,
 }: {
   entry: FileEntry
   onOpenDir: (name: string) => void
+  onOpenFile: (entry: FileEntry) => void
   href: string
 }) {
   const css = useStyles()
@@ -236,7 +274,17 @@ function GridCard({
   }
   if (entry.type === 'file') {
     return (
-      <a className={css.gridCard} href={href} target="_blank" rel="noreferrer" title={entry.name}>
+      <a
+        className={css.gridCard}
+        href={href}
+        title={entry.name}
+        // 左键走页内预览；中键 / ⌘ 点击仍按 href 打开原始地址。
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.button !== 0) return
+          event.preventDefault()
+          onOpenFile(entry)
+        }}
+      >
         <div className={css.gridIcon}>
           <EntryIcon name={entry.name} type="file" size={48} />
         </div>
