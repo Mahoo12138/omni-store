@@ -621,18 +621,6 @@ export const useStyles = makeStyles({
   'justifyContent': 'flex-end',
   ...shorthands.gap('4px'),
   },
-  'credentialEmpty': {
-  ...shorthands.padding('16px', '0'),
-  'color': 'var(--colorNeutralForeground2)',
-  'fontSize': '13px',
-  'lineHeight': 1.55,
-  },
-  credentialError: {
-  ...shorthands.padding('16px', '0'),
-  'fontSize': '13px',
-  'lineHeight': 1.55,
-  'color': 'var(--colorPaletteRedForeground1)',
-  },
   'credentialSubsection': {
   'marginTop': '24px',
   'paddingTop': '24px',
@@ -1121,12 +1109,6 @@ export const useStyles = makeStyles({
   ...shorthands.gap('8px'),
   'alignItems': 'center',
   'marginLeft': 'auto',
-  },
-  'auditMessage': {
-  ...shorthands.padding('16px'),
-  'textAlign': 'center',
-  'color': 'var(--colorNeutralForeground2)',
-  'fontSize': '13px',
   },
   'auditPagination': {
 

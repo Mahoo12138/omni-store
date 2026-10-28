@@ -46,6 +46,30 @@ describe('StateView', () => {
     expect(html).toContain('还没有收藏')
   })
 
+  it('treats filtered and unavailable as static states without a live region', () => {
+    for (const kind of ['filtered', 'unavailable'] as const) {
+      const html = renderToStaticMarkup(<StateView kind={kind} title="没有符合条件的记录" />)
+      expect(html).not.toContain('role="status"')
+      expect(html).not.toContain('role="alert"')
+      expect(html).toContain('没有符合条件的记录')
+    }
+  })
+
+  it('renders the plain layout without a heading or card chrome', () => {
+    const html = renderToStaticMarkup(
+      <StateView layout="plain" kind="empty" title="还没有用户" description="创建后即可登录" />,
+    )
+    expect(html).not.toContain('<h2')
+    expect(html).toContain('还没有用户')
+    expect(html).toContain('创建后即可登录')
+  })
+
+  it('keeps the plain pending state as a role=status live region', () => {
+    const html = renderToStaticMarkup(<StateView layout="plain" kind="pending" title="正在加载…" />)
+    expect(html).toContain('role="status"')
+    expect(html).toContain('aria-busy="true"')
+  })
+
   it('keeps the alert role on the wrapper because MessageBar itself is role=group', () => {
     const html = renderToStaticMarkup(<StateView kind="error" layout="inline" description="网络不可用" />)
     expect(html).toContain('role="alert"')

@@ -87,6 +87,29 @@ export const useShellStyles = makeStyles({
   stateInline: {
   'minWidth': '0px',
   },
+  // 卡片/表格内部的无边框空态：只做垂直呼吸与文字层级。
+  statePlain: {
+  'display': 'flex',
+  'flexDirection': 'column',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'gap': tokens.spacingVerticalXS,
+  'minHeight': '96px',
+  ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalL),
+  'textAlign': 'center',
+  },
+  statePlainTitle: {
+  'color': tokens.colorNeutralForeground1,
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  },
+  statePlainText: {
+  'color': tokens.colorNeutralForeground2,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase300,
+  'maxWidth': '52ch',
+  'marginTop': '0px',
+  },
   banner: {
   'minWidth': '0px',
   'overflowWrap': 'anywhere',

@@ -79,6 +79,7 @@ import { Button } from '../../components/ui/Button'
 import { DialogWrap } from '../../components/ui/Dialog'
 import { Banner } from '../../components/shell/Banner'
 import { FormField } from '../../components/shell/FormLayout'
+import { StateView } from '../../components/shell/StateView'
 import { Menu } from '../../components/ui/Menu'
 import { Select } from '../../components/ui/Select'
 import {
@@ -667,7 +668,7 @@ function TokenBlock({
 
       <div className={css.credentialBody}>
         {error ? (
-          <div className={css.credentialError}>WebDAV 凭据状态读取失败，请刷新页面后重试。</div>
+          <StateView layout="plain" kind="error" title="WebDAV 凭据状态读取失败" description="请刷新页面后重试。" />
         ) : (
           <div className={css.credentialFacts}>
             <div className={css.credentialFact}>
@@ -821,10 +822,17 @@ function ImageBedTokenManager() {
       />
 
       <div className={css.credentialBody}>
-        {tokens.isPending ? <div className={css.credentialEmpty}>正在加载 Token…</div> : null}
-        {tokens.isError ? <div className={css.credentialError}>Token 列表加载失败，请刷新页面后重试。</div> : null}
+        {tokens.isPending ? <StateView layout="plain" kind="pending" title="正在加载 Token…" /> : null}
+        {tokens.isError ? (
+          <StateView layout="plain" kind="error" title="Token 列表加载失败" description="请刷新页面后重试。" />
+        ) : null}
         {tokens.isSuccess && tokenItems.length === 0 ? (
-          <div className={css.credentialEmpty}>暂无图床 Token。为每台客户端创建独立凭据，撤销时不会影响其他客户端。</div>
+          <StateView
+            layout="plain"
+            kind="unavailable"
+            title="暂无图床 Token"
+            description="为每台客户端创建独立凭据，撤销时不会影响其他客户端。"
+          />
         ) : null}
         {tokenItems.length > 0 ? (
           <div className={css.credentialList} role="list" aria-label="图床 Token 列表">
@@ -1011,10 +1019,17 @@ function S3CredentialManager() {
       />
 
       <div className={css.credentialBody}>
-        {credentials.isPending ? <div className={css.credentialEmpty}>正在加载 S3 凭据…</div> : null}
-        {credentials.isError ? <div className={css.credentialError}>S3 凭据列表加载失败，请刷新页面后重试。</div> : null}
+        {credentials.isPending ? <StateView layout="plain" kind="pending" title="正在加载 S3 凭据…" /> : null}
+        {credentials.isError ? (
+          <StateView layout="plain" kind="error" title="S3 凭据列表加载失败" description="请刷新页面后重试。" />
+        ) : null}
         {credentials.isSuccess && items.length === 0 ? (
-          <div className={css.credentialEmpty}>暂无 S3 凭据。建议为每台客户端创建独立 Access Key。</div>
+          <StateView
+            layout="plain"
+            kind="unavailable"
+            title="暂无 S3 凭据"
+            description="建议为每台客户端创建独立 Access Key。"
+          />
         ) : null}
         {items.length > 0 ? (
           <div className={css.credentialList} role="list" aria-label="S3 凭据列表">
@@ -2278,9 +2293,7 @@ function UsersSection() {
             </tbody>
           </table>
           {users.isSuccess && users.data.length === 0 && (
-            <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>
-              还没有用户
-            </div>
+            <StateView layout="plain" kind="empty" title="还没有用户" />
           )}
         </HorizontalDataRegion>
       </section>
@@ -2649,13 +2662,9 @@ function AuditSection() {
             ))}
           </tbody>
         </table>
-        {logs.isPending && (
-          <div className={css.auditMessage}>正在加载审计日志…</div>
-        )}
+        {logs.isPending && <StateView layout="plain" kind="pending" title="正在加载审计日志…" />}
         {logs.isSuccess && logs.data.items.length === 0 && (
-          <div style={{ padding: 16, textAlign: 'center', color: 'var(--colorNeutralForeground2)', fontSize: '13px' }}>
-            没有符合条件的日志
-          </div>
+          <StateView layout="plain" kind="filtered" title="没有符合条件的日志" description="调整筛选条件后再试一次。" />
         )}
         {logs.isError ? <Banner intent="error">加载失败</Banner> : null}
       </HorizontalDataRegion>

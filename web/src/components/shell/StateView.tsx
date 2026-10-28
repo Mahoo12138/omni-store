@@ -11,7 +11,14 @@ import {
 import { useShellStyles } from './shell.styles'
 import { SkeletonRows } from './Skeletons'
 
-export type StateViewKind = 'pending' | 'loading' | 'empty' | 'error' | 'result'
+export type StateViewKind =
+  | 'pending' // 请求进行中（spinner）
+  | 'loading' // 骨架占位
+  | 'empty' // 从未有过数据
+  | 'filtered' // 有数据，但当前筛选/搜索条件下为空
+  | 'unavailable' // 能力未开启 / 未绑定 / 无权限
+  | 'error' // 请求失败
+  | 'result' // 操作完成的结果摘要
 
 const ROLE: Record<StateViewKind, 'status' | 'alert' | undefined> = {
   pending: 'status',
@@ -19,6 +26,8 @@ const ROLE: Record<StateViewKind, 'status' | 'alert' | undefined> = {
   result: 'status',
   error: 'alert',
   empty: undefined,
+  filtered: undefined,
+  unavailable: undefined,
 }
 
 const INTENT: Record<StateViewKind, 'info' | 'success' | 'warning' | 'error'> = {
@@ -27,6 +36,8 @@ const INTENT: Record<StateViewKind, 'info' | 'success' | 'warning' | 'error'> = 
   result: 'success',
   error: 'error',
   empty: 'info',
+  filtered: 'info',
+  unavailable: 'info',
 }
 
 // 页面的四种非结果态收在一个组件里，role 契约由这里统一给：
@@ -44,7 +55,8 @@ export function StateView({
   className,
 }: {
   kind: StateViewKind
-  layout?: 'block' | 'fill' | 'inline'
+  /** block=独立卡片；fill=撑满；plain=卡片/表格内部的无边框态；inline=表单内 MessageBar */
+  layout?: 'block' | 'fill' | 'plain' | 'inline'
   title?: ReactNode
   description?: ReactNode
   action?: ReactNode
@@ -56,6 +68,23 @@ export function StateView({
   const role = ROLE[kind]
   const busy = kind === 'pending' || kind === 'loading'
   const live = busy ? { role, 'aria-busy': true as const } : { role }
+
+  // plain：用在已有卡片/表格内部，不画自己的边框，也不引入 h2 标题。
+  if (layout === 'plain') {
+    return (
+      <div className={mergeClasses(css.statePlain, className ?? '')} {...live}>
+        {busy ? (
+          <Spinner size="tiny" label={typeof title === 'string' ? title : '正在加载…'} />
+        ) : (
+          <>
+            {title ? <span className={css.statePlainTitle}>{title}</span> : null}
+            {description ? <span className={css.statePlainText}>{description}</span> : null}
+            {action ? <div className={css.stateActions}>{action}</div> : null}
+          </>
+        )}
+      </div>
+    )
+  }
 
   if (layout === 'inline') {
     return (
