@@ -1,0 +1,513 @@
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
+import { media } from '../../../styles/media'
+import { layout } from '../../../styles/layout'
+import { useSharedStyles } from '../shared.styles'
+
+export const useSectionStyles = makeStyles({
+  // 健康摘要（卡头副标题的一部分）：文字与圆点同色，不另起横幅。
+  'healthState': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalXS),
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': tokens.colorNeutralForeground2,
+  '&[data-tone="success"]': {
+    'color': tokens.colorPaletteGreenForeground1,
+  },
+  '&[data-tone="warning"]': {
+    'color': tokens.colorPaletteDarkOrangeForeground1,
+  },
+  },
+  'healthDot': {
+  'width': tokens.spacingHorizontalS,
+  'height': tokens.spacingHorizontalS,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': 'currentColor',
+  },
+
+  // 运行指标：auto-fit 按容器宽度排 3/2/1 列，数值与标签上下分层。
+  'metricGrid': {
+  'display': 'grid',
+  // min(100%, …) 保证容器比下限还窄时轨道不溢出（320px 视口）。
+  'gridTemplateColumns': `repeat(auto-fit, minmax(min(100%, ${layout.dashboardTileMinWidth}), 1fr))`,
+  ...shorthands.gap(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+  ...shorthands.margin('0px'),
+  },
+  'metricTile': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  ...shorthands.gap(tokens.spacingVerticalS),
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+  'minWidth': '0px',
+  'backgroundColor': tokens.colorNeutralBackground2,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  },
+  'metricLabel': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground2,
+  'letterSpacing': '0.02em',
+  },
+  'metricIcon': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'width': tokens.spacingHorizontalXXL,
+  'height': tokens.spacingHorizontalXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusSmall),
+  'backgroundColor': tokens.colorNeutralBackground1,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  'color': tokens.colorNeutralForeground2,
+  },
+  'metricUnit': {
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'fontWeight': tokens.fontWeightRegular,
+  'color': tokens.colorNeutralForeground3,
+  },
+  'metricValue': {
+  ...shorthands.margin('0px'),
+  'display': 'flex',
+  'alignItems': 'baseline',
+  ...shorthands.gap(tokens.spacingHorizontalXS),
+  // 数值行与状态行同高，六张砖的标签才会落在同一条基线上。
+  'minHeight': tokens.lineHeightBase600,
+  'fontSize': tokens.fontSizeBase600,
+  'lineHeight': tokens.lineHeightBase600,
+  'fontWeight': tokens.fontWeightSemibold,
+  'fontVariantNumeric': 'tabular-nums',
+  'color': tokens.colorNeutralForeground1,
+  },
+  'statusValue': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'minHeight': tokens.lineHeightBase600,
+  'fontSize': tokens.fontSizeBase500,
+  'lineHeight': tokens.lineHeightBase500,
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': tokens.colorNeutralForeground3,
+  '&[data-tone="success"]': {
+    'color': tokens.colorPaletteGreenForeground1,
+  },
+  },
+  'statusDot': {
+  'width': tokens.spacingHorizontalS,
+  'height': tokens.spacingHorizontalS,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': 'currentColor',
+  },
+  // 构建元信息：安静的一行，与指标区用发丝线隔开。
+  'metricMeta': {
+  'display': 'flex',
+  'flexWrap': 'wrap',
+  'alignItems': 'center',
+  'columnGap': tokens.spacingHorizontalXL,
+  'rowGap': tokens.spacingVerticalXS,
+  'paddingTop': tokens.spacingVerticalL,
+  'borderTopWidth': tokens.strokeWidthThin,
+  'borderTopStyle': 'solid',
+  'borderTopColor': tokens.colorNeutralStroke2,
+  },
+  'metaItem': {
+  'display': 'inline-flex',
+  'alignItems': 'baseline',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'minWidth': '0px',
+  },
+  'metaLabel': {
+  'fontSize': tokens.fontSizeBase100,
+  'lineHeight': tokens.lineHeightBase200,
+  'fontWeight': tokens.fontWeightSemibold,
+  'letterSpacing': '0.06em',
+  'textTransform': 'uppercase',
+  'color': tokens.colorNeutralForeground3,
+  },
+  'metaValue': {
+  'fontFamily': tokens.fontFamilyMonospace,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground2,
+  'overflowWrap': 'anywhere',
+  },
+
+  // 三张运维卡：一个主数值 + 两三条支撑行，卡片等高。
+  'opsStatGrid': {
+  'display': 'grid',
+  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
+  ...shorthands.gap(tokens.spacingHorizontalL),
+  [media.md]: {
+    'gridTemplateColumns': 'minmax(0, 1fr)',
+  },
+  },
+  'statLead': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  ...shorthands.gap('2px'),
+  'minWidth': '0px',
+  },
+  'statLeadLabel': {
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  },
+  'statLeadValue': {
+  'display': 'flex',
+  'alignItems': 'baseline',
+  ...shorthands.gap(tokens.spacingHorizontalXS),
+  'fontSize': tokens.fontSizeBase600,
+  'lineHeight': tokens.lineHeightBase600,
+  'fontWeight': tokens.fontWeightSemibold,
+  'fontVariantNumeric': 'tabular-nums',
+  'color': tokens.colorNeutralForeground1,
+  'overflowWrap': 'anywhere',
+  },
+  'statRows': {
+  ...shorthands.margin('0px'),
+  'display': 'grid',
+  'borderTopWidth': tokens.strokeWidthThin,
+  'borderTopStyle': 'solid',
+  'borderTopColor': tokens.colorNeutralStroke2,
+  },
+  'statRow': {
+  'display': 'flex',
+  'alignItems': 'center',
+  'justifyContent': 'space-between',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  ...shorthands.padding(tokens.spacingVerticalMNudge, '0px'),
+  'minWidth': '0px',
+  '& + &': {
+    'borderTopWidth': tokens.strokeWidthThin,
+    'borderTopStyle': 'solid',
+    'borderTopColor': tokens.colorNeutralStroke2,
+  },
+  },
+  'statRowLabel': {
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'color': tokens.colorNeutralForeground2,
+  'whiteSpace': 'nowrap',
+  },
+  'statRowValue': {
+  ...shorthands.margin('0px'),
+  'minWidth': '0px',
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'fontFamily': tokens.fontFamilyMonospace,
+  'fontVariantNumeric': 'tabular-nums',
+  'color': tokens.colorNeutralForeground1,
+  'textAlign': 'right',
+  'overflowWrap': 'anywhere',
+  },
+
+  // 存储源表：名称带图标砖与 key；用量给一条 4px 配额条。
+  'dashboardSourceTable': {
+  'minWidth': '860px',
+  },
+  'dashboardSourceStatus': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  'alignItems': 'flex-start',
+  ...shorthands.gap(tokens.spacingVerticalXS),
+  'whiteSpace': 'normal',
+  },
+  'dashboardError': {
+  'color': tokens.colorPaletteRedForeground1,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'overflowWrap': 'anywhere',
+  },
+  'sourceIdentity': {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalMNudge),
+  },
+  'sourceIcon': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'width': tokens.spacingHorizontalXXXL,
+  'height': tokens.spacingHorizontalXXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  'backgroundColor': tokens.colorNeutralBackground2,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  'color': tokens.colorNeutralForeground2,
+  },
+  'sourceText': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  ...shorthands.gap('1px'),
+  'minWidth': '0px',
+  },
+  'sourceName': {
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': tokens.colorNeutralForeground1,
+  },
+  'sourceKey': {
+  'fontFamily': tokens.fontFamilyMonospace,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  },
+  'usageCell': {
+  'display': 'grid',
+  ...shorthands.gap(tokens.spacingVerticalSNudge),
+  'minWidth': '0px',
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  },
+  'usageTrack': {
+  'display': 'block',
+  'width': '100%',
+  'height': tokens.spacingVerticalXS,
+  'overflow': 'hidden',
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': tokens.colorNeutralBackground4,
+  },
+  'usageFill': {
+  'display': 'block',
+  'height': '100%',
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': tokens.colorBrandBackground,
+  '&[data-tone="warning"]': {
+    'backgroundColor': tokens.colorPaletteDarkOrangeBackground3,
+  },
+  '&[data-tone="danger"]': {
+    'backgroundColor': tokens.colorPaletteRedBackground3,
+  },
+  },
+  'usageQuota': {
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  },
+  'protocolTags': {
+  'display': 'flex',
+  'flexWrap': 'wrap',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  'protocolTag': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.padding('2px', tokens.spacingHorizontalS),
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusSmall),
+  'backgroundColor': tokens.colorNeutralBackground2,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground2,
+  'whiteSpace': 'nowrap',
+  },
+  'protocolEmpty': {
+  'color': tokens.colorNeutralForeground3,
+  },
+
+  // 站点能力：三张小卡，图标砖给出产品身份，状态仍由 Badge 表达。
+  'capabilityGrid': {
+  'display': 'grid',
+  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
+  ...shorthands.gap(tokens.spacingHorizontalM),
+  [media.md]: {
+    'gridTemplateColumns': 'minmax(0, 1fr)',
+  },
+  },
+  'capabilityCard': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  ...shorthands.gap(tokens.spacingVerticalS),
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+  'minWidth': '0px',
+  'backgroundColor': tokens.colorNeutralBackground2,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  },
+  'capabilityHead': {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'minWidth': '0px',
+  },
+  'capabilityName': {
+  'marginInlineEnd': 'auto',
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': tokens.colorNeutralForeground1,
+  },
+  'capabilityDetail': {
+  ...shorthands.margin('0px'),
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'color': tokens.colorNeutralForeground2,
+  'overflowWrap': 'anywhere',
+  },
+  'capabilityNote': {
+  ...shorthands.margin('0px'),
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground3,
+  },
+
+  // 最近失败操作：红色圆点 + 时间，动作仍用等宽标签。
+  'opsFailList': {
+  'display': 'grid',
+  ...shorthands.gap('0px'),
+  },
+  'opsFailRow': {
+  'display': 'grid',
+  'gridTemplateColumns': 'auto auto minmax(0, 1fr)',
+  'alignItems': 'baseline',
+  ...shorthands.gap(tokens.spacingHorizontalL),
+  ...shorthands.padding(tokens.spacingVerticalS, '0px'),
+  'borderBottomWidth': tokens.strokeWidthThin,
+  'borderBottomStyle': 'solid',
+  'borderBottomColor': tokens.colorNeutralStroke2,
+  'fontSize': tokens.fontSizeBase300,
+  // 窄屏改为可换行 flex：时间 + 动作放得下就同行，放不下各自换行；
+  // 原因始终独占一整行。旧的两列 grid 会把动作标签挤成竖排单字。
+  [media.sm]: {
+    'display': 'flex',
+    'flexWrap': 'wrap',
+    'alignItems': 'baseline',
+    'columnGap': tokens.spacingHorizontalS,
+    'rowGap': tokens.spacingVerticalXS,
+    '& > :nth-child(3)': {
+      'flexBasis': '100%',
+    },
+  },
+  },
+  'opsFailTime': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalSNudge),
+  'fontFamily': tokens.fontFamilyMonospace,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground2,
+  'whiteSpace': 'nowrap',
+  '&::before': {
+    'content': '""',
+    'width': tokens.spacingHorizontalS,
+    'height': tokens.spacingHorizontalS,
+    'flexShrink': 0,
+    ...shorthands.borderRadius(tokens.borderRadiusCircular),
+    'backgroundColor': tokens.colorPaletteRedForeground1,
+  },
+  },
+  'opsFailAction': {
+  'justifySelf': 'start',
+  'minWidth': '0px',
+  // 水平内边距收紧到 6px，375px 下时间 + 动作标签刚好同行。
+  ...shorthands.padding('2px', tokens.spacingHorizontalSNudge),
+  ...shorthands.borderRadius(tokens.borderRadiusSmall),
+  'backgroundColor': tokens.colorNeutralBackground2,
+  'fontFamily': tokens.fontFamilyMonospace,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'color': tokens.colorNeutralForeground1,
+  'whiteSpace': 'normal',
+  'overflowWrap': 'anywhere',
+  },
+  'opsFailReason': {
+  'minWidth': '0px',
+  'color': tokens.colorNeutralForeground2,
+  'overflowWrap': 'anywhere',
+  },
+  'emptyState': {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'color': tokens.colorNeutralForeground2,
+  },
+  'emptyIcon': {
+  'display': 'inline-flex',
+  'alignItems': 'center',
+  'justifyContent': 'center',
+  'width': tokens.spacingHorizontalXXL,
+  'height': tokens.spacingHorizontalXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': tokens.colorPaletteGreenBackground1,
+  'color': tokens.colorPaletteGreenForeground1,
+  },
+
+  // 运维结果弹窗（完整性检查 / 运行清理）：计数按「标签在上、数值在下」成组。
+  'reportGroup': {
+  'display': 'grid',
+  ...shorthands.gap(tokens.spacingVerticalM),
+  'minWidth': '0px',
+  '& + &': {
+    'marginTop': tokens.spacingVerticalXXL,
+  },
+  },
+  'reportGroupTitle': {
+  'color': tokens.colorNeutralForeground2,
+  'fontSize': tokens.fontSizeBase200,
+  'fontWeight': tokens.fontWeightSemibold,
+  'letterSpacing': '0.02em',
+  },
+  'reportGrid': {
+  'display': 'grid',
+  'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
+  ...shorthands.gap(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
+  ...shorthands.margin('0px'),
+  [media.xs]: {
+    'gridTemplateColumns': 'minmax(0, 1fr)',
+  },
+  },
+  'reportItem': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  'alignItems': 'flex-start',
+  ...shorthands.gap(tokens.spacingVerticalXXS),
+  'minWidth': '0px',
+  },
+  'reportLabel': {
+  'color': tokens.colorNeutralForeground3,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  },
+  'reportValue': {
+  ...shorthands.margin('0px'),
+  'color': tokens.colorNeutralForeground1,
+  'fontSize': tokens.fontSizeBase400,
+  'fontWeight': tokens.fontWeightSemibold,
+  'lineHeight': tokens.lineHeightBase400,
+  'fontVariantNumeric': 'tabular-nums',
+  'overflowWrap': 'anywhere',
+  },
+  'reportHint': {
+  ...shorthands.margin('0px'),
+  'color': tokens.colorNeutralForeground3,
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  },
+  'reportProblems': {
+  'display': 'flex',
+  'flexDirection': 'column',
+  ...shorthands.gap(tokens.spacingVerticalXXS),
+  ...shorthands.margin('0px'),
+  'paddingLeft': '18px',
+  'color': tokens.colorPaletteRedForeground1,
+  'fontSize': tokens.fontSizeBase300,
+  'lineHeight': tokens.lineHeightBase300,
+  'overflowWrap': 'anywhere',
+  },
+})
+
+export function useStyles() {
+  return { ...useSharedStyles(), ...useSectionStyles() }
+}

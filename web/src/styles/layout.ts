@@ -19,12 +19,31 @@ export const layout = {
   pageGutter: 'clamp(28px, 4vw, 72px)',
   pageGutterWide: 'clamp(20px, 2vw, 32px)',
   readingMaxWidth: '68ch',
+  // 仪表盘指标砖的列宽下限：auto-fit 按容器宽度排 3/2/1 列，
+  // 避免 max-width 断点重叠时小档规则被大档覆盖。
+  dashboardTileMinWidth: '260px',
   stateMinHeight: '270px',
+  // 图床上传区的拖放高度（>32px，按约定集中在这里）
+  imageBedDropMinHeight: '180px',
+  // 状态面的内边距与品牌水印尺寸（>32px，按约定放这里）
+  statePadding: 'clamp(24px, 4vw, 48px)',
+  stateMaxWidth: '960px',
+  stateWatermarkWidth: '300px',
+  stateWatermarkHeight: '264px',
+  // 空状态里的图标块（>32px，按约定放这里）
+  stateIconSize: '48px',
+
+  // 公开网盘首页：正文栏与右侧等距立方体场的尺寸（>32px）
+  entryCopyMaxWidth: '62ch',
+  entryFieldWidth: '360px',
+  entryFieldHeight: '296px',
 
   // 弹层。数值用 px 结尾的数字形式：同一常量既喂 CSS（`${x}px`），
   // 也喂 Fluent 组件的数值 props（如 Toaster 的 offset），只有一处事实。
   dialogWidthPx: 480,
   dialogWideWidthPx: 640,
+  // 短表单弹窗的内容区最小高度：标题与按钮区之外仍保留呼吸空间。
+  dialogMinContentHeight: '140px',
   toastMaxWidthPx: 420,
   toastOffsetPx: 24,
   toastGapPx: 8,

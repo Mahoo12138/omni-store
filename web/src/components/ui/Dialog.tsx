@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect, type ReactNode } from 'react'
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react'
 import {
   Button,
   Dialog as FluentDialog,
@@ -74,6 +74,14 @@ export function DialogWrap({
   const layerOffset = (depth - 1) * 2
   const css = useStyles()
 
+  // 关闭时 Fluent 仍保留 surface 约 250ms 做退场动画。调用方普遍写成
+  // `open={x !== null}` 且标题/正文也取自同一个 x，于是这段动画里弹窗会渲染成
+  // 「x 为空」的样子：标题翻成兜底文案、正文塌成一团 —— 用户看到的是"关掉一个
+  // 又闪出另一个"。这里冻结最后一次打开时的画面，动画期间继续显示它。
+  const shown = useRef({ title, description, wide, footer, children })
+  if (open) shown.current = { title, description, wide, footer, children }
+  const view = shown.current
+
   useLayoutEffect(() => {
     if (!open) return
     return isolateBackground()
@@ -105,7 +113,7 @@ export function DialogWrap({
             } as object
           }
           style={{
-            width: `min(${wide ? layout.dialogWideWidthPx : layout.dialogWidthPx}px, calc(100vw - ${layout.viewportInsetPx}px))`,
+            width: `min(${view.wide ? layout.dialogWideWidthPx : layout.dialogWidthPx}px, calc(100vw - ${layout.viewportInsetPx}px))`,
             maxWidth: `calc(100vw - ${layout.viewportInsetPx}px)`,
             zIndex: DIALOG_BASE_Z_INDEX + layerOffset + 1,
           }}
@@ -124,12 +132,12 @@ export function DialogWrap({
               自动排到底部、挤占按钮区。整块包进 title 行。
             */}
             <div className={css.titleBlock}>
-              <DialogTitle>{title}</DialogTitle>
-              {description ? <p className={css.description}>{description}</p> : null}
+              <DialogTitle>{view.title}</DialogTitle>
+              {view.description ? <p className={css.description}>{view.description}</p> : null}
             </div>
-            <DialogContent>{children}</DialogContent>
-            {footer ? (
-              <DialogActions className={css.actions}>{footer}</DialogActions>
+            <DialogContent className={css.content}>{view.children}</DialogContent>
+            {view.footer ? (
+              <DialogActions className={css.actions}>{view.footer}</DialogActions>
             ) : null}
           </DialogBody>
         </DialogSurface>

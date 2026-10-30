@@ -22,8 +22,8 @@ test('uploaded file is searchable, recoverable and permanently removable', async
   const fileManagerURL = page.url()
   const pageCount = page.context().pages().length
   // 1.2.0：文件名点击打开统一预览弹层；下载走行内"下载"操作。
-  const fileNameButton = row.getByRole('button', { name: fileName, exact: true })
-  await fileNameButton.click()
+  const fileNameLink = row.getByRole('link', { name: fileName, exact: true })
+  await fileNameLink.click()
   const previewDialog = page.getByRole('dialog', { name: `预览 ${fileName}` })
   await expect(previewDialog).toBeVisible()
   await expect(previewDialog).toContainText('OmniStore release lifecycle E2E')

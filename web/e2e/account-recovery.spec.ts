@@ -37,7 +37,7 @@ test('password change closes other sessions and administrator can revoke all cre
     await login(otherPage, username, initialPassword)
 
     await currentPage.getByRole('button', { name: new RegExp('账号菜单') }).click()
-    await currentPage.getByRole('menuitem', { name: '设置' }).click()
+    await currentPage.getByRole('menuitem', { name: '账户设置' }).click()
     await currentPage.getByRole('button', { name: '修改密码' }).click()
     const passwordDialog = currentPage.getByRole('dialog', { name: '修改密码' })
     await passwordDialog.getByLabel('旧密码').fill(initialPassword)
@@ -50,7 +50,8 @@ test('password change closes other sessions and administrator can revoke all cre
     await otherPage.reload()
     await expect(otherPage).toHaveURL(/\/login$/)
 
-    await userRow.getByRole('button', { name: '撤销凭据' }).click()
+    await userRow.getByRole('button', { name: `用户 ${username} 的更多操作` }).click()
+    await page.getByRole('menuitem', { name: '撤销访问凭据', exact: true }).click()
     const revokeDialog = page.getByRole('dialog', { name: '撤销全部凭据' })
     await expect(revokeDialog).toContainText(username)
     page.once('dialog', (dialog) => dialog.accept())
@@ -65,7 +66,8 @@ test('password change closes other sessions and administrator can revoke all cre
     await otherContext.close()
   }
 
-  await userRow.locator('button').last().click()
+  await userRow.getByRole('button', { name: `用户 ${username} 的更多操作` }).click()
+  await page.getByRole('menuitem', { name: '删除用户', exact: true }).click()
   await page.getByRole('dialog', { name: '删除用户' }).getByRole('button', { name: '确认删除' }).click()
   await expect(userRow).toHaveCount(0)
 })

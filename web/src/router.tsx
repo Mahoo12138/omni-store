@@ -143,12 +143,19 @@ const sharesRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/Shares'), 'SharesPage'),
 })
 
-// 管理员侧（README §24.3）
-// 系统设置页（多 section 布局）：侧边栏"系统设置"入口，左侧分组导航 + 右侧内容。
+// 设置（README §24.3）：两个真实路由共用一套布局与组件。
+// - /app/settings 账户设置：所有登录用户（我的 / 偏好设置）
+// - /app/admin    系统设置：仅超级管理员（仪表盘 / 存储源 / 策略 / 用户 / 审计 / 站点）
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/app/settings',
+  component: lazyRouteComponent(() => import('./pages/admin/AdminOverview'), 'SettingsPage'),
+})
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/admin',
-  component: lazyRouteComponent(() => import('./pages/admin/AdminOverview'), 'AdminOverviewPage'),
+  component: lazyRouteComponent(() => import('./pages/admin/AdminOverview'), 'AdminPage'),
 })
 
 const routeTree = rootRoute.addChildren([
@@ -169,6 +176,7 @@ const routeTree = rootRoute.addChildren([
   trashRoute,
   imageBedRoute,
   sharesRoute,
+  settingsRoute,
   adminRoute,
 ])
 

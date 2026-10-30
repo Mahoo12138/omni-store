@@ -35,19 +35,9 @@ export const useAppFrameStyles = makeStyles({
   'borderInlineEndColor': tokens.colorNeutralStroke2,
   // 底部留白交给账号区（userArea）自己分配，这里只留 12px 贴边。
   ...shorthands.padding(tokens.spacingVerticalXXXL, tokens.spacingHorizontalL, tokens.spacingVerticalM),
+  // 窄屏由顶部应用栏 + 抽屉接管主导航，原底部导航退场。
   [media.md]: {
-    'width': '100%',
-    'height': 'auto',
-    'position': 'fixed',
-    'insetInline': '0px',
-    'insetBlockEnd': '0px',
-    'insetBlockStart': 'auto',
-    'flexDirection': 'row',
-    'alignItems': 'center',
-    ...shorthands.gap(tokens.spacingHorizontalXXS),
-    'borderInlineEndStyle': 'none',
-    ...shorthands.borderTop(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding('6px', tokens.spacingHorizontalS, 'max(6px, env(safe-area-inset-bottom))'),
+    'display': 'none',
   },
   // 设置页：主侧栏收成图标窄栏。用属性选择器而不是第二个 class ——
   // 两个类都声明 width 时，谁生效取决于 Griffel 原子的插入顺序，不确定。
@@ -180,9 +170,6 @@ export const useAppFrameStyles = makeStyles({
   'flexDirection': 'column',
   'flexGrow': 1,
   'minWidth': '0px',
-  [media.md]: {
-    'paddingBlockEnd': 'calc(70px + env(safe-area-inset-bottom))',
-  },
   },
   main: {
   'flexGrow': 1,
@@ -312,5 +299,70 @@ export const useAppFrameStyles = makeStyles({
   loadingContent: {
   'flexGrow': 1,
   ...shorthands.padding(tokens.spacingVerticalXXXL),
+  },
+
+  // 窄屏顶部应用栏：左 logo 抽屉触发器，右账号头像。
+  mobileHeader: {
+  'display': 'none',
+  [media.md]: {
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'space-between',
+    'flexShrink': 0,
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.padding('calc(4px + env(safe-area-inset-top))', tokens.spacingHorizontalM, '4px', tokens.spacingHorizontalM),
+    'minHeight': `calc(${layout.navRailHeight} + env(safe-area-inset-top))`,
+    'position': 'sticky',
+    'top': '0px',
+    'zIndex': layout.zIndexSidebar,
+    'backgroundColor': tokens.colorNeutralBackground1,
+    'borderBottomWidth': tokens.strokeWidthThin,
+    'borderBottomStyle': 'solid',
+    'borderBottomColor': tokens.colorNeutralStroke2,
+  },
+  },
+  mobileBrandButton: {
+  'minWidth': '0px',
+  'height': '40px',
+  ...shorthands.padding('4px', tokens.spacingHorizontalSNudge),
+  'justifyContent': 'flex-start',
+  'color': tokens.colorNeutralForeground1,
+  },
+  mobileBrandRow: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  mobileBrandName: {
+  'fontSize': tokens.fontSizeBase400,
+  'lineHeight': tokens.lineHeightBase400,
+  'fontWeight': tokens.fontWeightSemibold,
+  'letterSpacing': '-0.01em',
+  'color': tokens.colorNeutralForeground1,
+  },
+  mobileUserArea: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'flexShrink': 0,
+  },
+  mobileAvatarButton: {
+  'width': '40px',
+  'height': '40px',
+  'minWidth': '0px',
+  ...shorthands.padding('4px'),
+  'justifyContent': 'center',
+  },
+  mobileDrawerBrand: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'fontSize': tokens.fontSizeBase400,
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': tokens.colorNeutralForeground1,
+  },
+  // 与桌面侧栏同一做法：把 NavItem 的库底色置透明，选中仍走 Fluent 语义。
+  mobileDrawerNav: {
+  'minWidth': '0px',
+  '--colorNeutralBackground4': 'transparent',
   },
 })

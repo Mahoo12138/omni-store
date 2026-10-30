@@ -123,7 +123,25 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   // 表格渲染该源且根可访问（活跃流转计数已在 API 断言中核对）。
   await expect(page.getByRole('row', { name: /团队文件/ })).toContainText('可访问')
   await page.getByRole('button', { name: '完整性检查' }).click()
-  await expect(page.getByText(/通过：integrity ok/)).toBeVisible({ timeout: 10_000 })
+  // 检查结果以弹窗呈现，关掉后不在页面上留常驻行。
+  // 注：Playwright 不为 term 计算可访问名，所以按文本过滤 role 而不是传 name。
+  const integrityReport = page.getByRole('dialog', { name: '完整性检查通过' })
+  await expect(integrityReport).toBeVisible({ timeout: 10_000 })
+  await expect(integrityReport.getByRole('term').filter({ hasText: 'integrity_check' })).toBeVisible()
+  await expect(integrityReport.getByRole('definition').filter({ hasText: 'ok' })).toBeVisible()
+  await integrityReport.getByRole('button', { name: '关闭', exact: true }).click()
+  // 退场动画期间弹窗内容必须保持冻结。曾经的 bug：标题在关闭瞬间翻成「清理完成」，
+  // 用户看到的是"关掉一个又闪出另一个"。这里逐帧采样整段动画。
+  const titlesDuringExit = await page.evaluate(async () => {
+    const seen: string[] = []
+    for (let i = 0; i < 14; i++) {
+      document.querySelectorAll('[role="dialog"] h2').forEach((h) => seen.push(h.textContent ?? ''))
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    return seen
+  })
+  expect([...new Set(titlesDuringExit)]).toEqual(['完整性检查通过'])
+  await expect(integrityReport).toHaveCount(0)
 
   // 6. 从统一源表校准台账，校准报告和刷新后的健康数据保持一致。
   const reconcileResponse = page.waitForResponse((response) => response.url().endsWith(`/sources/${team.key}/reconcile`))
@@ -143,7 +161,12 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   expect(cleanup.data.transfer_gc.orphan_temp_removed).toBe(0)
   expect(cleanup.data.transfer_gc.orphan_dirs_removed).toBe(0)
   await afterCleanup
-  await expect(page.getByRole('status').filter({ hasText: '本次清理' })).toBeVisible()
+  const cleanupReport = page.getByRole('dialog', { name: '清理完成' })
+  await expect(cleanupReport.getByText('存储与协议')).toBeVisible()
+  await expect(cleanupReport.getByRole('term').filter({ hasText: 'Multipart 上传' })).toBeVisible()
+  await expect(cleanupReport.getByRole('term').filter({ hasText: '孤儿目录' })).toBeVisible()
+  await cleanupReport.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(cleanupReport).toHaveCount(0)
   expect(readFileSync(tmpFile, 'utf-8')).toBe('partial upload')
 
   // 撤销活跃包 → 载荷目录删除 → 再次清理显示清扫计数。
@@ -227,7 +250,8 @@ test('dashboard handles empty health data and failed maintenance without false s
   await expect(page.getByText('4.0 KB', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '运行清理', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('测试：清理未完成')
-  await expect(page.getByRole('status').filter({ hasText: '本次清理' })).toHaveCount(0)
+  // 失败只报错误，不弹结果窗（没有报告可展示）。
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('button', { name: '运行清理', exact: true })).toBeEnabled()
   await expect(page.getByText('128 B', { exact: true })).toBeVisible()
   await expect(page.getByText('4.0 KB', { exact: true })).toHaveCount(0)

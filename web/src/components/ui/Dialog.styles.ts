@@ -1,4 +1,5 @@
-import { makeStyles } from '@fluentui/react-components'
+import { makeStyles, tokens } from '@fluentui/react-components'
+import { layout } from '../../styles/layout'
 
 // Fluent Dialog 原生观感;这里只有关闭按钮(absolute 于 surface 右上)与描述文本。
 export const useStyles = makeStyles({
@@ -17,6 +18,17 @@ export const useStyles = makeStyles({
     lineHeight: '1.5',
     color: 'var(--colorNeutralForeground2)',
     overflowWrap: 'anywhere',
+  },
+  // 弹窗内容区的纵向节奏：绝大多数弹窗直接把 Field / Checkbox / Banner
+  // 堆在 DialogContent 里，没有这层间距时字段会互相贴住。
+  content: {
+    'display': 'grid',
+    'gap': tokens.spacingVerticalXL,
+    'minWidth': '0px',
+    // 短表单弹窗也要有舒展的内容区；矮屏用 30dvh 兜底，避免最小高度把弹窗顶出视口。
+    'minHeight': `min(${layout.dialogMinContentHeight}, 30dvh)`,
+    // 按钮区上方留白，内容不再贴着 footer。
+    'paddingBottom': tokens.spacingVerticalXL,
   },
   titleBlock: {
     gridRow: 1,

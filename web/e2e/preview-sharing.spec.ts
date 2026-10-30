@@ -16,7 +16,7 @@ test('file manager opens unified preview modal for previewable files', async ({ 
 
   // 文本预览：文件名点击打开弹层，内容来自统一渲染器。
   const row = page.getByRole('row', { name: /README\.txt/ })
-  await row.getByRole('button', { name: 'README.txt', exact: true }).click()
+  await row.getByRole('link', { name: 'README.txt', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '预览 README.txt' })
   await expect(dialog).toBeVisible()
   await expect(dialog).toContainText('OmniStore public demo')

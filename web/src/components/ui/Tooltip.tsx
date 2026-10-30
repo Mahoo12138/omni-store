@@ -4,6 +4,8 @@ import type { ComponentProps, ReactNode } from 'react'
 interface TooltipProps {
   content: ReactNode
   children: ReactNode
+  /** disabled 控件需要外层可聚焦才能用键盘唤出提示；普通按钮保持 false，避免多出 tab 停靠点。 */
+  focusable?: boolean
 }
 
 // Fluent Tooltip 的 content 是 slot 类型（不接受 null/boolean 等 ReactNode 边角值），
@@ -15,8 +17,8 @@ const useStyles = makeStyles({
   trigger: { display: 'inline-flex', flexShrink: 0 },
 })
 
-/** Fluent Tooltip 包装：触发器保持可聚焦，适合包裹 disabled 控件。 */
-export function Tooltip({ content, children }: TooltipProps) {
+/** Fluent Tooltip 包装：disabled 控件可加 focusable，让提示也能通过键盘唤出。 */
+export function Tooltip({ content, children, focusable = false }: TooltipProps) {
   const styles = useStyles()
   return (
     <FluentTooltip
@@ -25,7 +27,7 @@ export function Tooltip({ content, children }: TooltipProps) {
       positioning="above"
       withArrow
     >
-      <span className={styles.trigger} tabIndex={0}>
+      <span className={styles.trigger} tabIndex={focusable ? 0 : undefined}>
         {children}
       </span>
     </FluentTooltip>

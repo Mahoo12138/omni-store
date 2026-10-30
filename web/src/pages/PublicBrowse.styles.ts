@@ -47,10 +47,6 @@ export const useStyles = makeStyles({
   'display': 'grid',
   'gridTemplateColumns': 'repeat(auto-fill, minmax(180px, 1fr))',
   ...shorthands.gap('16px'),
-  'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  ...shorthands.padding('16px'),
   },
   gridIcon: {
   'display': 'inline-flex',
@@ -74,20 +70,6 @@ export const useStyles = makeStyles({
   ...shorthands.overflow('hidden'),
   'textOverflow': 'ellipsis',
   'maxWidth': '100%',
-  },
-  gridEmpty: {
-  ...shorthands.padding('40px', '24px'),
-  'textAlign': 'center',
-  'color': 'var(--colorNeutralForeground2)',
-  'backgroundColor': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  },
-  gridEmptyTitle: {
-  'fontSize': '16px',
-  'fontWeight': 600,
-  'color': 'var(--colorNeutralForeground1)',
-  'marginBottom': '4px',
   },
   skeleton: {
   'height': '14px',

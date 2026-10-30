@@ -20,19 +20,6 @@ export const useStyles = makeStyles({
   ...shorthands.gap(tokens.spacingVerticalXXL),
   'minWidth': '0px',
   },
-  source: {
-  'display': 'flex',
-  'flexDirection': 'column',
-  ...shorthands.gap('4px'),
-  'minWidth': '0px',
-  'overflowWrap': 'anywhere',
-  },
-  path: {
-  'fontFamily': 'var(--fontFamilyMonospace)',
-  'fontSize': '12px',
-  'color': 'var(--colorNeutralForeground2)',
-  'overflowWrap': 'anywhere',
-  },
   featureGroup: {
   'display': 'flex',
   'flexDirection': 'column',
@@ -54,42 +41,12 @@ export const useStyles = makeStyles({
   'color': 'var(--colorNeutralForeground2)',
   'overflowWrap': 'anywhere',
   },
-  // 服务卡头部：图标 + 名称/状态 + 描述，操作在右。
-  serviceHeader: {
-  'display': 'flex',
-  'alignItems': 'flex-start',
-  'gap': tokens.spacingHorizontalM,
-  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
-  'borderBottomWidth': tokens.strokeWidthThin,
-  'borderBottomStyle': 'solid',
-  'borderBottomColor': tokens.colorNeutralStroke2,
-  },
-  serviceIcon: {
-  'display': 'grid',
-  'placeItems': 'center',
-  'width': tokens.spacingHorizontalXXXL,
-  'height': tokens.spacingHorizontalXXXL,
-  'flexShrink': 0,
-  ...shorthands.borderRadius(tokens.borderRadiusMedium),
-  'backgroundColor': tokens.colorNeutralBackground3,
-  'color': tokens.colorNeutralForeground2,
-  },
-  serviceCopy: {
-  'minWidth': '0px',
-  'flexGrow': 1,
-  },
-  serviceTitleRow: {
-  'display': 'flex',
-  'alignItems': 'center',
-  'flexWrap': 'wrap',
-  'gap': tokens.spacingHorizontalS,
-  'minWidth': '0px',
-  },
   serviceBody: {
   'display': 'flex',
   'flexDirection': 'column',
   'gap': tokens.spacingVerticalM,
-  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
+  // 与 SectionCard 卡头同一 24px 内缩。
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXXL),
   },
   // 键值行：标签固定宽度在左，值在右（长路径落在值列内换行）。
   facts: {

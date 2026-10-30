@@ -5,8 +5,10 @@ import { ApiRequestError } from '../api/client'
 import { lookupCollection, submitToCollection, unlockCollection, type CollectionPublicInfo } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
+import { LinkButton } from '../components/ui/LinkButton'
 import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
+import { StateView } from '../components/shell/StateView'
 import { Input, Textarea } from '@fluentui/react-components'
 import { IconCheck, IconClose, IconFolder, IconKey, IconUpload } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
@@ -124,10 +126,26 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
   if (info.isError || !info.data || unavailable) {
     const message = unavailable || errorMessage(info.error, '收集任务加载失败')
     const terminal = unavailable !== '' || isUnavailable(info.error)
-    return <PublicTransferShell title="提交文件"><div className={css.workbench}><div className={css.state} role="alert">
-      <h2>{message}</h2><p>{terminal ? '该任务目前无法接收文件，请联系收集者确认。' : '暂时无法加载收集任务，请重试。'}{picked.length > 0 ? '已选文件和填写内容仍保留在当前页面。' : ''}</p>
-      {!terminal ? <Button variant="secondary" onClick={() => void info.refetch()}>重新加载</Button> : null}
-    </div></div></PublicTransferShell>
+    const preserved = picked.length > 0 ? '已选文件和填写内容仍保留在当前页面。' : ''
+    return <PublicTransferShell title="提交文件">
+      <StateView
+        kind="error"
+        brand
+        eyebrow="文件中转 · 收集"
+        title={terminal ? message : '暂时无法加载收集任务'}
+        description={terminal
+          ? `该任务目前无法接收文件，请联系收集者确认。${preserved}`
+          : `无法连接到实例服务。请稍后重新加载；如果持续出现，请联系收集者确认。${preserved}`}
+        action={terminal
+          ? <LinkButton variant="secondary" to="/transfer" search={{ view: 'send' }}>返回文件中转</LinkButton>
+          : <Button onClick={() => void info.refetch()}>重新加载</Button>}
+        status={{
+          tone: terminal ? 'neutral' : 'warning',
+          label: terminal ? '收集任务不可用' : '实例服务未响应',
+          hint: terminal ? '此链接不再接收文件' : '收集链接和填写内容不会丢失',
+        }}
+      />
+    </PublicTransferShell>
   }
 
   const constraints = fileConstraints(info.data)
@@ -192,7 +210,7 @@ function CollectionTask({ publicKey }: { publicKey: string }) {
             }}>
             <span className={css.uploadIcon}><IconUpload size={36} /></span>
             <p className={css.dropTitle}>{readingFiles ? '正在读取文件夹…' : dragging ? '松开即可添加文件' : '将文件或文件夹拖到这里'}</p>
-            <div className={css.pickerActions}><Button type="button" variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>选择文件</Button><Button type="button" variant="secondary" disabled={busy} onClick={() => folderInput.current?.click()}><IconFolder size={16} /> 选择文件夹</Button></div>
+            <div className={css.pickerActions}><Button type="button" variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>选择文件</Button><Button type="button" variant="secondary" disabled={busy} onClick={() => folderInput.current?.click()} icon={<IconFolder size={16} />}>选择文件夹</Button></div>
             {constraints ? <p className={css.hint}>{constraints}</p> : null}
           </div>
           {picked.length > 0 ? <ul className={css.fileList}>{picked.map((item, index) => <li key={item.id} className={css.fileRow}>

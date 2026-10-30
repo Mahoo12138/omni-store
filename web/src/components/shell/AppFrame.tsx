@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Avatar,
   Button,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
   Menu as FluentMenu,
   Nav,
   NavItem as FluentNavItem,
@@ -15,6 +18,7 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
+  OverlayDrawer,
 } from '@fluentui/react-components'
 import { fetchMe, logout } from '../../api/auth'
 import { useFileClipboard } from '../files/FileClipboard'
@@ -24,12 +28,14 @@ import { isThemeMode } from '../../utils/themeMode'
 import { setThemeMode, useTheme } from '../../utils/useTheme'
 import {
   IconChevronDown,
+  IconClose,
   IconFolder,
   IconImage,
   IconLink,
   IconLogout,
   IconQuestion,
   IconSettings,
+  IconUser,
   IconStar,
   LogoMark,
 } from '../ui/Icon'
@@ -60,17 +66,17 @@ export function AppFrame({
   const queryClient = useQueryClient()
   const clipboard = useFileClipboard()
   const { pathname } = useLocation()
-  const navRef = useRef<HTMLElement>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const me = useQuery({ queryKey: ['me'], queryFn: fetchMe, retry: false, staleTime: 60_000 })
 
   useEffect(() => {
     if (me.isError && pathname.startsWith('/app')) navigate({ to: '/login' })
   }, [me.isError, navigate, pathname])
 
+  // 抽屉只服务窄屏；路由变化后无论点哪一项都收起。
   useEffect(() => {
-    if (!window.matchMedia('(max-width: 820px)').matches) return
-    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'center' })
-  }, [pathname, me.isSuccess])
+    setDrawerOpen(false)
+  }, [pathname])
 
   // 全局搜索:⌘K / Ctrl+K 在任意登录页呼出。
   useEffect(() => {
@@ -97,6 +103,11 @@ export function AppFrame({
     navigate({ to: '/login' })
   }
 
+  function goTo(to: string) {
+    setDrawerOpen(false)
+    navigate({ to })
+  }
+
   const navItems: AppFrameNavItem[] = [
     { to: '/app', label: '文件', icon: <IconFolder />, active: pathname === '/app' || pathname.startsWith('/app/sources') },
     { to: '/app/favorites', label: '收藏', icon: <IconStar />, active: pathname.startsWith('/app/favorites') },
@@ -105,11 +116,43 @@ export function AppFrame({
   ]
   // Nav 用 value 判定选中态；active 的分组规则（如 /app/sources 也算「文件」）在这里折算。
   const selectedNav = navItems.find((item) => item.active)?.to ?? ''
-  // 设置页把主侧栏收成图标窄栏，腾出的横向空间给「设置分组」面板（紧贴窄栏）。
-  const compact = pathname === '/app/admin' || pathname.startsWith('/app/admin/')
+  // 抽屉里的账户入口也要有选中态：设置页不属于主导航，回落到对应设置路由。
+  const drawerSelectedNav = selectedNav
+    || (pathname.startsWith('/app/settings') ? '/app/settings'
+      : pathname.startsWith('/app/admin') ? '/app/admin'
+        : pathname.startsWith('/about') ? '/about' : '')
+  // 设置页（账户设置 / 系统设置）把主侧栏收成图标窄栏，
+  // 腾出的横向空间给「设置分组」面板（紧贴窄栏）。
+  const compact =
+    pathname === '/app/admin' || pathname.startsWith('/app/admin/') ||
+    pathname === '/app/settings' || pathname.startsWith('/app/settings/')
 
   return (
     <div className={css.root}>
+      {/* ≤820：主侧栏与底部导航都退场，改为 logo 抽屉 + 头像菜单的顶部栏。 */}
+      <header className={css.mobileHeader}>
+        <Button
+          appearance="subtle"
+          className={css.mobileBrandButton}
+          aria-label="打开导航"
+          aria-haspopup="dialog"
+          aria-expanded={drawerOpen}
+          onClick={() => setDrawerOpen(true)}
+        >
+          <span className={css.mobileBrandRow}>
+            <LogoMark size={26} />
+            <span className={css.mobileBrandName}>OmniStore</span>
+          </span>
+        </Button>
+        <UserMenu
+          displayName={user.display_name}
+          showAdminEntry={user.role === 'super_admin'}
+          compact
+          header
+          onLogout={onLogout}
+        />
+      </header>
+
       <aside className={css.sidebar} data-compact={compact ? '' : undefined}>
         <Link
           to="/app"
@@ -120,7 +163,7 @@ export function AppFrame({
           <LogoMark size={30} />
           {compact ? null : <span className={css.brandName}>OmniStore</span>}
         </Link>
-        <nav ref={navRef} className={css.nav} aria-label="主导航">
+        <nav className={css.nav} aria-label="主导航">
           {compact ? null : <NavSectionHeader as="div" className={css.navLabel}>工作空间</NavSectionHeader>}
           <Nav selectedValue={selectedNav} className={css.navList}>
             {navItems.map((item) => (
@@ -163,6 +206,92 @@ export function AppFrame({
         >{children}</main>
       </div>
 
+      <OverlayDrawer
+        open={drawerOpen}
+        onOpenChange={(_, data) => setDrawerOpen(data.open)}
+        position="start"
+        size="small"
+      >
+        <DrawerHeader>
+          <DrawerHeaderTitle
+            action={(
+              <Button
+                appearance="subtle"
+                aria-label="关闭导航"
+                icon={<IconClose size={20} />}
+                onClick={() => setDrawerOpen(false)}
+              />
+            )}
+          >
+            <span className={css.mobileDrawerBrand}>
+              <LogoMark size={24} />
+              <span>OmniStore</span>
+            </span>
+          </DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <nav className={css.mobileDrawerNav} aria-label="主导航">
+            <Nav selectedValue={drawerSelectedNav}>
+              <NavSectionHeader as="div">工作空间</NavSectionHeader>
+              {navItems.map((item) => (
+                <FluentNavItem
+                  key={item.to}
+                  value={item.to}
+                  href={item.to}
+                  icon={item.icon}
+                  onClick={(event) => {
+                    if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                    event.preventDefault()
+                    goTo(item.to)
+                  }}
+                >
+                  {item.label}
+                </FluentNavItem>
+              ))}
+              <NavSectionHeader as="div">账户</NavSectionHeader>
+              <FluentNavItem
+                value="/app/settings"
+                href="/app/settings"
+                icon={<IconUser size={20} />}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                  event.preventDefault()
+                  goTo('/app/settings')
+                }}
+              >
+                账户设置
+              </FluentNavItem>
+              {user.role === 'super_admin' ? (
+                <FluentNavItem
+                  value="/app/admin"
+                  href="/app/admin"
+                  icon={<IconSettings size={20} />}
+                  onClick={(event) => {
+                    if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                    event.preventDefault()
+                    goTo('/app/admin')
+                  }}
+                >
+                  系统设置
+                </FluentNavItem>
+              ) : null}
+              <FluentNavItem
+                value="/about"
+                href="/about"
+                icon={<IconQuestion size={20} />}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                  event.preventDefault()
+                  goTo('/about')
+                }}
+              >
+                使用帮助
+              </FluentNavItem>
+            </Nav>
+          </nav>
+        </DrawerBody>
+      </OverlayDrawer>
+
       <SearchDialog />
     </div>
   )
@@ -183,6 +312,7 @@ function UserMenu({
   displayName,
   showAdminEntry,
   compact,
+  header = false,
   onLogout,
 }: {
   displayName: string
@@ -190,6 +320,8 @@ function UserMenu({
   showAdminEntry: boolean
   /** 窄栏态：只留头像，文字与箭头不渲染。 */
   compact: boolean
+  /** 移动端顶栏：40px 方形头像按钮，不套侧栏用户区的边框。 */
+  header?: boolean
   onLogout: () => void
 }) {
   const css = useAppFrameStyles()
@@ -199,12 +331,13 @@ function UserMenu({
   const ModeIcon = (THEME_OPTIONS.find((option) => option.value === mode) ?? THEME_OPTIONS[0]).icon
 
   const items: MenuOption[] = [
-    { id: 'settings', label: '设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin', search: { section: 'profile' } }) },
-    { id: 'image-bed', label: '图床', icon: <IconImage size={16} />, onSelect: () => navigate({ to: '/app/image-bed' }) },
-    { id: 'about', label: '使用帮助', icon: <IconQuestion size={16} />, onSelect: () => navigate({ to: '/about' }) },
+    // 两个设置是两个真实路由：账户设置（所有人）/ 系统设置（仅管理员）。
+    // 「图床」侧栏已有入口，不在菜单里重复。
+    { id: 'settings', label: '账户设置', icon: <IconUser size={16} />, onSelect: () => navigate({ to: '/app/settings' }) },
     ...(showAdminEntry
       ? [{ id: 'admin', label: '系统设置', icon: <IconSettings size={16} />, onSelect: () => navigate({ to: '/app/admin' }) }]
       : []),
+    { id: 'about', label: '使用帮助', icon: <IconQuestion size={16} />, onSelect: () => navigate({ to: '/about' }) },
   ]
   const logoutItem: MenuOption = {
     id: 'logout',
@@ -215,32 +348,42 @@ function UserMenu({
   }
 
   return (
-    <div className={css.userArea}>
+    <div className={header ? css.mobileUserArea : css.userArea}>
       <FluentMenu hasIcons>
         <MenuTrigger>
-          {/*
-            头像不能走 Button 的 icon 槽：Fluent 把该槽钉死为 20×20，32px 的 Avatar
-            会被压扁。renderButton 直接把 children 放进 root，所以整行自己排布。
-          */}
-          <Button
-            appearance="subtle"
-            className={css.userButton}
-            data-compact={compact ? '' : undefined}
-            aria-label={`账号菜单：${displayName}`}
-          >
-            <span className={css.userRow} data-compact={compact ? '' : undefined}>
+          {header ? (
+            <Button
+              appearance="subtle"
+              className={css.mobileAvatarButton}
+              aria-label={`账号菜单：${displayName}`}
+            >
               <Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />
-              {compact ? null : (
-                <>
-                  <span className={css.userStack}>
-                    <span className={css.userName}>{displayName}</span>
-                    <span className={css.userCaption}>账号与设置</span>
-                  </span>
-                  <IconChevronDown size={12} className={css.userChevron} />
-                </>
-              )}
-            </span>
-          </Button>
+            </Button>
+          ) : (
+            /*
+              头像不能走 Button 的 icon 槽：Fluent 把该槽钉死为 20×20，32px 的 Avatar
+              会被压扁。renderButton 直接把 children 放进 root，所以整行自己排布。
+            */
+            <Button
+              appearance="subtle"
+              className={css.userButton}
+              data-compact={compact ? '' : undefined}
+              aria-label={`账号菜单：${displayName}`}
+            >
+              <span className={css.userRow} data-compact={compact ? '' : undefined}>
+                <Avatar name={displayName} initials={displayName.slice(0, 1)} size={32} color="brand" />
+                {compact ? null : (
+                  <>
+                    <span className={css.userStack}>
+                      <span className={css.userName}>{displayName}</span>
+                      <span className={css.userCaption}>账号与设置</span>
+                    </span>
+                    <IconChevronDown size={12} className={css.userChevron} />
+                  </>
+                )}
+              </span>
+            </Button>
+          )}
         </MenuTrigger>
         <MenuPopover>
           <MenuList aria-label={`账号菜单：${displayName}`}>

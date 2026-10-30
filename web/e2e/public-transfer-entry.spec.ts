@@ -186,7 +186,7 @@ test('public navigation, three workspace tabs, long branding and status retry fi
       await expectNoOverflow(page)
       await publicNav.getByRole('link', { name: '文件中转', exact: true }).click()
       await page.reload()
-      await expect(page.getByText(unavailableHint, { exact: true })).toBeVisible()
+      await expect(page.getByText('新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。', { exact: true })).toBeVisible()
       await expectSelectedNav(page)
       for (const tabName of ['发送文件', '收集文件', '收发记录']) {
         const tab = page.getByRole('tab', { name: tabName, exact: true })
@@ -201,7 +201,7 @@ test('public navigation, three workspace tabs, long branding and status retry fi
         } else if (tabName === '收集文件') {
           await expect(page.getByLabel('收集任务标题', { exact: true })).toBeVisible()
           await page.getByRole('button', { name: '收集设置', exact: true }).click()
-          await page.locator('details').getByRole('tab', { name: '文件', exact: true }).click()
+          await page.getByRole('tab', { name: '文件', exact: true }).click()
           await expect(page.getByLabel('总量上限 MB', { exact: true })).toBeVisible()
           await expect(page.getByRole('button', { name: '生成收集链接', exact: true })).toBeDisabled()
         }
@@ -222,12 +222,12 @@ test('public navigation, three workspace tabs, long branding and status retry fi
     statusUnavailable = true
     await page.reload()
     await expect(page.getByText('状态未知', { exact: true })).toBeVisible()
-    await expect(page.getByText(unavailableHint, { exact: true })).toHaveCount(0)
+    await expect(page.getByText('新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。', { exact: true })).toHaveCount(0)
     await expect(page.getByRole('tab', { name: '收发记录', exact: true })).toBeEnabled()
     await expectNoOverflow(page)
     statusUnavailable = false
     await page.getByRole('button', { name: '重新检查', exact: true }).click()
-    await expect(page.getByText(unavailableHint, { exact: true })).toBeVisible()
+    await expect(page.getByText('新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。', { exact: true })).toBeVisible()
     await expect(page.getByText('状态未知', { exact: true })).toHaveCount(0)
     await page.goto('/app/transfer')
     // 登录侧的流转已并入公开页：旧地址重定向到 /transfer。
@@ -398,6 +398,8 @@ test('UI logout and a second login never show the previous owner cache when iden
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
     await page.getByRole('button', { name: '返回收发记录', exact: true }).click()
     await expect(record).toBeVisible()
+    // 公开页没有账号菜单；退出登录入口在工作台外壳里。
+    await page.goto('/app')
     await page.getByRole('button', { name: /^账号菜单：/ }).click()
     await page.getByRole('menuitem', { name: '退出登录', exact: true }).click()
     await expect.poll(() => new URL(page.url()).pathname).toBe('/login')
@@ -412,7 +414,8 @@ test('UI logout and a second login never show the previous owner cache when iden
     // 侧栏入口已移除；登录身份在公开页同样生效，故直接走 /transfer。
     await page.goto('/transfer')
     await expect(page.getByRole('alert')).toContainText('收发身份暂时无法恢复')
-    await page.getByRole('tab', { name: '收发记录', exact: true }).click()
+    // 身份不可用时整页收成一个恢复状态，不渲染可切换的空 Tabs。
+    await expect(page.getByRole('tab', { name: '收发记录', exact: true })).toHaveCount(0)
     await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0)
     await expect(page.getByRole('article', { name: `发件包 ${title}`, exact: true })).toHaveCount(0)
     await expect(page.getByText(title, { exact: true })).toHaveCount(0)
@@ -420,7 +423,9 @@ test('UI logout and a second login never show the previous owner cache when iden
     await page.unroute('**/api/v1/transfer-identity')
     await page.getByRole('button', { name: '重新检查收发身份', exact: true }).click()
     await expect(page.getByRole('alert')).toHaveCount(0)
-    await expect(page.getByRole('heading', { name: '收发记录', exact: true })).toBeVisible()
+    // 流转页不再有重复的「收发记录」面板标题；身份恢复后以记录区的空态为准。
+    await page.getByRole('tab', { name: '收发记录', exact: true }).click()
+    await expect(page.getByText(/还没有(发送|收到)记录/)).toBeVisible()
     await expect(page.getByRole('article', { name: `发件包 ${title}`, exact: true })).toHaveCount(0)
     expect((await page.request.get(`/api/v1/transfers/${send.id}`)).status()).toBe(404)
   } finally {

@@ -58,10 +58,7 @@ export function AppHomePage() {
           <time className={css.welcomeDate} dateTime={now.toISOString()}>{formatWelcomeDate(now)}</time>
           <h1 className={css.pageTitle}>{displayName ? `${timeGreeting(now)}，${displayName}` : '我的文件'}</h1>
         </div>
-        <Button variant="secondary" onClick={openSearchDialog}>
-          <IconSearch size={16} />
-          搜索
-        </Button>
+        <Button variant="secondary" onClick={openSearchDialog} icon={<IconSearch size={16} />}>搜索</Button>
       </header>
 
       <div className={css.workspace}>

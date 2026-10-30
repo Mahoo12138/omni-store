@@ -13,13 +13,15 @@ import {
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
-import { ExternalLinkButton } from '../components/ui/LinkButton'
+import { ExternalLinkButton, LinkButton } from '../components/ui/LinkButton'
+import { Tooltip } from '../components/ui/Tooltip'
 import { Banner } from '../components/shell/Banner'
+import { StateView, type StateTone } from '../components/shell/StateView'
 import { Image, Input } from '@fluentui/react-components'
 import { PreviewModal } from '../preview/PreviewModal'
 import { PreviewContent, type PreviewItem } from '../preview/PreviewContent'
 import { resolvePreview } from '../preview/resolver'
-import { IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconKey, IconLink, IconList } from '../components/ui/Icon'
+import { IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconKey, IconList } from '../components/ui/Icon'
 import { formatDate } from '../utils/format'
 import { useStyles as useFtStyles } from '../components/files/FileTable.styles'
 import { useStyles } from './PublicShare.styles'
@@ -46,18 +48,33 @@ export function PublicSharePage() {
   if (info.isPending) return <PublicFrame><div className={css.empty}>正在加载分享…</div></PublicFrame>
 
   // 1.2.0：过期 / 次数用完不再伪装成 404，访客能看到明确状态（docs/design/share-preview-system.md）。
+  // 只有带明确业务码的响应才是终态；网络/实例故障保留重试，不能误报「分享不存在」。
   if (info.isError || !info.data) {
     const code = info.error instanceof ApiRequestError ? info.error.code : ''
     if (code === 'SHARE_EXPIRED') {
-      return <ShareStatus title="分享已过期" hint="该分享已超过有效期，无法继续访问。请联系分享者重新分享。" />
+      return <ShareStatus title="分享已过期" hint="该分享已超过有效期，无法继续访问。" label="有效期已结束" statusHint="请联系分享者重新分享" />
     }
     if (code === 'SHARE_EXHAUSTED') {
-      return <ShareStatus title="下载次数已用完" hint="该分享的下载次数已达上限，无法继续访问。请联系分享者重新分享。" />
+      return <ShareStatus title="下载次数已用完" hint="该分享的下载次数已达上限，无法继续访问。" label="下载额度已用完" statusHint="请联系分享者重新分享" />
+    }
+    if (code === 'FILE_NOT_FOUND') {
+      return (
+        <ShareStatus
+          title="分享不存在或已失效"
+          hint="链接可能已被撤销或不存在。"
+          label="链接无效"
+          tone="neutral"
+          statusHint="请向分享者确认链接"
+        />
+      )
     }
     return (
       <ShareStatus
-        title="分享不存在或已失效"
-        hint="链接可能已被撤销或不存在。请向分享者确认链接是否正确。"
+        title="暂时无法打开此分享"
+        hint="无法连接到实例服务，请稍后重试。"
+        label="实例服务未响应"
+        statusHint="如持续出现，请联系分享者确认"
+        action={<Button onClick={() => info.refetch()}>重新加载</Button>}
       />
     )
   }
@@ -86,15 +103,38 @@ export function PublicSharePage() {
     : <PublicDirectory shareKey={shareKey} info={info.data} path={search.path} page={search.page} />
 }
 
-function ShareStatus({ title, hint }: { title: string; hint: string }) {
-  const css = useStyles()
+function ShareStatus({
+  title,
+  hint,
+  label,
+  statusHint,
+  tone = 'warning',
+  action,
+}: {
+  title: string
+  hint: string
+  label: string
+  statusHint?: string
+  tone?: StateTone
+  action?: React.ReactNode
+}) {
   return (
     <PublicFrame>
-      <div className={css.empty}>
-        <span className={css.unlockIcon}><IconLink size={28} /></span>
-        <h1>{title}</h1>
-        <p>{hint}</p>
-      </div>
+      <StateView
+        kind="error"
+        brand
+        eyebrow="分享链接 · 访问状态"
+        titleAs={1}
+        title={title}
+        description={hint}
+        action={
+          <>
+            {action}
+            <LinkButton variant={action ? 'secondary' : 'primary'} to="/">返回公开网盘</LinkButton>
+          </>
+        }
+        status={{ tone, label, hint: statusHint }}
+      />
     </PublicFrame>
   )
 }
@@ -251,22 +291,33 @@ function PublicDirectory({ shareKey, info, path, page }: { shareKey: string; inf
             </div>
           ))}
         </div>
+      ) : browse.isError ? (
+        <StateView
+          kind="error"
+          icon={<IconFolder size={22} />}
+          title="目录暂不可访问"
+          description="无法读取这个目录。分享可能已经失效，或实例服务暂时不可用。"
+          action={<Button onClick={() => browse.refetch()}>重新加载目录</Button>}
+        />
       ) : (
         <FileTable
-          entries={browse.isError ? [] : entries}
+          entries={entries}
           loading={browse.isPending}
           showType
-          emptyTitle={browse.isError ? '目录不可访问' : '目录为空'}
-          emptyHint={browse.isError ? '分享可能已经失效。' : undefined}
+          emptyTitle="目录为空"
           onOpenDir={(name) => navigate([...segments, name].join('/'))}
           onOpenFile={openOrDownload}
           fileHref={(entry) => publicShareRawUrl(shareKey, childPath(entry.name))}
           renderActions={(entry) => entry.type === 'file' ? (
             <span className={ft.actions}>
-              <button className={ft.actionBtn} onClick={() => openOrDownload(entry)} title={resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported' ? '预览' : '下载'} aria-label={`${resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported' ? '预览' : '下载'} ${entry.name}`}>
-                <IconImage size={16} />
-              </button>
-              <a className={ft.actionBtn} href={publicShareRawUrl(shareKey, childPath(entry.name), true)} title="下载" aria-label={`下载 ${entry.name}`}><IconDownload size={16} /></a>
+              <Tooltip content={resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported' ? '预览' : '下载'}>
+                <button className={ft.actionBtn} onClick={() => openOrDownload(entry)} aria-label={`${resolvePreview({ name: entry.name, size: entry.size }) !== 'unsupported' ? '预览' : '下载'} ${entry.name}`}>
+                  <IconImage size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip content="下载">
+                <a className={ft.actionBtn} href={publicShareRawUrl(shareKey, childPath(entry.name), true)} aria-label={`下载 ${entry.name}`}><IconDownload size={16} /></a>
+              </Tooltip>
             </span>
           ) : null}
         />

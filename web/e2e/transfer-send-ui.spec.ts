@@ -140,7 +140,7 @@ for (const requireCode of [true, false]) test(`optional pickup code and password
     await page.getByRole('button', { name: '发送设置', exact: true }).click()
     await page.getByRole('checkbox', { name: '启用取件码', exact: true }).setChecked(requireCode)
     await page.getByLabel('访问密码', { exact: true }).fill('Pickup-Pass-1')
-    await page.locator('details').getByRole('tab', { name: '文件', exact: true }).click()
+    await page.getByRole('tab', { name: '文件', exact: true }).click()
     await page.getByLabel('下载次数上限', { exact: true }).fill('3')
     await page.getByTestId('transfer-upload-files').setInputFiles({ name: 'secret.txt', mimeType: 'text/plain', buffer: Buffer.from('ENCRYPTED') })
     const creation = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/transfers' && response.request().method() === 'POST')

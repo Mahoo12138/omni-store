@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement } from 'react'
+import { forwardRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { Button as FluentButton, makeStyles, tokens } from '@fluentui/react-components'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerGhost' | 'ghost'
@@ -63,10 +63,14 @@ export function useButtonVariant(variant: ButtonVariant) {
   } as const
 }
 
-export function Button({ variant = 'primary', className, icon, size, iconPosition, children, ...props }: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'primary', className, icon, size, iconPosition, children, ...props },
+  ref,
+) {
   const { appearance, extra } = useButtonVariant(variant)
   return (
     <FluentButton
+      ref={ref}
       appearance={appearance}
       className={[extra, className].filter(Boolean).join(' ')}
       icon={icon}
@@ -77,4 +81,4 @@ export function Button({ variant = 'primary', className, icon, size, iconPositio
       {children}
     </FluentButton>
   )
-}
+})

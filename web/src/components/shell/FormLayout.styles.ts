@@ -10,7 +10,8 @@ export const useStyles = makeStyles({
   grid: {
     'display': 'grid',
     'gridTemplateColumns': 'minmax(0, 1fr)',
-    ...shorthands.gap(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    // 字段之间 20px：16px 在带 hint 的字段上会显得挤（hint 与下个 label 贴住）。
+    ...shorthands.gap(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
     'minWidth': '0px',
   },
   gridTwo: {

@@ -4,7 +4,7 @@ import griffel from '@griffel/vite-plugin'
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, '.', '')
-  const backend = process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
+  const backend = process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || 'http://localhost:18080'
   return {
     plugins: [
       react(),
@@ -21,6 +21,8 @@ export default defineConfig(({ mode, command }) => {
       proxy: {
         '/api': backend,
         '/raw': backend,
+        // 只代理原始文件，/public/* 其余路径是 SPA 自己的公开浏览页。
+        '/public/raw': backend,
         '/i': backend,
         '/dav': backend,
       },

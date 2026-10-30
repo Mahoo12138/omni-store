@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ApiRequestError } from '../api/client'
 import { browsePublic, rawUrl } from '../api/public'
 import { PublicBreadcrumb } from '../components/shell/PublicBreadcrumb'
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { PageHeader } from '../components/shell/PageHeader'
+import { StateView } from '../components/shell/StateView'
 import { FileTable } from '../components/files/FileTable'
 import { Button } from '../components/ui/Button'
+import { Tooltip } from '../components/ui/Tooltip'
 import {
   EntryIcon,
   IconDownload,
@@ -85,6 +88,9 @@ export function PublicBrowsePage() {
     return items.filter((e) => e.name.toLowerCase().includes(q))
   }, [browse.data, filter])
 
+  const missing = browse.error instanceof ApiRequestError && browse.error.code === 'FILE_NOT_FOUND'
+  const parentPath = segments.slice(0, -1).join('/')
+
   return (
     <PublicFrame>
       <PageHeader title="公开网盘" />
@@ -93,105 +99,130 @@ export function PublicBrowsePage() {
           <PublicBreadcrumb segments={segments} onNavigate={goTo} />
         </header>
 
-        <div className={css.browsePanel}>
-          <div className={ft.toolbar}>
-            <div className={css.readOnlyNotice} role="note">
-              <IconInfo size={15} />
-              <span>公开目录仅支持预览和下载</span>
-            </div>
-            <div className={ft.toolbarGroup}>
-              <span className={ft.searchBox}>
-                <span className={ft.searchIcon}>
-                  <IconSearch size={16} />
-                </span>
-                <input
-                  className={ft.searchInput}
-                  placeholder="搜索文件或文件夹"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-              </span>
-              <ViewSwitcher
-                ariaLabel="视图切换"
-                iconOnly
-                value={view}
-                onChange={(next) => setView(next as ViewMode)}
-                options={[
-                  { value: 'list', label: '列表视图', icon: <IconList size={16} />, title: '列表视图' },
-                  { value: 'grid', label: '网格视图', icon: <IconGrid size={16} />, title: '网格视图' },
-                ]}
-              />
-              <Button
-                variant="ghost"
-                aria-label="刷新目录"
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['public-browse'] })}
-                title="刷新"
-              >
-                <IconRefresh />
-              </Button>
-            </div>
-          </div>
-
-          {view === 'list' ? (
-            <FileTable
-              entries={browse.isError ? [] : entries}
-              loading={browse.isPending}
-              emptyTitle={browse.isError ? '路径不存在或不可访问' : filter ? '没有匹配的条目' : '目录为空'}
-              emptyHint={browse.isError ? '目录可能已被取消公开。' : undefined}
-              onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
-              onOpenFile={openPreview}
-              fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
-              fileTarget="_blank"
-              renderActions={(entry) =>
-                entry.type === 'file' ? (
-                  <span className={ft.actions}>
-                    <a
-                      className={ft.actionBtn}
-                      href={rawUrl(`${virtualPath}/${entry.name}`, true)}
-                      aria-label={`下载 ${entry.name}`}
-                      title="下载"
-                    >
-                      <IconDownload size={16} />
-                    </a>
+        {browse.isError ? (
+          <StateView
+            kind="error"
+            brand
+            eyebrow="公开网盘 · 目录访问"
+            title={missing ? '此目录不存在或不可访问' : '无法读取公开目录'}
+            description={
+              missing
+                ? '目录可能已被取消公开，或路径已经变更。可以返回上一级继续浏览。'
+                : '实例服务暂时无法连接，请稍后重新加载。'
+            }
+            action={
+              <>
+                {missing ? null : <Button onClick={() => browse.refetch()}>重新加载</Button>}
+                <Button variant={missing ? 'primary' : 'secondary'} onClick={() => goTo(parentPath)}>
+                  {segments.length ? '返回上一级' : '返回公开网盘'}
+                </Button>
+              </>
+            }
+            status={{
+              tone: missing ? 'neutral' : 'warning',
+              label: missing ? '目录不可访问' : '实例服务未响应',
+              hint: segments.length ? `当前路径：/${virtualPath}` : undefined,
+            }}          />
+        ) : (
+          <div className={css.browsePanel}>
+            <div className={ft.toolbar}>
+              <div className={css.readOnlyNotice} role="note">
+                <IconInfo size={15} />
+                <span>公开目录仅支持预览和下载</span>
+              </div>
+              <div className={ft.toolbarGroup}>
+                <span className={ft.searchBox}>
+                  <span className={ft.searchIcon}>
+                    <IconSearch size={16} />
                   </span>
-                ) : null
-              }
-            />
-          ) : (
-            <FileGrid
-              entries={browse.isError ? [] : entries}
-              loading={browse.isPending}
-              onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
-              onOpenFile={openPreview}
-              virtualPath={virtualPath}
-            />
-          )}
-
-          {previewIndex !== null && previewItems.length > 0 ? (
-            <PreviewModal
-              items={previewItems}
-              index={Math.min(previewIndex, previewItems.length - 1)}
-              onIndexChange={setPreviewIndex}
-              onClose={() => setPreviewIndex(null)}
-            />
-          ) : null}
-
-          {browse.isSuccess && (browse.data.has_next || page > 1) && (
-            <div className={ft.pager}>
-              <span>共 {browse.data.total} 项</span>
-              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                上一页
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!browse.data.has_next}
-                onClick={() => setPage(page + 1)}
-              >
-                下一页
-              </Button>
+                  <input
+                    className={ft.searchInput}
+                    placeholder="搜索文件或文件夹"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                  />
+                </span>
+                <ViewSwitcher
+                  ariaLabel="视图切换"
+                  iconOnly
+                  value={view}
+                  onChange={(next) => setView(next as ViewMode)}
+                  options={[
+                    { value: 'list', label: '列表视图', icon: <IconList size={16} />, title: '列表视图' },
+                    { value: 'grid', label: '网格视图', icon: <IconGrid size={16} />, title: '网格视图' },
+                  ]}
+                />
+                <Button
+                  variant="ghost"
+                  aria-label="刷新目录"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['public-browse'] })}
+                  title="刷新" icon={<IconRefresh />} />
+              </div>
             </div>
-          )}
-        </div>
+
+            {view === 'list' ? (
+              <FileTable
+                entries={entries}
+                loading={browse.isPending}
+                emptyTitle={filter ? '没有匹配的条目' : '目录为空'}
+                emptyHint={filter ? '换个关键词试试。' : undefined}
+                onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+                onOpenFile={openPreview}
+                fileHref={(entry) => rawUrl(`${virtualPath}/${entry.name}`)}
+                fileTarget="_blank"
+                renderActions={(entry) =>
+                  entry.type === 'file' ? (
+                    <span className={ft.actions}>
+                      <Tooltip content="下载">
+                        <a
+                          className={ft.actionBtn}
+                          href={rawUrl(`${virtualPath}/${entry.name}`, true)}
+                          aria-label={`下载 ${entry.name}`}
+                        >
+                          <IconDownload size={16} />
+                        </a>
+                      </Tooltip>
+                    </span>
+                  ) : null
+                }
+              />
+            ) : (
+              <FileGrid
+                entries={entries}
+                loading={browse.isPending}
+                filtered={!!filter.trim()}
+                onOpenDir={(name) => goTo(segments.concat(name).join('/'))}
+                onOpenFile={openPreview}
+                virtualPath={virtualPath}
+              />
+            )}
+
+            {previewIndex !== null && previewItems.length > 0 ? (
+              <PreviewModal
+                items={previewItems}
+                index={Math.min(previewIndex, previewItems.length - 1)}
+                onIndexChange={setPreviewIndex}
+                onClose={() => setPreviewIndex(null)}
+              />
+            ) : null}
+
+            {browse.isSuccess && (browse.data.has_next || page > 1) && (
+              <div className={ft.pager}>
+                <span>共 {browse.data.total} 项</span>
+                <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                  上一页
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={!browse.data.has_next}
+                  onClick={() => setPage(page + 1)}
+                >
+                  下一页
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </PublicFrame>
   )
@@ -201,12 +232,14 @@ export function PublicBrowsePage() {
 function FileGrid({
   entries,
   loading,
+  filtered,
   onOpenDir,
   onOpenFile,
   virtualPath,
 }: {
   entries: FileEntry[]
   loading?: boolean
+  filtered?: boolean
   onOpenDir: (name: string) => void
   onOpenFile: (entry: FileEntry) => void
   virtualPath: string
@@ -227,10 +260,12 @@ function FileGrid({
 
   if (entries.length === 0) {
     return (
-      <div className={css.gridEmpty}>
-        <div className={css.gridEmptyTitle}>目录为空</div>
-        <div>把文件或文件夹放进此目录后会显示在这里。</div>
-      </div>
+      <StateView
+        layout="plain"
+        kind={filtered ? 'filtered' : 'empty'}
+        title={filtered ? '没有匹配的条目' : '目录为空'}
+        description={filtered ? '换个关键词试试。' : '把文件或文件夹放进此目录后会显示在这里。'}
+      />
     )
   }
 

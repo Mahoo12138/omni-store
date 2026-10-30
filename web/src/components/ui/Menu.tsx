@@ -8,6 +8,7 @@ import {
   MenuTrigger,
 } from '@fluentui/react-components'
 import { useStyles } from './Menu.styles'
+import { Tooltip } from './Tooltip'
 
 export interface MenuOption {
   id: string
@@ -27,7 +28,7 @@ interface MenuProps {
   trigger: ReactNode
   items: MenuOption[]
   triggerClassName?: string
-  /** 图标触发器没有可见文字，补一个 title 给鼠标用户。 */
+  /** 图标触发器的悬停提示；缺省回落到 ariaLabel。 */
   triggerTitle?: string
 }
 
@@ -54,16 +55,17 @@ export function Menu({ ariaLabel, trigger, items, triggerClassName, triggerTitle
   const css = useStyles()
   return (
     <FluentMenu>
-      <MenuTrigger>
-        <button
-          type="button"
-          className={triggerClassName ?? css.trigger}
-          aria-label={ariaLabel}
-          title={triggerTitle}
-        >
-          {trigger}
-        </button>
-      </MenuTrigger>
+      <Tooltip content={triggerTitle ?? ariaLabel}>
+        <MenuTrigger>
+          <button
+            type="button"
+            className={triggerClassName ?? css.trigger}
+            aria-label={ariaLabel}
+          >
+            {trigger}
+          </button>
+        </MenuTrigger>
+      </Tooltip>
       <MenuPopover>
         <MenuList aria-label={ariaLabel}>
           {items.map((item) => (

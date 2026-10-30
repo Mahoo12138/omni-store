@@ -92,7 +92,7 @@ test('the chosen mode is persisted to the account, not only to localStorage', as
 test('the preferences pane exposes the same three modes as a radiogroup', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await loginAsAdmin(page)
-  await page.goto('/app/admin?section=preferences')
+  await page.goto('/app/settings?section=preferences')
 
   const group = page.getByRole('radiogroup', { name: '外观主题' })
   await expect(group).toBeVisible()
@@ -141,7 +141,7 @@ test('the preview layer keeps its chrome always-dark while the content panel fol
 
   await page.getByRole('button', { name: '打开存储源 公开演示资料' }).click()
   await page.getByRole('row', { name: /README\.txt/ })
-    .getByRole('button', { name: 'README.txt', exact: true })
+    .getByRole('link', { name: 'README.txt', exact: true })
     .click()
   const dialog = page.getByRole('dialog', { name: '预览 README.txt' })
   await expect(dialog).toBeVisible()
@@ -171,7 +171,7 @@ test('the preview layer keeps its chrome always-dark while the content panel fol
   await page.goto('/app')
   await page.getByRole('button', { name: '打开存储源 公开演示资料' }).click()
   await page.getByRole('row', { name: /README\.txt/ })
-    .getByRole('button', { name: 'README.txt', exact: true })
+    .getByRole('link', { name: 'README.txt', exact: true })
     .click()
   const onLight = await readPreviewColors()
   expect(onLight.overlayBackground).toBe(onDark.overlayBackground)

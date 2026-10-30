@@ -4,15 +4,15 @@ import { FluentProvider } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAuthStatus } from '../../api/auth'
 import { fetchPreferences, updatePreferences } from '../../api/preferences'
-import { appDarkTheme, appLightTheme } from '../../styles/fluentTheme'
-import { themeStore, useTheme } from '../../utils/useTheme'
+import { useAppFluentTheme } from './useAppFluentTheme'
+import { themeStore } from '../../utils/useTheme'
 import { toastError } from '../ui/Toast'
 
 // 主题外壳：把解析后的深浅档位交给 FluentProvider，同时接通服务端偏好。
 // 层级要求：它在 QueryClientProvider 之内、RouterProvider 之外，
 // 因此账号侧的偏好读写不会牵动路由与 toaster 的挂载顺序。
 export function AppThemeProvider({ children }: { children: ReactNode }) {
-  const { resolved } = useTheme()
+  const theme = useAppFluentTheme()
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 60_000 })
   const authenticated = auth.data?.authenticated === true
   const preferences = useQuery({
@@ -48,7 +48,7 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   }, [authenticated])
 
   return (
-    <FluentProvider theme={resolved === 'dark' ? appDarkTheme : appLightTheme} applyStylesToPortals>
+    <FluentProvider theme={theme} applyStylesToPortals>
       {children}
     </FluentProvider>
   )

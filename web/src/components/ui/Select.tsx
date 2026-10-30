@@ -22,7 +22,6 @@ interface SelectProps {
   required?: boolean
   leadingIcon?: ReactNode
   leadingIconVariant?: 'tile' | 'plain'
-  size?: 'compact' | 'default' | 'large'
   width?: 'full' | 'content' | 'wide'
   className?: string
 }
@@ -40,7 +39,6 @@ export function Select({
   disabled,
   leadingIcon,
   leadingIconVariant = 'tile',
-  size = 'default',
   width = 'full',
   className,
 }: SelectProps) {
@@ -68,7 +66,8 @@ export function Select({
       id={id}
       disabled={disabled}
       aria-label={ariaLabel ?? placeholder}
-      size={size === 'compact' ? 'small' : size === 'large' ? 'large' : 'medium'}
+      // 尺寸固定 medium（32px），与 Button / Input 同一档：
+      // 曾在图床历史工具条里用 compact(22px)，和旁边的视图切换按钮显性错位。
       selectedOptions={value ? [value] : []}
       onOptionSelect={(_, data) => {
         if (data.optionValue !== undefined) onValueChange(String(data.optionValue))

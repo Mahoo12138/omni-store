@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
-import { Toaster, useToastController } from '@fluentui/react-components'
+import { createPortal } from 'react-dom'
+import { FluentProvider, Toaster, useToastController } from '@fluentui/react-components'
 import type { ToastIntent } from '@fluentui/react-components'
 import { layout } from '../../styles/layout'
+import { useAppFluentTheme } from '../theme/useAppFluentTheme'
 
 const appStatusToastID = 'app-status'
 
@@ -64,11 +66,13 @@ export function AppToaster() {
 
 // 常驻任务卡（上传/粘贴/批量删除）不走 Toaster：其 CollapseDelayed 高度动画的
 // 结束态不追踪内容变高，进度卡会溢出视口。改为独立 fixed 层，由 Host 组件 portal 渲染。
-// 该层在 React 之外创建、挂在 document.body 上 —— 不在 FluentProvider 子树内，
-// 取不到任何主题 CSS 变量，因此尺寸只能来自 styles/layout.ts（不得写 tokens.var 引用）。
+// 该层容器在 React 之外创建、挂在 document.body 上，取不到主题 CSS 变量，
+// 所以它自己的尺寸只能来自 styles/layout.ts（不得写 tokens.var 引用）。
 let taskLayer: HTMLDivElement | null = null
 
-export function getTaskToastLayer(): HTMLDivElement {
+// 只经 TaskLayerPortal 使用：直接往这层 portal 会绕过 FluentProvider，
+// 卡片里的 tokens.* 全部失效，所以这里不导出。
+function getTaskToastLayer(): HTMLDivElement {
   if (!taskLayer) {
     taskLayer = document.createElement('div')
     Object.assign(taskLayer.style, {
@@ -89,4 +93,20 @@ export function getTaskToastLayer(): HTMLDivElement {
     document.body.appendChild(taskLayer)
   }
   return taskLayer
+}
+
+/**
+ * 把常驻任务卡渲染进上面的独立层。
+ *
+ * 必须自带一层 FluentProvider：Fluent 的主题变量只写在 `.fui-FluentProvider`
+ * 这个类上（`applyStylesToPortals` 也只是沿 React context 传类名，不会写到 :root），
+ * 而该层挂在 body 直下、不在那个子树里。少了这一层，卡片里所有 `tokens.*`
+ * ——内边距、间距、圆角、底色、字号，连同 Fluent ProgressBar——都会塌成初始值。
+ */
+export function TaskLayerPortal({ children }: { children: ReactNode }) {
+  const theme = useAppFluentTheme()
+  return createPortal(
+    <FluentProvider theme={theme}>{children}</FluentProvider>,
+    getTaskToastLayer(),
+  )
 }

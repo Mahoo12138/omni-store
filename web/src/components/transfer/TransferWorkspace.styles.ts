@@ -1,4 +1,4 @@
-import { makeStyles, shorthands } from '@fluentui/react-components'
+import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
 import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
@@ -12,6 +12,107 @@ export const useStyles = makeStyles({
   'display': 'grid',
   ...shorthands.gap('16px'),
   'minWidth': '0px',
+  },
+  // 主导航不再是一排等权文字 Tab，而是两块模式卡 + 尾部记录入口。
+  // 选择器直接瞄准 Fluent Tab 的语义节点，避免覆写库内部类名。
+  modeRail: {
+  'minWidth': '0px',
+  ...shorthands.padding(tokens.spacingVerticalXS),
+  'backgroundColor': tokens.colorNeutralBackground2,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusLarge),
+  '& > [role="tablist"]': {
+    'display': 'grid',
+    'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr) auto',
+    'width': '100%',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  '& [role="tab"]': {
+    'minWidth': '0px',
+    'minHeight': '64px',
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalMNudge),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    'color': tokens.colorNeutralForeground1,
+    'backgroundColor': 'transparent',
+    'justifyContent': 'flex-start',
+    'transitionProperty': 'background-color, color',
+    'transitionDuration': tokens.durationFaster,
+    'transitionTimingFunction': tokens.curveDecelerateMax,
+  },
+  '& [role="tab"]::before, & [role="tab"]::after': {
+    'display': 'none',
+  },
+  '& [role="tab"]:hover:not(:disabled)': {
+    'backgroundColor': tokens.colorNeutralBackground1Hover,
+  },
+  '& [role="tab"][aria-selected="true"]': {
+    'backgroundColor': tokens.colorBrandBackground2,
+    'color': tokens.colorBrandForeground2,
+  },
+  '& [role="tab"][aria-selected="true"]:hover': {
+    'backgroundColor': tokens.colorBrandBackground2Hover,
+  },
+  '& [role="tab"]:disabled': {
+    'color': tokens.colorNeutralForegroundDisabled,
+    'backgroundColor': 'transparent',
+  },
+  // 记录入口与两块主模式分开，视觉上是第三个动作而不是第三个等权 Tab。
+  '& [role="tab"]:last-of-type': {
+    'flex': '0 0 auto',
+    'minWidth': '148px',
+    'borderInlineStartWidth': tokens.strokeWidthThin,
+    'borderInlineStartStyle': 'solid',
+    'borderInlineStartColor': tokens.colorNeutralStroke2,
+  },
+  [media.sm]: {
+    '& > [role="tablist"]': {
+      'gridTemplateColumns': 'minmax(0, 1fr) minmax(0, 1fr)',
+    },
+    '& [role="tab"]:last-of-type': {
+      'gridColumn': '1 / -1',
+      'minWidth': '0px',
+      'borderInlineStartWidth': '0px',
+      'borderTopWidth': tokens.strokeWidthThin,
+      'borderTopStyle': 'solid',
+      'borderTopColor': tokens.colorNeutralStroke2,
+    },
+  },
+  },
+  modeTabContent: {
+  'display': 'flex',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'width': '100%',
+  'minWidth': '0px',
+  },
+  modeTabIcon: {
+  'display': 'grid',
+  'placeItems': 'center',
+  'width': tokens.spacingHorizontalXXXL,
+  'height': tokens.spacingHorizontalXXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  'backgroundColor': tokens.colorNeutralBackground1,
+  'color': 'inherit',
+  },
+  modeTabText: {
+  'display': 'grid',
+  ...shorthands.gap('2px'),
+  'minWidth': '0px',
+  'textAlign': 'left',
+  },
+  modeTabLabel: {
+  'fontSize': tokens.fontSizeBase400,
+  'lineHeight': tokens.lineHeightBase400,
+  'fontWeight': tokens.fontWeightSemibold,
+  'color': 'inherit',
+  },
+  modeTabHint: {
+  'fontSize': tokens.fontSizeBase200,
+  'lineHeight': tokens.lineHeightBase200,
+  'fontWeight': tokens.fontWeightRegular,
+  'color': 'inherit',
+  'opacity': 0.64,
   },
   panel: {
   // 只做防溢出；Tabs.Panel 的 hidden 语义交给浏览器默认样式。
@@ -64,17 +165,9 @@ export const useStyles = makeStyles({
   'maxWidth': '65ch',
   'overflowWrap': 'anywhere',
   },
-  link: {
-  'color': 'var(--colorBrandForeground1)',
-  'fontWeight': 'var(--fontWeightSemibold)',
-  'textDecoration': 'none',
-  '&:hover': {
-    'textDecoration': 'underline',
-  },
-  },
   fields: {
   'display': 'grid',
-  ...shorthands.gap('18px'),
+  ...shorthands.gap('20px'),
   'minWidth': '0px',
   ...shorthands.margin('0px'),
   ...shorthands.padding('0px'),
@@ -178,33 +271,137 @@ export const useStyles = makeStyles({
   ...shorthands.padding('12px', '0'),
   'minWidth': '0px',
   },
-  recordList: {
-  'display': 'grid',
-  ...shorthands.gap('12px'),
+  // 收发记录：发送/收集混排成一张台账，用类型图标与行分隔代替两层 Tab。
+  ledgerHeader: {
+  'display': 'flex',
+  'alignItems': 'flex-end',
+  'justifyContent': 'space-between',
+  'flexWrap': 'wrap',
+  ...shorthands.gap(tokens.spacingHorizontalL),
   'minWidth': '0px',
   },
-  recordRow: {
+  ledgerCopy: {
+  'display': 'grid',
+  ...shorthands.gap(tokens.spacingVerticalXXS),
+  'minWidth': '0px',
+  },
+  ledgerTitle: {
+  ...shorthands.margin('0px'),
+  'fontSize': tokens.fontSizeBase500,
+  'lineHeight': tokens.lineHeightBase500,
+  'fontWeight': tokens.fontWeightSemibold,
+  'letterSpacing': '-0.01em',
+  'color': tokens.colorNeutralForeground1,
+  },
+  ledgerCounts: {
   'display': 'flex',
   'flexWrap': 'wrap',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  ledgerCount: {
+  'display': 'inline-flex',
   'alignItems': 'center',
-  'justifyContent': 'space-between',
-  ...shorthands.gap('24px'),
-  ...shorthands.padding('20px'),
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'background': 'var(--colorNeutralBackground1)',
+  ...shorthands.gap(tokens.spacingHorizontalSNudge),
+  'height': tokens.spacingHorizontalXXXL,
+  ...shorthands.padding('0px', tokens.spacingHorizontalM),
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusCircular),
+  'backgroundColor': tokens.colorNeutralBackground2,
+  'color': tokens.colorNeutralForeground2,
+  'fontSize': tokens.fontSizeBase200,
+  'fontWeight': tokens.fontWeightSemibold,
+  'whiteSpace': 'nowrap',
+  '&[data-kind="send"]': {
+    'backgroundColor': tokens.colorBrandBackground2,
+    ...shorthands.borderColor('transparent'),
+    'color': tokens.colorBrandForeground2,
+  },
+  },
+  recordList: {
+  'display': 'grid',
   'minWidth': '0px',
-  'transitionProperty': 'border-color, background-color', 'transitionDuration': 'var(--durationSlower)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
+  'overflow': 'hidden',
+  'backgroundColor': tokens.colorNeutralBackground1,
+  ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke2),
+  ...shorthands.borderRadius(tokens.borderRadiusLarge),
+  },
+  recordRow: {
+  'display': 'grid',
+  'gridTemplateColumns': '32px minmax(0, 1fr) auto',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalL),
+  ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXL),
+  'minWidth': '0px',
+  'transitionProperty': 'background-color',
+  'transitionDuration': tokens.durationFaster,
+  'transitionTimingFunction': tokens.curveDecelerateMax,
+  '& + &': {
+    'borderTopWidth': tokens.strokeWidthThin,
+    'borderTopStyle': 'solid',
+    'borderTopColor': tokens.colorNeutralStroke2,
+  },
   '&:hover': {
-    ...shorthands.borderColor('var(--colorNeutralStroke1)'),
-    'backgroundColor': 'var(--colorNeutralBackground1Hover)',
+    'backgroundColor': tokens.colorNeutralBackground1Hover,
+  },
+  [media.sm]: {
+    'gridTemplateColumns': '32px minmax(0, 1fr)',
+    'gridTemplateAreas': '"icon main" "icon action"',
+    'rowGap': tokens.spacingVerticalS,
+    'alignItems': 'start',
+    ...shorthands.padding(tokens.spacingVerticalL),
+  },
+  },
+  recordIcon: {
+  'display': 'grid',
+  'placeItems': 'center',
+  'width': tokens.spacingHorizontalXXXL,
+  'height': tokens.spacingHorizontalXXXL,
+  'flexShrink': 0,
+  ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  'backgroundColor': tokens.colorBrandBackground2,
+  'color': tokens.colorBrandForeground2,
+  '&[data-kind="collect"]': {
+    'backgroundColor': tokens.colorNeutralBackground3,
+    'color': tokens.colorNeutralForeground2,
+  },
+  [media.sm]: {
+    'gridArea': 'icon',
+    'alignSelf': 'start',
   },
   },
   recordMain: {
   'display': 'grid',
-  ...shorthands.gap('8px'),
+  ...shorthands.gap(tokens.spacingVerticalXS),
   'minWidth': '0px',
-  'flex': '1 1 240px',
+  [media.sm]: {
+    'gridArea': 'main',
+  },
+  },
+  recordTitleRow: {
+  'display': 'flex',
+  'flexWrap': 'wrap',
+  'alignItems': 'center',
+  ...shorthands.gap(tokens.spacingHorizontalS),
+  'minWidth': '0px',
+  },
+  recordKind: {
+  'fontSize': tokens.fontSizeBase200,
+  'fontWeight': tokens.fontWeightSemibold,
+  'letterSpacing': '0.04em',
+  'color': tokens.colorNeutralForeground3,
+  '&[data-kind="send"]': {
+    'color': tokens.colorBrandForeground2,
+  },
+  },
+  recordAction: {
+  'display': 'flex',
+  'alignItems': 'center',
+  'justifyContent': 'flex-end',
+  'flexShrink': 0,
+  [media.sm]: {
+    'gridArea': 'action',
+    'justifySelf': 'start',
+  },
   },
   meta: {
   'display': 'flex',
@@ -253,25 +450,11 @@ export const useStyles = makeStyles({
     'gridTemplateColumns': 'minmax(0, 1fr)',
   },
   },
-  service: {
+  serviceRow: {
   'display': 'flex',
   'alignItems': 'center',
   'flexWrap': 'wrap',
   ...shorthands.gap('8px'),
-  'color': 'var(--colorNeutralBackground1)',
-  'fontSize': '13px',
-  },
-  serviceText: {
-  'display': 'grid',
-  ...shorthands.gap('4px'),
-  },
-  serviceDot: {
-  'width': '8px',
-  'height': '8px',
-  ...shorthands.borderRadius('999px'),
-  'background': 'var(--colorNeutralStroke1)',
-  '&[data-enabled="true"]': {
-    'background': 'var(--colorPaletteGreenForeground1)',
-  },
+  'minWidth': '0px',
   },
 })

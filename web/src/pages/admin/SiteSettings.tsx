@@ -16,10 +16,11 @@ import { Checkbox, Input } from '@fluentui/react-components'
 import { Banner } from '../../components/shell/Banner'
 import { toastError, toastSuccess } from '../../components/ui/Toast'
 import { FormField, FormLayout } from '../../components/shell/FormLayout'
-import { IconCloud, IconDownload, IconGlobe, IconImage } from '../../components/ui/Icon'
+import { IconCloud, IconDownload, IconGlobe, IconImage, IconInfo, IconTag } from '../../components/ui/Icon'
 import { Select } from '../../components/ui/Select'
-import { useStyles } from './AdminOverview.styles'
+import { useStyles } from './sections/site.styles'
 import { useStyles as useSiteStyles } from './SiteSettings.styles'
+import { SectionCard } from './SectionCard'
 
 type SiteTab = 'services' | 'general'
 const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string; icon: ReactElement }[] = [
@@ -80,10 +81,10 @@ function SiteServicesSection() {
   if (!capabilities.data || !sources.data) {
     const error = capabilities.error || sources.error
     return (
-      <section className={css.section}><div className={css.sectionBody}>
+      <SectionCard icon={<IconCloud size={18} />} tone="brand" hint="站点服务">
         {error ? <Banner intent="error" action={<Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button>}>站点服务加载失败：{error.message}</Banner>
           : <span role="status" className={css.kvLabel}>正在加载站点服务…</span>}
-      </div></section>
+      </SectionCard>
     )
   }
   const editingBinding = capabilities.data.find((item) => item.capability === editing)
@@ -94,34 +95,32 @@ function SiteServicesSection() {
         const binding = capabilities.data.find((item) => item.capability === service.key)
         const source = sources.data.find((item) => item.key === binding?.source_key)
         return (
-          <article className={css.section} key={service.key} aria-label={`站点服务 ${service.name}`}>
-            <header className={site.serviceHeader}>
-              <span className={site.serviceIcon} aria-hidden="true">{service.icon}</span>
-              <div className={site.serviceCopy}>
-                {/* 状态直接跟在服务名后面，不再单列一行「服务状态」。 */}
-                <div className={site.serviceTitleRow}>
-                  <h3 className={css.sectionTitle}>{service.name}</h3>
-                  {!binding ? <Badge color="red">配置缺失</Badge>
-                    : !binding.source_key ? <Badge color="gray">未绑定</Badge>
-                    : !binding.enabled ? <Badge color="gray">已关闭</Badge>
-                    : !source ? <Badge color="red">绑定源不存在</Badge>
-                    : source.is_disabled ? <Badge color="red">存储源已禁用</Badge>
-                    : <Badge color="green">已启用</Badge>}
-                </div>
-                <p className={css.sectionHint}>{service.description}</p>
-              </div>
-              <Button variant="secondary" disabled={!binding} onClick={() => setEditing(service.key)}>配置</Button>
-            </header>
+          <SectionCard
+            key={service.key}
+            as="article"
+            ariaLabel={`站点服务 ${service.name}`}
+            icon={service.icon}
+            tone="brand"
+            title={service.name}
+            titleAs="h3"
+            hint={service.description}
+            badge={!binding ? <Badge color="red">配置缺失</Badge>
+              : !binding.source_key ? <Badge color="gray">未绑定</Badge>
+              : !binding.enabled ? <Badge color="gray">已关闭</Badge>
+              : !source ? <Badge color="red">绑定源不存在</Badge>
+              : source.is_disabled ? <Badge color="red">存储源已禁用</Badge>
+              : <Badge color="green">已启用</Badge>}
+            actions={<Button variant="secondary" disabled={!binding} onClick={() => setEditing(service.key)}>配置</Button>}
+            bodyPadding="none"
+          >
             <div className={site.serviceBody}>
               <dl className={site.facts}>
-                <div><dt>存储源</dt><dd className={site.source}>
-                  <span>{binding?.source_name || '未绑定'}</span>
-                  {source ? <span className={site.path}>{source.root_path}</span> : null}
-                </dd></div>
+                {/* 只展示源名称：真实目录属于存储源维护页的信息，服务配置页不重复暴露。 */}
+                <div><dt>存储源</dt><dd>{binding?.source_name || '未绑定'}</dd></div>
               </dl>
               {service.key === 'image_bed' && binding ? <ImageBedOptions usable={binding.enabled && !!source && !source.is_disabled} /> : null}
             </div>
-          </article>
+          </SectionCard>
         )
       })}
       {editingBinding && editingService ? (
@@ -142,7 +141,6 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const site = useSiteStyles()
   const queryClient = useQueryClient()
   const [enabled, setEnabled] = useState(binding.enabled)
   const [sourceKey, setSourceKey] = useState(binding.source_key ?? '')
@@ -188,7 +186,6 @@ function SiteServiceDialog({ binding, service, sources, onClose, onSaved }: {
         <Select ariaLabel="绑定存储源" value={sourceKey} disabled={mutation.isPending} onValueChange={setSourceKey}
           options={[{ value: '', label: '未绑定' }, ...sources.map((source) => ({ value: source.key, label: `${source.name}${source.is_disabled ? '（已禁用）' : ''}`, disabled: source.is_disabled }))]} />
       </FormField>
-      {sourceKey ? <p className={site.path}>{sources.find((source) => source.key === sourceKey)?.root_path}</p> : null}
       {conflict ? <Banner intent="warning">{conflict}</Banner> : error ? <Banner intent="error">{error}</Banner> : null}
     </DialogWrap>
   )
@@ -280,22 +277,24 @@ function ImageRetentionDialog({ retention, onClose }: { retention: ImageBedReten
 }
 
 function SiteRuntimeSection() {
-  const css = useStyles()
   const site = useSiteStyles()
   const health = useQuery({ queryKey: ['health'], queryFn: () => apiFetch<{ version: string }>('/api/v1/health') })
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false })
   return (
-    <section className={css.section}>
-      <div className={css.sectionHeader}><h3 className={css.sectionTitle}>运行信息</h3></div>
-      <div className={css.sectionBody}>
-        <dl className={site.facts}>
-          <div><dt>运行版本</dt><dd>{health.data?.version ?? '—'}</dd></div>
-          <div><dt>对外地址</dt><dd>{system.data?.public_url || '—'}</dd></div>
-        </dl>
-        {system.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void system.refetch()}>重试</Button>}>运行信息读取失败：{system.error.message}</Banner> : null}
-        <p className={site.hint}>监听地址、对外地址和上传限制由 config.yaml 与 OMNISTORE_* 环境变量管理，修改后需重启服务。</p>
-      </div>
-    </section>
+    <SectionCard
+      icon={<IconInfo size={18} />}
+      tone="brand"
+      title="运行信息"
+      titleAs="h3"
+      hint="实例版本与对外地址。"
+    >
+      <dl className={site.facts}>
+        <div><dt>运行版本</dt><dd>{health.data?.version ?? '—'}</dd></div>
+        <div><dt>对外地址</dt><dd>{system.data?.public_url || '—'}</dd></div>
+      </dl>
+      {system.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void system.refetch()}>重试</Button>}>运行信息读取失败：{system.error.message}</Banner> : null}
+      <p className={site.hint}>监听地址、对外地址和上传限制由 config.yaml 与 OMNISTORE_* 环境变量管理，修改后需重启服务。</p>
+    </SectionCard>
   )
 }
 function BackupSection() {
@@ -307,34 +306,30 @@ function BackupSection() {
   })
 
   return (
-    <section className={css.section}>
-      <div className={css.sectionHeader}>
-        <h3 className={css.sectionTitle}>导出系统配置包</h3>
-        <p className={css.sectionHint}>生成当前实例的可迁移配置快照，用于人工备份或故障恢复。</p>
-      </div>
-      <div className={css.sectionBody}>
-        <div className={css.exportSummary}>
-          <span className={css.exportIcon}><IconDownload size={22} /></span>
-          <div className={css.exportCopy}>
-            <strong>数据库、配置与密钥材料</strong>
-            <span className={css.exportCopySecondary}>包含 SQLite 一致性快照、生效配置、恢复说明，以及 keys 目录中的普通文件。</span>
-          </div>
-          <div className={css.exportAction}>
-            <Button
-              onClick={() => exportMutation.mutate()}
-              disabled={exportMutation.isPending}
-            >
-              <IconDownload size={16} />
-              {exportMutation.isPending ? '正在生成…' : '导出配置包'}
-            </Button>
-          </div>
+    <SectionCard
+      icon={<IconDownload size={18} />}
+      tone="brand"
+      title="导出系统配置包"
+      titleAs="h3"
+      hint="生成当前实例的可迁移配置快照，用于人工备份或故障恢复。"
+    >
+      <div className={css.exportSummary}>
+        <span className={css.exportIcon}><IconDownload size={22} /></span>
+        <div className={css.exportCopy}>
+          <strong>数据库、配置与密钥材料</strong>
+          <span className={css.exportCopySecondary}>包含 SQLite 一致性快照、生效配置、恢复说明，以及 keys 目录中的普通文件。</span>
         </div>
-        <div className={css.exportNotice} role="note">
-          <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
-          <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
+        <div className={css.exportAction}>
+          <Button
+            onClick={() => exportMutation.mutate()}
+            disabled={exportMutation.isPending} icon={<IconDownload size={16} />}>{exportMutation.isPending ? '正在生成…' : '导出配置包'}</Button>
         </div>
       </div>
-    </section>
+      <div className={css.exportNotice} role="note">
+        <strong>配置包包含敏感系统数据，请按备份凭据保管。</strong>
+        <span className={css.exportCopySecondary}>不会包含存储源中的真实文件、缓存、上传临时文件或日志；这些内容需要单独备份。</span>
+      </div>
+    </SectionCard>
   )
 }
 
@@ -372,44 +367,41 @@ function BrandingSection() {
   const currentName = branding.data?.instance_name ?? 'OmniStore'
 
   return (
-    <section className={css.section}>
-      <header className={css.sectionHeaderWithAction}>
-        <div className={css.sectionHeaderCopy}>
-          <h3 id="branding-title" className={css.sectionTitle}>品牌信息</h3>
-          <p className={css.sectionHint}>
-            实例名称显示在公开页与分享页顶部及页脚；清空保存可恢复默认名称 OmniStore。
-          </p>
-        </div>
-        <div className={css.sectionHeaderAction}>
-          <Button
-            variant="secondary" disabled={!branding.data || save.isPending}
-            onClick={() => {
-              setName(currentName)
-              setEditing((open) => !open)
-              setMsg('')
-            }}
-          >
-            {editing ? '取消' : '修改名称'}
-          </Button>
-        </div>
-      </header>
-      <div className={css.sectionBody}>
-        {editing ? (
-          <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-            <FormField label="实例名称" required error={msg} info="1-64 个字符，展示于公开侧页面。">
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
-            </FormField>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="submit" disabled={save.isPending}>{save.isPending ? '保存中…' : '保存'}</Button>
-            </div>
-          </form>
-        ) : (
-          branding.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button>}>品牌信息读取失败：{branding.error.message}</Banner> : <div className={css.kvRow}>
-            <span className={css.kvLabel}>实例名称</span>
-            <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
+    <SectionCard
+      icon={<IconTag size={18} />}
+      tone="brand"
+      title="品牌信息"
+      titleId="branding-title"
+      titleAs="h3"
+      hint="实例名称显示在公开页与分享页顶部及页脚；清空保存可恢复默认名称 OmniStore。"
+      actions={(
+        <Button
+          variant="secondary" disabled={!branding.data || save.isPending}
+          onClick={() => {
+            setName(currentName)
+            setEditing((open) => !open)
+            setMsg('')
+          }}
+        >
+          {editing ? '取消' : '修改名称'}
+        </Button>
+      )}
+    >
+      {editing ? (
+        <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
+          <FormField label="实例名称" required error={msg} info="1-64 个字符，展示于公开侧页面。">
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
+          </FormField>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? '保存中…' : '保存'}</Button>
           </div>
-        )}
-      </div>
-    </section>
+        </form>
+      ) : (
+        branding.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void branding.refetch()}>重试</Button>}>品牌信息读取失败：{branding.error.message}</Banner> : <div className={css.kvRow}>
+          <span className={css.kvLabel}>实例名称</span>
+          <span className={css.kvValue}>{branding.isPending ? '加载中…' : currentName}</span>
+        </div>
+      )}
+    </SectionCard>
   )
 }

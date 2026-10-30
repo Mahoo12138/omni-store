@@ -12,9 +12,11 @@ import {
 import { AppFrame } from '../components/shell/AppFrame'
 import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
+import { StateView } from '../components/shell/StateView'
 import { Button } from '../components/ui/Button'
 import { DialogWrap } from '../components/ui/Dialog'
-import { Input } from '@fluentui/react-components'
+import { IconAction } from '../components/ui/IconAction'
+import { Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow } from '@fluentui/react-components'
 import { IconChevronLeft, IconFile, IconFolder, IconRefresh, IconRestore, IconTrash } from '../components/ui/Icon'
 import { toastSuccess } from '../components/ui/Toast'
 import { formatBytes, formatDate } from '../utils/format'
@@ -48,10 +50,19 @@ export function TrashPage() {
   if (!source) {
     return (
       <AppFrame title="回收站">
-        <div className={css.centerState}>
-          <p>存储源不可用。</p>
-          <Button variant="secondary" onClick={() => navigate({ to: '/app' })}>返回文件列表</Button>
-        </div>
+        <StateView
+          kind="unavailable"
+          titleAs={1}
+          icon={<IconTrash size={22} />}
+          title="存储源不可用"
+          description="该存储源不可访问，或你没有查看回收站的权限。"
+          action={
+            <>
+              <Button onClick={() => sources.refetch()}>重新加载</Button>
+              <Button variant="secondary" onClick={() => navigate({ to: '/app' })}>返回文件列表</Button>
+            </>
+          }
+        />
       </AppFrame>
     )
   }
@@ -69,63 +80,65 @@ export function TrashPage() {
           <h1 className={css.title}>回收站</h1>
           <p className={css.description}>删除的内容仍占用用户配额；永久清理后无法恢复。</p>
         </div>
-        <Button variant="secondary" onClick={refresh} disabled={trash.isFetching}>
-          <IconRefresh size={14} /> {trash.isFetching ? '刷新中…' : '刷新'}
-        </Button>
+        <Button variant="secondary" onClick={refresh} disabled={trash.isFetching} icon={<IconRefresh size={14} />}>{trash.isFetching ? '刷新中…' : '刷新'}</Button>
       </header>
 
-      <section className={css.panel}>
-        {trash.isPending ? <div className={css.centerState}>正在读取回收站…</div> : null}
-        {trash.isError ? (
-          <div className={css.centerState}>
-            <p>{trash.error instanceof ApiRequestError ? trash.error.message : '回收站加载失败。'}</p>
-            <Button variant="secondary" onClick={refresh}>重试</Button>
-          </div>
-        ) : null}
-        {trash.isSuccess && entries.length === 0 ? (
-          <div className={css.empty}>
-            <span className={css.emptyIcon}><IconTrash size={26} /></span>
-            <h2>回收站为空</h2>
-            <p>从文件管理器删除的内容会暂存在这里。</p>
-          </div>
-        ) : null}
-        {trash.isSuccess && entries.length > 0 ? (
+      {trash.isPending ? <StateView kind="pending" title="正在读取回收站…" /> : null}
+      {trash.isError ? (
+        <StateView
+          kind="error"
+          icon={<IconTrash size={22} />}
+          title="回收站加载失败"
+          description={trash.error instanceof ApiRequestError ? trash.error.message : '无法连接到实例服务，请稍后重试。'}
+          action={<Button onClick={refresh}>重试</Button>}
+        />
+      ) : null}
+      {trash.isSuccess && entries.length === 0 ? (
+        <StateView
+          kind="empty"
+          icon={<IconTrash size={22} />}
+          title="回收站为空"
+          description="从文件管理器删除的内容会暂存在这里。"
+        />
+      ) : null}
+      {trash.isSuccess && entries.length > 0 ? (
+        <section className={css.panel}>
           <div className={css.tableWrap}>
-            <table className={css.table}>
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th className={css.pathCell}>原路径</th>
-                  <th className={css.sizeCell}>大小</th>
-                  <th className={css.timeCell}>删除时间</th>
-                  <th aria-label="操作" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table className={css.table} size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>名称</TableHeaderCell>
+                  <TableHeaderCell className={css.pathCell}>原路径</TableHeaderCell>
+                  <TableHeaderCell className={css.sizeCell}>大小</TableHeaderCell>
+                  <TableHeaderCell className={css.timeCell}>删除时间</TableHeaderCell>
+                  <TableHeaderCell aria-label="操作" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {entries.map((entry) => (
-                  <tr key={entry.key}>
-                    <td>
+                  <TableRow key={entry.key}>
+                    <TableCell>
                       <span className={css.nameCell}>
                         {entry.type === 'dir' ? <IconFolder size={17} /> : <IconFile size={17} />}
                         <span>{entry.name}</span>
                       </span>
-                    </td>
-                    <td className={css.pathCell}>/{entry.original_path}</td>
-                    <td className={css.sizeCell}>{formatBytes(entry.size)}{entry.type === 'dir' ? ` · ${entry.file_count} 个文件` : ''}</td>
-                    <td className={css.timeCell}>{formatDate(entry.deleted_at)}</td>
-                    <td>
+                    </TableCell>
+                    <TableCell className={css.pathCell}>/{entry.original_path}</TableCell>
+                    <TableCell className={css.sizeCell}>{formatBytes(entry.size)}{entry.type === 'dir' ? ` · ${entry.file_count} 个文件` : ''}</TableCell>
+                    <TableCell className={css.timeCell}>{formatDate(entry.deleted_at)}</TableCell>
+                    <TableCell>
                       <span className={css.actions}>
-                        <Button variant="ghost" title="恢复" aria-label="恢复" icon={<IconRestore size={15} />} onClick={() => setRestoreTarget(entry)} />
-                        <Button variant="dangerGhost" title="永久删除" aria-label="永久删除" icon={<IconTrash size={15} />} onClick={() => setPurgeTarget(entry)} />
+                        <IconAction label="恢复" icon={<IconRestore size={16} />} onClick={() => setRestoreTarget(entry)} />
+                        <IconAction label="永久删除" icon={<IconTrash size={16} />} danger onClick={() => setPurgeTarget(entry)} />
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {restoreTarget ? (
         <RestoreDialog

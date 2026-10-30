@@ -175,18 +175,12 @@ export function SearchDialog() {
             <Button
               variant="secondary"
               disabled={data.page <= 1}
-              onClick={() => setPage(data.page - 1)}
-            >
-              <IconChevronLeft size={15} /> 上一页
-            </Button>
+              onClick={() => setPage(data.page - 1)} icon={<IconChevronLeft size={15} />}>上一页</Button>
             <span>{data.page} / {Math.max(1, Math.ceil(data.total / data.page_size))}</span>
             <Button
               variant="secondary"
               disabled={!data.has_next}
-              onClick={() => setPage(data.page + 1)}
-            >
-              下一页 <IconChevronRight size={15} />
-            </Button>
+              onClick={() => setPage(data.page + 1)} icon={<IconChevronRight size={15} />} iconPosition="after">下一页</Button>
           </nav>
         </section>
       ) : null}

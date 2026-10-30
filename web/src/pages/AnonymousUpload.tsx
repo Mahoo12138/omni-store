@@ -5,13 +5,14 @@ import { ApiRequestError } from '../api/client'
 import { fetchAnonymousStatus, uploadAnonymousImage } from '../api/imagebed'
 import { PublicFrame } from '../components/shell/PublicFrame'
 import { PageHeader } from '../components/shell/PageHeader'
+import { ServiceStatus } from '../components/shell/ServiceStatus'
+import { StateView } from '../components/shell/StateView'
 import { Button } from '../components/ui/Button'
 import {
   IconCheck,
   IconCopy,
   IconExternalLink,
   IconImage,
-  IconRefresh,
   IconUpload,
 } from '../components/ui/Icon'
 import { Banner } from '../components/shell/Banner'
@@ -302,32 +303,13 @@ export function AnonymousUploadPage() {
           title="匿名图床"
           description="把图片放进来，立即获取适用于网页、论坛和文档的链接。"
           actions={
-            <span className={css.serviceBadge} aria-live="polite">
-              <span
-                className={
-                  status.isPending
-                    ? css.serviceDotPending
-                    : status.isError
-                      ? css.serviceDotError
-                      : enabled
-                        ? css.serviceDotEnabled
-                        : css.serviceDotDisabled
-                }
-                aria-hidden="true"
+            status.isPending ? null : (
+              <ServiceStatus
+                label="上传服务"
+                tone={status.isError ? 'warning' : enabled ? 'success' : 'neutral'}
+                value={status.isError ? '状态未知' : enabled ? '可以使用' : '暂未开放'}
               />
-              <span>
-                <small>上传服务</small>
-                <strong>
-                  {status.isPending
-                    ? '正在检查'
-                    : status.isError
-                      ? '状态未知'
-                      : enabled
-                        ? '可以使用'
-                        : '暂未开放'}
-                </strong>
-              </span>
-            </span>
+            )
           }
         />
 
@@ -342,26 +324,34 @@ export function AnonymousUploadPage() {
           )}
 
           {status.isError && (
-            <div className={css.serviceState} role="alert">
-              <span className={css.serviceIcon}><IconRefresh size={24} /></span>
-              <div>
-                <h2>暂时无法读取上传服务</h2>
-                <p>请检查网络连接后重试。</p>
-              </div>
-              <button type="button" onClick={() => status.refetch()}>
-                <IconRefresh size={16} /> 重新检查
-              </button>
-            </div>
+            <StateView
+              kind="error"
+              brand
+              eyebrow="匿名图床 · 上传服务"
+              title="暂时无法读取上传服务"
+              description="无法连接到实例服务，请稍后重新检查。"
+              action={<Button onClick={() => status.refetch()}>重新检查</Button>}
+              status={{
+                tone: 'warning',
+                label: '上传服务未响应',
+                hint: '如持续出现，请联系实例管理员',
+              }}
+            />
           )}
 
           {status.isSuccess && !enabled && (
-            <div className={css.serviceState}>
-              <span className={css.serviceIcon}><IconImage size={24} /></span>
-              <div>
-                <h2>匿名上传暂未开放</h2>
-                <p>管理员开启公共图床后，这里就可以直接上传图片。</p>
-              </div>
-            </div>
+            <StateView
+              kind="unavailable"
+              brand
+              eyebrow="匿名图床 · 上传服务"
+              title="匿名上传暂未开放"
+              description="此实例暂未开放匿名图床。管理员开启公共图床后，这里就可以直接上传图片。"
+              status={{
+                tone: 'neutral',
+                label: '此实例未开放匿名上传',
+                hint: '开启后入口会自动变为可用',
+              }}
+            />
           )}
 
           {status.isSuccess && enabled && (

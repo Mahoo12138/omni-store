@@ -145,15 +145,20 @@ test('source cards and configuration reflow with long names and paths', async ({
       const path = element.querySelector('code')!.getBoundingClientRect()
       const heading = element.querySelector('h3')!.getBoundingClientRect()
       const configure = element.querySelector('button')!.getBoundingClientRect()
+      const actions = Array.from(element.querySelectorAll('button')).map((button) => button.getBoundingClientRect())
       return { fits: element.scrollWidth <= element.clientWidth, pathRight: path.right, pathLeft: path.left,
         cardRight: cardRect.right, cardLeft: cardRect.left, headingBottom: heading.bottom, pathTop: path.top,
-        configureTop: configure.top, pathBottom: path.bottom }
+        configureRight: configure.right, configureLeft: configure.left,
+        actionsInside: actions.every((rect) => rect.left >= cardRect.left && rect.right <= cardRect.right + 0.5) }
     })
     expect(bounds.fits).toBe(true)
     expect(bounds.pathRight).toBeLessThanOrEqual(bounds.cardRight)
     expect(bounds.pathLeft).toBeGreaterThanOrEqual(bounds.cardLeft)
     expect(bounds.pathTop).toBeGreaterThanOrEqual(bounds.headingBottom)
-    expect(bounds.configureTop).toBeGreaterThanOrEqual(bounds.pathBottom)
+    // 资源行布局：操作与身份同一行，只保证落在卡片边界内（不再要求排在路径下方）。
+    expect(bounds.configureLeft).toBeGreaterThanOrEqual(bounds.cardLeft)
+    expect(bounds.configureRight).toBeLessThanOrEqual(bounds.cardRight)
+    expect(bounds.actionsInside).toBe(true)
     expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
     await card.getByRole('button', { name: `配置存储源 ${longName}`, exact: true }).click()
@@ -195,7 +200,7 @@ test('primary settings actions belong to their module headers', async ({ page })
   for (const module of modules) {
     await page.goto(`/app/admin?section=${module.section}`)
     const moduleHeader = page.locator('header').filter({
-      has: page.getByRole('heading', { name: module.heading, exact: true }),
+      has: page.getByRole('button', { name: module.action, exact: true }),
     })
     const action = moduleHeader.getByRole('button', { name: module.action, exact: true })
     await expect(moduleHeader).toBeVisible()
@@ -219,7 +224,7 @@ test('primary settings actions belong to their module headers', async ({ page })
   for (const module of modules) {
     await page.goto(`/app/admin?section=${module.section}`)
     const action = page.locator('header').filter({
-      has: page.getByRole('heading', { name: module.heading, exact: true }),
+      has: page.getByRole('button', { name: module.action, exact: true }),
     }).getByRole('button', { name: module.action, exact: true })
     await expect(action).toBeVisible()
     const hasHorizontalOverflow = await page.evaluate(() => (
@@ -233,7 +238,7 @@ test('credential overview opens one isolated management modal at a time', async 
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await loginAsAdmin(page)
   await page.setViewportSize({ width: 1119, height: 880 })
-  await page.goto('/app/admin?section=profile')
+  await page.goto('/app/settings?section=profile')
 
   const connectionTypes = page.getByRole('navigation', { name: '连接类型' })
   const webdavEntry = connectionTypes.getByRole('button', { name: '管理 WebDAV' })
@@ -303,7 +308,7 @@ test('credential overview opens one isolated management modal at a time', async 
   const createS3Credential = s3.getByRole('button', { name: '新建凭据', exact: true })
   await expect(createS3Credential).toBeEnabled()
   const s3CredentialList = s3.getByRole('list', { name: 'S3 凭据列表' })
-  const s3CredentialEmpty = s3.getByText('暂无 S3 凭据。建议为每台客户端创建独立 Access Key。', { exact: true })
+  const s3CredentialEmpty = s3.getByText('暂无 S3 凭据', { exact: true })
   await expect(s3CredentialList.or(s3CredentialEmpty)).toBeVisible()
   await expect(s3.getByRole('list', { name: 'S3 Bucket 映射' })).toBeVisible()
   const copyBucket = s3.getByRole('button', { name: '复制 Bucket' }).first()
@@ -387,15 +392,16 @@ test('audit logs request an explicit page and translate action names', async ({ 
 test('every admin section remains readable and keeps its active navigation visible', async ({ page }) => {
   await loginAsAdmin(page)
 
+  // 账户设置与系统设置是两个路由：前者所有人可用，后者仅超级管理员。
   const sections = [
-    { key: 'profile', nav: '我的', heading: '测试管理员' },
-    { key: 'preferences', nav: '偏好设置', heading: '偏好设置' },
-    { key: 'stats', nav: '仪表盘', heading: '系统状态' },
-    { key: 'sources', nav: '存储源', heading: '存储源' },
-    { key: 'policies', nav: '访问策略', heading: '访问策略' },
-    { key: 'users', nav: '用户', heading: '用户' },
-    { key: 'audit', nav: '审计日志', heading: '审计日志' },
-    { key: 'site', nav: '站点配置', heading: '站点配置' },
+    { key: 'profile', nav: '我的', heading: '测试管理员', base: '/app/settings' },
+    { key: 'preferences', nav: '偏好设置', heading: '偏好设置', base: '/app/settings' },
+    { key: 'stats', nav: '仪表盘', heading: '系统状态', base: '/app/admin' },
+    { key: 'sources', nav: '存储源', heading: '存储源', base: '/app/admin' },
+    { key: 'policies', nav: '访问策略', heading: '访问策略', base: '/app/admin' },
+    { key: 'users', nav: '用户', heading: '用户', base: '/app/admin' },
+    { key: 'audit', nav: '审计日志', heading: '审计日志', base: '/app/admin' },
+    { key: 'site', nav: '站点配置', heading: '站点配置', base: '/app/admin' },
   ] as const
 
   for (const viewport of [
@@ -406,7 +412,7 @@ test('every admin section remains readable and keeps its active navigation visib
     await page.setViewportSize(viewport)
 
     for (const section of sections) {
-      await page.goto(`/app/admin?section=${section.key}`)
+      await page.goto(`${section.base}?section=${section.key}`)
 
       const settingsNav = page.getByRole('navigation', { name: '设置分组' })
       const activeItem = settingsNav.getByRole('button', { name: section.nav, exact: true })
@@ -437,7 +443,7 @@ test('every admin section remains readable and keeps its active navigation visib
     }
   }
 
-  await page.goto('/app/admin?section=profile')
+  await page.goto('/app/settings?section=profile')
   const accountName = page.getByRole('heading', { name: '测试管理员', exact: true })
   const accountNameBox = await accountName.boundingBox()
   expect(accountNameBox?.height ?? Infinity).toBeLessThan(48)

@@ -26,6 +26,13 @@
   --omnistore-code-on-surface: oklch(0.93 0.01 258);
   /* 预览弹层的堆叠层：与 styles/layout.ts 的 dialogBaseZIndex 同档（互斥出现，不比较大小）。 */
   --omnistore-z-preview: 40;
+  /*
+   * 首页等距线稿里那条「传输轨道」的虚线节奏。
+   * dasharray 写在 Home.styles 的 rail 类上，位移动画写在下面的 omnistore-flow 里，
+   * 两者必须共用同一个周期（3 + 9）才能无缝循环 —— 所以数值只在这里存一份。
+   */
+  --omnistore-rail-dash: 3 9;
+  --omnistore-rail-period: 12;
 }
 
 :root[data-theme='dark'] {
@@ -80,13 +87,33 @@ h3 {
   outline-offset: 2px;
 }
 
-/* 尊重减少动效偏好：全站动效退化为即时切换。 */
+/*
+ * 尊重减少动效偏好：全站动效退化为即时切换。
+ * 必须带 !important —— `*` 的选择器优先级是 0,0,0，任何自带 `animation` 简写的
+ * 类（shimmer / spin / 入场 stagger）都会盖掉它，此前这条规则实际上是失效的。
+ * iteration-count 与 delay 也要收：无限动画停在第一帧、带延迟的入场不会先空一段。
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms;
-    animation-duration: 0.01ms;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+  }
+}
+
+/* 内容入场：淡入 + 10px 上浮，用于首页入口板与能力栏的 stagger。 */
+@keyframes omnistore-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -126,6 +153,71 @@ h3 {
   }
   50% {
     transform: translateY(-6px);
+  }
+}
+
+/*
+ * 首页动效层。
+ *
+ * 全部循环关键帧的 0% 与 100% 同态：上面那条 prefers-reduced-motion 规则会把
+ * iteration-count 压成 1、duration 压成 0.01ms，循环动画因此停在静止帧而不是半程。
+ * 入场类关键帧一律配 `both` 填充，reduce 时直接落到终态。
+ */
+
+/*
+ * 线稿自绘 / 脉冲行进：配合 pathLength="1"，位移恰好一个归一化周期。
+ * dasharray 给 1 就是「整条路径画出来」，给 0.03 0.97 就是「一小段脉冲沿路径跑完一圈」。
+ * 首页立方体场的入场和电缆上的数据包共用这一条关键帧。
+ */
+@keyframes omnistore-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 报头标题：在遮罩层里自下而上推出来（不带透明度，靠裁切出「翻页」的重量感）。 */
+@keyframes omnistore-mask-rise {
+  from {
+    transform: translateY(108%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* 细线自左向右画出：kicker 品牌短线与署名带上沿共用。 */
+@keyframes omnistore-rule-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* 轨道虚线行进：位移一个 dash 周期即无缝，读起来是文件正流向主箱。 */
+@keyframes omnistore-flow {
+  from {
+    stroke-dashoffset: var(--omnistore-rail-period);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 品牌光晕呼吸：只动 opacity 与 transform，交给合成层。 */
+@keyframes omnistore-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
   }
 }
 

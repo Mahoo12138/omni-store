@@ -1,13 +1,25 @@
 import { useState, type DragEvent, type ReactNode } from 'react'
+import {
+  Checkbox,
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+  mergeClasses,
+} from '@fluentui/react-components'
 import type { FileEntry } from '../../api/sources'
 import { EntryIcon } from '../ui/Icon'
 import { ContextMenu } from '../ui/ContextMenu'
 import type { MenuOption } from '../ui/Menu'
+import { StateView } from '../shell/StateView'
 import { formatBytes, formatDate } from '../../utils/format'
 import { useStyles } from './FileTable.styles'
 
 // 公开侧与私有侧共用的文件表格（docs/index.png）。
 // 只负责渲染；导航、下载和写操作由调用方通过回调提供。
+// 内核是 Fluent Table（原生 <table> 语义），选择状态完全由调用方受控。
 export function FileTable({
   entries,
   loading,
@@ -47,144 +59,158 @@ export function FileTable({
   onToggleSelected?: (name: string, selected: boolean) => void
   allSelected?: boolean
   onToggleAll?: (selected: boolean) => void
-  onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
-  onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLTableRowElement>) => void
+  onDragEntryStart?: (entry: FileEntry, event: DragEvent<HTMLElement>) => void
+  onDropOnDirectory?: (entry: FileEntry, event: DragEvent<HTMLElement>) => void
   contextMenuItems?: (entry: FileEntry) => MenuOption[]
 }) {
   const css = useStyles()
   const [dropTargetName, setDropTargetName] = useState<string | null>(null)
+
+  // 全选头三态：全部选中为 true，部分选中为 mixed（此前部分选中仍显示未选中）。
+  const selectableEntries = entries?.filter((entry) => entry.type !== 'unsupported') ?? []
+  const selectedCount = selectableEntries.filter((entry) => selectedNames?.has(entry.name)).length
+  const headerChecked: boolean | 'mixed' = allSelected
+    ? true
+    : selectedCount > 0
+      ? (selectedCount === selectableEntries.length ? true : 'mixed')
+      : false
+
   return (
     <div className={css.tableWrap}>
-      <table className={css.table}>
-        <thead>
-          <tr className={selectable ? css.selectableRow : css.mobileRow}>
+      <Table className={css.table} size="small">
+        <TableHeader>
+          <TableRow className={selectable ? css.selectableRow : css.mobileRow}>
             {selectable && (
-              <th className={css.selectionTh}>
+              <TableHeaderCell className={css.selectionTh}>
                 <label className={css.checkboxTarget}>
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     aria-label="选择当前页全部条目"
-                    checked={allSelected}
-                    onChange={(event) => onToggleAll?.(event.target.checked)}
+                    checked={headerChecked}
+                    onChange={(_, data) => onToggleAll?.(data.checked === true)}
                   />
                 </label>
-              </th>
+              </TableHeaderCell>
             )}
-            <th className={css.th}>名称</th>
-            {showType && <th className={css.detailHeading}>类型</th>}
-            <th className={css.detailHeading}>大小</th>
-            <th className={css.detailHeading}>修改时间</th>
-            {renderActions && (
-              <th className={css.detailHeading} aria-label="操作" />
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {entries?.map((entry) => (
-            <ContextMenu
-              key={entry.name}
-              ariaLabel={`文件操作 ${entry.name}`}
-              items={contextMenuItems?.(entry) ?? []}
-              trigger={
-                <tr
-                  className={`${css.row} ${selectable ? css.selectableRow : css.mobileRow} ${dropTargetName === entry.name ? css.dropTarget : ''}`}
-                  draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
-                  onDragStart={onDragEntryStart ? (event) => {
-                    if (entry.type === 'unsupported') {
+            <TableHeaderCell className={css.th}>名称</TableHeaderCell>
+            {showType && <TableHeaderCell className={css.detailHeading}>类型</TableHeaderCell>}
+            <TableHeaderCell className={css.detailHeading}>大小</TableHeaderCell>
+            <TableHeaderCell className={css.detailHeading}>修改时间</TableHeaderCell>
+            {renderActions && <TableHeaderCell className={css.detailHeading} aria-label="操作" />}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {entries?.map((entry) => {
+            const selected = selectedNames?.has(entry.name) ?? false
+            return (
+              <ContextMenu
+                key={entry.name}
+                ariaLabel={`文件操作 ${entry.name}`}
+                items={contextMenuItems?.(entry) ?? []}
+                trigger={
+                  <TableRow
+                    className={mergeClasses(
+                      css.row,
+                      selectable ? css.selectableRow : css.mobileRow,
+                      dropTargetName === entry.name && css.dropTarget,
+                    )}
+                    appearance={selected ? 'brand' : 'none'}
+                    draggable={Boolean(onDragEntryStart && entry.type !== 'unsupported')}
+                    onDragStart={onDragEntryStart ? (event) => {
+                      if (entry.type === 'unsupported') {
+                        event.preventDefault()
+                        return
+                      }
+                      event.dataTransfer.effectAllowed = 'move'
+                      event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
+                      onDragEntryStart(entry, event)
+                    } : undefined}
+                    onDragOver={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                      if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
                       event.preventDefault()
-                      return
-                    }
-                    event.dataTransfer.effectAllowed = 'move'
-                    event.dataTransfer.setData('application/x-omnistore-file-items', 'internal')
-                    onDragEntryStart(entry, event)
-                  } : undefined}
-                  onDragOver={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                    if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
-                    event.preventDefault()
-                    event.dataTransfer.dropEffect = 'move'
-                    setDropTargetName(entry.name)
-                  } : undefined}
-                  onDragLeave={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
-                  } : undefined}
-                  onDrop={onDropOnDirectory && entry.type === 'dir' ? (event) => {
-                    if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
-                    event.preventDefault()
-                    setDropTargetName(null)
-                    onDropOnDirectory(entry, event)
-                  } : undefined}
-                >
-              {selectable && (
-                <td className={css.selectionCell}>
-                  <label className={css.checkboxTarget}>
-                    <input
-                      type="checkbox"
-                      aria-label={`选择 ${entry.name}`}
-                      checked={selectedNames?.has(entry.name) ?? false}
-                      disabled={entry.type === 'unsupported'}
-                      onChange={(event) => onToggleSelected?.(entry.name, event.target.checked)}
-                    />
-                  </label>
-                </td>
-              )}
-              <td className={css.nameCell}>
-                <span className={css.nameInner}>
-                  <EntryIcon name={entry.name} type={entry.type} />
-                  {entry.type === 'dir' ? (
-                    <button className={css.nameLink} onClick={() => onOpenDir(entry.name)}>
-                      {entry.name}
-                    </button>
-                  ) : entry.type === 'file' && onOpenFile ? (
-                    fileHref ? (
-                      // 同时给了 href 时保留链接语义（中键/复制链接/新标签仍可用），
-                      // 只把左键点击接管成页内预览。
-                      <a
-                        className={css.nameLink}
-                        href={fileHref(entry)}
-                        target={fileTarget}
-                        rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
-                        onClick={(event) => {
-                          if (event.metaKey || event.ctrlKey || event.button !== 0) return
-                          event.preventDefault()
-                          onOpenFile(entry)
-                        }}
-                      >
-                        {entry.name}
-                      </a>
-                    ) : (
-                      <button className={css.nameLink} onClick={() => onOpenFile(entry)}>
-                        {entry.name}
-                      </button>
-                    )
-                  ) : entry.type === 'file' && fileHref ? (
-                    <a
-                      className={css.nameLink}
-                      href={fileHref(entry)}
-                      target={fileTarget}
-                      rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
-                    >
-                      {entry.name}
-                    </a>
-                  ) : entry.type === 'file' ? (
-                    <span className={css.nameStatic}>{entry.name}</span>
-                  ) : (
-                    <span className={css.nameMuted}>{entry.name}（符号链接，不支持）</span>
-                  )}
-                </span>
-                <span className={css.mobileMeta}>
-                  {entry.type === 'file' ? formatBytes(entry.size) : '文件夹'} · {formatDate(entry.mtime)}
-                </span>
-              </td>
-              {showType && <td className={css.detailCell}>{entry.type === 'dir' ? '文件夹' : guessType(entry.name)}</td>}
-              <td className={css.detailCell}>{entry.type === 'file' ? formatBytes(entry.size) : '–'}</td>
-              <td className={css.detailCell}>{formatDate(entry.mtime)}</td>
-              {renderActions && <td className={css.actionsCell}>{renderActions(entry)}</td>}
-                </tr>
-              }
-            />
-          ))}
-        </tbody>
-      </table>
+                      event.dataTransfer.dropEffect = 'move'
+                      setDropTargetName(entry.name)
+                    } : undefined}
+                    onDragLeave={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetName(null)
+                    } : undefined}
+                    onDrop={onDropOnDirectory && entry.type === 'dir' ? (event) => {
+                      if (!event.dataTransfer.types.includes('application/x-omnistore-file-items')) return
+                      event.preventDefault()
+                      setDropTargetName(null)
+                      onDropOnDirectory(entry, event)
+                    } : undefined}
+                  >
+                    {selectable && (
+                      <TableCell className={css.selectionCell}>
+                        <label className={css.checkboxTarget}>
+                          <Checkbox
+                            aria-label={`选择 ${entry.name}`}
+                            checked={selected}
+                            disabled={entry.type === 'unsupported'}
+                            onChange={(_, data) => onToggleSelected?.(entry.name, data.checked === true)}
+                          />
+                        </label>
+                      </TableCell>
+                    )}
+                    <TableCell className={css.nameCell}>
+                      <span className={css.nameInner}>
+                        <EntryIcon name={entry.name} type={entry.type} />
+                        {entry.type === 'dir' ? (
+                          <button className={css.nameLink} onClick={() => onOpenDir(entry.name)}>
+                            {entry.name}
+                          </button>
+                        ) : entry.type === 'file' && onOpenFile ? (
+                          fileHref ? (
+                            // 同时给了 href 时保留链接语义（中键/复制链接/新标签仍可用），
+                            // 只把左键点击接管成页内预览。
+                            <a
+                              className={css.nameLink}
+                              href={fileHref(entry)}
+                              target={fileTarget}
+                              rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
+                              onClick={(event) => {
+                                if (event.metaKey || event.ctrlKey || event.button !== 0) return
+                                event.preventDefault()
+                                onOpenFile(entry)
+                              }}
+                            >
+                              {entry.name}
+                            </a>
+                          ) : (
+                            <button className={css.nameLink} onClick={() => onOpenFile(entry)}>
+                              {entry.name}
+                            </button>
+                          )
+                        ) : entry.type === 'file' && fileHref ? (
+                          <a
+                            className={css.nameLink}
+                            href={fileHref(entry)}
+                            target={fileTarget}
+                            rel={fileTarget === '_blank' ? 'noreferrer' : undefined}
+                          >
+                            {entry.name}
+                          </a>
+                        ) : entry.type === 'file' ? (
+                          <span className={css.nameStatic}>{entry.name}</span>
+                        ) : (
+                          <span className={css.nameMuted}>{entry.name}（符号链接，不支持）</span>
+                        )}
+                      </span>
+                      <span className={css.mobileMeta}>
+                        {entry.type === 'file' ? formatBytes(entry.size) : '文件夹'} · {formatDate(entry.mtime)}
+                      </span>
+                    </TableCell>
+                    {showType && <TableCell className={css.detailCell}>{entry.type === 'dir' ? '文件夹' : guessType(entry.name)}</TableCell>}
+                    <TableCell className={css.detailCell}>{entry.type === 'file' ? formatBytes(entry.size) : '–'}</TableCell>
+                    <TableCell className={css.detailCell}>{formatDate(entry.mtime)}</TableCell>
+                    {renderActions && <TableCell className={css.actionsCell}>{renderActions(entry)}</TableCell>}
+                  </TableRow>
+                }
+              />
+            )
+          })}
+        </TableBody>
+      </Table>
       {loading && (
         <div aria-busy="true" aria-label="加载中">
           <div className={css.skeletonRow} />
@@ -192,11 +218,8 @@ export function FileTable({
           <div className={css.skeletonRow} />
         </div>
       )}
-      {showType && !loading && entries?.length === 0 && (
-        <div className={css.empty}>
-          <div className={css.emptyTitle}>{emptyTitle}</div>
-          {emptyHint && <div>{emptyHint}</div>}
-        </div>
+      {!loading && entries?.length === 0 && (
+        <StateView layout="plain" kind="empty" title={emptyTitle} description={emptyHint} />
       )}
     </div>
   )

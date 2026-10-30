@@ -1,5 +1,4 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Link } from '@tanstack/react-router'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Tabs } from '../ui/Tabs'
 import { fetchAuthStatus } from '../../api/auth'
@@ -26,7 +25,10 @@ import {
   Input,
 } from '@fluentui/react-components'
 import { Banner } from '../shell/Banner'
+import { ServiceStatus } from '../shell/ServiceStatus'
 import { StateView } from '../shell/StateView'
+import { LinkButton } from '../ui/LinkButton'
+import { IconDownload, IconHistory, IconUpload } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { toastSuccess } from '../ui/Toast'
 import { formatBytes } from '../../utils/format'
@@ -58,9 +60,10 @@ export function TransferServiceSummary() {
   const css = useStyles()
   const system = useQuery({ queryKey: ['system-status'], queryFn: fetchSystemStatus, retry: false, staleTime: 0 })
   const service = system.isError ? undefined : system.data?.transfer_center
-  return <div className={css.service} aria-live="polite">
-    <span className={css.serviceDot} data-enabled={!!service?.enabled} aria-hidden="true" />
-    <div className={css.serviceText}><small>新任务服务</small><strong>{system.isPending ? '正在检查…' : !service ? '状态未知' : service.status}</strong></div>
+  const value = system.isPending ? '正在检查…' : !service ? '状态未知' : service.status
+  const tone = system.isPending ? 'pending' as const : !service ? 'neutral' as const : service.enabled ? 'success' as const : 'warning' as const
+  return <div className={css.serviceRow}>
+    <ServiceStatus label="新任务服务" value={value} tone={tone} />
     {system.isError || (!system.isPending && !service) ? <Button variant="ghost" onClick={() => void system.refetch()}>重新检查</Button> : null}
   </div>
 }
@@ -80,6 +83,31 @@ export function TransferWorkspace({ search, onNavigate }: WorkspaceProps) {
   const record = (kind: TransferRecordKind, id: number) => onNavigate({ view: 'history', record: kind, id })
   const params = new URLSearchParams({ view: search.view })
   if (search.record && search.id) { params.set('record', search.record); params.set('id', String(search.id)) }
+  // 身份无法确认时整个工作区都不可用：不渲染空 Tabs，也不留下上一身份的记录。
+  // 这是页面级状态，恢复后页面会回到原来的 view（含 record 深链接）。
+  if (auth.isError || identity.isError) {
+    const retry = () => { if (auth.isError) void auth.refetch(); else void identity.refetch() }
+    return <div className={css.publicWorkspace}>
+      <StateView
+        kind="error"
+        brand
+        eyebrow="文件中转 · 身份状态"
+        title="收发身份暂时无法恢复"
+        description="无法确认当前身份。请检查网络后重试；如果仍无法恢复，可以重新登录后再继续。"
+        action={
+          <>
+            <Button onClick={retry}>重新检查收发身份</Button>
+            <LinkButton variant="secondary" to="/login" search={{ redirect: `/transfer?${params.toString()}` }}>登录并继续</LinkButton>
+          </>
+        }
+        status={{
+          tone: 'warning',
+          label: auth.isError ? '账户状态未响应' : '收发身份未响应',
+          hint: '已有分享链接和收发记录不会丢失',
+        }}
+      />
+    </div>
+  }
   return <div className={css.publicWorkspace}>
     <Tabs.Root
       key={owner?.owner_key ?? 'pending'}
@@ -87,22 +115,38 @@ export function TransferWorkspace({ search, onNavigate }: WorkspaceProps) {
       value={search.view}
       onValueChange={(value) => { if (!writing) onNavigate({ view: value as TransferWorkspaceSearch['view'] }) }}
     >
-      <Tabs.List aria-label="中转功能">
-        <Tabs.Tab value="send" disabled={writing}>发送文件</Tabs.Tab>
-        <Tabs.Tab value="collect" disabled={writing}>收集文件</Tabs.Tab>
-        <Tabs.Tab value="history" disabled={writing}>收发记录</Tabs.Tab>
-      </Tabs.List>
-      {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : auth.isError || identity.isError ? (
-        <Banner
-          intent="error"
-          action={
-            <>
-              <Button variant="secondary" onClick={() => { if (auth.isError) void auth.refetch(); else void identity.refetch() }}>重新检查收发身份</Button>
-              <Link to="/login" search={{ redirect: `/transfer?${params}` }} className={css.link}>登录并继续</Link>
-            </>
-          }
-        >收发身份暂时无法恢复，请重新检查。</Banner>
-      ) : guest ? <p className={css.text}>访客身份保留至 {new Date(identity.data!.expires_at!).toLocaleString()}；记录仅存于当前浏览器，清除 Cookie 或更换设备后不可恢复。</p> : null}
+      <div className={css.modeRail}>
+        <Tabs.List aria-label="中转功能">
+          <Tabs.Tab value="send" ariaLabel="发送文件" disabled={writing}>
+            <span className={css.modeTabContent}>
+              <span className={css.modeTabIcon} aria-hidden="true"><IconUpload size={20} /></span>
+              <span className={css.modeTabText}>
+                <strong className={css.modeTabLabel}>发送文件</strong>
+                <small className={css.modeTabHint}>交付文件</small>
+              </span>
+            </span>
+          </Tabs.Tab>
+          <Tabs.Tab value="collect" ariaLabel="收集文件" disabled={writing}>
+            <span className={css.modeTabContent}>
+              <span className={css.modeTabIcon} aria-hidden="true"><IconDownload size={20} /></span>
+              <span className={css.modeTabText}>
+                <strong className={css.modeTabLabel}>收集文件</strong>
+                <small className={css.modeTabHint}>接收提交</small>
+              </span>
+            </span>
+          </Tabs.Tab>
+          <Tabs.Tab value="history" ariaLabel="收发记录" disabled={writing}>
+            <span className={css.modeTabContent}>
+              <span className={css.modeTabIcon} aria-hidden="true"><IconHistory size={20} /></span>
+              <span className={css.modeTabText}>
+                <strong className={css.modeTabLabel}>收发记录</strong>
+                <small className={css.modeTabHint}>查看任务</small>
+              </span>
+            </span>
+          </Tabs.Tab>
+        </Tabs.List>
+      </div>
+      {auth.isPending || (auth.isSuccess && identity.isPending) ? <p className={css.text}>正在恢复收发身份…</p> : guest ? <p className={css.text}>访客身份保留至 {new Date(identity.data!.expires_at!).toLocaleString()}；记录仅存于当前浏览器，清除 Cookie 或更换设备后不可恢复。</p> : null}
       {service && !service.enabled ? <p className={css.text}>新任务服务当前不可用；已有分享链接和收发记录仍按任务状态提供访问。</p> : null}
       <Tabs.Panel keepMounted value="send" className={css.panel}>{owner ? <SendComposer canCreate={canCreate} canUseStore={canUseStore} guest={guest} onRecord={record} /> : null}</Tabs.Panel>
       <Tabs.Panel keepMounted value="collect" className={css.panel}>{owner ? <CollectionComposer canCreate={canCreate} guest={guest} onRecord={record} /> : null}</Tabs.Panel>
@@ -306,27 +350,55 @@ function SendComposer({ canCreate, onRecord, guest, canUseStore }: { canCreate: 
 
 function TransferHistory({ ownerID, canUseStore, search, onNavigate }: { ownerID: string; canUseStore: boolean } & WorkspaceProps) {
   const css = useStyles()
-  const [category, setCategory] = useState<TransferRecordKind>(search.record ?? 'send')
   const sends = useQuery({ queryKey: ['transfer-sends', ownerID], queryFn: listMySends, retry: false })
   const collections = useQuery({ queryKey: ['transfer-collections', ownerID], queryFn: listMyCollections, retry: false })
   if (search.record && search.id) return <RecordDetail key={`${search.record}-${search.id}`} ownerID={ownerID} canUseStore={canUseStore} kind={search.record} id={search.id} onBack={() => onNavigate({ view: 'history' })} />
-  const current = category === 'send' ? sends : collections
+  const records = [
+    ...(sends.data ?? []).map((task) => ({ kind: 'send' as const, task })),
+    ...(collections.data ?? []).map((task) => ({ kind: 'collect' as const, task })),
+  ].sort((a, b) => new Date(b.task.created_at).getTime() - new Date(a.task.created_at).getTime())
+  const loading = sends.isPending || collections.isPending
+  const error = sends.isError ? sends.error : collections.isError ? collections.error : null
+  const retry = () => { void sends.refetch(); void collections.refetch() }
+  const sendCount = sends.data?.length ?? 0
+  const collectCount = collections.data?.length ?? 0
   return <section className={css.stack} aria-label="收发记录">
-    <Tabs.Root value={category} onValueChange={(value) => setCategory(value as TransferRecordKind)}>
-      <Tabs.List aria-label="记录类型"><Tabs.Tab value="send">我发送的</Tabs.Tab><Tabs.Tab value="collect">我收集的</Tabs.Tab></Tabs.List>
-      {current.isPending ? <p className={css.text}>正在加载记录…</p> : current.isError ? <Banner intent="error" action={<Button variant="secondary" onClick={() => void current.refetch()}>重新加载记录</Button>}>{message(current.error)}</Banner> : null}
-      <div className={css.recordList}>
-        {current.data?.length === 0 ? (
-          category === 'send'
-            ? <StateView layout="plain" kind="empty" title="还没有发送记录" description="选择「发送文件」开始一次交付。" />
-            : <StateView layout="plain" kind="empty" title="还没有收集任务" description="选择「收集文件」生成上传链接。" />
-        ) : null}
-        {current.data?.map((task) => <article key={task.id} className={css.recordRow} aria-label={`${category === 'send' ? '发件包' : '收集任务'} ${task.title || task.public_key}`}>
-          <div className={css.recordMain}><h3 className={css.subheading}>{task.title || '未命名任务'}</h3><TaskMeta task={task} /></div>
-          <div className={css.actions}><Button variant="secondary" onClick={() => onNavigate({ view: 'history', record: category, id: task.id })}>查看任务</Button></div>
-        </article>)}
+    <header className={css.ledgerHeader}>
+      <div className={css.ledgerCopy}>
+        <h2 className={css.ledgerTitle}>全部记录</h2>
+        <p className={css.text}>发送与收集任务按创建时间排列。</p>
       </div>
-    </Tabs.Root>
+      <div className={css.ledgerCounts}>
+        <span className={css.ledgerCount} data-kind="send"><IconUpload size={14} aria-hidden="true" />发送 {sendCount}</span>
+        <span className={css.ledgerCount} data-kind="collect"><IconDownload size={14} aria-hidden="true" />收集 {collectCount}</span>
+      </div>
+    </header>
+    {loading ? <p className={css.text}>正在加载记录…</p> : null}
+    {error ? <Banner intent="error" action={<Button variant="secondary" onClick={retry}>重新加载记录</Button>}>{message(error)}</Banner> : null}
+    {!loading && !error && records.length === 0 ? (
+      <StateView layout="plain" kind="empty" title="还没有发送记录" description="发送或收集文件后，任务会出现在这里。" />
+    ) : null}
+    {records.length > 0 ? (
+      <div className={css.recordList}>
+        {records.map(({ kind, task }) => (
+          <article key={`${kind}-${task.id}`} className={css.recordRow} aria-label={`${kind === 'send' ? '发件包' : '收集任务'} ${task.title || task.public_key}`}>
+            <span className={css.recordIcon} data-kind={kind} aria-hidden="true">
+              {kind === 'send' ? <IconUpload size={16} /> : <IconDownload size={16} />}
+            </span>
+            <div className={css.recordMain}>
+              <div className={css.recordTitleRow}>
+                <span className={css.recordKind} data-kind={kind}>{kind === 'send' ? '发件' : '收集'}</span>
+                <h3 className={css.subheading}>{task.title || '未命名任务'}</h3>
+              </div>
+              <TaskMeta task={task} />
+            </div>
+            <div className={css.recordAction}>
+              <Button variant="secondary" onClick={() => onNavigate({ view: 'history', record: kind, id: task.id })}>查看任务</Button>
+            </div>
+          </article>
+        ))}
+      </div>
+    ) : null}
   </section>
 }
 

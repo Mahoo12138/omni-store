@@ -1,5 +1,6 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../styles/media'
+import { layout } from '../styles/layout'
 
 export const useStyles = makeStyles({
   'loadingState': {
@@ -11,7 +12,7 @@ export const useStyles = makeStyles({
   ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
   ...shorthands.borderRadius('var(--borderRadiusLarge)'),
   },
-  // 上传区：整幅横向拖放条。主任务不需要一个 288px 高的空方框占掉半屏。
+  // 上传区：页面级主任务，给足拖放面积；内容居中，避免大框内出现悬空的左对齐文本。
   // dropZoneActive 只放差异，由组件 mergeClasses 叠加在 dropZone 上。
   'dropPanel': {
   'minWidth': '0px',
@@ -19,17 +20,19 @@ export const useStyles = makeStyles({
   },
   'dropZone': {
   'display': 'flex',
+  'flexDirection': 'column',
   'alignItems': 'center',
+  'justifyContent': 'center',
   'width': '100%',
   'minWidth': '0px',
-  'minHeight': '104px',
-  ...shorthands.gap('var(--spacingHorizontalL)'),
-  ...shorthands.padding('var(--spacingVerticalL)', 'var(--spacingHorizontalXL)'),
+  'minHeight': layout.imageBedDropMinHeight,
+  ...shorthands.gap('var(--spacingVerticalM)'),
+  ...shorthands.padding('var(--spacingVerticalXXL)', 'var(--spacingHorizontalXXL)'),
   'color': 'var(--colorNeutralForeground1)',
   'background': 'var(--colorNeutralBackground1)',
   ...shorthands.border('2px', 'dashed', 'var(--colorNeutralStroke1)'),
   ...shorthands.borderRadius('var(--borderRadiusXLarge)'),
-  'textAlign': 'left',
+  'textAlign': 'center',
   'cursor': 'pointer',
   'transitionProperty': 'border-color, background-color', 'transitionDuration': 'var(--durationNormal)', 'transitionTimingFunction': 'var(--curveDecelerateMax)',
   '&:hover:not(:disabled)': {
@@ -336,39 +339,6 @@ export const useStyles = makeStyles({
   'justifyContent': 'space-between',
   ...shorthands.gap('12px'),
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
-  },
-  'noTargetPage': {
-  'minHeight': '520px',
-  'display': 'flex',
-  'flexDirection': 'column',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.padding('32px'),
-  'textAlign': 'center',
-  'background': 'var(--colorNeutralBackground1)',
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  },
-  'noTargetIcon': {
-  'width': '76px',
-  'height': '76px',
-  'display': 'grid',
-  'placeItems': 'center',
-  'marginBottom': '18px',
-  'color': 'var(--colorBrandBackground)',
-  'background': 'var(--colorBrandBackground2)',
-  ...shorthands.borderRadius('999px'),
-  },
-  'noTargetTitle': {
-  ...shorthands.margin('0px'),
-  'fontSize': '20px',
-  'fontWeight': 650,
-  },
-  'noTargetHint': {
-  'maxWidth': '480px',
-  ...shorthands.margin('9px', '0', '20px'),
-  'color': 'var(--colorNeutralForeground2)',
-  'lineHeight': 1.65,
   },
   'error': {
   'color': 'var(--colorPaletteRedForeground1)',

@@ -7,6 +7,7 @@ import {
   ArrowClockwiseRegular,
   ArrowCounterclockwiseRegular,
   ArrowDownloadRegular,
+  ArrowSyncRegular,
   ArrowUploadRegular,
   CheckmarkRegular,
   ChevronDownRegular,
@@ -16,15 +17,19 @@ import {
   CloudRegular,
   CopyRegular,
   CutRegular,
+  DatabaseRegular,
   DarkThemeRegular,
   DeleteRegular,
   DismissRegular,
   DocumentRegular,
   EditRegular,
+  ErrorCircleRegular,
   FolderAddRegular,
   FolderFilled,
   FolderRegular,
+  GaugeRegular,
   GlobeRegular,
+  HistoryRegular,
   GridRegular,
   HardDriveRegular,
   HomeRegular,
@@ -37,15 +42,19 @@ import {
   OpenRegular,
   PersonAddRegular,
   PersonRegular,
+  PlugConnectedRegular,
   PulseRegular,
   QrCodeRegular,
   QuestionCircleRegular,
   SearchRegular,
   ServerRegular,
   SettingsRegular,
+  ShieldCheckmarkRegular,
   ShieldRegular,
   SignOutRegular,
   StarRegular,
+  TagRegular,
+  WarningRegular,
   WeatherMoonRegular,
   WeatherSunnyRegular
 } from '@fluentui/react-icons'
@@ -78,16 +87,20 @@ export const IconClipboard = shim(ClipboardRegular)
 export const IconClose = shim(DismissRegular)
 export const IconCloud = shim(CloudRegular)
 export const IconCopy = shim(CopyRegular)
+export const IconDatabase = shim(DatabaseRegular)
 export const IconDownload = shim(ArrowDownloadRegular)
 export const IconEdit = shim(EditRegular)
+export const IconError = shim(ErrorCircleRegular)
 export const IconExternalLink = shim(OpenRegular)
 export const IconFile = shim(DocumentRegular)
 export const IconFolder = shim(FolderRegular)
 export const IconFolderFilled = shim(FolderFilled)
 export const IconFolderPlus = shim(FolderAddRegular)
+export const IconGauge = shim(GaugeRegular)
 export const IconGlobe = shim(GlobeRegular)
 export const IconGrid = shim(GridRegular)
 export const IconHardDrive = shim(HardDriveRegular)
+export const IconHistory = shim(HistoryRegular)
 export const IconHome = shim(HomeRegular)
 export const IconImage = shim(ImageRegular)
 export const IconInfo = shim(InfoRegular)
@@ -96,6 +109,7 @@ export const IconLink = shim(LinkRegular)
 export const IconList = shim(ListRegular)
 export const IconLogout = shim(SignOutRegular)
 export const IconMore = shim(MoreHorizontalRegular)
+export const IconPlug = shim(PlugConnectedRegular)
 export const IconPlus = shim(AddRegular)
 export const IconQr = shim(QrCodeRegular)
 export const IconQuestion = shim(QuestionCircleRegular)
@@ -106,7 +120,10 @@ export const IconSearch = shim(SearchRegular)
 export const IconServer = shim(ServerRegular)
 export const IconSettings = shim(SettingsRegular)
 export const IconShield = shim(ShieldRegular)
+export const IconShieldCheck = shim(ShieldCheckmarkRegular)
 export const IconStar = shim(StarRegular)
+export const IconSync = shim(ArrowSyncRegular)
+export const IconTag = shim(TagRegular)
 // 外观三档：跟随系统用 Fluent 的半明半暗图标，浅色/深色用晴与月。
 export const IconThemeAuto = shim(DarkThemeRegular)
 export const IconThemeDark = shim(WeatherMoonRegular)
@@ -115,6 +132,7 @@ export const IconTrash = shim(DeleteRegular)
 export const IconUpload = shim(ArrowUploadRegular)
 export const IconUser = shim(PersonRegular)
 export const IconUserPlus = shim(PersonAddRegular)
+export const IconWarning = shim(WarningRegular)
 
 // OmniStore 品牌标：立方体箱子里的六边形核心（对应设计稿的蓝色方块 logo）。
 // 底色与描边写死品牌对，不跟随容器的 currentColor —— 深色下容器文字是白色，

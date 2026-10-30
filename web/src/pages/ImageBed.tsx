@@ -58,18 +58,16 @@ export function ImageBedPage() {
   if (status.isError) {
     return (
       <AppFrame title="图床">
-        <div className={css.noTargetPage} role="alert">
-          <div className={css.noTargetIcon}><IconCloud size={42} /></div>
-          <h1 className={css.noTargetTitle}>图床加载失败</h1>
-          <p className={css.noTargetHint}>
-            {status.error instanceof ApiRequestError
-              ? status.error.message
-              : '请检查网络连接后重试。'}
-          </p>
-          <div>
-            <Button variant="secondary" onClick={() => status.refetch()}>重新加载</Button>
-          </div>
-        </div>
+        <PageHeader title="图床" />
+        <StateView
+          kind="error"
+          icon={<IconCloud size={22} />}
+          title="图床加载失败"
+          description={status.error instanceof ApiRequestError
+            ? status.error.message
+            : '无法连接到实例服务，请稍后重新加载。'}
+          action={<Button onClick={() => status.refetch()}>重新加载</Button>}
+        />
       </AppFrame>
     )
   }
@@ -77,6 +75,7 @@ export function ImageBedPage() {
   if (status.isSuccess && !status.data.available) {
     return (
       <AppFrame title="图床">
+        <PageHeader title="图床" />
         <NoTargetView isAdmin={isAdmin} />
       </AppFrame>
     )
@@ -88,22 +87,20 @@ export function ImageBedPage() {
 }
 
 function NoTargetView({ isAdmin }: { isAdmin: boolean }) {
-  const css = useStyles()
   return (
-    <div className={css.noTargetPage}>
-      <div className={css.noTargetIcon}><IconCloud size={42} /></div>
-      <h1 className={css.noTargetTitle}>图床尚未开启</h1>
-      <p className={css.noTargetHint}>
-        {isAdmin
-          ? '在系统设置的「站点配置 → 站点服务」中为图床绑定存储源并开启后，即可在这里上传和管理图片。'
-          : '图床能力未开启或未绑定存储源，请联系管理员。'}
-      </p>
-      {isAdmin ? (
+    <StateView
+      kind="unavailable"
+      icon={<IconCloud size={22} />}
+      title="图床尚未开启"
+      description={isAdmin
+        ? '在系统设置的「站点配置 → 站点服务」中为图床绑定存储源并开启后，即可在这里上传和管理图片。'
+        : '图床能力未开启或未绑定存储源，请联系管理员。'}
+      action={isAdmin ? (
         <LinkButton to="/app/admin" search={{ section: 'site', tab: 'services' }} variant="secondary">
           前往系统设置
         </LinkButton>
-      ) : null}
-    </div>
+      ) : undefined}
+    />
   )
 }
 
@@ -239,7 +236,6 @@ function ImageBedContent({ status }: { status: StatusData }) {
                     { value: 'month', label: '本月' },
                   ]}
                   ariaLabel="按时间筛选"
-                  size="compact"
                   width="content"
                 />
                 <ViewSwitcher
@@ -330,7 +326,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
                 label="PicGo API Token"
                 value={tokenStatus.data?.image_bed.exists ? `已配置 ${tokenStatus.data.image_bed.count} 个 · 明文仅在创建时显示` : '尚未配置'}
                 action={
-                  <Link to="/app/admin" search={{ section: 'profile' }} onClick={() => setInfoOpen(false)}>
+                  <Link to="/app/settings" search={{ section: 'profile' }} onClick={() => setInfoOpen(false)}>
                     管理
                   </Link>
                 }

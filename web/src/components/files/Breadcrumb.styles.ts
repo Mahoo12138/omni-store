@@ -1,0 +1,65 @@
+import { makeStyles, shorthands } from '@fluentui/react-components'
+
+export const useStyles = makeStyles({
+  crumb: {
+    'display': 'flex',
+    'flexWrap': 'wrap',
+    'alignItems': 'center',
+    ...shorthands.gap('4px'),
+    'fontSize': '13px',
+    'color': 'var(--colorNeutralForeground2)',
+    'marginBottom': '4px',
+  },
+  crumbSegment: {
+    'display': 'inline-flex',
+    'alignItems': 'center',
+    ...shorthands.gap('4px'),
+  },
+  crumbLink: {
+    'display': 'inline-flex',
+    'alignItems': 'center',
+    ...shorthands.gap('4px'),
+    ...shorthands.padding('2px', '6px'),
+    ...shorthands.borderRadius('var(--borderRadiusSmall)'),
+    'color': 'var(--colorNeutralForeground2)',
+    'textDecoration': 'none',
+    'cursor': 'pointer',
+    'transitionProperty': 'background-color, color',
+    'transitionDuration': 'var(--durationNormal)',
+    'transitionTimingFunction': 'var(--curveDecelerateMax)',
+    '&:hover': {
+      'backgroundColor': 'var(--colorNeutralBackground1Hover)',
+      'color': 'var(--colorNeutralForeground1)',
+    },
+  },
+  crumbSourceTrigger: {
+    'display': 'inline-flex',
+    'alignItems': 'center',
+    ...shorthands.gap('4px'),
+    ...shorthands.padding('2px', '6px'),
+    ...shorthands.borderRadius('var(--borderRadiusSmall)'),
+    'color': 'var(--colorNeutralForeground2)',
+    'textDecoration': 'none',
+    'cursor': 'pointer',
+    'transitionProperty': 'background-color, color',
+    'transitionDuration': 'var(--durationNormal)',
+    'transitionTimingFunction': 'var(--curveDecelerateMax)',
+    '&:hover': {
+      'backgroundColor': 'var(--colorNeutralBackground1Hover)',
+      'color': 'var(--colorNeutralForeground1)',
+    },
+    'border': 0,
+    'fontFamily': 'inherit',
+    'fontSize': 'inherit',
+    'background': 'transparent',
+  },
+  crumbCurrent: {
+    ...shorthands.padding('2px', '6px'),
+    'color': 'var(--colorNeutralForeground1)',
+    'fontWeight': 500,
+  },
+  crumbSep: {
+    'color': 'var(--colorNeutralForeground2)',
+    'userSelect': 'none',
+  },
+})

@@ -62,6 +62,8 @@ export const useStyles = makeStyles({
   table: {
   'width': '100%',
   'borderCollapse': 'collapse',
+  // Fluent Table 原生模式默认 table-layout:fixed；文件列表需要按内容自适应列宽。
+  'tableLayout': 'auto',
   'fontSize': '14px',
   },
   th: {
@@ -72,6 +74,10 @@ export const useStyles = makeStyles({
   'fontSize': '13px',
   'borderBottomWidth': '1px', 'borderBottomStyle': 'solid', 'borderBottomColor': 'var(--colorNeutralStroke2)',
   'whiteSpace': 'nowrap',
+  [media.lg]: {
+    // 窄屏行内名称单元格左右无内边距，表头跟随对齐。
+    ...shorthands.padding('12px', '0px'),
+  },
   },
   detailHeading: {
   'textAlign': 'left',
@@ -109,13 +115,14 @@ export const useStyles = makeStyles({
   mobileRow: {
   [media.lg]: {
     'display': 'grid',
-    'gridTemplateColumns': 'minmax(0, 1fr)',
+    // 名称 + 操作同处一行；操作不再被挤到第二行（那会溢出到下一行并挡住勾选框）。
+    'gridTemplateColumns': 'minmax(0, 1fr) auto',
   },
   },
   selectableRow: {
   [media.lg]: {
     'display': 'grid',
-    'gridTemplateColumns': '44px minmax(0, 1fr)',
+    'gridTemplateColumns': '44px minmax(0, 1fr) auto',
   },
   },
   dropTarget: {
@@ -145,6 +152,8 @@ export const useStyles = makeStyles({
   'textAlign': 'center',
   [media.lg]: {
     'width': '44px',
+    // Fluent TableCell 的固定高度会打断栅格行的自适应高度，窄屏统一交还给内容。
+    'height': 'auto',
     ...shorthands.padding('12px', '0px'),
   },
   },
@@ -163,6 +172,7 @@ export const useStyles = makeStyles({
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   [media.lg]: {
+    'height': 'auto',
     ...shorthands.padding('12px', '0px'),
   },
   },
@@ -205,6 +215,11 @@ export const useStyles = makeStyles({
   'whiteSpace': 'nowrap',
   'color': 'var(--colorNeutralForeground2)',
   [media.lg]: {
+    // 窄屏栅格里 td 是栅格项，改为 flex 让操作图标在行高内垂直居中。
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'flex-end',
+    'height': 'auto',
     ...shorthands.padding('12px', '0px'),
   },
   },
@@ -255,17 +270,6 @@ export const useStyles = makeStyles({
     'height': '44px',
     ...shorthands.padding('12px', '0px'),
   },
-  },
-  empty: {
-  ...shorthands.padding('40px', '24px'),
-  'textAlign': 'center',
-  'color': 'var(--colorNeutralForeground2)',
-  },
-  emptyTitle: {
-  'fontSize': '16px',
-  'fontWeight': 600,
-  'color': 'var(--colorNeutralForeground1)',
-  'marginBottom': '4px',
   },
   skeletonRow: {
   'height': '14px',

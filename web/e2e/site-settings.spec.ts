@@ -248,8 +248,8 @@ test('site services persist state transitions, reject failed saves and recover c
     await imageCard.getByRole('button', { name: '保留策略', exact: true }).click()
     const retentionDialog = page.getByRole('dialog', { name: '图片保留策略', exact: true })
     await expect(retentionDialog).toBeVisible()
-    await retentionDialog.getByLabel('登录用户图片保留天数', { exact: true }).fill('30')
-    await retentionDialog.getByLabel('匿名图片保留天数', { exact: true }).fill('7')
+    await retentionDialog.getByRole('spinbutton', { name: '登录用户图片保留天数' }).fill('30')
+    await retentionDialog.getByRole('spinbutton', { name: '匿名图片保留天数' }).fill('7')
     const retentionSaved = page.waitForResponse((response) => (
       new URL(response.url()).pathname === '/api/v1/admin/image-bed/retention'
       && response.request().method() === 'PUT'
@@ -261,8 +261,8 @@ test('site services persist state transitions, reject failed saves and recover c
     expect(await bindings(page)).toEqual(bindingsBeforeRetention)
     expect((await read<AnonymousSettings>(page, '/api/v1/admin/image-bed/anonymous-settings')).enabled).toBe(true)
     await imageCard.getByRole('button', { name: '保留策略', exact: true }).click()
-    await expect(retentionDialog.getByLabel('登录用户图片保留天数', { exact: true })).toHaveValue('30')
-    await expect(retentionDialog.getByLabel('匿名图片保留天数', { exact: true })).toHaveValue('7')
+    await expect(retentionDialog.getByRole('spinbutton', { name: '登录用户图片保留天数' })).toHaveValue('30')
+    await expect(retentionDialog.getByRole('spinbutton', { name: '匿名图片保留天数' })).toHaveValue('7')
     await retentionDialog.getByRole('button', { name: '取消', exact: true }).click()
 
     // A disabled carrier cannot be selected; an existing anonymous gate can still be closed.
@@ -366,8 +366,8 @@ test('site navigation groups services and general settings without desktop or mo
     }
     await serviceCard(page, '快速图床').getByRole('button', { name: '保留策略', exact: true }).click()
     const retentionDialog = page.getByRole('dialog', { name: '图片保留策略', exact: true })
-    await expect(retentionDialog.getByLabel('登录用户图片保留天数', { exact: true })).toBeVisible()
-    await expect(retentionDialog.getByLabel('匿名图片保留天数', { exact: true })).toBeVisible()
+    await expect(retentionDialog.getByRole('spinbutton', { name: '登录用户图片保留天数' })).toBeVisible()
+    await expect(retentionDialog.getByRole('spinbutton', { name: '匿名图片保留天数' })).toBeVisible()
     await expectNoOverflow(page, retentionDialog)
     await retentionDialog.getByRole('button', { name: '取消', exact: true }).click()
     if (width === 375) await page.screenshot({ path: '/tmp/omni-site-mobile.png', fullPage: true })

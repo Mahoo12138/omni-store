@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Banner } from './Banner'
 import { PageHeader } from './PageHeader'
+import { ServiceStatus } from './ServiceStatus'
 import { StateView } from './StateView'
 
 // 这两个骨架件的契约是 e2e 的定位方式（getByRole('heading'|'status'|'alert')），
@@ -75,10 +76,47 @@ describe('StateView', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('role="group"')
   })
+
+  it('renders a branded page-level state with eyebrow, actions and a status signature', () => {
+    const html = renderToStaticMarkup(
+      <StateView
+        kind="error"
+        brand
+        eyebrow="公开网盘 · 访问状态"
+        titleAs={1}
+        title="公开目录暂时不可用"
+        description="无法连接到实例服务，请稍后重新加载。"
+        action={<button type="button">重新加载</button>}
+        status={{ tone: 'warning', label: '实例服务未响应', hint: '如持续出现，请联系实例管理员' }}
+      />,
+    )
+    expect(html).toContain('role="alert"')
+    expect(html).toMatch(/<h1[^>]*>公开目录暂时不可用<\/h1>/)
+    expect(html).toContain('公开网盘 · 访问状态')
+    expect(html).toContain('实例服务未响应')
+    expect(html).toContain('如持续出现，请联系实例管理员')
+    expect(html).toContain('重新加载')
+  })
+
+  it('keeps status dots decorative so the text carries the meaning', () => {
+    const html = renderToStaticMarkup(
+      <StateView kind="error" title="读取失败" status={{ tone: 'warning', label: '实例服务未响应' }} />,
+    )
+    expect(html).toMatch(/data-tone="warning"[^>]*aria-hidden="true"/)
+  })
 })
 
-describe('Banner', () => {
-  it('gives error and warning banners the alert role and info/success the status role', () => {
+describe('ServiceStatus', () => {
+  it('keeps label and value as separate text nodes for exact queries', () => {
+    const html = renderToStaticMarkup(<ServiceStatus label="新任务服务" value="状态未知" tone="neutral" />)
+    expect(html).toContain('aria-live="polite"')
+    expect(html).toContain('新任务服务')
+    expect(html).toMatch(/<span[^>]*>状态未知<\/span>/)
+    expect(html).toContain('data-tone="neutral"')
+  })
+})
+
+describe('Banner', () => {  it('gives error and warning banners the alert role and info/success the status role', () => {
     expect(renderToStaticMarkup(<Banner intent="error">失败</Banner>)).toContain('role="alert"')
     expect(renderToStaticMarkup(<Banner intent="warning">冲突</Banner>)).toContain('role="alert"')
     expect(renderToStaticMarkup(<Banner intent="info">已进入只读</Banner>)).toContain('role="status"')

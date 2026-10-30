@@ -57,7 +57,8 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   await expect(clipboard).toContainText('已复制 1 项')
   const pasteButton = clipboard.getByRole('button', { name: '粘贴到此处' })
   await expect(pasteButton).toBeDisabled()
-  await pasteButton.locator('..').hover()
+  // Tooltip 包装层本身可聚焦；聚焦比悬停稳定（disabled 控件不派发鼠标事件）。
+  await pasteButton.locator('..').focus()
   await expect(page.getByRole('tooltip')).toContainText(`目标目录与“${renamedName}”的来源目录相同`)
 
   await page.getByRole('row', { name: new RegExp(pasteDestinationName) }).getByRole('button', { name: pasteDestinationName, exact: true }).click()

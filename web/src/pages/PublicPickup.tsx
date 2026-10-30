@@ -5,8 +5,10 @@ import { ApiRequestError } from '../api/client'
 import { downloadBlob, fetchTransferBlob, listTransferFiles, lookupTransfer, unlockTransfer, type TransferFile } from '../api/transfers'
 import { PublicTransferShell } from '../components/transfer/PublicTransferShell'
 import { Button } from '../components/ui/Button'
+import { LinkButton } from '../components/ui/LinkButton'
 import { Banner } from '../components/shell/Banner'
 import { FormField } from '../components/shell/FormLayout'
+import { StateView } from '../components/shell/StateView'
 import { Input } from '@fluentui/react-components'
 import { IconDownload, IconFile, IconKey } from '../components/ui/Icon'
 import { formatBytes } from '../utils/format'
@@ -131,10 +133,25 @@ function PickupTask({ publicKey }: { publicKey: string }) {
       : info.error instanceof ApiRequestError && info.error.code === 'TRANSFER_EXPIRED'
         ? '发件包已过期'
         : errorMessage(info.error, '发件包加载失败'))
-    return <PublicTransferShell title="领取文件"><div className={css.workbench}><div className={css.state} role="alert">
-      <h2>{message}</h2><p>{terminal ? '该发件包目前无法领取，请联系分享者确认。' : '暂时无法获取取件信息，请重试。'}</p>
-      {!terminal ? <Button variant="secondary" onClick={() => void info.refetch()}>重新加载</Button> : null}
-    </div></div></PublicTransferShell>
+    return <PublicTransferShell title="领取文件">
+      <StateView
+        kind="error"
+        brand
+        eyebrow="文件中转 · 取件"
+        title={terminal ? message : '暂时无法获取取件信息'}
+        description={terminal
+          ? '该发件包目前无法领取，请联系分享者确认。'
+          : '无法连接到实例服务。请稍后重新加载；如果持续出现，请联系分享者确认。'}
+        action={terminal
+          ? <LinkButton variant="secondary" to="/transfer" search={{ view: 'send' }}>返回文件中转</LinkButton>
+          : <Button onClick={() => void info.refetch()}>重新加载</Button>}
+        status={{
+          tone: terminal ? 'neutral' : 'warning',
+          label: terminal ? '发件包不可领取' : '实例服务未响应',
+          hint: terminal ? '此链接不再可用' : '取件链接和已记录的文件不会丢失',
+        }}
+      />
+    </PublicTransferShell>
   }
   const title = info.data.title || '领取文件'
   const summary = <div className={css.summary}><span>{info.data.file_count} 个文件 · {formatBytes(info.data.total_size)}</span>{info.data.expires_at ? <span>截止 {new Date(info.data.expires_at).toLocaleString()}</span> : null}{info.data.downloads_left != null ? <span>剩余 {info.data.downloads_left} 次下载</span> : null}</div>
@@ -156,13 +173,13 @@ function PickupTask({ publicKey }: { publicKey: string }) {
       </section> : <div className={css.state}>
         {authError ? <><h2>暂时无法领取文件</h2><Banner intent="error">{authError}</Banner><Button variant="secondary" onClick={() => { setAuthError(''); unlock.mutate({ code: '', password: '' }) }}>重试</Button></> : <p role="status">正在准备取件…</p>}
       </div> : <>
-        <div className={css.toolbar}><h2>文件列表</h2><Button onClick={() => void download(null)} disabled={downloading || !files.data?.length}><IconDownload size={16} /> {downloading ? '正在准备下载…' : '全部下载（ZIP）'}</Button></div>
+        <div className={css.toolbar}><h2>文件列表</h2><Button onClick={() => void download(null)} disabled={downloading || !files.data?.length} icon={<IconDownload size={16} />}>{downloading ? '正在准备下载…' : '全部下载（ZIP）'}</Button></div>
         {files.isPending ? <div className={css.state} role="status">正在加载文件…</div> : null}
         {files.isError ? <div className={css.state}><Banner intent="error" action={<Button variant="secondary" onClick={() => void files.refetch()}>重新加载文件</Button>}>{errorMessage(files.error, '无法获取文件列表。')}</Banner></div> : null}
         {files.data && files.data.length === 0 ? <div className={css.state}>发件包中没有文件。</div> : null}
         {files.data && files.data.length > 0 ? <ul className={css.fileList}>{files.data.map((entry) => <li key={entry.id} className={css.downloadRow}>
           <div className={css.downloadDetails}><span className={css.fileIcon}><IconFile size={19} /></span><div className={css.fileDetails}><span className={css.filePath}>{entry.relative_path}</span><span className={css.fileSize}>{formatBytes(entry.size)}</span></div></div>
-          <Button variant="secondary" disabled={downloading} onClick={() => void download(entry)} aria-label={`下载 ${entry.relative_path}`}><IconDownload size={15} /> 下载</Button>
+          <Button variant="secondary" disabled={downloading} onClick={() => void download(entry)} aria-label={`下载 ${entry.relative_path}`} icon={<IconDownload size={15} />}>下载</Button>
         </li>)}</ul> : null}
         {sessionMessage ? <Banner intent="info">{sessionMessage}</Banner> : null}
         {error ? <Banner intent="error">{error}</Banner> : null}

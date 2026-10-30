@@ -1,51 +1,13 @@
 import { makeStyles, shorthands } from '@fluentui/react-components'
 import { media } from '../styles/media'
 
-// AnonymousUpload 专用样式；serviceDot* 变体已内联全量属性，dropZoneActive 仅保留差异（由
-// AnonymousUpload.tsx 通过 mergeClasses(css.dropZone, dragActive && css.dropZoneActive) 叠加）。
+// AnonymousUpload 专用样式；服务状态胶囊已收口到 shell/ServiceStatus，
+// dropZoneActive 仅保留差异（由 AnonymousUpload.tsx 通过 mergeClasses 叠加）。
 export const useStyles = makeStyles({
   'page': {
   'width': '100%',
   'minWidth': '0px',
   ...shorthands.padding('0', '0', 'var(--spacingVerticalXXXL)'),
-  },
-  'serviceBadge': {
-  'display': 'flex',
-  'alignItems': 'center',
-  ...shorthands.gap('var(--spacingHorizontalMNudge)'),
-  ...shorthands.padding('var(--spacingVerticalXS)', 'var(--spacingHorizontalL)'),
-  ...shorthands.border('1px', 'solid', 'var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorNeutralBackground1)',
-  'whiteSpace': 'nowrap',
-  },
-  serviceDotPending: {
-'width': '9px',
-  'height': '9px',
-  'flexShrink': 0,
-  ...shorthands.borderRadius('999px'),
-  'background': 'var(--colorPaletteYellowForeground1)',
-  },
-  serviceDotError: {
-'width': '9px',
-  'height': '9px',
-  'flexShrink': 0,
-  ...shorthands.borderRadius('999px'),
-  'background': 'var(--colorPaletteRedForeground1)',
-  },
-  serviceDotEnabled: {
-'width': '9px',
-  'height': '9px',
-  'flexShrink': 0,
-  ...shorthands.borderRadius('999px'),
-  'background': 'var(--colorPaletteGreenForeground1)',
-  },
-  serviceDotDisabled: {
-'width': '9px',
-  'height': '9px',
-  'flexShrink': 0,
-  ...shorthands.borderRadius('999px'),
-  'background': 'var(--colorNeutralForeground2)',
   },
   'workbenchStage': {
   'minWidth': '0px',
@@ -295,33 +257,6 @@ export const useStyles = makeStyles({
   '&:focus-within': {
     ...shorthands.borderColor('var(--colorBrandBackground)'),
   },
-  },
-  'serviceState': {
-  'minHeight': '220px',
-  'display': 'flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  ...shorthands.gap('24px'),
-  ...shorthands.padding('40px'),
-  ...shorthands.borderWidth('1px'), ...shorthands.borderStyle('solid'), ...shorthands.borderColor('var(--colorNeutralStroke2)'),
-  ...shorthands.borderRadius('var(--borderRadiusLarge)'),
-  'background': 'var(--colorNeutralBackground1)',
-  [media.sm]: {
-    'alignItems': 'flex-start',
-    'flexDirection': 'column',
-    ...shorthands.padding('24px'),
-  },
-  },
-  'serviceIcon': {
-  'width': '52px',
-  'height': '52px',
-  'display': 'inline-flex',
-  'alignItems': 'center',
-  'justifyContent': 'center',
-  'flexShrink': 0,
-  ...shorthands.borderRadius('var(--borderRadiusMedium)'),
-  'background': 'var(--colorBrandBackground2)',
-  'color': 'var(--colorBrandBackground)',
   },
   'loadingState': {
   'minHeight': '288px',
