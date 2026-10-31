@@ -14,6 +14,14 @@ async function openTrash(page: Page) {
   await expect(page.getByRole('heading', { name: '回收站', exact: true })).toBeVisible()
 }
 
+// 路由切换期间旧文件列表可能仍在 DOM；只匹配带“永久删除”的回收站行，
+// 避免把文件列表行当成回收站行。
+function trashRows(page: Page, name: string) {
+  return page.getByRole('row')
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .filter({ has: page.getByRole('button', { name: '永久删除' }) })
+}
+
 test('directory can be created, renamed, copied, cut-pasted and cleaned up', async ({ page }) => {
   const suffix = Date.now()
   const originalName = `e2e-ops-${suffix}`
@@ -63,8 +71,11 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   const pasteButton = clipboard.getByRole('button', { name: '粘贴到此处' })
   await expect(pasteButton).toBeDisabled()
   // Tooltip 包装层本身可聚焦；聚焦比悬停稳定（disabled 控件不派发鼠标事件）。
-  await pasteButton.locator('..').focus()
-  await expect(page.getByRole('tooltip')).toContainText(`目标目录与“${renamedName}”的来源目录相同`)
+  // CI 上聚焦与 tooltip 渲染偶尔有延迟，重试聚焦而不是依赖一次性 5s 断言。
+  await expect(async () => {
+    await pasteButton.locator('..').focus()
+    await expect(page.getByRole('tooltip')).toContainText(`目标目录与“${renamedName}”的来源目录相同`, { timeout: 2_000 })
+  }).toPass({ timeout: 15_000 })
 
   await page.getByRole('row', { name: new RegExp(pasteDestinationName) }).getByRole('button', { name: pasteDestinationName, exact: true }).click()
   await clipboard.getByRole('button', { name: '粘贴到此处' }).click()
@@ -95,8 +106,9 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
 
   await openTrash(page)
   for (const name of [renamedName, pasteDestinationName, moveDestinationName]) {
-    row = page.getByRole('row', { name: new RegExp(name) })
-    await row.getByRole('button', { name: '永久删除' }).click()
+    const row = trashRows(page, name)
+    await expect(row.first()).toBeVisible()
+    await row.first().getByRole('button', { name: '永久删除' }).click()
     await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除' }).click()
     await expect(row).toHaveCount(0)
   }
@@ -170,7 +182,7 @@ test('multi-select paste reports partial conflicts and keeps only failed copies 
 
   await openTrash(page)
   for (const name of [sourceA, sourceB, target]) {
-    const rows = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
+    const rows = trashRows(page, name)
     await expect(rows.first()).toBeVisible()
     while (await rows.count() > 0) {
       const count = await rows.count()
@@ -256,8 +268,9 @@ test('batch delete confirms selection and keeps failed entries selected for retr
 
   await openTrash(page)
   for (const name of [first, second]) {
-    const row = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
-    await row.getByRole('button', { name: '永久删除' }).click()
+    const row = trashRows(page, name)
+    await expect(row.first()).toBeVisible()
+    await row.first().getByRole('button', { name: '永久删除' }).click()
     await page.getByRole('dialog', { name: '永久删除' }).getByRole('button', { name: '永久删除', exact: true }).click()
     await expect(row).toHaveCount(0)
   }
