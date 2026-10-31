@@ -146,3 +146,11 @@ Web 端新增公开入口 `/transfer`（发送文件/收集文件/收发记录�
 - `OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh` 通过：9 条场景共 90 次真实 SIGKILL。
 - 真实客户端矩阵仍未执行：Windows Explorer/Finder/rclone/Cyberduck/WinSCP/RaiDrive/Mountain Duck、AWS CLI/rclone S3/s3cmd/MinIO Client、PicGo 均为 not-tested；MP4、Safari/Firefox 与生产反向代理同样未验收。这些仍是 2.0.0 正式发布前的剩余门禁，本次 RC 不声称已完成。
 - 本地创建标签 `v2.0.0-rc.1`；未推送、未发布镜像或 GitHub Release。
+- 标签 `v2.0.0-rc.1` 随后已推送；GitHub Actions 质量门禁因 Linux E2E/测试环境问题失败，未产出镜像或 Release，由 `v2.0.0-rc.2` 取代；已发布标签未移动。
+
+## 2026-11-01：2.0.0-rc.2 发布
+
+- 候选提交 `010fb3c`；GitHub Actions 质量门禁、Docker 镜像、Linux amd64/arm64 二进制与 GitHub Release 全部成功。
+- Release: https://github.com/Mahoo12138/omni-store/releases/tag/v2.0.0-rc.2（pre-release）；资产为 `checksums.txt`、两个 Linux tar.gz，下载后 `shasum -a 256 -c` 通过。
+- 修复的 CI 环境问题：E2E 截图改用跨平台临时目录；备份 E2E 用 Node 校验和/realpath 并安装 `unzip`/`zip`；回收站导航与通知遮挡等待；lifecycle 测试 join goroutine；文件操作用例超时调整。
+- 真实客户端实测结果与剩余 GA 缺口见 [兼容矩阵](design/compatibility-testing.md)：S3 `GetBucketLocation`、ListObjects V1、Windows 客户端、MP4/Safari/Firefox/生产代理仍未完成。
