@@ -21,7 +21,7 @@ concurrency:
 jobs:
   quality:
     name: Unified release gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
 
@@ -79,7 +79,7 @@ jobs:
     name: Build and publish release image
     if: startsWith(github.ref, 'refs/tags/v')
     needs: quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -148,7 +148,7 @@ jobs:
     name: Linux ${{ matrix.arch }} binary
     if: startsWith(github.ref, 'refs/tags/v')
     needs: quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:
@@ -195,7 +195,7 @@ jobs:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [docker, binaries]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
