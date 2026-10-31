@@ -11,11 +11,13 @@ func TestWriteWaitsForReadersAndBlocksNewReaders(t *testing.T) {
 	releaseFirst := Read(resource)
 	writerAcquired := make(chan struct{})
 	releaseWriter := make(chan struct{})
+	writerDone := make(chan struct{})
 	go func() {
 		release := Write(resource)
 		close(writerAcquired)
 		<-releaseWriter
 		release()
+		close(writerDone)
 	}()
 
 	select {
@@ -31,10 +33,12 @@ func TestWriteWaitsForReadersAndBlocksNewReaders(t *testing.T) {
 	}
 
 	secondReaderAcquired := make(chan struct{})
+	secondReaderDone := make(chan struct{})
 	go func() {
 		release := Read(resource)
 		close(secondReaderAcquired)
 		release()
+		close(secondReaderDone)
 	}()
 	select {
 	case <-secondReaderAcquired:
@@ -47,6 +51,11 @@ func TestWriteWaitsForReadersAndBlocksNewReaders(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("reader did not acquire after writer released")
 	}
+	// Both goroutines must finish releasing before the next test inspects the
+	// shared registry; acquiring a lease and cleaning up the registry entry are
+	// not the same instant.
+	<-writerDone
+	<-secondReaderDone
 }
 
 func TestMultipleKeysUseStableOrderAndRegistryIsReleased(t *testing.T) {
