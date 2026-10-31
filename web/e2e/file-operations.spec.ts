@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// 这些用例包含通知退场和 tooltip 重试等待，长于全局 30s 上限。
+test.describe.configure({ timeout: 60_000 })
+
 // 粘贴任务卡是常驻 toast（duration Infinity），任务状态每次更新都会重建节点。
 // 等"粘贴完成"定格后用 force 点击关闭，避免命中 detach 重试超时。
 async function closePasteTaskToast(page: Page) {
@@ -12,6 +15,8 @@ async function closePasteTaskToast(page: Page) {
 async function openTrash(page: Page) {
   await page.getByRole('button', { name: '回收站' }).click()
   await expect(page.getByRole('heading', { name: '回收站', exact: true })).toBeVisible()
+  // 右下角通知卡会自动消失；在它退场前点击表格行会被拦截。
+  await expect(page.getByRole('status').filter({ hasText: '移入回收站' })).toHaveCount(0, { timeout: 12_000 })
 }
 
 // 路由切换期间旧文件列表可能仍在 DOM；只匹配带“永久删除”的回收站行，
@@ -71,9 +76,14 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
   const pasteButton = clipboard.getByRole('button', { name: '粘贴到此处' })
   await expect(pasteButton).toBeDisabled()
   // Tooltip 包装层本身可聚焦；聚焦比悬停稳定（disabled 控件不派发鼠标事件）。
-  // CI 上聚焦与 tooltip 渲染偶尔有延迟，重试聚焦而不是依赖一次性 5s 断言。
+  // 通知卡可能仍在退场，且重复 focus 不会再次触发 focus 事件；等待通知消失，
+  // 再以悬停 + 失焦/聚焦重试 tooltip。
+  await expect(page.getByRole('status').filter({ hasText: '已复制' })).toHaveCount(0, { timeout: 12_000 })
   await expect(async () => {
-    await pasteButton.locator('..').focus()
+    const trigger = pasteButton.locator('..')
+    await trigger.hover()
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await trigger.focus()
     await expect(page.getByRole('tooltip')).toContainText(`目标目录与“${renamedName}”的来源目录相同`, { timeout: 2_000 })
   }).toPass({ timeout: 15_000 })
 
