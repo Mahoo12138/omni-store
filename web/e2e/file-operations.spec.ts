@@ -9,6 +9,11 @@ async function closePasteTaskToast(page: Page) {
   await status.first().getByRole('button', { name: '关闭' }).click({ force: true })
 }
 
+async function openTrash(page: Page) {
+  await page.getByRole('button', { name: '回收站' }).click()
+  await expect(page.getByRole('heading', { name: '回收站', exact: true })).toBeVisible()
+}
+
 test('directory can be created, renamed, copied, cut-pasted and cleaned up', async ({ page }) => {
   const suffix = Date.now()
   const originalName = `e2e-ops-${suffix}`
@@ -88,7 +93,7 @@ test('directory can be created, renamed, copied, cut-pasted and cleaned up', asy
     await expect(row).toHaveCount(0)
   }
 
-  await page.getByRole('button', { name: '回收站' }).click()
+  await openTrash(page)
   for (const name of [renamedName, pasteDestinationName, moveDestinationName]) {
     row = page.getByRole('row', { name: new RegExp(name) })
     await row.getByRole('button', { name: '永久删除' }).click()
@@ -163,9 +168,10 @@ test('multi-select paste reports partial conflicts and keeps only failed copies 
     await expect(row).toHaveCount(0)
   }
 
-  await page.getByRole('button', { name: '回收站' }).click()
+  await openTrash(page)
   for (const name of [sourceA, sourceB, target]) {
     const rows = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
+    await expect(rows.first()).toBeVisible()
     while (await rows.count() > 0) {
       const count = await rows.count()
       const row = rows.first()
@@ -248,7 +254,7 @@ test('batch delete confirms selection and keeps failed entries selected for retr
   await expect(deleteStatus).toContainText('已处理 1 项')
   await expect(page.getByRole('row', { name: new RegExp(second) })).toHaveCount(0)
 
-  await page.getByRole('button', { name: '回收站' }).click()
+  await openTrash(page)
   for (const name of [first, second]) {
     const row = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
     await row.getByRole('button', { name: '永久删除' }).click()
