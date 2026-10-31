@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -75,9 +76,8 @@ test('admin exports backup via UI; backup validates and restores offline', async
   const manifest = JSON.parse(readFileSync(join(extractDir, 'manifest.json'), 'utf-8'))
   expect(manifest.format_version).toBe(3)
   expect(manifest.database_max_migration).toMatch(/^v\d+\.\d+\.\d+$/)
-  const { execSync } = await import('node:child_process')
   for (const [name, checksum] of Object.entries(manifest.checksums as Record<string, string>)) {
-    const actual = execSync(`shasum -a 256 "${join(extractDir, name)}"`).toString().split(/\s+/)[0]
+    const actual = createHash('sha256').update(readFileSync(join(extractDir, name))).digest('hex')
     expect(actual, `checksum of ${name}`).toBe(checksum)
   }
 
@@ -116,6 +116,7 @@ test('admin exports backup via UI; backup validates and restores offline', async
   expect(existsSync(join(restoreDataDir, 'omnistore.db'))).toBe(true)
 
   // 篡改包：解包后翻转数据库快照一个字节再重打包 → 校验和拒绝。
+  const { execSync } = await import('node:child_process')
   execSync(`cd "${extractDir}" && printf 'X' | dd of="database/omnistore.db" bs=1 seek=512 conv=notrunc status=none`)
   const tamperedPath = join(stagedData, 'tampered.zip')
   execSync(`cd "${extractDir}" && zip -q -r "${tamperedPath}" .`)
@@ -163,7 +164,7 @@ test('source root deleted out-of-band surfaces in health and rebinds to a new ro
   expect(rebound.status).toBe(200)
   // ValidateRootPath 返回符号链接解析后的真实路径。
   expect(rebound.body.data.root_path).toContain('/omnistore-rebound-')
-  expect(rebound.body.data.root_path.startsWith('/private/')).toBe(true)
+  expect(rebound.body.data.root_path).toBe(realpathSync(newRoot))
 
   // 状态恢复健康；校准台账后空目录对应 0 台账行（旧记录被收敛）。
   const statusAfter = await adminAPI(page, 'GET', '/api/v1/admin/operations/status')

@@ -146,15 +146,18 @@ test('the preview layer keeps its chrome always-dark while the content panel fol
   const dialog = page.getByRole('dialog', { name: '预览 README.txt' })
   await expect(dialog).toBeVisible()
 
-  const readPreviewColors = () => dialog.evaluate((element) => {
-    const closeButton = element.querySelector<HTMLElement>('.omnistore-preview-headerBtn')
-    const textPanel = element.querySelector<HTMLElement>('.omnistore-preview-textWrap')
-    return {
-      overlayBackground: getComputedStyle(element).backgroundColor,
-      closeColor: closeButton ? getComputedStyle(closeButton).color : '',
-      panelBackground: textPanel ? getComputedStyle(textPanel).backgroundColor : '',
-    }
-  })
+  const readPreviewColors = async () => {
+    await expect(dialog.locator('.omnistore-preview-textWrap')).toBeVisible()
+    return dialog.evaluate((element) => {
+      const closeButton = element.querySelector<HTMLElement>('.omnistore-preview-headerBtn')
+      const textPanel = element.querySelector<HTMLElement>('.omnistore-preview-textWrap')
+      return {
+        overlayBackground: getComputedStyle(element).backgroundColor,
+        closeColor: closeButton ? getComputedStyle(closeButton).color : '',
+        panelBackground: textPanel ? getComputedStyle(textPanel).backgroundColor : '',
+      }
+    })
+  }
 
   const onDark = await readPreviewColors()
   expect(onDark.overlayBackground, '遮罩底色解析出来了').not.toBe('rgba(0, 0, 0, 0)')

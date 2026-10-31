@@ -1,4 +1,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 type ServiceName = '公开网盘' | '匿名图床'
 type AccountName = '管理登录' | '进入工作台'
@@ -163,7 +165,7 @@ async function checkRouteMatrix(page: Page, account: AccountName) {
       const width = page.viewportSize()!.width
       const screenshotName = screenshotNames[route.path]
       if (account === '管理登录' && [1440, 320].includes(width) && screenshotName) {
-        await page.screenshot({ path: `/private/tmp/omni-public-nav-${width}-${screenshotName}.png`, fullPage: true })
+        await page.screenshot({ path: join(tmpdir(), `omni-public-nav-${width}-${screenshotName}.png`), fullPage: true })
       }
     })
   }
