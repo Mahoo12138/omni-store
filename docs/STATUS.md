@@ -138,3 +138,11 @@ Web 端新增公开入口 `/transfer`（发送文件/收集文件/收发记录�
 - 新增 `TestMigrateV2BindingRules` 覆盖 0/1/多候选，并断言存量源 S3 保持、fresh 源默认关闭；补齐 3 个 Go 文件的 gofmt。
 
 验证：`gofmt -l cmd internal migrations` 无输出；`go vet ./...`；`go test -count=1 ./...`；`go test -race -count=1 ./internal/db`；`git diff --check` 均通过；全新临时实例 Chromium E2E 59/59 通过。已有本地 2.0.0-dev 库不会重放已记录的迁移，需要重建测试数据才能验证新规则。未重跑完整 `verify-release.sh`/crashcheck，未发布镜像或标签。
+
+## 2026-11-01：2.0.0-rc.1 发布候选
+
+- 候选代码提交 `4489abb`；本条目所在提交仅追加发布文档。
+- 干净工作区以 `OMNISTORE_RELEASE_VERSION=2.0.0-rc.1` 完整通过 `./scripts/verify-release.sh`：前端 97 项单元测试、`tsc -b` 与生产构建；Go 格式、vet、全量非缓存测试（总覆盖率 70.9%，全部关键包过线）与全量 race；全新临时实例 Chromium E2E 59/59；嵌入前端的发布二进制、Linux amd64/arm64 交叉构建、Compose 配置与 diff 检查。
+- `OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh` 通过：9 条场景共 90 次真实 SIGKILL。
+- 真实客户端矩阵仍未执行：Windows Explorer/Finder/rclone/Cyberduck/WinSCP/RaiDrive/Mountain Duck、AWS CLI/rclone S3/s3cmd/MinIO Client、PicGo 均为 not-tested；MP4、Safari/Firefox 与生产反向代理同样未验收。这些仍是 2.0.0 正式发布前的剩余门禁，本次 RC 不声称已完成。
+- 本地创建标签 `v2.0.0-rc.1`；未推送、未发布镜像或 GitHub Release。

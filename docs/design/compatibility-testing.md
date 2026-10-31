@@ -87,3 +87,7 @@ minimal repro
 | AWS CLI / rclone S3 / s3cmd / MinIO Client / PicGo | not-tested | 既有 S3/PicGo API 测试不构成客户端矩阵通过 |
 
 复现：先构建前端，再运行 `node scripts/verify-browser.mjs static-browser-compatibility.spec.ts`。完整矩阵仍是 2.0 RC 前的待办。
+
+## 2026-11-01 RC 候选
+
+`v2.0.0-rc.1` 的 Release Gate 与 crashcheck 已通过；本表真实客户端仍未执行，RC 不将 API 测试或 Chromium 结果外推为客户端兼容通过。2.0.0 正式发布前仍需补齐上述 WebDAV/S3/PicGo 真实客户端与 MP4、Safari/Firefox、生产代理验收。
