@@ -12,13 +12,6 @@ export const useSectionStyles = makeStyles({
   ...shorthands.gap('4px'),
   'minWidth': '0px',
   },
-  'protocolHint': {
-  ...shorthands.margin('0px'),
-  'fontSize': '13px',
-  'lineHeight': 1.6,
-  'color': 'var(--colorNeutralForeground2)',
-  'overflowWrap': 'anywhere',
-  },
   'protocolList': {
   'display': 'flex',
   'flexDirection': 'column',

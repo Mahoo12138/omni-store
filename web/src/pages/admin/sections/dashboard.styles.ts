@@ -141,7 +141,7 @@ export const useSectionStyles = makeStyles({
   // 三张运维卡：一个主数值 + 两三条支撑行，卡片等高。
   'opsStatGrid': {
   'display': 'grid',
-  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
+  'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
   ...shorthands.gap(tokens.spacingHorizontalL),
   [media.md]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',
@@ -316,7 +316,7 @@ export const useSectionStyles = makeStyles({
   // 站点能力：三张小卡，图标砖给出产品身份，状态仍由 Badge 表达。
   'capabilityGrid': {
   'display': 'grid',
-  'gridTemplateColumns': 'repeat(3, minmax(0, 1fr))',
+  'gridTemplateColumns': 'repeat(2, minmax(0, 1fr))',
   ...shorthands.gap(tokens.spacingHorizontalM),
   [media.md]: {
     'gridTemplateColumns': 'minmax(0, 1fr)',

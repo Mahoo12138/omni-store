@@ -39,7 +39,6 @@ export function FavoritesPage() {
       <PageHeader
         eyebrow="个人空间"
         title="收藏"
-        description="收藏常用文件和文件夹，跨存储源快速返回；收藏不会复制或移动原文件。"
       />
 
       {favorites.isPending ? (
@@ -56,7 +55,6 @@ export function FavoritesPage() {
           kind="empty"
           icon={<IconStar size={22} />}
           title="还没有收藏"
-          description="在文件列表或网格中点按星标，即可收藏文件或文件夹。"
           action={<Button variant="secondary" onClick={() => navigate({ to: '/app' })}>前往文件</Button>}
         />
       ) : (

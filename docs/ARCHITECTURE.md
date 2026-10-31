@@ -50,13 +50,11 @@ Source 改名不能改变 key。
 OmniStore
 ├── Site Capabilities
 │   ├── Public Drive -> Source A
-│   ├── Image Bed -> Source B
-│   └── Transfer Center -> Source C
+│   └── Image Bed -> Source B
 │
 ├── Source Protocols
 │   ├── Source A: WebDAV / S3 / Static HTTP + publish_root
-│   ├── Source B: WebDAV / S3 / Static HTTP + publish_root
-│   └── Source C: WebDAV / S3 / Static HTTP + publish_root
+│   └── Source B: WebDAV / S3 / Static HTTP + publish_root
 │
 └── Resource Capabilities
     ├── Preview
@@ -80,10 +78,7 @@ Site Capability 需要在绑定 Source 内保存内部数据时使用：
 
 ```text
 .omnistore/
-├── image-bed/
-└── transfer/
-    ├── send/
-    └── collect/
+└── image-bed/
 ```
 
 规则：
@@ -99,7 +94,7 @@ Site Capability 需要在绑定 Source 内保存内部数据时使用：
 - 功能模块自己维护业务记录；
 - 不能按文件名猜测所有权并删除。
 
-图床/Transfer 初始化托管根时，发现未知 `.omnistore/` 必须阻止接管并提示人工处理。公开盘/静态资源不创建托管根，只隔离并告警，不因普通发布目录旁存在未知内部目录就擅自改动它。完整规则见 [托管命名空间](design/managed-namespace.md)。
+图床初始化托管根时，发现未知 `.omnistore/` 必须阻止接管并提示人工处理。公开盘/静态资源不创建托管根，只隔离并告警，不因普通发布目录旁存在未知内部目录就擅自改动它。完整规则见 [托管命名空间](design/managed-namespace.md)。
 
 ## 5. Site Capability Binding
 
@@ -117,16 +112,14 @@ Capability：
 ```text
 public_drive
 image_bed
-transfer_center
 ```
 
-删除 Source 前必须解除当前绑定，并处理所有历史图床、Transfer、回收站与未完成恢复日志引用；仅 Disable 不清除外键关系，也不授权删除。
+删除 Source 前必须解除当前绑定，并处理所有历史图床、回收站与未完成恢复日志引用；仅 Disable 不清除外键关系，也不授权删除。
 
 Rebind 语义：
 
 - Public Drive：管理员确认后切换当前公开根。
 - Image Bed：只影响新上传；旧 images 继续按记录中的 source 读取。
-- Transfer Center：只影响新建 Transfer；已有 Transfer 快照自己的 source。
 
 静态 HTTP 在源协议配置中独立维护。source/publish_root 变更必须走 reset/relocate，不允许静默让旧 URL 指向另一批内容；跨源迁移不能覆盖目标源已有静态配置。
 
@@ -185,57 +178,35 @@ Auth / Capability
 → cleanup
 ```
 
-Transfer service writes 可以复用底层 crash-safe primitives，但不能伪装成普通用户 `file_records`。
-
-## 8. Transfer Storage
-
-Transfer Center 绑定的 Source 是**物理承载空间**。
-
-Transfer 自己记录：
-
-- owner；
-- source snapshot；
-- relative payload path；
-- file metadata；
-- status；
-- quotas；
-- expiry。
-
-普通 User Quota 不计算 Transfer 临时 payload；Transfer 有独立 active quota。
-
-Source physical quota始终计算。
-
-## 9. Backup
+## 8. Backup
 
 System backup：
 
 - DB；
 - config；
 - keys；
-- capability bindings；
-- transfer metadata。
+- capability bindings。
 
 不打包：
 
 - Storage Source 内容；
-- Transfer payload；
 - cache/tmp。
 
 Restore 后通过 Source Rebind 重新建立 root path。
 
-## 10. 静态发布不是托管存储
+## 9. 静态发布不是托管存储
 
 `internal/staticassets`（建议模块名）负责发布配置、范围解析、公开媒体读取和发布身份，不负责创建第二套文件树。图片/视频原件仍在普通目录；写入由现有 files / WebDAV / S3 管线完成。
 
 读取路径：发布快照 → 普通文件安全读取 → 公开 HTTP 响应。其访问授权不同于登录下载，但路径边界、文件锁、类型隔离必须共用；不能直接暴露 `http.FileServer(Source.root)`。
 
-一个源同时绑定三项 Site 服务并开启静态 HTTP 时，公开盘与静态资源只读取普通文件；图床与 Transfer 经各自记录访问内部内容。普通协议开启也不能绕过 `.omnistore/`。Source 计量覆盖所有实际字节，静态发布不再收取一份“托管副本”配额。
+一个源同时绑定两项 Site 服务并开启静态 HTTP 时，公开盘与静态资源只读取普通文件；图床经自己的记录访问内部内容。普通协议开启也不能绕过 `.omnistore/`。Source 计量覆盖所有实际字节，静态发布不再收取一份“托管副本”配额。
 
-## 11. Reconcile 的作用域
+## 10. Reconcile 的作用域
 
-`file_records.resource_scope` 分为 `file` 和 `image_bed`。普通扫描只校准 file scope；不把内部图片行删除为 missing，也不把 Transfer 导入 file scope。普通搜索 FTS 仅索引 file scope active 行；查询时仍做路径过滤。图片历史和用量使用专用作用域，不能依赖普通文件搜索。内部作用域只能由受信任 Service 写入。
+`file_records.resource_scope` 分为 `file` 和 `image_bed`。普通扫描只校准 file scope；不把内部图片行删除为 missing。普通搜索 FTS 仅索引 file scope active 行；查询时仍做路径过滤。图片历史和用量使用专用作用域，不能依赖普通文件搜索。内部作用域只能由受信任 Service 写入。
 
-## 12. 相关目标契约
+## 11. 相关目标契约
 
 - [能力与文件管理归属](design/capability-scope.md)
 - [静态发布](design/static-assets.md)

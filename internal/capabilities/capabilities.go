@@ -1,5 +1,5 @@
 // Package capabilities 实现 Site Capability 单例绑定：
-// public_drive / image_bed / transfer_center 三项站点服务
+// public_drive / image_bed 两项站点服务
 // 各自至多绑定一个当前存储源，由管理员统一配置。
 package capabilities
 
@@ -15,14 +15,13 @@ import (
 
 // Site Capability 标识（与 site_capability_bindings.capability 枚举一致）。
 const (
-	CapabilityPublicDrive    = "public_drive"
-	CapabilityImageBed       = "image_bed"
-	CapabilityTransferCenter = "transfer_center"
+	CapabilityPublicDrive = "public_drive"
+	CapabilityImageBed    = "image_bed"
 )
 
 // AllCapabilities 返回全部 Site Capability，顺序固定。
 func AllCapabilities() []string {
-	return []string{CapabilityPublicDrive, CapabilityImageBed, CapabilityTransferCenter}
+	return []string{CapabilityPublicDrive, CapabilityImageBed}
 }
 
 var (
@@ -248,7 +247,7 @@ func (s *Service) BoundCapabilities(storageSourceID int64) ([]string, error) {
 
 func isValidCapability(capability string) bool {
 	switch capability {
-	case CapabilityPublicDrive, CapabilityImageBed, CapabilityTransferCenter:
+	case CapabilityPublicDrive, CapabilityImageBed:
 		return true
 	}
 	return false

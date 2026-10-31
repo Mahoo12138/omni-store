@@ -98,7 +98,6 @@ export function TrashPage() {
           kind="empty"
           icon={<IconTrash size={22} />}
           title="回收站为空"
-          description="从文件管理器删除的内容会暂存在这里。"
         />
       ) : null}
       {trash.isSuccess && entries.length > 0 ? (
@@ -194,7 +193,6 @@ function RestoreDialog({ sourceKey, entry, onClose, onSuccess }: {
       open
       onOpenChange={(open) => { if (!open) onClose() }}
       title="恢复文件"
-      description="可恢复到原路径，也可指定同一存储源中的其他路径。"
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button onClick={submit} disabled={mutation.isPending}>{mutation.isPending ? '恢复中…' : '恢复'}</Button></>}
     >
       <FormField label="恢复路径" required error={error} hint="目标父目录必须存在，且不会覆盖已有内容。">
@@ -222,10 +220,9 @@ function PurgeDialog({ sourceKey, entry, onClose, onSuccess }: {
       open
       onOpenChange={(open) => { if (!open) onClose() }}
       title="永久删除"
-      description={`“${entry.name}”删除后无法恢复，并会释放其占用的用户配额。`}
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="danger" onClick={() => mutation.mutate()} disabled={mutation.isPending}>{mutation.isPending ? '删除中…' : '永久删除'}</Button></>}
     >
-      {error ? <Banner intent="error">{error}</Banner> : <p className={css.dialogText}>请确认这是你想永久清理的内容。</p>}
+      {error ? <Banner intent="error">{error}</Banner> : <p className={css.dialogText}>“{entry.name}”删除后无法恢复，并会释放其占用的用户配额。</p>}
     </DialogWrap>
   )
 }

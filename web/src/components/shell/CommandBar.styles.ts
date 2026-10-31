@@ -1,5 +1,4 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components'
-import { media } from '../../styles/media'
 
 export const useStyles = makeStyles({
   root: {
@@ -30,16 +29,6 @@ export const useStyles = makeStyles({
   },
   status: {
     'whiteSpace': 'nowrap',
-  },
-  hint: {
-    'color': tokens.colorNeutralForeground2,
-    'fontSize': tokens.fontSizeBase200,
-    'whiteSpace': 'nowrap',
-    ...shorthands.overflow('hidden'),
-    'textOverflow': 'ellipsis',
-    [media.md]: {
-      'display': 'none',
-    },
   },
   actions: {
     'display': 'flex',

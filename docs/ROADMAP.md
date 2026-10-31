@@ -6,7 +6,7 @@
 
 ## 目标
 
-2.0 不是简单增加一个 Transfer 页面，而是把 OmniStore 的功能边界重新统一。
+2.0 不是简单增加一套页面，而是把 OmniStore 的功能边界重新统一。
 
 核心原则：
 
@@ -19,8 +19,7 @@
 全站单例：
 
 - Public Drive；
-- Image Bed；
-- Transfer Center。
+- Image Bed。
 
 每个能力：
 
@@ -66,66 +65,19 @@ Site.PublicDrive.Source
 
 不再存在多 Source public mount。
 
-## Epic B — Transfer Center
-
-一个完整产品中心：
-
-```text
-Transfer Center
-├── Send
-├── Collect
-└── History
-```
-
-### Send
-
-- 本地文件/文件夹直接上传；
-- 可从已有 OmniStore 文件复制进 Transfer；
-- 保持目录结构；
-- 标题和说明；
-- 高熵公开链接；
-- 短取件码；
-- 可选密码；
-- QR Code；
-- 有效期；
-- 下载次数；
-- 文件列表与 Preview；
-- 单文件下载；
-- 全部 ZIP；
-- 主动撤销；
-- 自动过期 GC。
-
-### Collect
-
-- 创建收集任务；
-- 标题/说明；
-- 高熵链接；
-- 短收件码；
-- 可选密码；
-- 有效期；
-- 类型/单文件/总量限制；
-- 可要求提交者姓名和备注；
-- 匿名 upload-only；
-- Submission Inbox；
-- Preview；
-- 下载；
-- Save to Files；
-- Close / Expire。
-
-## Epic C — Operation Center
+## Epic B — Operation Center
 
 - Dashboard；
 - Source Health；
 - Site Capability Health；
 - Database status；
 - Quota / Trash / Cache / Multipart；
-- Transfer active usage；
 - Recent failed audit；
 - Reconcile；
 - Cleanup；
 - SQLite integrity check。
 
-## Epic D — Backup & Recovery
+## Epic C — Backup & Recovery
 
 - 稳定 Backup Format；
 - 导出 SQLite 一致性快照；
@@ -139,7 +91,7 @@ Transfer Center
 
 不打包真实 Storage Source 文件。
 
-## Epic E — Compatibility
+## Epic D — Compatibility
 
 WebDAV：
 
@@ -166,15 +118,13 @@ Image Bed：
 
 - `v2.0.0.sql` 升级链可从 1.1.x 实例安全迁移；
 - Site Capability / Source Protocol 旧模型彻底删除，不保留双轨代码；
-- Transfer Send/Collect 完整闭环；
 - Operation Center 可用于实际维护；
 - Backup -> Fresh Instance -> Rebind -> Reconcile 可复现；
 - 兼容矩阵形成测试；
 - Release Gate 全绿；
-- Crash Recovery 增加 Transfer 关键写路径；
 - RC 之后只修 blocker。
 
-## Epic F — 快速图床与静态资源托管分工（2.0 必交付）
+## Epic E — 快速图床与静态资源托管分工（2.0 必交付）
 
 - 图床：匿名/登录上传受支持图片，随机 ID 直链，系统托管，独立保留策略。
 - 静态资源：按源独立的匿名只读 HTTP 配置 + 普通发布目录，图片/视频按 baseUrl + relativePath 读取。
@@ -184,4 +134,4 @@ Image Bed：
 - 默认短缓存，严格限定公开读取 CORS，与管理 API 分离。
 - 未实现的新服务不标成已交付；原有已完成上传和 Preview/Share 能力保留为基线。
 
-依赖关系和实施时点以 [实施顺序](IMPLEMENTATION_PLAN.md) 的补充为准。Site 服务为公开盘、图床、Transfer；静态 HTTP 属于 Source Protocol，各自生命周期独立。
+依赖关系和实施时点以 [实施顺序](IMPLEMENTATION_PLAN.md) 的补充为准。Site 服务为公开盘、图床；静态 HTTP 属于 Source Protocol，各自生命周期独立。

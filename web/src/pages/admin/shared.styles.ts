@@ -191,6 +191,10 @@ export const useSharedStyles = makeStyles({
   'cardHeaderCopyToolbar': {
   'alignItems': 'center',
   },
+  // 只有标题、没有说明：标题行与 32px 图标位整体居中，避免底部留下空档。
+  'cardHeaderCopyCentered': {
+  'alignItems': 'center',
+  },
   'cardBody': {
   'display': 'flex',
   'flexDirection': 'column',

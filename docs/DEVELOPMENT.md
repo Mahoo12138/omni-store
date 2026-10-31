@@ -24,7 +24,6 @@ node scripts/verify-browser.mjs
 
 ```bash
 node scripts/verify-browser.mjs static-browser-compatibility.spec.ts
-node scripts/verify-browser.mjs transfer-center.spec.ts transfer-collect-ui.spec.ts
 ```
 
 ## 2. Migration
@@ -73,7 +72,7 @@ migration
 
 ## 4. File/Service Write
 
-新增 Transfer 写入前必须设计：
+新增服务写入前必须设计：
 
 - path；
 - reserved namespace；
@@ -96,29 +95,30 @@ Playwright 使用 clean test seed。
 - General Source；
 - Public Source；
 - Image Source；
-- Transfer Source；
 - WebDAV/S3 enabled variants；
-- admin/user；
-- transfer fixtures。
+- admin/user。
 
 ## 6. Crash Test
 
-扩展 crashcheck：
+crashcheck 场景：
 
-- Send upload；
-- Send finalize；
-- Collect submission upload；
-- Collect finalize；
-- Save to Files；
-- Transfer GC。
+- overwrite upload；
+- directory copy；
+- same-source move；
+- cross-source move；
+- trash；
+- restore；
+- permanent delete；
+- multipart complete；
+- image upload。
 
-`scripts/verify-crash-recovery.sh` 已覆盖以上五类进程场景；Collect 的提交与 finalize 属于同一次批次事务。按场景名子串筛选可缩短修复循环：
+`scripts/verify-crash-recovery.sh` 已覆盖以上进程场景。按场景名子串筛选可缩短修复循环：
 
 ```bash
-OMNISTORE_CRASH_SCENARIO=transfer OMNISTORE_CRASH_ROUNDS=3 ./scripts/verify-crash-recovery.sh
+OMNISTORE_CRASH_SCENARIO=trash OMNISTORE_CRASH_ROUNDS=3 ./scripts/verify-crash-recovery.sh
 ```
 
-筛选不替代发布前的完整 10 轮。失败保留独立 fixture、数据库、日志与 `crash.json`；检查最终文件字节、业务台账、批次/任务汇总和普通保存副本，不只检查服务能重启。
+筛选不替代发布前的完整 10 轮。失败保留独立 fixture、数据库、日志与 `crash.json`；检查最终文件字节与业务台账，不只检查服务能重启。
 
 ## 7. 文档同步
 

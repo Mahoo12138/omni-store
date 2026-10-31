@@ -99,10 +99,7 @@ Migration：
 ```text
 public_drive
 image_bed
-transfer_center
 ```
-
-Transfer 默认 disabled/unbound。
 
 ## 6. Reserved Namespace Collision
 
@@ -131,7 +128,6 @@ Admin 首页显示：
 2.0 Upgrade Required
 - Configure Public Drive
 - Configure Image Bed
-- Configure Transfer Center
 ```
 
 不是后台静默失败。
@@ -146,7 +142,7 @@ Database migration 不承诺降级回 1.x。
 
 ## 9. 本次图床 / 静态资源拆分
 
-2.0.0 直接建出三项 Site binding（公开盘、图床、流转中心），静态访问按源存放于 source_static_access/source_static_origins，不保留 static_assets Site 枚举。升级不自动发布任何源，也不推断发布身份；未配置源默认不公开，不得从旧 public_read_enabled、image_bed_enabled 或个人图床偏好推断发布范围。
+2.0.0 直接建出两项 Site binding（公开盘、图床），静态访问按源存放于 source_static_access/source_static_origins，不保留 static_assets Site 枚举。升级不自动发布任何源，也不推断发布身份；未配置源默认不公开，不得从旧 public_read_enabled、image_bed_enabled 或个人图床偏好推断发布范围。
 
 图片类旧记录继续保留 ID、source、path；不能凭登录/匿名标签把所有登录用户图归为静态资源。用户需要路径型博客时，选择现有普通目录并配置发布服务；需要搬迁旧图片则是明确文件迁移工作，不能自动从 original_filename 还原并覆盖可能同名文件。
 
@@ -160,7 +156,7 @@ Database migration 不承诺降级回 1.x。
 
 ## 11. 台账 / 搜索升级
 
-新增 file_records.resource_scope，默认 file；只有新内部托管图床写入 image_bed。更新 FTS 触发器及普通 Reconcile 的 missing 分支，不能只在列表里隐藏。检测历史已索引保留路径，清除搜索条目不等于删除磁盘内容。以包含普通文件、旧 images、新托管图床和 Transfer 的混合源测试“不丢台账、不漏数据、不重复计费”。
+新增 file_records.resource_scope，默认 file；只有新内部托管图床写入 image_bed。更新 FTS 触发器及普通 Reconcile 的 missing 分支，不能只在列表里隐藏。检测历史已索引保留路径，清除搜索条目不等于删除磁盘内容。以包含普通文件、旧 images 和新托管图床的混合源测试“不丢台账、不漏数据、不重复计费”。
 
 ## 12. 发布身份、恢复与风险
 

@@ -38,6 +38,35 @@ export const layout = {
   entryFieldWidth: '360px',
   entryFieldHeight: '296px',
 
+  // 工作台首页（/app）：报头节奏、双栏与右侧几何场（>32px）
+  appHomeHeaderGap: '40px',
+  appHomeColumnGap: '48px',
+  appHomeSectionGap: '40px',
+  appHomeStageWidth: '300px',
+  appHomeStageHeight: '216px',
+  appHomeSearchMaxWidth: '420px',
+  appHomeSearchHeight: '40px',
+  appHomeSearchHeightTouch: '44px',
+  appHomeSourceColumnMinWidth: '320px',
+  appHomeSourceCardMinWidth: '280px',
+  appHomeSourcePlateMinHeight: '200px',
+  appHomeSourceGlyphSize: '44px',
+  // 源数量 >4 时切到全宽密度目录：紧凑卡的最小列宽、卡高与铭牌尺寸。
+  appHomeDenseCardMinWidth: '240px',
+  appHomeDensePlateMinHeight: '140px',
+  appHomeDenseGlyphSize: '32px',
+  appHomeRecentListMaxHeight: '560px',
+  appHomeRecentEmptyMinHeight: '360px',
+  appHomeRecentActionSize: '36px',
+  appHomeRecentActionSizeTouch: '44px',
+  appHomeRecentIconPx: 36,
+  appHomeRecentSkeletonMetaWidth: '96px',
+  appHomeEmptyArtWidth: '200px',
+  appHomeEmptyArtHeight: '145px',
+  appHomeOnboardingMinHeight: '300px',
+  appHomeOnboardingArtWidth: '220px',
+  appHomeOnboardingArtHeight: '160px',
+
   // 弹层。数值用 px 结尾的数字形式：同一常量既喂 CSS（`${x}px`），
   // 也喂 Fluent 组件的数值 props（如 Toaster 的 offset），只有一处事实。
   dialogWidthPx: 480,

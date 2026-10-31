@@ -11,18 +11,18 @@ import (
 
 func TestManagedWriteWithJournalTempRejectsUnsafePathsBeforeMkdir(t *testing.T) {
 	service, source, _, _ := newManagedNamespaceService(t)
-	final := ".omnistore/transfer/send/package/file.txt"
+	final := ".omnistore/image-bed/send/package/file.txt"
 	for _, temp := range []string{
-		".omnistore/transfer/send/other/.omnistore-upload-0123456789abcdef.tmp",
+		".omnistore/image-bed/send/other/.omnistore-upload-0123456789abcdef.tmp",
 		".omnistore/image-bed/.omnistore-upload-0123456789abcdef.tmp",
 		"ordinary/.omnistore-upload-0123456789abcdef.tmp",
-		".omnistore/transfer/send/package/not-internal.tmp",
-		".omnistore/transfer/send/package/.omnistore-upload-invalid.tmp",
-		".omnistore/transfer/send/package/../../../../outside.tmp",
+		".omnistore/image-bed/send/package/not-internal.tmp",
+		".omnistore/image-bed/send/package/.omnistore-upload-invalid.tmp",
+		".omnistore/image-bed/send/package/../../../../outside.tmp",
 		final,
 	} {
 		t.Run(temp, func(t *testing.T) {
-			if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", strings.NewReader("payload"), 0, false); !errors.Is(err, ErrInvalid) {
+			if _, err := service.WriteManagedFileWithTemp(source, final, temp, "image-bed", strings.NewReader("payload"), 0, false); !errors.Is(err, ErrInvalid) {
 				t.Fatalf("unsafe temp returned %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(source.RootPath, ".omnistore")); !errors.Is(err, os.ErrNotExist) {
@@ -38,8 +38,8 @@ func (f managedReadFunc) Read(p []byte) (int, error) { return f(p) }
 
 func TestManagedWriteWithJournalTempPreservesOldContentOnFailure(t *testing.T) {
 	service, source, _, _ := newManagedNamespaceService(t)
-	final := ".omnistore/transfer/send/package/file.txt"
-	temp := ".omnistore/transfer/send/package/.omnistore-upload-0123456789abcdef.tmp"
+	final := ".omnistore/image-bed/send/package/file.txt"
+	temp := ".omnistore/image-bed/send/package/.omnistore-upload-0123456789abcdef.tmp"
 	finalAbs := filepath.Join(source.RootPath, filepath.FromSlash(final))
 	tempAbs := filepath.Join(source.RootPath, filepath.FromSlash(temp))
 	if err := os.MkdirAll(filepath.Dir(finalAbs), 0o755); err != nil {
@@ -60,7 +60,7 @@ func TestManagedWriteWithJournalTempPreservesOldContentOnFailure(t *testing.T) {
 		{"reader", managedReadFunc(func(p []byte) (int, error) { return copy(p, "partial"), readFailure }), 0, false, readFailure},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", tc.body, tc.max, tc.limited); !errors.Is(err, tc.want) {
+			if _, err := service.WriteManagedFileWithTemp(source, final, temp, "image-bed", tc.body, tc.max, tc.limited); !errors.Is(err, tc.want) {
 				t.Fatalf("write error = %v", err)
 			}
 			if data, err := os.ReadFile(finalAbs); err != nil || string(data) != "old" {
@@ -75,7 +75,7 @@ func TestManagedWriteWithJournalTempPreservesOldContentOnFailure(t *testing.T) {
 	if err := os.WriteFile(tempAbs, []byte("foreign"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", strings.NewReader("new"), 0, false); !errors.Is(err, os.ErrExist) {
+	if _, err := service.WriteManagedFileWithTemp(source, final, temp, "image-bed", strings.NewReader("new"), 0, false); !errors.Is(err, os.ErrExist) {
 		t.Fatalf("collision = %v", err)
 	}
 	if data, err := os.ReadFile(tempAbs); err != nil || string(data) != "foreign" {
@@ -98,7 +98,7 @@ func TestManagedWriteWithJournalTempPreservesOldContentOnFailure(t *testing.T) {
 		}
 		return copy(p, "complete"), io.EOF
 	})
-	if n, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", body, 0, false); err != nil || n != 8 {
+	if n, err := service.WriteManagedFileWithTemp(source, final, temp, "image-bed", body, 0, false); err != nil || n != 8 {
 		t.Fatalf("publish = %d, %v", n, err)
 	}
 	if data, err := os.ReadFile(finalAbs); err != nil || string(data) != "complete" {
@@ -111,7 +111,7 @@ func TestManagedWriteWithJournalTempPreservesOldContentOnFailure(t *testing.T) {
 
 func TestManagedWriteWithJournalTempRejectsSymlink(t *testing.T) {
 	service, source, _, _ := newManagedNamespaceService(t)
-	parent := filepath.Join(source.RootPath, ".omnistore", "transfer")
+	parent := filepath.Join(source.RootPath, ".omnistore", "image-bed")
 	outside := t.TempDir()
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		t.Fatal(err)
@@ -119,9 +119,9 @@ func TestManagedWriteWithJournalTempRejectsSymlink(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(parent, "linked")); err != nil {
 		t.Fatal(err)
 	}
-	final := ".omnistore/transfer/linked/new/file.txt"
-	temp := ".omnistore/transfer/linked/new/.omnistore-upload-0123456789abcdef.tmp"
-	if _, err := service.WriteManagedFileWithTemp(source, final, temp, "transfer", strings.NewReader("payload"), 0, false); !errors.Is(err, ErrUnsupported) {
+	final := ".omnistore/image-bed/linked/new/file.txt"
+	temp := ".omnistore/image-bed/linked/new/.omnistore-upload-0123456789abcdef.tmp"
+	if _, err := service.WriteManagedFileWithTemp(source, final, temp, "image-bed", strings.NewReader("payload"), 0, false); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("symlink = %v", err)
 	}
 	entries, err := os.ReadDir(outside)

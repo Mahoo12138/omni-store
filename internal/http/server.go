@@ -26,7 +26,6 @@ import (
 	"github.com/omni-store/omnistore/internal/shares"
 	"github.com/omni-store/omnistore/internal/sources"
 	"github.com/omni-store/omnistore/internal/staticassets"
-	"github.com/omni-store/omnistore/internal/transfers"
 	"github.com/omni-store/omnistore/internal/users"
 	"github.com/omni-store/omnistore/internal/webdav"
 	"github.com/omni-store/omnistore/web"
@@ -34,32 +33,28 @@ import (
 
 // Server 聚合 HTTP 层依赖。
 type Server struct {
-	cfg                     *config.Config
-	db                      *sql.DB
-	logger                  *slog.Logger
-	users                   *users.Service
-	sources                 *sources.Service
-	files                   *files.Service
-	public                  *publicdisk.Service
-	shares                  *shares.Service
-	sessions                *auth.Sessions
-	loginLimiter            *auth.LoginLimiter
-	tokens                  *auth.Tokens
-	imagebed                *imagebed.Service
-	anonLimiter             *imagebed.RateLimiter
-	capabilities            *capabilities.Service
-	staticassets            *staticassets.Service
-	transfers               *transfers.Service
-	operations              *operations.Service
-	transferUnlockLimiter   *keyedRateLimiter
-	collectionSubmitLimiter *keyedRateLimiter
-	transferGuestLimiter    *keyedRateLimiter
-	audit                   *audit.Logger
-	proxy                   *security.ProxyResolver
-	s3Keys                  *s3api.Credentials
-	s3Multipart             *s3api.MultipartStore
-	s3Handler               http.Handler
-	bootstrapToken          string
+	cfg            *config.Config
+	db             *sql.DB
+	logger         *slog.Logger
+	users          *users.Service
+	sources        *sources.Service
+	files          *files.Service
+	public         *publicdisk.Service
+	shares         *shares.Service
+	sessions       *auth.Sessions
+	loginLimiter   *auth.LoginLimiter
+	tokens         *auth.Tokens
+	imagebed       *imagebed.Service
+	anonLimiter    *imagebed.RateLimiter
+	capabilities   *capabilities.Service
+	staticassets   *staticassets.Service
+	operations     *operations.Service
+	audit          *audit.Logger
+	proxy          *security.ProxyResolver
+	s3Keys         *s3api.Credentials
+	s3Multipart    *s3api.MultipartStore
+	s3Handler      http.Handler
+	bootstrapToken string
 }
 
 // New 创建 HTTP Server，同时返回内部 Server 以便 main 启动后台任务。
@@ -95,11 +90,6 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.files = files.NewService(dbConn, s.sources, locks.NewManager())
 	s.capabilities = capabilities.NewService(dbConn, s.sources)
 	s.staticassets = staticassets.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
-	s.transfers = transfers.NewService(dbConn, s.sources, s.capabilities, s.files, cfg.Data.Dir, cfg.Security.MasterKey)
-	s.transfers.SetGuestMaxFileSize(cfg.Upload.MaxFileSizeMB * 1024 * 1024)
-	s.transferUnlockLimiter = newKeyedRateLimiter(60, time.Hour)
-	s.collectionSubmitLimiter = newKeyedRateLimiter(120, time.Hour)
-	s.transferGuestLimiter = newKeyedRateLimiter(60, time.Hour)
 	s.public = publicdisk.NewService(s.files, s.capabilities)
 	s.shares = shares.NewService(dbConn, s.sources, s.files, cfg.Server.PublicURL)
 	s.tokens = auth.NewTokens(dbConn)
@@ -116,7 +106,7 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	s.imagebed = ib
 	s.anonLimiter = imagebed.NewRateLimiter(cfg.ImageBed.AnonymousRateLimit.PerIPPerHour)
 	s.operations = operations.NewService(dbConn, cfg.DatabasePath(), cfg.Data.Dir, buildinfo.Version,
-		s.sources, s.files, s.imagebed, s.transfers,
+		s.sources, s.files, s.imagebed,
 		auth.NewSessions(dbConn, time.Duration(cfg.Security.SessionTTLHours)*time.Hour),
 		multipartCleanupAdapter(s.s3Multipart))
 
@@ -266,42 +256,10 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("GET /api/v1/admin/capabilities", s.requireAdmin(s.handleAdminListCapabilities))
 	mux.HandleFunc("PUT /api/v1/admin/capabilities/{capability}", s.requireAdmin(s.handleAdminUpdateCapability))
 
-	// 流转中心（2.0 Phase 4）：所有者 API
-	mux.HandleFunc("GET /api/v1/transfer-identity", s.handleTransferIdentity)
-	mux.HandleFunc("POST /api/v1/transfer-identity", s.handleTransferIdentity)
-	mux.HandleFunc("POST /api/v1/transfers", s.requireTransferOwner(s.handleCreateTransfer))
-	mux.HandleFunc("GET /api/v1/transfers", s.requireTransferOwner(s.handleListMyTransfers))
-	mux.HandleFunc("GET /api/v1/transfers/{transferID}", s.requireTransferOwner(s.handleGetMyTransfer))
-	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/upload", s.requireTransferOwner(s.handleTransferUpload))
-	mux.HandleFunc("POST /api/v1/transfers/{transferID}/files/from-store", s.requireAuth(s.handleTransferStoreCopy))
-	mux.HandleFunc("GET /api/v1/transfers/{transferID}/files", s.requireTransferOwner(s.handleTransferFileList))
-	mux.HandleFunc("POST /api/v1/transfers/{transferID}/finalize", s.requireTransferOwner(s.handleFinalizeTransfer))
-	mux.HandleFunc("DELETE /api/v1/transfers/{transferID}", s.requireTransferOwner(s.handleRevokeTransfer))
-	mux.HandleFunc("POST /api/v1/transfer-collections", s.requireTransferOwner(s.handleCreateCollection))
-	mux.HandleFunc("GET /api/v1/transfer-collections", s.requireTransferOwner(s.handleListMyCollections))
-	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}", s.requireTransferOwner(s.handleGetMyCollection))
-	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions", s.requireTransferOwner(s.handleCollectionInbox))
-	mux.HandleFunc("GET /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/files/{fileID}/download", s.requireTransferOwner(s.handleSubmissionDownload))
-	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/submissions/{submissionID}/save-to-files", s.requireAuth(s.handleSubmissionSaveToFiles))
-	mux.HandleFunc("POST /api/v1/transfer-collections/{collectionID}/close", s.requireTransferOwner(s.handleCloseCollection))
-	mux.HandleFunc("GET /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminGetTransferSettings))
-	mux.HandleFunc("PUT /api/v1/admin/transfer-settings", s.requireAdmin(s.handleAdminSetTransferSettings))
-
 	// 管理员：运维中心（2.0 Epic C）
 	mux.HandleFunc("GET /api/v1/admin/operations/status", s.requireAdmin(s.handleAdminOperationsStatus))
 	mux.HandleFunc("POST /api/v1/admin/operations/integrity-check", s.requireAdmin(s.handleAdminIntegrityCheck))
 	mux.HandleFunc("POST /api/v1/admin/operations/cleanup", s.requireAdmin(s.handleAdminOperationsCleanup))
-
-	// 流转中心：公开取件与提交（2.0 Phase 4）
-	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}", s.handlePublicTransferLookup)
-	mux.HandleFunc("POST /api/v1/public/transfers/{publicKey}/unlock", s.handlePublicTransferUnlock)
-	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}/files", s.handlePublicTransferFiles)
-	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}/files/{fileID}/download", s.handlePublicTransferFile)
-	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}/files/{fileID}/raw", s.handlePublicTransferFile)
-	mux.HandleFunc("GET /api/v1/public/transfers/{publicKey}/archive", s.handlePublicTransferArchive)
-	mux.HandleFunc("GET /api/v1/public/transfer-collections/{publicKey}", s.handlePublicCollectionLookup)
-	mux.HandleFunc("POST /api/v1/public/transfer-collections/{publicKey}/unlock", s.handlePublicCollectionUnlock)
-	mux.HandleFunc("POST /api/v1/public/transfer-collections/{publicKey}/submit", s.handlePublicCollectionSubmit)
 
 	// 管理员：静态资源配置（2.0 AST）
 	mux.HandleFunc("DELETE /api/v1/admin/sources/{key}/static-access/config", s.requireAdmin(s.handleAdminRemoveStaticConfig))
@@ -334,6 +292,14 @@ func New(cfg *config.Config, dbConn *sql.DB, logger *slog.Logger) (*http.Server,
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, CodeFileNotFound, "接口不存在", nil)
 	})
+
+	// 已移除的中转入口不再回退 SPA 外壳，旧链接明确 404。
+	mux.HandleFunc("GET /transfer", http.NotFound)
+	mux.HandleFunc("GET /transfer/{path...}", http.NotFound)
+	mux.HandleFunc("GET /app/transfer", http.NotFound)
+	mux.HandleFunc("GET /pickup/{publicKey}", http.NotFound)
+	mux.HandleFunc("GET /collect/{publicKey}", http.NotFound)
+
 	mux.Handle("/", spa)
 
 	var handler http.Handler = mux
@@ -431,46 +397,6 @@ func multipartCleanupAdapter(store *s3api.MultipartStore) func(time.Duration) (i
 		result, err := store.CleanupExpired(maxAge)
 		return int64(result.UploadsRemoved), int64(result.OrphansRemoved), 0, err
 	}
-}
-
-// Transfers 暴露流转中心服务（启动恢复使用）。
-func (s *Server) Transfers() *transfers.Service {
-	return s.transfers
-}
-
-// StartTransferGC 在启动时及之后每小时清理过期/撤销的流转载荷。
-func StartTransferGC(service *transfers.Service, logger *slog.Logger, stop <-chan struct{}) {
-	go func() {
-		run := func() {
-			result, err := service.RunGC(time.Now().UTC())
-			if err != nil {
-				logger.Warn("流转中心 GC 失败", "err", err)
-			} else if result.TransfersExpired+result.CollectionsExpired+result.DraftsRemoved+
-				result.TransfersSwept+result.CollectionsSwept+result.EmptySubmissions+
-				result.OrphanDirsRemoved+result.OrphanTempRemoved+int(result.SessionsRemoved) > 0 {
-				logger.Info("流转中心 GC 完成",
-					"transfers_expired", result.TransfersExpired,
-					"collections_expired", result.CollectionsExpired,
-					"drafts_removed", result.DraftsRemoved,
-					"swept", result.TransfersSwept+result.CollectionsSwept,
-					"empty_submissions", result.EmptySubmissions,
-					"orphan_dirs", result.OrphanDirsRemoved,
-					"orphan_temp", result.OrphanTempRemoved,
-					"sessions_removed", result.SessionsRemoved)
-			}
-		}
-		run()
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				run()
-			case <-stop:
-				return
-			}
-		}
-	}()
 }
 
 // StartWebDAVLockCleanup 在启动时及之后每小时清理过期的持久锁。

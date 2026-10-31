@@ -41,7 +41,7 @@ export function PoliciesSection() {
       <SectionCard
         icon={<IconShield size={18} />}
         tone="brand"
-        hint={<>共 {policies.data?.length ?? 0} 个 · 将多个存储源权限组合成策略，再统一绑定用户。</>}
+        hint={<>共 {policies.data?.length ?? 0} 个</>}
         actions={<Button onClick={() => setCreateOpen(true)} icon={<IconPlus size={14} />}>新建策略</Button>}
         bodyPadding="none"
       >

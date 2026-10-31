@@ -71,7 +71,7 @@ func TestRESTManagedNamespaceIsolation(t *testing.T) {
 // `/.omnistore/...` 直接站点 URL 必须在 SPA fallback 之前返回 404（NS-03）。
 func TestSPAFallbackDoesNotSwallowManagedNamespace(t *testing.T) {
 	fixture := newPrivateFileAPIFixture(t)
-	for _, target := range []string{"/.omnistore", "/.omnistore/transfer/send/x", "/blog/.omnistore/payload.bin"} {
+	for _, target := range []string{"/.omnistore", "/.omnistore/image-bed/x", "/blog/.omnistore/payload.bin"} {
 		resp := serveTestRequest(t, fixture.handler, http.MethodGet, target, "", nil, "")
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("SPA %s = %d body=%.60s, want 404", target, resp.Code, resp.Body.String())

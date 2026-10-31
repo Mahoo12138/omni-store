@@ -15,7 +15,6 @@ export interface SystemStatus {
   anonymous: SystemStatusFlag
   public_drive: SystemStatusFlag
   image_bed: SystemStatusFlag
-  transfer_center: SystemStatusFlag
   version: string
   public_url: string
   instance_name: string

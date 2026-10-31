@@ -37,7 +37,7 @@ export function SourcesSection() {
       <SectionCard
         icon={<IconServer size={18} />}
         tone="brand"
-        hint={<>共 {sources.data?.length ?? 0} 个 · 连接真实目录并统一管理访问能力。</>}
+        hint={<>共 {sources.data?.length ?? 0} 个</>}
         busy={sources.isFetching}
         actions={<Button onClick={() => setCreateOpen(true)} icon={<IconPlus size={14} />}>新建存储源</Button>}
       >

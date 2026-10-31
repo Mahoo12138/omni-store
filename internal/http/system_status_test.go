@@ -2,10 +2,8 @@ package httpserver
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -32,9 +30,8 @@ func readPublicSystemStatus(t *testing.T, handler http.Handler, privatePaths ...
 
 func statusServiceFlags(status systemStatusResponse) map[string]systemStatusFlag {
 	return map[string]systemStatusFlag{
-		capabilities.CapabilityPublicDrive:    status.PublicDrive,
-		capabilities.CapabilityImageBed:       status.ImageBed,
-		capabilities.CapabilityTransferCenter: status.TransferCenter,
+		capabilities.CapabilityPublicDrive: status.PublicDrive,
+		capabilities.CapabilityImageBed:    status.ImageBed,
 	}
 }
 
@@ -61,7 +58,7 @@ func TestSystemStatusPublicContractAndUnboundServices(t *testing.T) {
 	if err := json.Unmarshal(body, &fields); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"s3", "webdav", "file_preview", "anonymous", "public_drive", "image_bed", "transfer_center"} {
+	for _, key := range []string{"s3", "webdav", "file_preview", "anonymous", "public_drive", "image_bed"} {
 		var flag map[string]any
 		if err := json.Unmarshal(fields[key], &flag); err != nil {
 			t.Fatalf("decode %s: %v", key, err)
@@ -178,86 +175,5 @@ func TestSystemStatusLookupFailureDoesNotLeakErrorDetails(t *testing.T) {
 	}
 	if status.Anonymous.Enabled || status.Anonymous.Hint != "匿名上传状态暂不可用" {
 		t.Fatalf("unsafe anonymous lookup failure: %+v", status.Anonymous)
-	}
-}
-
-func TestSystemStatusTransferAvailabilityDoesNotRevokeHistoricalPickup(t *testing.T) {
-	f := newTransferHTTPFixture(t)
-	created := f.postJSON(t, "/api/v1/transfers", `{"title":"已有取件包","expires_in_hours":48}`)
-	if created.Code != http.StatusOK {
-		t.Fatal(created.Body.String())
-	}
-	data := decodeTransferJSON(t, created).Data
-	send := data["send"].(map[string]any)
-	id := int64(send["id"].(float64))
-	publicKey := send["public_key"].(string)
-	pickupCode := data["pickup_code"].(string)
-	upload := f.uploadMultipart(t, "/api/v1/transfers/"+int64String(id)+"/files/upload", map[string]string{"relative_path": "delivery.txt"}, "delivery.txt", []byte("HISTORICAL DELIVERY"))
-	if upload.Code != http.StatusOK {
-		t.Fatal(upload.Body.String())
-	}
-	if response := f.postJSON(t, "/api/v1/transfers/"+int64String(id)+"/finalize", ""); response.Code != http.StatusOK {
-		t.Fatal(response.Body.String())
-	}
-	admin := &staticFixture{handler: f.handler, app: f.app, cookie: f.adminCookie, csrf: f.adminCSRF}
-	bound := readAdminCapabilityBindings(t, admin)["transfer_center"]
-	assertPickup := func(enabled bool, state string) {
-		t.Helper()
-		flag := readPublicSystemStatus(t, f.handler, f.carrier.RootPath, f.target.RootPath).TransferCenter
-		if flag.Enabled != enabled || flag.Status != state {
-			t.Fatalf("current transfer availability=%+v", flag)
-		}
-		base := "/api/v1/public/transfers/" + publicKey
-		if response := publicGet(t, f.handler, base, ""); response.Code != http.StatusOK {
-			t.Fatalf("existing pickup disappeared: %d %s", response.Code, response.Body.String())
-		}
-		if response := publicGet(t, f.handler, base+"/files", ""); response.Code != http.StatusNotFound {
-			t.Fatalf("historical pickup bypassed authorization: %d", response.Code)
-		}
-		unlock := publicPostJSON(t, f.handler, base+"/unlock", fmt.Sprintf(`{"pickup_code":%q}`, pickupCode))
-		if unlock.Code != http.StatusOK {
-			t.Fatalf("historical unlock: %d %s", unlock.Code, unlock.Body.String())
-		}
-		token := decodeTransferJSON(t, unlock).Data["token"].(string)
-		files := publicGet(t, f.handler, base+"/files", token)
-		if files.Code != http.StatusOK {
-			t.Fatalf("authorized historical file list: %d %s", files.Code, files.Body.String())
-		}
-		var fileList struct {
-			Data struct {
-				Items []struct {
-					ID int64 `json:"id"`
-				} `json:"items"`
-			} `json:"data"`
-		}
-		decodeTestJSON(t, files, &fileList)
-		if len(fileList.Data.Items) != 1 || fileList.Data.Items[0].ID <= 0 {
-			t.Fatalf("historical file list changed: %s", files.Body.String())
-		}
-		fileID := fileList.Data.Items[0].ID
-		download := publicGet(t, f.handler, base+"/files/"+int64String(fileID)+"/download", token)
-		if download.Code != http.StatusOK || download.Body.String() != "HISTORICAL DELIVERY" {
-			t.Fatalf("historical download did not use original carrier: %d %s", download.Code, download.Body.String())
-		}
-	}
-	assertPickup(true, "已启用")
-	bound = updateAdminCapability(t, admin, "transfer_center", map[string]any{"enabled": false, "expected_revision": bound.Revision})
-	assertPickup(false, "已关闭")
-	bound = updateAdminCapability(t, admin, "transfer_center", map[string]any{"enabled": true, "storage_source_key": f.target.Key, "expected_revision": bound.Revision})
-	assertPickup(true, "已启用")
-	if err := f.app.sources.SetDisabled(f.target.Key, true); err != nil {
-		t.Fatal(err)
-	}
-	assertPickup(false, "存储源已禁用")
-	if err := f.app.sources.SetDisabled(f.target.Key, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.RemoveAll(f.target.RootPath); err != nil {
-		t.Fatal(err)
-	}
-	assertPickup(false, "目录不可用")
-	// The bound source changed, but the package record and payload remain at the original carrier.
-	if _, err := os.Stat(filepath.Join(f.carrier.RootPath, ".omnistore")); err != nil {
-		t.Fatalf("historical carrier payload missing: %v", err)
 	}
 }

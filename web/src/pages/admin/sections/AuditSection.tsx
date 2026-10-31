@@ -99,7 +99,7 @@ export function AuditSection() {
     <SectionCard
       icon={<IconActivity size={18} />}
       tone="brand"
-      hint="按主体、入口、结果或关键字筛选实例上的关键操作。"
+      hint={<>共 {total} 条</>}
       bodyPadding="none"
     >
       <form className={css.auditFilters} onSubmit={applyFilters}>

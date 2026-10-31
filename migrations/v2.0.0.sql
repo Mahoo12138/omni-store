@@ -1,18 +1,19 @@
--- OmniStore 2.0.0 — Capability Scope 重构 + 文件流转中心
+-- OmniStore 2.0.0 — Capability Scope 重构
 --
 -- 破坏性变更（允许破坏兼容，不允许破坏数据）：
 -- 1. storage_sources 移除 public_read_enabled / public_mount_path / image_bed_enabled，
---    新增 s3_enabled（Source Protocol 独立开关）。
--- 2. site_capability_bindings 收敛为三项 Site Capability；静态 HTTP 不再是全站单例能力。
+--    新增 s3_enabled（Source Protocol 独立开关）；存量源保留 1.x 的 S3 可达性，
+--    fresh 2.0 源仍由服务层默认关闭。
+-- 2. site_capability_bindings 收敛为两项 Site Capability；静态 HTTP 不再是全站单例能力。
 -- 3. 新增 source_static_access / source_static_origins：每个存储源独立的匿名只读发布。
 -- 4. 新增 managed_root_registrations（.omnistore/ 托管根所有权登记）。
 -- 5. 删除 public_mount_redirects；user_preferences 移除图床 Source 偏好，新增外观偏好 theme。
--- 6. 新增文件流转中心台账：发送任务、收集任务、访客身份、访问会话与下载名额声明。
 --
 -- 旧公开挂载与图床 Source 选择按以下规则收敛到新的 Site 绑定：
--- - public_drive：绑定唯一公开挂载源；若存在多个挂载则取挂载路径最靠前者。
--- - image_bed：优先匿名图床已配置且仍存在的源，否则取第一个启用图床的源；
---   仅当匿名图床开启或存在用户偏好时 enabled=1。
+-- - public_drive：恰好一个启用公开挂载的源时自动绑定；零个或多个时保持
+--   disabled/unbound，不猜测管理员意图。
+-- - image_bed：恰好一个启用图床的源时自动绑定；零个或多个时保持 disabled/unbound。
+--   匿名开关与用户偏好只影响上传行为，不用于在多个源中挑选绑定目标。
 -- - 静态 HTTP：不自动发布任何源。旧 public_read_enabled/public_mount_path 只用于
 --   收敛公开网盘绑定，不能推断发布范围；需要公开静态资源时由管理员显式配置。
 -- 旧图片记录继续按自身 storage_source_id 读取，不做物理迁移。
@@ -20,7 +21,7 @@
 -- 1. Site Capability 绑定：每项能力全站单例。
 CREATE TABLE site_capability_bindings (
   capability TEXT PRIMARY KEY CHECK(capability IN
-    ('public_drive', 'image_bed', 'transfer_center')),
+    ('public_drive', 'image_bed')),
   enabled BOOLEAN NOT NULL DEFAULT 0,
   storage_source_id INTEGER REFERENCES storage_sources(id) ON DELETE RESTRICT,
   revision INTEGER NOT NULL DEFAULT 0,
@@ -29,47 +30,26 @@ CREATE TABLE site_capability_bindings (
 
 INSERT INTO site_capability_bindings (capability, enabled, storage_source_id, revision, updated_at)
   VALUES ('public_drive', 0, NULL, 0, datetime('now')),
-         ('image_bed', 0, NULL, 0, datetime('now')),
-         ('transfer_center', 0, NULL, 0, datetime('now'));
+         ('image_bed', 0, NULL, 0, datetime('now'));
 
--- 2. 公开网盘绑定：旧公开挂载收敛为全站单 Source。
+-- 2. 公开网盘绑定：仅当旧公开挂载恰好一个时自动绑定。
 UPDATE site_capability_bindings SET enabled = 1,
   storage_source_id = (
     SELECT s.id FROM storage_sources s
     WHERE s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL
-    ORDER BY s.public_mount_path
-    LIMIT 1
   )
 WHERE capability = 'public_drive'
-  AND EXISTS (
-    SELECT 1 FROM storage_sources s
-    WHERE s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL
-  );
+  AND (SELECT COUNT(*) FROM storage_sources s
+       WHERE s.public_read_enabled = 1 AND s.public_mount_path IS NOT NULL) = 1;
 
--- 3. 图床绑定：匿名设置优先，其次第一个启用图床的源。
+-- 3. 图床绑定：仅当旧图床标记恰好落在一个源时自动绑定。
 UPDATE site_capability_bindings SET enabled = 1,
-  storage_source_id = COALESCE(
-    (
-      SELECT s.id FROM storage_sources s
-      JOIN system_settings cfg ON cfg.key = 'anonymous_image_bed_storage_source_id'
-        AND CAST(cfg.value AS INTEGER) = s.id
-      LIMIT 1
-    ),
-    (
-      SELECT s.id FROM storage_sources s
-      WHERE s.image_bed_enabled = 1
-      ORDER BY s.id
-      LIMIT 1
-    )
+  storage_source_id = (
+    SELECT s.id FROM storage_sources s
+    WHERE s.image_bed_enabled = 1
   )
 WHERE capability = 'image_bed'
-  AND (
-    EXISTS (
-      SELECT 1 FROM system_settings
-      WHERE key = 'anonymous_image_bed_enabled' AND value = 'true'
-    )
-    OR EXISTS (SELECT 1 FROM user_preferences WHERE default_image_bed_storage_source_id IS NOT NULL)
-  );
+  AND (SELECT COUNT(*) FROM storage_sources s WHERE s.image_bed_enabled = 1) = 1;
 
 -- 4. 按源静态 HTTP 发布配置与允许来源白名单。默认全部关闭：
 --    升级不迁移任何发布身份，避免把旧公开挂载误当成静态资源站点。
@@ -107,9 +87,10 @@ CREATE TABLE storage_sources_v2 (
   updated_at DATETIME NOT NULL
 );
 
+-- 存量源在 1.x 中没有 per-source S3 开关，升级时保持可达；管理员可再逐源关闭。
 INSERT INTO storage_sources_v2
   (id, key, name, description, root_path, is_disabled, webdav_enabled, s3_enabled, quota_bytes, created_at, updated_at)
-SELECT id, key, name, description, root_path, is_disabled, webdav_enabled, 0, quota_bytes, created_at, updated_at
+SELECT id, key, name, description, root_path, is_disabled, webdav_enabled, 1, quota_bytes, created_at, updated_at
 FROM storage_sources;
 
 DROP TABLE storage_sources;
@@ -197,143 +178,3 @@ INSERT INTO file_search_index(rowid, relative_path)
 SELECT id, relative_path FROM file_records
 WHERE record_status = 'active' AND resource_scope = 'file'
   AND id NOT IN (SELECT rowid FROM file_search_index);
-
--- 12. 文件流转中心（2.0 Epic B / Phase 4）：独立 domain 台账，不写 file_records。
--- 载荷物理位置：`.omnistore/transfer/send/<public_key>/` 与
--- `.omnistore/transfer/collect/<public_key>/<submission_id>/`；
--- 源物理用量照常统计这些字节；绑定 Source 是创建时的快照，重绑只影响新任务。
---
--- 访客身份仅用于文件中转，不创建普通用户、登录 Session 或存储权限。
-CREATE TABLE transfer_guest_identities (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  token_hash TEXT NOT NULL UNIQUE,
-  created_at DATETIME NOT NULL,
-  expires_at DATETIME NOT NULL
-);
-
-CREATE INDEX idx_transfer_guest_expiry ON transfer_guest_identities(expires_at);
-
--- 任务所有者二选一：登录用户或访客身份。访客删除受 RESTRICT 保护，
--- 避免历史任务的所有者被静默抹掉。
--- require_code 默认 1：分享链接可直接取件/提交，只有显式关闭时才免码。
-CREATE TABLE transfers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  public_key TEXT NOT NULL UNIQUE,
-  owner_user_id INTEGER REFERENCES users(id),
-  owner_guest_id INTEGER REFERENCES transfer_guest_identities(id) ON DELETE RESTRICT,
-  storage_source_id INTEGER NOT NULL REFERENCES storage_sources(id) ON DELETE CASCADE,
-  title TEXT NOT NULL DEFAULT '',
-  description TEXT NOT NULL DEFAULT '',
-  pickup_code_hash TEXT NOT NULL,
-  password_hash TEXT,
-  max_downloads INTEGER,
-  download_count INTEGER NOT NULL DEFAULT 0,
-  expires_at DATETIME,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'active', 'revoked', 'expired')),
-  total_files INTEGER NOT NULL DEFAULT 0,
-  total_size INTEGER NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL,
-  finalized_at DATETIME,
-  revoked_at DATETIME,
-  updated_at DATETIME NOT NULL,
-  require_code INTEGER NOT NULL DEFAULT 1 CHECK(require_code IN (0, 1)),
-  CHECK((owner_user_id IS NOT NULL AND owner_guest_id IS NULL) OR
-        (owner_user_id IS NULL AND owner_guest_id IS NOT NULL))
-);
-
-CREATE INDEX idx_transfers_owner ON transfers(owner_user_id, created_at);
-CREATE INDEX idx_transfers_guest ON transfers(owner_guest_id, status);
-CREATE INDEX idx_transfers_source ON transfers(storage_source_id);
-CREATE INDEX idx_transfers_gc ON transfers(status, expires_at);
-
-CREATE TABLE transfer_files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
-  relative_path TEXT NOT NULL,
-  size INTEGER NOT NULL,
-  ext TEXT NOT NULL DEFAULT '',
-  mime_type TEXT NOT NULL DEFAULT '',
-  created_at DATETIME NOT NULL,
-  UNIQUE(transfer_id, relative_path)
-);
-
-CREATE TABLE transfer_collections (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  public_key TEXT NOT NULL UNIQUE,
-  owner_user_id INTEGER REFERENCES users(id),
-  owner_guest_id INTEGER REFERENCES transfer_guest_identities(id) ON DELETE RESTRICT,
-  storage_source_id INTEGER NOT NULL REFERENCES storage_sources(id) ON DELETE CASCADE,
-  title TEXT NOT NULL DEFAULT '',
-  description TEXT NOT NULL DEFAULT '',
-  code_hash TEXT NOT NULL,
-  password_hash TEXT,
-  max_file_size INTEGER,
-  max_total_size INTEGER,
-  require_name INTEGER NOT NULL DEFAULT 0,
-  require_note INTEGER NOT NULL DEFAULT 0,
-  allowed_exts TEXT NOT NULL DEFAULT '',
-  expires_at DATETIME,
-  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed', 'revoked', 'expired')),
-  total_files INTEGER NOT NULL DEFAULT 0,
-  total_size INTEGER NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL,
-  closed_at DATETIME,
-  updated_at DATETIME NOT NULL,
-  require_code INTEGER NOT NULL DEFAULT 1 CHECK(require_code IN (0, 1)),
-  CHECK((owner_user_id IS NOT NULL AND owner_guest_id IS NULL) OR
-        (owner_user_id IS NULL AND owner_guest_id IS NOT NULL))
-);
-
-CREATE INDEX idx_transfer_collections_owner ON transfer_collections(owner_user_id, created_at);
-CREATE INDEX idx_transfer_collections_guest ON transfer_collections(owner_guest_id, status);
-CREATE INDEX idx_transfer_collections_source ON transfer_collections(storage_source_id);
-CREATE INDEX idx_transfer_collections_gc ON transfer_collections(status, expires_at);
-
-CREATE TABLE transfer_submissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  collection_id INTEGER NOT NULL REFERENCES transfer_collections(id) ON DELETE CASCADE,
-  submitter_name TEXT NOT NULL DEFAULT '',
-  note TEXT NOT NULL DEFAULT '',
-  file_count INTEGER NOT NULL DEFAULT 0,
-  total_size INTEGER NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL
-);
-
-CREATE INDEX idx_transfer_submissions_collection ON transfer_submissions(collection_id, created_at);
-
-CREATE TABLE transfer_submission_files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  submission_id INTEGER NOT NULL REFERENCES transfer_submissions(id) ON DELETE CASCADE,
-  relative_path TEXT NOT NULL,
-  size INTEGER NOT NULL,
-  ext TEXT NOT NULL DEFAULT '',
-  mime_type TEXT NOT NULL DEFAULT '',
-  created_at DATETIME NOT NULL,
-  UNIQUE(submission_id, relative_path)
-);
-
-CREATE TABLE transfer_access_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  token_hash TEXT NOT NULL UNIQUE,
-  transfer_id INTEGER REFERENCES transfers(id) ON DELETE CASCADE,
-  collection_id INTEGER REFERENCES transfer_collections(id) ON DELETE CASCADE,
-  ip_address TEXT,
-  created_at DATETIME NOT NULL,
-  expires_at DATETIME NOT NULL
-);
-
-CREATE INDEX idx_transfer_access_sessions_gc ON transfer_access_sessions(expires_at);
-
--- 13. 下载名额声明：按（访问会话, 任务, 下载目标）去重。
--- 同一文件的 Range 续传、失败重试与并发重复请求复用同一名额，不再重复消耗
--- max_downloads；不同目标、不同会话仍各自计数。声明随访问会话或任务级联删除。
-CREATE TABLE transfer_download_claims (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id INTEGER NOT NULL REFERENCES transfer_access_sessions(id) ON DELETE CASCADE,
-  transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
-  target TEXT NOT NULL,
-  created_at DATETIME NOT NULL,
-  UNIQUE(session_id, transfer_id, target)
-);
-
-CREATE INDEX idx_transfer_download_claims_transfer ON transfer_download_claims(transfer_id);

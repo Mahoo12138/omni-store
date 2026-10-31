@@ -16,7 +16,6 @@ import (
 	"github.com/omni-store/omnistore/internal/capabilities"
 	"github.com/omni-store/omnistore/internal/models"
 	"github.com/omni-store/omnistore/internal/sources"
-	"github.com/omni-store/omnistore/internal/transfers"
 )
 
 func readAdminCapabilityBindings(t *testing.T, f *staticFixture) map[string]capabilities.Binding {
@@ -32,10 +31,10 @@ func readAdminCapabilityBindings(t *testing.T, f *staticFixture) map[string]capa
 		} `json:"data"`
 	}
 	decodeTestJSON(t, response, &envelope)
-	if envelope.Data.Total != 3 || len(envelope.Data.Items) != 3 {
-		t.Fatalf("expected exactly three singleton services: %s", response.Body.String())
+	if envelope.Data.Total != 2 || len(envelope.Data.Items) != 2 {
+		t.Fatalf("expected exactly two singleton services: %s", response.Body.String())
 	}
-	bindings := make(map[string]capabilities.Binding, 3)
+	bindings := make(map[string]capabilities.Binding, 2)
 	for _, binding := range envelope.Data.Items {
 		if _, duplicate := bindings[binding.Capability]; duplicate {
 			t.Fatalf("duplicate singleton %q", binding.Capability)
@@ -290,53 +289,6 @@ func TestAdminCapabilityImageBedSwitchKeepsExistingImages(t *testing.T) {
 	if _, err := f.app.imagebed.UploadForUser(user, "blocked.png", bytes.NewReader(payload.Bytes())); err == nil {
 		t.Fatal("disabled image-bed still accepts new uploads")
 	}
-}
-
-func TestAdminCapabilityTransferSwitchKeepsExistingTasks(t *testing.T) {
-	f := newStaticHTTPFixture(t)
-	target := newCapabilityTarget(t, f)
-	bound := updateAdminCapability(t, f, "transfer_center", map[string]any{"enabled": true, "storage_source_key": f.source.Key, "expected_revision": 0})
-	create := func(title string) transfers.Send {
-		t.Helper()
-		response := serveTestRequest(t, f.handler, http.MethodPost, "/api/v1/transfers", fmt.Sprintf(`{"title":%q}`, title), f.cookie, f.csrf)
-		if response.Code != http.StatusOK {
-			t.Fatalf("create transfer: %d %s", response.Code, response.Body.String())
-		}
-		var envelope struct {
-			Data struct {
-				Send transfers.Send `json:"send"`
-			} `json:"data"`
-		}
-		decodeTestJSON(t, response, &envelope)
-		return envelope.Data.Send
-	}
-	original := create("original task")
-	bound = updateAdminCapability(t, f, "transfer_center", map[string]any{"storage_source_key": target.Key, "expected_revision": bound.Revision})
-	replacement := create("replacement task")
-	if original.SourceKey != f.source.Key || replacement.SourceKey != target.Key {
-		t.Fatalf("new task targets original=%s replacement=%s", original.SourceKey, replacement.SourceKey)
-	}
-	updateAdminCapability(t, f, "transfer_center", map[string]any{"enabled": false, "expected_revision": bound.Revision})
-	response := serveTestRequest(t, f.handler, http.MethodGet, "/api/v1/transfers", "", f.cookie, "")
-	if response.Code != http.StatusOK {
-		t.Fatal(response.Body.String())
-	}
-	var envelope struct {
-		Data struct {
-			Items []transfers.Send `json:"items"`
-		} `json:"data"`
-	}
-	decodeTestJSON(t, response, &envelope)
-	byID := make(map[int64]transfers.Send)
-	for _, send := range envelope.Data.Items {
-		byID[send.ID] = send
-	}
-	if len(byID) != 2 || byID[original.ID].SourceKey != original.SourceKey || byID[replacement.ID].SourceKey != replacement.SourceKey || byID[original.ID].Status != "draft" {
-		t.Fatalf("binding switch or disable changed existing task records: %+v", byID)
-	}
-	response = serveTestRequest(t, f.handler, http.MethodPost, "/api/v1/transfers", `{"title":"blocked task"}`, f.cookie, f.csrf)
-	// This service currently reports unavailable creation through its generic error.
-	assertErrorResponse(t, response, http.StatusInternalServerError, CodeInternalError)
 }
 
 func TestAdminCapabilityAnonymousImageBedGateRetainsBinding(t *testing.T) {

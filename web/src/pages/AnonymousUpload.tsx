@@ -301,7 +301,6 @@ export function AnonymousUploadPage() {
         <PageHeader
           eyebrow="公开匿名图片托管"
           title="匿名图床"
-          description="把图片放进来，立即获取适用于网页、论坛和文档的链接。"
           actions={
             status.isPending ? null : (
               <ServiceStatus
@@ -345,11 +344,10 @@ export function AnonymousUploadPage() {
               brand
               eyebrow="匿名图床 · 上传服务"
               title="匿名上传暂未开放"
-              description="此实例暂未开放匿名图床。管理员开启公共图床后，这里就可以直接上传图片。"
+              description="此实例暂未开放匿名图床。"
               status={{
                 tone: 'neutral',
                 label: '此实例未开放匿名上传',
-                hint: '开启后入口会自动变为可用',
               }}
             />
           )}
@@ -412,7 +410,7 @@ export function AnonymousUploadPage() {
                     <div>
                       <h2>本次上传</h2>
                       <p>
-                        {isUploading ? '图片正在上传，完成后即可复制链接' : `已处理 ${items.length} 张图片`}
+                        {isUploading ? '正在上传…' : `已处理 ${items.length} 张图片`}
                       </p>
                     </div>
                     <div className={css.resultActions}>

@@ -82,7 +82,7 @@ export function SearchDialog() {
   const data = results.data
   return (
     <DialogWrap open={open} onOpenChange={setOpen} title="全局搜索" wide>
-      <p className={css.dialogHint}>跨存储源查找文件名或路径，只显示你有权访问的内容。</p>
+      <p className={css.dialogHint}>只显示你有权访问的内容。</p>
       <form className={css.searchPanel} onSubmit={submit}>
         <label className={css.queryField}>
           <span className={css.srOnly}>搜索关键字</span>
@@ -114,7 +114,6 @@ export function SearchDialog() {
       {!hasQuery ? (
         <section className={css.emptyState}>
           <span className={css.emptyIcon}><IconSearch size={24} /></span>
-          <h2 className={css.emptyTitle}>从所有文件中查找</h2>
           <span>支持文件名和完整相对路径；回收站与排除路径不会出现在结果中。</span>
         </section>
       ) : results.isPending ? (

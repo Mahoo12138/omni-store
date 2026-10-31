@@ -3,7 +3,7 @@ import { mergeClasses } from '@fluentui/react-components'
 import type { StateTone } from './StateView'
 import { useStyles } from './ServiceStatus.styles'
 
-// 公开侧服务状态的统一胶囊：首页、文件中转、匿名图床共用。
+// 公开侧服务状态的统一胶囊：首页与匿名图床共用。
 // 只表达「哪个服务 · 现在怎样」，重试等操作仍由调用方放在旁边，避免胶囊变成按钮。
 export function ServiceStatus({
   label,

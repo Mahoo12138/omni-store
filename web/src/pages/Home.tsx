@@ -98,6 +98,8 @@ export function HomePage() {
             <div className={css.skeletonBars}>
               <span className={css.skeletonKicker} aria-hidden="true" />
               <span className={css.skeletonTitle} aria-hidden="true" />
+              <span className={css.skeletonTagline} aria-hidden="true" />
+              <span className={css.skeletonValues} aria-hidden="true" />
               <span className={css.skeletonLine} aria-hidden="true" />
               <span className={css.skeletonLineShort} aria-hidden="true" />
               <span className={css.skeletonActions} aria-hidden="true" />
@@ -130,11 +132,10 @@ export function HomePage() {
             brand
             eyebrow="公开网盘 · 访问状态"
             title="公开网盘尚未开启"
-            description="此实例暂未开放公开目录。如果你是这个实例的管理员，可在「系统设置 → 站点配置 → 站点服务」中绑定公开存储源。"
+            description="此实例尚未开放公开目录。管理员可在「系统设置 → 站点配置 → 站点服务」中绑定公开存储源。"
             status={{
               tone: 'neutral',
               label: '此实例未开放公开目录',
-              hint: '绑定公开存储源后，入口会自动出现在这里',
             }}
           />
         </>
@@ -153,9 +154,15 @@ export function HomePage() {
                 <span className={css.titleMask}>
                   <h1 id="public-drive-title" className={css.entryTitle}>公开网盘</h1>
                 </span>
-                <p className={css.entryLead}>
-                  这里收录此实例开放共享的目录，访客无需账号即可浏览、预览与下载其中的文件。
-                </p>
+                <div className={css.entryLede}>
+                  <p className={css.entryTagline}>让文件分享变得简单。</p>
+                  <p className={css.entryValues}>开放、自由、随时访问。</p>
+                  <p className={css.entryDescription}>
+                    一个轻量、开放的文件存储空间。
+                    <br />
+                    无需登录，即可浏览和访问公开分享的文件。
+                  </p>
+                </div>
                 <div className={css.entryActions}>
                   <Button
                     size="large"

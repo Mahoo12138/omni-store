@@ -21,7 +21,6 @@ Storage Sources
 Site Capabilities
 Protocols
 Internal Data
-Transfer
 Recent Problems
 ```
 
@@ -33,14 +32,6 @@ Site Capability health：
 - reserved namespace valid；
 - current usage。
 
-Transfer：
-
-- active send；
-- active collect；
-- bytes；
-- expiring soon；
-- failed GC。
-
 危险维护动作必须：
 
 - explicit confirmation；
@@ -49,6 +40,6 @@ Transfer：
 
 ## 静态发布与图床诊断
 
-运行中心的 Source 协议列表包含静态 HTTP 启停状态，Site 健康列表只包含三项站点服务。发布根、baseUrl、cache/CORS 在每源静态配置中查看；进一步聚合发布根可读性等诊断仍属于目标范围。图床诊断显示匿名启停、保留策略、旧源引用与托管根归属。
+运行中心的 Source 协议列表包含静态 HTTP 启停状态，Site 健康列表只包含两项站点服务。发布根、baseUrl、cache/CORS 在每源静态配置中查看；进一步聚合发布根可读性等诊断仍属于目标范围。图床诊断显示匿名启停、保留策略、旧源引用与托管根归属。
 
-统计区分普通文件（含静态原件）、托管图床、Transfer、临时数据；Source 物理总量包含全部真实字节，分类台账不得简单相加导致重复。清理缓存/Transfer 不得删除普通发布文件。未知 `.omnistore/` 提供明确 blocked 告警，而不是“自动修复”按钮。
+统计区分普通文件（含静态原件）、托管图床、临时数据；Source 物理总量包含全部真实字节，分类台账不得简单相加导致重复。清理缓存不得删除普通发布文件。未知 `.omnistore/` 提供明确 blocked 告警，而不是“自动修复”按钮。

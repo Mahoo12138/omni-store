@@ -40,6 +40,10 @@ export function SectionCard({
   const css = useSharedStyles()
   const toolbar = title === undefined
   const hasBody = children !== undefined && children !== null
+  // 无说明时标题块只有一行；与 32px 图标位顶部对齐会让标题悬在上沿，改为整块居中。
+  const copyAlign = toolbar
+    ? css.cardHeaderCopyToolbar
+    : hint ? undefined : css.cardHeaderCopyCentered
   return (
     <Root
       className={mergeClasses(css.card, className ?? '')}
@@ -47,7 +51,7 @@ export function SectionCard({
       aria-busy={busy}
     >
       <header className={css.cardHeader}>
-        <div className={mergeClasses(css.cardHeaderCopy, toolbar ? css.cardHeaderCopyToolbar : '')}>
+        <div className={mergeClasses(css.cardHeaderCopy, copyAlign)}>
           <span className={css.iconChip} data-tone={tone} aria-hidden="true">{icon}</span>
           <div className={css.cardTitleBlock}>
             {toolbar ? null : (

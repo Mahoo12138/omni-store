@@ -86,7 +86,6 @@ export function PublicSharePage() {
           <section className={css.unlockCard}>
             <span className={css.unlockIcon}><IconKey size={28} /></span>
             <h1>此分享受密码保护</h1>
-            <p>输入分享者提供的访问密码以查看「{info.data.name}」。</p>
             <form className={css.unlockForm} onSubmit={(event) => { event.preventDefault(); setPasswordError(''); unlock.mutate() }}>
               <Input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="访问密码" aria-label="访问密码" />
               {passwordError ? <Banner intent="error">{passwordError}</Banner> : null}

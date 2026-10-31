@@ -22,7 +22,6 @@ import (
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
 	"github.com/omni-store/omnistore/internal/staticassets"
-	"github.com/omni-store/omnistore/internal/transfers"
 	"github.com/omni-store/omnistore/internal/users"
 )
 
@@ -158,7 +157,6 @@ func newLifecycleDeleteServer(t *testing.T) (*Server, *models.StorageSource, *mo
 		files:        fileService,
 		capabilities: capabilities.NewService(conn, sourceService),
 		staticassets: staticassets.NewService(conn, sourceService, fileService, ""),
-		transfers:    transfers.NewService(conn, sourceService, capabilities.NewService(conn, sourceService), fileService, dataDir, "test-master-key"),
 		users:        userService,
 		audit:        audit.New(conn, false, 0, logger),
 		proxy:        security.NewProxyResolver(nil),

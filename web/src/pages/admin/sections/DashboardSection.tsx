@@ -13,7 +13,7 @@ import { Banner } from '../../../components/shell/Banner'
 import { SkeletonRows } from '../../../components/shell/Skeletons'
 import {
   IconCheck, IconCloud, IconDatabase, IconError, IconGlobe, IconHardDrive, IconImage,
-  IconInfo, IconPlug, IconShield, IconShieldCheck, IconSync, IconTag, IconTrash, IconUpload, IconUser, IconWarning,
+  IconInfo, IconPlug, IconShield, IconShieldCheck, IconSync, IconTag, IconTrash, IconUser, IconWarning,
 } from '../../../components/ui/Icon'
 import { formatBytes } from '../../../utils/format'
 import { auditActionLabel } from '../../../utils/audit'
@@ -24,13 +24,11 @@ import { SectionCard } from '../SectionCard'
 const operationCapabilityLabels: Record<string, string> = {
   public_drive: '公开网盘',
   image_bed: '快速图床',
-  transfer_center: '流转中心',
 }
 
 const capabilityIcons: Record<string, ReactNode> = {
   public_drive: <IconGlobe size={16} />,
   image_bed: <IconImage size={16} />,
-  transfer_center: <IconUpload size={16} />,
 }
 
 function formatAuditTime(iso: string): string {
@@ -158,7 +156,7 @@ export function DashboardSection() {
               {healthy ? '运行正常' : `${attentionCount} 项需要关注`}
             </span>
             {/* 分隔点放在第二段内部：换行时跟着“更新于”走，不会悬在上一行行尾。 */}
-            <span>· 更新于 {new Date(data.generated_at).toLocaleTimeString()} · 每 30 秒自动刷新</span>
+            <span>· 更新于 {new Date(data.generated_at).toLocaleTimeString()}</span>
           </>
         )}
         actions={(
@@ -222,7 +220,7 @@ export function DashboardSection() {
       </SectionCard>
 
       <div className={css.opsStatGrid}>
-        <SectionCard icon={<IconDatabase size={18} />} tone="brand" title="数据库" hint="SQLite 主库与 WAL 预写日志。">
+        <SectionCard icon={<IconDatabase size={18} />} tone="brand" title="数据库">
           <div className={css.statLead}>
             <span className={css.statLeadLabel}>数据库大小</span>
             <span className={css.statLeadValue}>{formatBytes(data.database.size_bytes)}</span>
@@ -236,7 +234,7 @@ export function DashboardSection() {
           </dl>
         </SectionCard>
 
-        <SectionCard icon={<IconTrash size={18} />} tone="brand" title="缓存与回收站" hint="可清理的缓存与保留中的删除项。">
+        <SectionCard icon={<IconTrash size={18} />} tone="brand" title="缓存与回收站">
           <div className={css.statLead}>
             <span className={css.statLeadLabel}>回收站</span>
             <span className={css.statLeadValue}>
@@ -250,25 +248,11 @@ export function DashboardSection() {
           </dl>
         </SectionCard>
 
-        <SectionCard icon={<IconUpload size={18} />} tone="brand" title="流转负载" hint="发件包与收集任务的在途占用。">
-          <div className={css.statLead}>
-            <span className={css.statLeadLabel}>在途载荷</span>
-            <span className={css.statLeadValue}>{formatBytes(data.transfers.payload_bytes)}</span>
-          </div>
-          <dl className={css.statRows}>
-            <StatRow label="发件包" value={`活跃 ${data.transfers.active_sends} · 草稿 ${data.transfers.draft_sends}`} />
-            <StatRow label="收集" value={data.transfers.active_collections} />
-            {data.transfers.active_quota_bytes > 0 ? (
-              <StatRow label="活跃配额" value={formatBytes(data.transfers.active_quota_bytes)} />
-            ) : null}
-          </dl>
-        </SectionCard>
       </div>
 
       <SectionCard
         icon={<IconHardDrive size={18} />}
         title="存储源健康"
-        hint="存储源状态、协议和用量统一查看；配置请前往“存储源”。"
         busy={overview.isFetching}
         bodyPadding="none"
       >
@@ -279,12 +263,11 @@ export function DashboardSection() {
               <TableHeaderCell className={css.compactTh}>状态</TableHeaderCell>
               <TableHeaderCell className={css.compactTh}>物理 / 台账</TableHeaderCell>
               <TableHeaderCell className={css.compactTh}>回收站</TableHeaderCell>
-              <TableHeaderCell className={css.compactTh}>活跃流转</TableHeaderCell>
               <TableHeaderCell className={css.compactTh}>协议</TableHeaderCell>
               <TableHeaderCell className={css.compactTh}>操作</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
-              {data.sources.length === 0 ? <TableRow><TableCell colSpan={7} className={css.compactTd}>还没有存储源，请前往“存储源”添加。</TableCell></TableRow> : null}
+              {data.sources.length === 0 ? <TableRow><TableCell colSpan={6} className={css.compactTd}>还没有存储源，请前往“存储源”添加。</TableCell></TableRow> : null}
               {data.sources.map((source) => {
                 const usagePercent = source.quota_bytes > 0
                   ? Math.min(100, (source.usage_bytes / source.quota_bytes) * 100)
@@ -330,7 +313,6 @@ export function DashboardSection() {
                       </div>
                     </TableCell>
                     <TableCell className={css.compactTd}>{source.trash_count} 项</TableCell>
-                    <TableCell className={css.compactTd}>{source.active_transfers}</TableCell>
                     <TableCell className={css.compactTd}>
                       <div className={css.protocolTags}>
                         {protocols.map((protocol) => <span className={css.protocolTag} key={protocol}>{protocol}</span>)}
@@ -357,7 +339,6 @@ export function DashboardSection() {
       <SectionCard
         icon={<IconShield size={18} />}
         title="站点能力健康"
-        hint="公开侧三个能力的产品开关与绑定状态。"
       >
         <div className={css.capabilityGrid}>
           {data.capabilities.map((capability) => (
@@ -386,7 +367,6 @@ export function DashboardSection() {
         tone="danger"
         title="最近失败操作"
         badge={data.recent_failed_audits.length > 0 ? <Badge color="red">{data.recent_failed_audits.length}</Badge> : null}
-        hint="来自审计日志，按时间倒序。"
       >
         {data.recent_failed_audits.length === 0 ? (
           <div className={css.emptyState}>
@@ -460,33 +440,17 @@ function IntegrityReportBody({ data }: { data: IntegrityReport }) {
 
 function CleanupReportBody({ data }: { data: CleanupResult }) {
   const css = useStyles()
-  const gc = data.transfer_gc
   return (
-    <>
-      <div className={css.reportGroup}>
-        <span className={css.reportGroupTitle}>存储与协议</span>
-        <dl className={css.reportGrid}>
-          <ReportCount label="WebDAV 锁" value={data.webdav_locks} />
-          <ReportCount label="会话" value={data.sessions} />
-          <ReportCount label="Multipart 上传" value={data.multipart_uploads} />
-          <ReportCount label="Multipart 孤儿" value={data.multipart_orphans} />
-          <ReportCount label="缩略图缓存" value={data.thumbnails} />
-        </dl>
-      </div>
-      <div className={css.reportGroup}>
-        <span className={css.reportGroupTitle}>流转中心</span>
-        <p className={css.reportHint}>「过期」与「已清扫」依次为 发件包 + 收集任务。</p>
-        <dl className={css.reportGrid}>
-          <ReportCount label="过期任务" value={`${gc.transfers_expired} + ${gc.collections_expired}`} />
-          <ReportCount label="已清扫任务" value={`${gc.transfers_swept} + ${gc.collections_swept}`} />
-          <ReportCount label="草稿清理" value={gc.drafts_removed} />
-          <ReportCount label="空提交" value={gc.empty_submissions} />
-          <ReportCount label="流转会话" value={gc.sessions_removed} />
-          <ReportCount label="孤儿目录" value={gc.orphan_dirs_removed} />
-          <ReportCount label="临时文件" value={gc.orphan_temp_removed} />
-        </dl>
-      </div>
-    </>
+    <div className={css.reportGroup}>
+      <span className={css.reportGroupTitle}>存储与协议</span>
+      <dl className={css.reportGrid}>
+        <ReportCount label="WebDAV 锁" value={data.webdav_locks} />
+        <ReportCount label="会话" value={data.sessions} />
+        <ReportCount label="Multipart 上传" value={data.multipart_uploads} />
+        <ReportCount label="Multipart 孤儿" value={data.multipart_orphans} />
+        <ReportCount label="缩略图缓存" value={data.thumbnails} />
+      </dl>
+    </div>
   )
 }
 

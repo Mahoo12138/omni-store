@@ -161,7 +161,7 @@ export function PolicyDialog({
           placeholder="例如：内容团队"
         />
       </FormField>
-      <FormField label="说明" hint="说明策略适用的人群或用途">
+      <FormField label="说明">
         <Textarea
           className={css.formTextarea}
           rows={4}

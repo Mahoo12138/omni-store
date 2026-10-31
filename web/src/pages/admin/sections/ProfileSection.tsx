@@ -23,21 +23,18 @@ const credentialViews = [
     key: 'webdav',
     label: 'WebDAV',
     meta: '桌面挂载',
-    description: '使用系统文件管理器或支持 WebDAV 的客户端挂载文件。',
     icon: <IconLink size={18} />,
   },
   {
     key: 'image-api',
     label: '图床 API',
     meta: '上传客户端',
-    description: '为 PicGo 或第三方客户端签发可单独撤销的 Token。',
     icon: <IconImage size={18} />,
   },
   {
     key: 's3',
     label: 'S3',
     meta: 'CLI 与 SDK',
-    description: '为 AWS CLI、rclone 或 SDK 创建独立访问凭据。',
     icon: <IconCloud size={18} />,
   },
 ] as const
@@ -164,7 +161,6 @@ export function ProfileSection() {
         open={profileOpen}
         onOpenChange={(o) => { setProfileOpen(o); if (!o) { setDisplayName(''); setProfileMsg('') } }}
         title="修改显示名"
-        description="显示名仅用于界面展示，不影响登录。"
         footer={
           <>
             <Button variant="ghost" onClick={() => setProfileOpen(false)}>
@@ -222,7 +218,6 @@ export function ProfileSection() {
           label="新密码（至少 8 位）"
           required
           error={pwdMsg}
-          hint={pwdMsg ? undefined : '建议使用字母数字符号组合'}
         >
           <Input
             type="password"
@@ -237,7 +232,7 @@ export function ProfileSection() {
         icon={<IconLink size={18} />}
         tone="brand"
         title="应用与客户端连接"
-        hint="选择连接类型查看状态和管理凭据。Token 与 Secret 仅展示一次。"
+        hint="Token 与 Secret 仅展示一次。"
         bodyPadding="none"
       >
         <nav className={css.credentialOverview} aria-label="连接类型">
@@ -248,31 +243,37 @@ export function ProfileSection() {
                 key={view.key}
                 id={`credential-entry-${view.key}`}
                 type="button"
+                data-credential-row
                 className={css.credentialOverviewItem}
                 onClick={() => setCredentialView(view.key)}
                 aria-label={`管理 ${view.label}`}
+                aria-describedby={`credential-status-${view.key}`}
               >
-                <span className={css.credentialOverviewIcon} aria-hidden="true">{view.icon}</span>
+                <span className={css.credentialOverviewIcon} data-kind={view.key} aria-hidden="true">
+                  {view.icon}
+                </span>
                 <span className={css.credentialOverviewCopy}>
-                  <span className={css.credentialOverviewTitleLine}>
-                    <strong className={css.credentialOverviewTitle}>{view.label}</strong>
-                    <small className={css.credentialOverviewMeta}>{view.meta}</small>
+                  <strong className={css.credentialOverviewTitle}>{view.label}</strong>
+                  <span className={css.credentialOverviewMetaGroup}>
+                    <span className={css.credentialOverviewDot} aria-hidden="true" />
+                    <span className={css.credentialOverviewMeta}>{view.meta}</span>
                   </span>
-                  <span className={css.credentialOverviewDescription}>{view.description}</span>
                 </span>
                 <span
+                  id={`credential-status-${view.key}`}
+                  data-credential-status
                   className={mergeClasses(
                     css.credentialOverviewStatus,
                     status.error
-                      ? css.credentialStatusError
-                      : status.active ? css.statusBadge : css.statusBadgeMuted,
+                      ? css.credentialOverviewStatusError
+                      : status.active ? css.credentialOverviewStatusActive : css.credentialOverviewStatusMuted,
                   )}
                 >
                   {status.active ? <i className={css.statusDotSmall} /> : null}
                   {status.label}
                 </span>
-                <span className={css.credentialOverviewChevron} aria-hidden="true">
-                  <IconChevronRight size={17} />
+                <span className={css.credentialOverviewChevron} data-credential-chevron aria-hidden="true">
+                  <IconChevronRight size={18} />
                 </span>
               </button>
             )
@@ -282,7 +283,6 @@ export function ProfileSection() {
           open={credentialView !== null}
           onOpenChange={(open) => { if (!open) closeCredentialModal() }}
           title={credentialViews.find((view) => view.key === credentialView)?.label ?? '管理连接'}
-          description={credentialViews.find((view) => view.key === credentialView)?.description}
           wide
           footer={<Button variant="secondary" onClick={closeCredentialModal}>完成</Button>}
         >
@@ -586,7 +586,6 @@ function ImageBedTokenManager() {
           }
         }}
         title="新建图床 Token"
-        description="建议使用设备或客户端名称，便于后续单独撤销。"
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>取消</Button>
@@ -778,7 +777,6 @@ function S3CredentialManager() {
           <div className={css.credentialSubsection}>
             <div className={css.credentialSubsectionHeader}>
               <h4 className={css.credentialSubsectionTitle}>Bucket 映射</h4>
-              <p className={css.credentialSubsectionHint}>按存储源名称复制系统生成的 Bucket 值。</p>
             </div>
             <div className={css.bucketList} role="list" aria-label="S3 Bucket 映射">
               {sources.data.map((source) => (
@@ -807,7 +805,6 @@ function S3CredentialManager() {
           }
         }}
         title="新建 S3 凭据"
-        description="使用设备或客户端名称，便于后续单独禁用或撤销。"
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>取消</Button>

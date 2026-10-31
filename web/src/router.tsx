@@ -4,9 +4,7 @@ import {
   createRouter,
   lazyRouteComponent,
   Outlet,
-  redirect,
 } from '@tanstack/react-router'
-import { validateTransferRedirect, validateTransferSearch } from './utils/transfer-workspace'
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -23,25 +21,6 @@ const publicBrowseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/public/$',
   component: lazyRouteComponent(() => import('./pages/PublicBrowse'), 'PublicBrowsePage'),
-})
-
-const publicPickupRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/pickup/$publicKey',
-  component: lazyRouteComponent(() => import('./pages/PublicPickup'), 'PublicPickupPage'),
-})
-
-const publicTransferRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/transfer',
-  component: lazyRouteComponent(() => import('./pages/PublicTransfer'), 'PublicTransferPage'),
-  validateSearch: validateTransferSearch,
-})
-
-const publicCollectRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/collect/$publicKey',
-  component: lazyRouteComponent(() => import('./pages/PublicCollect'), 'PublicCollectPage'),
 })
 
 const anonymousUploadRoute = createRoute({
@@ -75,9 +54,6 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: lazyRouteComponent(() => import('./pages/Login'), 'LoginPage'),
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
-    redirect: validateTransferRedirect(search.redirect),
-  }),
 })
 
 const setupRoute = createRoute({
@@ -126,17 +102,6 @@ const imageBedRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/ImageBed'), 'ImageBedPage'),
 })
 
-// 登录侧不再维护单独的「流转中心」：旧链接、书签与登录回跳一律并到公开页 /transfer，
-// 登录身份在公开页同样生效（发件包仍可用「从已有文件添加」等需要登录的能力）。
-const transferCenterRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/app/transfer',
-  beforeLoad: ({ search }) => {
-    throw redirect({ to: '/transfer', search })
-  },
-  validateSearch: validateTransferSearch,
-})
-
 const sharesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/app/shares',
@@ -161,11 +126,7 @@ const adminRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   publicBrowseRoute,
-  publicTransferRoute,
-  publicPickupRoute,
-  publicCollectRoute,
   anonymousUploadRoute,
-  transferCenterRoute,
   publicShareRoute,
   aboutRoute,
   loginRoute,

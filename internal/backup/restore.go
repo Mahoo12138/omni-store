@@ -241,7 +241,7 @@ func Restore(ctx context.Context, opts RestoreOptions) (*Report, error) {
 		})
 	}
 	report.Warnings = append(report.Warnings,
-		"静态资源/流转等能力绑定随数据库恢复；请核对绑定指向的存储源与发布根是否仍然有效。",
+		"静态资源等能力绑定随数据库恢复；请核对绑定指向的存储源与发布根是否仍然有效。",
 		"启动服务后建议运行存储源台账校准与运维中心完整性检查。")
 
 	reportBytes, err := json.MarshalIndent(report, "", "  ")

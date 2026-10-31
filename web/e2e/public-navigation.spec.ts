@@ -1,9 +1,8 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
-type ServiceName = '公开网盘' | '匿名图床' | '文件中转'
+type ServiceName = '公开网盘' | '匿名图床'
 type AccountName = '管理登录' | '进入工作台'
 interface Share { key: string }
-interface Transfer { id: number; public_key: string }
 interface PublicRoute { path: string; current?: ServiceName; heading?: string; tone?: 'light' }
 interface ButtonAppearance {
   name: string
@@ -15,17 +14,13 @@ interface ButtonAppearance {
   decoration: Record<string, string>
 }
 
-const serviceNames: ServiceName[] = ['公开网盘', '匿名图床', '文件中转']
+const serviceNames: ServiceName[] = ['公开网盘', '匿名图床']
 const widths = [1440, 320, 375]
-const screenshotNames: Record<string, string> = { '/': 'home', '/upload': 'upload', '/transfer?view=send': 'transfer', '/about': 'about' }
+const screenshotNames: Record<string, string> = { '/': 'home', '/upload': 'upload', '/about': 'about' }
 let ownerContext: BrowserContext | undefined
 let owner: Page
 let ownerCSRF = ''
 let share: Share | undefined
-let send: Transfer | undefined
-let collection: Transfer | undefined
-let sendTitle = ''
-let collectionTitle = ''
 
 // Uses cmd/testenv's isolated seed, including its credentials and README fixture.
 // OMNISTORE_E2E_BASE_URL can point this suite at a separate test server.
@@ -47,14 +42,9 @@ function publicRoutes(): PublicRoute[] {
   return [
     { path: '/', current: '公开网盘', heading: '公开网盘' },
     { path: '/upload', current: '匿名图床', heading: '匿名图床' },
-    { path: '/transfer?view=send', current: '文件中转', heading: '文件中转' },
-    { path: '/transfer?view=collect', current: '文件中转', heading: '文件中转' },
-    { path: '/transfer?view=history', current: '文件中转', heading: '文件中转' },
     { path: '/about', tone: 'light' },
     { path: '/public/', current: '公开网盘', heading: '公开网盘' },
     { path: `/s/${share!.key}`, heading: 'README.txt', tone: 'light' },
-    { path: `/pickup/${send!.public_key}`, current: '文件中转', heading: sendTitle },
-    { path: `/collect/${collection!.public_key}`, current: '文件中转', heading: collectionTitle },
   ]
 }
 
@@ -67,7 +57,6 @@ async function expectNavigation(page: Page, account: AccountName, current?: Serv
   await expect(nav).toHaveCount(1)
   await expect(nav).toBeVisible()
   await expect(nav.getByRole('link')).toHaveText([...serviceNames, account])
-  await expect(nav.getByRole('link', { name: '收发记录', exact: true })).toHaveCount(0)
   for (const name of [...serviceNames, account]) {
     const link = nav.getByRole('link', { name, exact: true })
     await expect(link).toBeVisible()
@@ -79,7 +68,6 @@ async function expectNavigation(page: Page, account: AccountName, current?: Serv
   const destinations = [
     { name: '公开网盘', path: '/' },
     { name: '匿名图床', path: '/upload' },
-    { name: '文件中转', path: '/transfer', view: 'send' },
     { name: account, path: account === '管理登录' ? '/login' : '/app' },
   ]
   for (const destination of destinations) {
@@ -181,10 +169,9 @@ async function checkRouteMatrix(page: Page, account: AccountName) {
   }
 }
 
-async function clickService(page: Page, name: ServiceName, path: string, view?: string) {
+async function clickService(page: Page, name: ServiceName, path: string) {
   await navigation(page).getByRole('link', { name, exact: true }).click()
   await expect.poll(() => new URL(page.url()).pathname).toBe(path)
-  if (view) await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe(view)
   await expectNavigation(page, '管理登录', name)
   await expectUnclippedButtons(navigation(page))
 }
@@ -202,26 +189,11 @@ test.beforeAll(async ({ browser, baseURL }) => {
   expect(source, 'cmd/testenv public fixture source').toBeDefined()
   expect(source!.is_disabled).toBe(false)
   share = await mutate<Share>('/api/v1/shares', 'POST', { source_key: source!.key, path: '/README.txt', max_downloads: 0 })
-  const suffix = Date.now()
-  sendTitle = `导航回归取件 ${suffix}`
-  collectionTitle = `导航回归收集 ${suffix}`
-  send = (await mutate<{ send: Transfer }>('/api/v1/transfers', 'POST', { title: sendTitle, require_code: false, expires_in_hours: 24 })).send
-  const upload = await owner.request.post(`/api/v1/transfers/${send.id}/files/upload`, {
-    headers: { 'X-CSRF-Token': ownerCSRF },
-    multipart: { relative_path: 'navigation.txt', file: { name: 'navigation.txt', mimeType: 'text/plain', buffer: Buffer.from('PUBLIC-NAVIGATION-FIXTURE') } },
-  })
-  expect(upload.status()).toBe(200)
-  await mutate(`/api/v1/transfers/${send.id}/finalize`, 'POST')
-  collection = (await mutate<{ collection: Transfer }>('/api/v1/transfer-collections', 'POST', {
-    title: collectionTitle, require_code: false, require_name: false, require_note: false, expires_in_hours: 24,
-  })).collection
 })
 
 test.afterAll(async () => {
   if (!ownerContext) return
   try {
-    if (collection) await mutate(`/api/v1/transfer-collections/${collection.id}/close`, 'POST')
-    if (send) await mutate(`/api/v1/transfers/${send.id}`, 'DELETE')
     if (share) await mutate(`/api/v1/shares/${share.key}`, 'DELETE')
   } finally {
     await ownerContext.close()
@@ -238,14 +210,6 @@ for (const width of widths) {
     await page.goto('/about')
     await expectNavigation(page, '管理登录')
     await clickService(page, '匿名图床', '/upload')
-    await clickService(page, '文件中转', '/transfer', 'send')
-    const historyTab = page.getByRole('tab', { name: '收发记录', exact: true })
-    await historyTab.click()
-    await expect.poll(() => new URL(page.url()).pathname).toBe('/transfer')
-    await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe('history')
-    await expect(historyTab).toHaveAttribute('aria-selected', 'true')
-    await expectNavigation(page, '管理登录', '文件中转')
-    await expectUnclippedButtons(navigation(page))
     await clickService(page, '公开网盘', '/')
     await navigation(page).getByRole('link', { name: '管理登录', exact: true }).click()
     await expect(page).toHaveURL(/\/login$/)

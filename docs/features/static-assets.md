@@ -63,7 +63,7 @@ baseUrl = https://files.example.com/assets/ast-0123456789abcdef0123456789abcdef/
 - 请求 `.omnistore` 路径段、越界路径、排除项或不允许发布的类型，不提供内容。
 - 初始默认服务范围是图片和视频；精确格式、安全策略见公开 HTTP 设计。其他普通文件可存在源中，不等于自动公开。
 - 视频按字节 Range 流式读取；返回原始媒体内容，而不是播放器 HTML。不做转码。
-- 读取不消费 Share 或 Transfer 的下载次数，也不依赖这些对象。
+- 读取不消费 Share 的下载次数，也不依赖该对象。
 
 ## 5. 固定路径的生命周期
 
@@ -87,4 +87,4 @@ baseUrl = https://files.example.com/assets/ast-0123456789abcdef0123456789abcdef/
 
 ## 7. 非目标
 
-不提供公开目录浏览、公开写入、逐文件 image ID 登记、强制文件改名、Transfer 式过期、网站应用托管、视频转码、实时缓存撤回或 CDN 控制平台。
+不提供公开目录浏览、公开写入、逐文件 image ID 登记、强制文件改名、网站应用托管、视频转码、实时缓存撤回或 CDN 控制平台。

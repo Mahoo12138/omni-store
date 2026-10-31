@@ -116,7 +116,6 @@ export function CreateUserDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="创建用户"
-      description="用户首次登录后可自行修改密码。"
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
@@ -146,7 +145,7 @@ export function CreateUserDialog({
         label="密码"
         required
         error={err}
-        hint="至少 8 位，建议字母数字符号组合"
+        hint="至少 8 位"
       >
         <Input
           type="password"

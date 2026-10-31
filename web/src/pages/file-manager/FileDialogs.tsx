@@ -33,7 +33,6 @@ export function DirectoryUploadDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="上传目录"
-      description="选择一个目录，目录中的文件会按原有层级上传到当前位置。"
       footer={(
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>取消</Button>
@@ -65,7 +64,6 @@ export function UploadConflictDialog({
         if (!open) onDecision('cancel')
       }}
       title="发现重名文件"
-      description="请选择本次上传任务遇到同名文件时的处理方式。"
       footer={(
         <>
           <Button variant="secondary" onClick={() => onDecision('skip')}>跳过冲突文件</Button>
@@ -93,7 +91,6 @@ export function BatchDeleteDialog({ entries, onClose, onConfirm }: {
       open
       onOpenChange={(open) => { if (!open) onClose() }}
       title={`将 ${entries.length} 项移入回收站？`}
-      description="批量删除确认"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>取消</Button>
@@ -149,7 +146,7 @@ export function MkdirDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="新建文件夹"
-      description={`在 ${currentPath} 下创建一个新目录。`}
+      description={`当前目录：${currentPath}`}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
@@ -424,12 +421,12 @@ export function ShareDialog({
       )}
     >
       {created ? (
-        <FormField label="分享链接" hint="链接可随时在“分享”页面复制或撤销。">
+        <FormField label="分享链接">
           <Input readOnly value={created.url} onFocus={(event) => event.currentTarget.select()} />
         </FormField>
       ) : (
         <FormLayout>
-          <FormField label="访问密码" hint="选填；设置后访问者需要先验证密码。">
+          <FormField label="访问密码" hint="选填。">
             <Input
               type="password"
               value={password}

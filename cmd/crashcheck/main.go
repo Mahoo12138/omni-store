@@ -72,7 +72,6 @@ type fixture struct {
 	protocol   protocolCredentials
 	partETag   string
 	uploadID   string
-	transfer   transferFixture
 }
 
 type protocolCredentials struct {
@@ -358,8 +357,7 @@ func seedScenarioFiles(f *fixture, name string) error {
 		return seedTree(f.teamRoot, "subject")
 	case "restore", "permanent delete":
 		return seedTree(f.teamRoot, "subject")
-	case "multipart complete", "image upload", "transfer send upload", "transfer send finalize",
-		"transfer collect submit", "transfer save to files", "transfer GC":
+	case "multipart complete", "image upload":
 		return nil
 	default:
 		return fmt.Errorf("unknown scenario %q", name)
@@ -491,7 +489,7 @@ func (f *fixture) apiRequest(method, path string, body io.Reader, contentType st
 }
 
 func crashScenarios() []scenario {
-	return append([]scenario{
+	return []scenario{
 		{name: "overwrite upload", journalDir: "operations/file-uploads", ready: uploadTempVisible, request: requestOverwrite, verify: verifyOverwrite},
 		{name: "directory copy", journalDir: "operations/copies", request: requestCopy, verify: verifyCopy},
 		{name: "cross-source move", journalDir: "operations/transfers", request: requestCrossMove, verify: verifyCrossMove},
@@ -501,7 +499,7 @@ func crashScenarios() []scenario {
 		{name: "permanent delete", journalDir: "trash/.operations", prepare: prepareTrash, request: requestPurge, verify: verifyPurge},
 		{name: "multipart complete", journalDir: "operations/s3-multipart-completions", prepare: prepareMultipart, request: requestMultipartComplete, verify: verifyMultipart},
 		{name: "image upload", journalDir: "operations/image-uploads", ready: uploadTempVisible, request: requestImageUpload, verify: verifyImageUpload},
-	}, transferCrashScenarios()...)
+	}
 }
 
 func uploadTempVisible(f *fixture) bool {
@@ -806,7 +804,7 @@ func auditFixture(f *fixture) error {
 	}
 	for _, dir := range []string{
 		"operations/copies", "operations/file-uploads", "operations/image-uploads", "operations/paths",
-		"operations/s3-multipart-completions", "operations/s3-multipart-parts", "operations/transfers", "operations/transfer-uploads", "trash/.operations",
+		"operations/s3-multipart-completions", "operations/s3-multipart-parts", "operations/transfers", "trash/.operations",
 	} {
 		if directoryHasEntries(filepath.Join(f.dataDir, dir)) {
 			return fmt.Errorf("recovery journal remains in %s", dir)

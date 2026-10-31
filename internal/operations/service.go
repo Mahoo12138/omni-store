@@ -1,5 +1,5 @@
 // Package operations 聚合 2.0 仪表盘所需的状态与维护动作：
-// 系统/数据库/存储源/站点能力健康、缓存与回收站统计、流转活跃用量、
+// 系统/数据库/存储源/站点能力健康、缓存与回收站统计、
 // 最近失败审计；提供一次性清理编排与 SQLite 完整性检查。
 package operations
 
@@ -18,7 +18,6 @@ import (
 	"github.com/omni-store/omnistore/internal/imagebed"
 	"github.com/omni-store/omnistore/internal/security"
 	"github.com/omni-store/omnistore/internal/sources"
-	"github.com/omni-store/omnistore/internal/transfers"
 )
 
 const multipartMaxAge = 7 * 24 * time.Hour
@@ -32,7 +31,6 @@ type Service struct {
 	sources    *sources.Service
 	files      *files.Service
 	thumbnails *imagebed.Service
-	transfers  *transfers.Service
 	sessions   *auth.Sessions
 	multipart  multipartCleanupFunc
 }
@@ -42,31 +40,30 @@ type multipartCleanupFunc func(maxAge time.Duration) (uploads, orphans, parts in
 
 // NewService 创建运行维护服务。sessions/multipart 可为 nil（对应能力关闭）。
 func NewService(db *sql.DB, dbPath, dataDir, version string, sources *sources.Service,
-	files *files.Service, thumbnails *imagebed.Service, transfers *transfers.Service,
+	files *files.Service, thumbnails *imagebed.Service,
 	sessions *auth.Sessions, multipart multipartCleanupFunc) *Service {
 	return &Service{
 		db: db, dbPath: dbPath, dataDir: dataDir, version: version,
-		sources: sources, files: files, thumbnails: thumbnails, transfers: transfers,
+		sources: sources, files: files, thumbnails: thumbnails,
 		sessions: sessions, multipart: multipart,
 	}
 }
 
 // SourceHealth 是单个存储源的健康快照。
 type SourceHealth struct {
-	Key             string `json:"key"`
-	Name            string `json:"name"`
-	RootPath        string `json:"root_path"`
-	Disabled        bool   `json:"disabled"`
-	RootAccessible  bool   `json:"root_accessible"`
-	UsageBytes      int64  `json:"usage_bytes"`
-	LedgerBytes     int64  `json:"ledger_bytes"`
-	QuotaBytes      int64  `json:"quota_bytes"`
-	TrashCount      int64  `json:"trash_count"`
-	ActiveTransfers int64  `json:"active_transfers"`
-	WebdavEnabled   bool   `json:"webdav_enabled"`
-	S3Enabled       bool   `json:"s3_enabled"`
-	StaticEnabled   bool   `json:"static_enabled"`
-	RootIssue       string `json:"root_issue,omitempty"`
+	Key            string `json:"key"`
+	Name           string `json:"name"`
+	RootPath       string `json:"root_path"`
+	Disabled       bool   `json:"disabled"`
+	RootAccessible bool   `json:"root_accessible"`
+	UsageBytes     int64  `json:"usage_bytes"`
+	LedgerBytes    int64  `json:"ledger_bytes"`
+	QuotaBytes     int64  `json:"quota_bytes"`
+	TrashCount     int64  `json:"trash_count"`
+	WebdavEnabled  bool   `json:"webdav_enabled"`
+	S3Enabled      bool   `json:"s3_enabled"`
+	StaticEnabled  bool   `json:"static_enabled"`
+	RootIssue      string `json:"root_issue,omitempty"`
 }
 
 // CapabilityHealth 是一项站点能力的健康快照。
@@ -87,16 +84,6 @@ type DatabaseHealth struct {
 	TableRows  map[string]int64 `json:"table_rows"`
 }
 
-// TransferUsage 是流转中心活跃用量。
-type TransferUsage struct {
-	ActiveSends       int64 `json:"active_sends"`
-	DraftSends        int64 `json:"draft_sends"`
-	ActiveCollections int64 `json:"active_collections"`
-	PayloadBytes      int64 `json:"payload_bytes"`
-	ActiveQuotaBytes  int64 `json:"active_quota_bytes"`
-	Sessions          int64 `json:"sessions"`
-}
-
 // StorageExtras 是缓存/回收站/Multipart 统计。
 type StorageExtras struct {
 	ThumbnailCacheBytes int64 `json:"thumbnail_cache_bytes"`
@@ -113,7 +100,6 @@ type Status struct {
 	Database     DatabaseHealth     `json:"database"`
 	Sources      []SourceHealth     `json:"sources"`
 	Capabilities []CapabilityHealth `json:"capabilities"`
-	Transfers    TransferUsage      `json:"transfers"`
 	Storage      StorageExtras      `json:"storage"`
 	RecentFailed []audit.LogEntry   `json:"recent_failed_audits"`
 }
@@ -139,9 +125,6 @@ func (s *Service) GetStatus() (*Status, error) {
 	if err := s.fillCapabilities(status); err != nil {
 		return nil, err
 	}
-	if err := s.fillTransfers(status); err != nil {
-		return nil, err
-	}
 	s.fillStorage(status)
 	s.fillRecentFailed(status)
 	return status, nil
@@ -164,7 +147,7 @@ func (s *Service) fillDatabase(status *Status) error {
 		quickCheck = "ok"
 	}
 	status.Database.QuickCheck = quickCheck
-	for _, table := range []string{"users", "storage_sources", "file_records", "images", "transfers", "transfer_collections", "audit_logs"} {
+	for _, table := range []string{"users", "storage_sources", "file_records", "images", "audit_logs"} {
 		var count int64
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err == nil {
 			status.Database.TableRows[table] = count
@@ -206,11 +189,6 @@ func (s *Service) fillSources(status *Status) error {
 		}
 		_ = s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(size), 0) FROM trash_entries
   WHERE storage_source_id = ?`, src.ID).Scan(&health.TrashCount, new(int64))
-		activeTransfers, err := s.transfers.SourceActiveTaskCount(src.ID)
-		if err != nil {
-			return err
-		}
-		health.ActiveTransfers = activeTransfers
 		status.Sources = append(status.Sources, health)
 	}
 	return nil
@@ -248,42 +226,6 @@ func (s *Service) fillCapabilities(status *Status) error {
 		status.Capabilities = append(status.Capabilities, health)
 	}
 	return rows.Err()
-}
-
-func (s *Service) fillTransfers(status *Status) error {
-	usage := TransferUsage{}
-	if err := s.db.QueryRow(`SELECT
-  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
-  SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END),
-  COALESCE(SUM(CASE WHEN status IN ('draft', 'active') THEN total_size ELSE 0 END), 0)
-  FROM transfers`).Scan(new(sql.NullInt64), new(sql.NullInt64), &usage.PayloadBytes); err != nil {
-		return err
-	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfer_collections WHERE status = 'active'`).Scan(&usage.ActiveCollections); err != nil {
-		return err
-	}
-	var collectionBytes int64
-	if err := s.db.QueryRow(`SELECT COALESCE(SUM(total_size), 0) FROM transfer_collections WHERE status IN ('active', 'closed')`).Scan(&collectionBytes); err != nil {
-		return err
-	}
-	usage.PayloadBytes += collectionBytes
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM transfer_access_sessions WHERE expires_at > ?`,
-		time.Now().UTC()).Scan(&usage.Sessions); err != nil {
-		return err
-	}
-	settings, err := s.transfers.GetSettings()
-	if err != nil {
-		return err
-	}
-	usage.ActiveQuotaBytes = settings.ActiveQuotaBytes
-	// active 行 COUNT 在空表时为 NULL，上面 Scan 用 NullInt64 忽略；这里补齐零值。
-	var active, draft int64
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM transfers WHERE status = 'active'`).Scan(&active)
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM transfers WHERE status = 'draft'`).Scan(&draft)
-	usage.ActiveSends = active
-	usage.DraftSends = draft
-	status.Transfers = usage
-	return nil
 }
 
 func (s *Service) fillStorage(status *Status) {
@@ -356,17 +298,16 @@ func (s *Service) RunIntegrityCheck() (*IntegrityReport, error) {
 
 // CleanupResult 汇总一次清理编排。
 type CleanupResult struct {
-	WebDAVLocks      int64               `json:"webdav_locks"`
-	Sessions         int64               `json:"sessions"`
-	MultipartUploads int64               `json:"multipart_uploads"`
-	MultipartOrphans int64               `json:"multipart_orphans"`
-	Thumbnails       int                 `json:"thumbnails"`
-	TransferGC       *transfers.GCResult `json:"transfer_gc"`
+	WebDAVLocks      int64 `json:"webdav_locks"`
+	Sessions         int64 `json:"sessions"`
+	MultipartUploads int64 `json:"multipart_uploads"`
+	MultipartOrphans int64 `json:"multipart_orphans"`
+	Thumbnails       int   `json:"thumbnails"`
 }
 
-// RunCleanup 编排全部既定清理：过期锁/会话/Multipart、缩略图缓存、流转 GC。
+// RunCleanup 编排全部既定清理：过期锁/会话/Multipart、缩略图缓存。
 func (s *Service) RunCleanup(ctx context.Context) (*CleanupResult, error) {
-	result := &CleanupResult{TransferGC: &transfers.GCResult{}}
+	result := &CleanupResult{}
 	var joined error
 
 	if n, err := s.files.PersistentLocks().CleanupExpired(ctx); err != nil {
@@ -395,14 +336,6 @@ func (s *Service) RunCleanup(ctx context.Context) (*CleanupResult, error) {
 			joined = errors.Join(joined, fmt.Errorf("清理缩略图缓存失败: %w", err))
 		} else {
 			result.Thumbnails = n
-		}
-	}
-	if s.transfers != nil {
-		gc, err := s.transfers.RunGC(time.Now().UTC())
-		if err != nil {
-			joined = errors.Join(joined, fmt.Errorf("流转 GC 失败: %w", err))
-		} else {
-			result.TransferGC = gc
 		}
 	}
 	return result, joined

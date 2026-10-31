@@ -50,7 +50,7 @@ export function UsersSection() {
       <SectionCard
         icon={<IconUser size={18} />}
         tone="brand"
-        hint={<>共 {users.data?.length ?? 0} 个 · 用户首次登录后可自行修改密码。</>}
+        hint={<>共 {users.data?.length ?? 0} 个</>}
         actions={<Button onClick={() => setCreateOpen(true)} icon={<IconUserPlus size={14} />}>创建用户</Button>}
         bodyPadding="none"
       >
@@ -151,7 +151,6 @@ export function UsersSection() {
         open={!!revokingCredentials}
         onOpenChange={(open) => { if (!open) setRevokingCredentials(null) }}
         title="撤销全部凭据"
-        description={`立即阻断「${revokingCredentials?.username ?? ''}」当前已签发的访问凭据。`}
         footer={(
           <>
             <Button variant="ghost" onClick={() => setRevokingCredentials(null)}>取消</Button>

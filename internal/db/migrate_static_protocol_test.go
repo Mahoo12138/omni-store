@@ -26,7 +26,7 @@ func TestStaticAccessMigrationKeepsSourcesUnpublished(t *testing.T) {
 	if err := conn.QueryRow(`SELECT COUNT(*) FROM source_static_access`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("upgrade must not publish a source: count=%d err=%v", count, err)
 	}
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM site_capability_bindings`).Scan(&count); err != nil || count != 3 {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM site_capability_bindings`).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("capabilities count=%d err=%v", count, err)
 	}
 	if _, err := conn.Exec(`INSERT INTO site_capability_bindings VALUES ('static_assets', 0, NULL, 0, datetime('now'))`); err == nil {

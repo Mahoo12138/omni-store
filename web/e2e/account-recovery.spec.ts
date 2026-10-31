@@ -53,7 +53,7 @@ test('password change closes other sessions and administrator can revoke all cre
     await userRow.getByRole('button', { name: `用户 ${username} 的更多操作` }).click()
     await page.getByRole('menuitem', { name: '撤销访问凭据', exact: true }).click()
     const revokeDialog = page.getByRole('dialog', { name: '撤销全部凭据' })
-    await expect(revokeDialog).toContainText(username)
+    await expect(revokeDialog).toContainText('所有网页登录会话、WebDAV Token、图床 Token 和 S3 Key 将立即失效')
     page.once('dialog', (dialog) => dialog.accept())
     await revokeDialog.getByRole('button', { name: '撤销全部凭据' }).click()
     await expect(revokeDialog).toHaveCount(0)

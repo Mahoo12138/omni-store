@@ -21,7 +21,7 @@ export interface AdminSource {
 }
 
 // Site Capability 绑定（2.0）：产品功能归站点，全站单 Source。
-export type SiteCapability = 'public_drive' | 'image_bed' | 'transfer_center'
+export type SiteCapability = 'public_drive' | 'image_bed'
 
 export interface CapabilityBinding {
   capability: SiteCapability
@@ -399,7 +399,6 @@ export interface OperationsSourceHealth {
   ledger_bytes: number
   quota_bytes: number
   trash_count: number
-  active_transfers: number
   webdav_enabled: boolean
   s3_enabled: boolean
   static_enabled: boolean
@@ -427,14 +426,6 @@ export interface OperationsStatus {
   }
   sources: OperationsSourceHealth[]
   capabilities: OperationsCapabilityHealth[]
-  transfers: {
-    active_sends: number
-    draft_sends: number
-    active_collections: number
-    payload_bytes: number
-    active_quota_bytes: number
-    sessions: number
-  }
   storage: {
     thumbnail_cache_bytes: number
     trash_entries: number
@@ -465,17 +456,6 @@ export interface CleanupResult {
   multipart_uploads: number
   multipart_orphans: number
   thumbnails: number
-  transfer_gc: {
-    transfers_expired: number
-    transfers_swept: number
-    drafts_removed: number
-    collections_expired: number
-    collections_swept: number
-    empty_submissions: number
-    orphan_dirs_removed: number
-    orphan_temp_removed: number
-    sessions_removed: number
-  }
 }
 
 export async function runOperationsCleanup(): Promise<CleanupResult> {

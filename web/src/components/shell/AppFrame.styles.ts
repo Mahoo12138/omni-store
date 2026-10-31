@@ -271,11 +271,6 @@ export const useAppFrameStyles = makeStyles({
     'display': 'none',
   },
   },
-  userCaption: {
-  'display': 'block',
-  'color': tokens.colorNeutralForeground2,
-  'fontSize': tokens.fontSizeBase200,
-  },
   userName: {
   'display': 'block',
   'maxWidth': '100%',

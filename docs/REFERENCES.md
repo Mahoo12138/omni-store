@@ -27,7 +27,7 @@ short/no-cache/long、CORS 默认值、配置 revision 与表字段是本包为 
 - [MDN CORS 配置](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/CORS)：公开无凭据读取与路由级开放。
 - [MDN CORP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Resource-Policy)：跨域资源嵌入控制。
 - [AWS S3 GetObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)、[HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)：协议读取与错误响应格式。OmniStore 的保留路径拒绝是自身策略，不声称完整复现 AWS IAM 行为。
-- [SQLite CREATE INDEX](https://www.sqlite.org/lang_createindex.html)：唯一约束、NULL 与表达式索引，供既有 Transfer 路径唯一性设计参考。
+- [SQLite CREATE INDEX](https://www.sqlite.org/lang_createindex.html)：唯一约束、NULL 与表达式索引，供路径唯一性设计参考。
 
 ## 4. 校验范围
 

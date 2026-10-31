@@ -14,7 +14,7 @@ var ErrReservedName = errors.New("路径包含 OmniStore 保留名称，请先�
 var ErrManagedNamespace = errors.New("路径包含系统托管命名空间")
 
 // ManagedNamespaceSegment 是每个存储源根下唯一的系统托管目录段。
-// 系统服务（图床、Transfer 等）的内部数据保存在它的固定子目录中。
+// 系统服务（如图床）的内部数据保存在它的固定子目录中。
 const ManagedNamespaceSegment = ".omnistore"
 
 // IsReservedName 判断单个名称是否属于 OmniStore 内部操作命名空间。

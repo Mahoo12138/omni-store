@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-type Capability = 'public_drive' | 'image_bed' | 'transfer_center'
+type Capability = 'public_drive' | 'image_bed'
 interface Binding {
   capability: Capability
   enabled: boolean
@@ -15,7 +15,6 @@ interface Retention { user_retention_days: number; anonymous_retention_days: num
 const services: Array<{ capability: Capability; name: string }> = [
   { capability: 'public_drive', name: '公开网盘' },
   { capability: 'image_bed', name: '快速图床' },
-  { capability: 'transfer_center', name: '文件中转' },
 ]
 
 async function login(page: Page) {
@@ -195,11 +194,11 @@ test('site services persist state transitions, reject failed saves and recover c
     await saveService(page, conflictDialog, 'public_drive', teamSource.key, true)
 
     // Failed writes leave the dialog and draft available and never change live state.
-    const beforeFailedSave = await binding(page, 'transfer_center')
-    const failedDialog = await openService(page, '文件中转')
+    const beforeFailedSave = await binding(page, 'image_bed')
+    const failedDialog = await openService(page, '快速图床')
     await selectSource(page, failedDialog, teamSource.name)
     const failureMessage = 'E2E 服务保存失败，配置未生效'
-    await page.route('**/api/v1/admin/capabilities/transfer_center', async (route) => {
+    await page.route('**/api/v1/admin/capabilities/image_bed', async (route) => {
       if (route.request().method() !== 'PUT') return route.continue()
       await route.fulfill({ status: 500, json: { error: { code: 'INTERNAL_ERROR', message: failureMessage }, request_id: 'site-save-failure' } })
     })
@@ -207,8 +206,8 @@ test('site services persist state transitions, reject failed saves and recover c
     await expect(failedDialog.getByText(failureMessage, { exact: true })).toBeVisible()
     await expect(failedDialog).toBeVisible()
     await expect(failedDialog.getByRole('combobox', { name: '绑定存储源', exact: true })).toContainText(teamSource.name)
-    expect(await binding(page, 'transfer_center')).toEqual(beforeFailedSave)
-    await page.unroute('**/api/v1/admin/capabilities/transfer_center')
+    expect(await binding(page, 'image_bed')).toEqual(beforeFailedSave)
+    await page.unroute('**/api/v1/admin/capabilities/image_bed')
     await failedDialog.getByRole('button', { name: '取消', exact: true }).click()
 
     const imageCard = serviceCard(page, '快速图床')
@@ -274,7 +273,7 @@ test('site services persist state transitions, reject failed saves and recover c
     expect((await disabledGateClosed).status()).toBe(200)
     await expect(anonymous).toBeDisabled()
     expect((await read<AnonymousSettings>(page, '/api/v1/admin/image-bed/anonymous-settings')).enabled).toBe(false)
-    const disabledSourceDialog = await openService(page, '文件中转')
+    const disabledSourceDialog = await openService(page, '快速图床')
     await disabledSourceDialog.getByRole('combobox', { name: '绑定存储源', exact: true }).click()
     await expect(page.getByRole('option', { name: new RegExp(publicSource.name) })).toHaveAttribute('aria-disabled', 'true')
     await page.keyboard.press('Escape')
@@ -284,7 +283,7 @@ test('site services persist state transitions, reject failed saves and recover c
     await expect(anonymous).toBeEnabled()
     await expect(anonymous).not.toBeChecked()
   } finally {
-    await page.unroute('**/api/v1/admin/capabilities/transfer_center')
+    await page.unroute('**/api/v1/admin/capabilities/image_bed')
     await page.unroute('**/api/v1/admin/image-bed/anonymous-settings')
     for (const source of originalSources) {
       const current = (await read<{ items: Source[] }>(page, '/api/v1/admin/sources')).items.find((item) => item.key === source.key)

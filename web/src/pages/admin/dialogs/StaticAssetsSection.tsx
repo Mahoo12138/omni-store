@@ -75,8 +75,7 @@ function StaticAssetsConfigureForm({ sourceKey }: { sourceKey: string }) {
         <div className={css.sectionHeaderCopy}>
           <h3 className={css.sectionTitle}>发布范围</h3>
           <p className={css.sectionHint}>
-            把一个普通目录按固定地址公开读取，用于博客图片、视频等长期资源。
-            启用后发布目录内的受支持文件将公开读取，无需登录；不提供目录列表不等于保密。
+            不提供目录列表不等于保密；发布目录内的受支持文件将对任何访客公开读取。
           </p>
         </div>
       </header>
@@ -145,7 +144,7 @@ function StaticAssetsConfiguredView({ config }: { config: StaticAssetConfig }) {
       expected_revision: config.revision,
     }),
     onSuccess: async () => {
-      setMsg('配置已保存；新响应按新策略执行。')
+      setMsg('配置已保存。')
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['static-assets-config'] }),
         queryClient.invalidateQueries({ queryKey: ['admin-sources'] }),

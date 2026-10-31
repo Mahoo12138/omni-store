@@ -31,13 +31,11 @@ export interface CommandBarAction {
 export function CommandBar({
   label,
   status,
-  hint,
   actions,
 }: {
   /** role=toolbar 的可访问名 */
   label: string
   status: ReactNode
-  hint?: ReactNode
   actions: CommandBarAction[]
 }) {
   const css = useStyles()
@@ -48,7 +46,6 @@ export function CommandBar({
         <OverflowItem id="command-bar-summary" pinned>
           <div className={css.copy}>
             <strong className={css.status}>{status}</strong>
-            {hint ? <span className={css.hint}>{hint}</span> : null}
           </div>
         </OverflowItem>
         <div className={css.actions}>

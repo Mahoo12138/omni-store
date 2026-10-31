@@ -4,9 +4,9 @@
 
 ## 1. 本次必须采用的产品边界
 
-站点服务三项：公开网盘、快速图床、文件流转中心。每项最多绑定一个 Source，一个 Source 可以被多项复用；WebDAV/S3/静态 HTTP 按源独立配置与启停，普通文件动作归 Resource。
+站点服务两项：公开网盘、快速图床。每项最多绑定一个 Source，一个 Source 可以被两项复用；WebDAV/S3/静态 HTTP 按源独立配置与启停，普通文件动作归 Resource。
 
-系统托管原件进 `.omnistore/`（图床/Transfer）；博客图片和视频仍在普通目录，以 baseUrl + relativePath 发布，不依赖公开盘、Share 或 images 登记。数据库、配置、密钥保持系统数据目录。
+系统托管原件进 `.omnistore/`（图床）；博客图片和视频仍在普通目录，以 baseUrl + relativePath 发布，不依赖公开盘、Share 或 images 登记。数据库、配置、密钥保持系统数据目录。
 
 `.omnistore` 直接通用读取/浏览返回真实 HTTP 404，不能只在 UI 隐藏；递归、编码路径、query、协议入口和 SPA fallback 均需受控。静态读取和普通写权限分离，不将公开媒体 CORS 扩大到后台 API。
 
@@ -47,10 +47,9 @@
 | [公开盘](features/public-drive.md) | 可浏览的公开空间 |
 | [快速图床](features/image-bed.md) | 匿名/登录上传、随机 ID |
 | [静态资源](features/static-assets.md) | 普通目录、baseUrl、长期媒体 |
-| [Transfer](features/transfer-center.md) | Send + Collect 完整流转 |
 | [WebDAV](features/webdav.md) | 源级协议 |
 | [S3](features/s3.md) | 源级协议 |
-| [运行中心](features/operation-center.md) | 四种站点服务诊断 |
+| [运行中心](features/operation-center.md) | 两种站点服务诊断 |
 | [备份恢复](features/backup-recovery.md) | 配置/ID/keys 与源重新绑定 |
 
 ## 5. 设计文档
@@ -62,7 +61,6 @@
 | [静态发布](design/static-assets.md) | 发布根、映射、配置和 reset/relocate |
 | [公开 HTTP](design/public-content-http.md) | 缓存、Range、CORS、安全类型 |
 | [上传任务](design/upload-task-system.md) | 复用队列、不混淆授权 |
-| [Transfer](design/transfer-center.md) | 临时包/提交与安全存储 |
 | [Migration](design/v2-migration.md) | 升级保护、旧图与新配置 |
 | [Operation](design/operation-center.md) | 维护与诊断 |
 | [Backup](design/backup-recovery.md) | 完整系统恢复契约 |

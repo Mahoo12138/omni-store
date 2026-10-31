@@ -264,7 +264,7 @@ function FileGrid({
         layout="plain"
         kind={filtered ? 'filtered' : 'empty'}
         title={filtered ? '没有匹配的条目' : '目录为空'}
-        description={filtered ? '换个关键词试试。' : '把文件或文件夹放进此目录后会显示在这里。'}
+        description={filtered ? '换个关键词试试。' : undefined}
       />
     )
   }

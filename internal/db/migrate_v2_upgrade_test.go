@@ -112,6 +112,16 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 			t.Fatalf("storage_sources missing column %s", want)
 		}
 	}
+	// 存量源在 1.x 没有 per-source S3 开关，升级后必须保持可达。
+	for _, id := range []int64{1, 2, 3} {
+		var s3Enabled int
+		if err := conn.QueryRowContext(ctx, `SELECT s3_enabled FROM storage_sources WHERE id = ?`, id).Scan(&s3Enabled); err != nil {
+			t.Fatal(err)
+		}
+		if s3Enabled != 1 {
+			t.Fatalf("migrated source %d s3_enabled = %d, want 1", id, s3Enabled)
+		}
+	}
 
 	// 公开盘绑定收敛到唯一公开源。
 	var capability string
@@ -205,6 +215,14 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 	if err := conn.QueryRowContext(ctx, `SELECT id FROM storage_sources WHERE key = 'src-new'`).Scan(&count); err != nil || count != 4 {
 		t.Fatalf("autoincrement id=%d err=%v, want 4", count, err)
 	}
+	// fresh 2.0 源保持服务层默认关闭，不沿用存量源的 S3 开关。
+	var newS3Enabled int
+	if err := conn.QueryRowContext(ctx, `SELECT s3_enabled FROM storage_sources WHERE key = 'src-new'`).Scan(&newS3Enabled); err != nil {
+		t.Fatal(err)
+	}
+	if newS3Enabled != 0 {
+		t.Fatalf("fresh source s3_enabled = %d, want 0", newS3Enabled)
+	}
 
 	// 重复执行不再变更。
 	if err := Migrate(conn); err != nil {
@@ -239,4 +257,94 @@ func TestMigrateFromV1ToV2(t *testing.T) {
 	if expiresAt != nil {
 		t.Fatalf("legacy image expires_at = %v, want NULL", expiresAt)
 	}
+}
+
+func TestMigrateV2BindingRules(t *testing.T) {
+	ctx := context.Background()
+
+	assertBinding := func(t *testing.T, conn *sql.DB, capability string, wantEnabled bool, wantSourceID int64) {
+		t.Helper()
+		var enabled int
+		var sourceID sql.NullInt64
+		if err := conn.QueryRowContext(ctx,
+			`SELECT enabled, storage_source_id FROM site_capability_bindings WHERE capability = ?`,
+			capability).Scan(&enabled, &sourceID); err != nil {
+			t.Fatal(err)
+		}
+		want := 0
+		if wantEnabled {
+			want = 1
+		}
+		if enabled != want {
+			t.Fatalf("%s enabled = %d, want %d", capability, enabled, want)
+		}
+		if wantSourceID == 0 {
+			if sourceID.Valid {
+				t.Fatalf("%s source = %d, want NULL", capability, sourceID.Int64)
+			}
+			return
+		}
+		if !sourceID.Valid || sourceID.Int64 != wantSourceID {
+			t.Fatalf("%s source = %v, want %d", capability, sourceID, wantSourceID)
+		}
+	}
+
+	migrateWith := func(t *testing.T, seeds ...string) *sql.DB {
+		t.Helper()
+		conn := newLegacyDB(t)
+		for _, stmt := range seeds {
+			if _, err := conn.ExecContext(ctx, stmt); err != nil {
+				t.Fatalf("seed: %v: %v", stmt, err)
+			}
+		}
+		if err := Migrate(conn); err != nil {
+			t.Fatalf("upgrade to 2.0.0: %v", err)
+		}
+		return conn
+	}
+
+	t.Run("zero legacy candidates stay unbound", func(t *testing.T) {
+		conn := migrateWith(t)
+		assertBinding(t, conn, "public_drive", false, 0)
+		assertBinding(t, conn, "image_bed", false, 0)
+	})
+
+	t.Run("multiple public and image sources stay unbound", func(t *testing.T) {
+		conn := migrateWith(t,
+			`INSERT INTO storage_sources (key, name, root_path, public_read_enabled, public_mount_path, image_bed_enabled, created_at, updated_at)
+			  VALUES ('pub-a', 'Public A', '/tmp/pub-a', 1, '/a', 1, datetime('now'), datetime('now'))`,
+			`INSERT INTO storage_sources (key, name, root_path, public_read_enabled, public_mount_path, image_bed_enabled, created_at, updated_at)
+			  VALUES ('pub-b', 'Public B', '/tmp/pub-b', 1, '/b', 1, datetime('now'), datetime('now'))`,
+			`INSERT INTO system_settings (key, value, updated_at)
+			  VALUES ('anonymous_image_bed_enabled', 'true', datetime('now'))`,
+		)
+		// 匿名图床开启也不能成为在多个 legacy 源中挑选绑定目标的依据。
+		assertBinding(t, conn, "public_drive", false, 0)
+		assertBinding(t, conn, "image_bed", false, 0)
+	})
+
+	t.Run("single image source binds without anonymous preference", func(t *testing.T) {
+		conn := migrateWith(t,
+			`INSERT INTO storage_sources (key, name, root_path, image_bed_enabled, created_at, updated_at)
+			  VALUES ('img', 'Images', '/tmp/img', 1, datetime('now'), datetime('now'))`,
+		)
+		assertBinding(t, conn, "public_drive", false, 0)
+		assertBinding(t, conn, "image_bed", true, 1)
+	})
+
+	t.Run("single mounted public source binds", func(t *testing.T) {
+		conn := migrateWith(t,
+			`INSERT INTO storage_sources (key, name, root_path, public_read_enabled, public_mount_path, created_at, updated_at)
+			  VALUES ('pub', 'Public', '/tmp/pub', 1, '/public', datetime('now'), datetime('now'))`,
+		)
+		assertBinding(t, conn, "public_drive", true, 1)
+	})
+
+	t.Run("single public source without mount stays unbound", func(t *testing.T) {
+		conn := migrateWith(t,
+			`INSERT INTO storage_sources (key, name, root_path, public_read_enabled, created_at, updated_at)
+			  VALUES ('pub', 'Public', '/tmp/pub', 1, datetime('now'), datetime('now'))`,
+		)
+		assertBinding(t, conn, "public_drive", false, 0)
+	})
 }

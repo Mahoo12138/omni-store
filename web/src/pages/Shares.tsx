@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchShares, revokeShare, type FileShare } from '../api/shares'
 import { AppFrame } from '../components/shell/AppFrame'
@@ -16,6 +17,7 @@ import { useStyles } from './Shares.styles'
 
 export function SharesPage() {
   const css = useStyles()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const shares = useQuery({ queryKey: ['shares'], queryFn: fetchShares })
   const [revokeTarget, setRevokeTarget] = useState<FileShare | null>(null)
@@ -37,8 +39,8 @@ export function SharesPage() {
   return (
     <AppFrame title="分享">
       <PageHeader
+        eyebrow="个人空间"
         title="分享"
-        description="集中查看、复制和撤销文件与目录分享。"
       />
 
       {shares.isPending ? (
@@ -58,7 +60,7 @@ export function SharesPage() {
           kind="empty"
           icon={<IconLink size={22} />}
           title="还没有分享"
-          description="在文件管理中选择文件或文件夹，点击链接图标即可创建分享。"
+          action={<Button variant="secondary" onClick={() => navigate({ to: '/app' })}>前往文件</Button>}
         />
       ) : null}
       {shares.isSuccess && shares.data.length > 0 ? (

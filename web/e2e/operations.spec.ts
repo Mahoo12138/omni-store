@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
@@ -57,56 +57,24 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   await adminLogin(page)
   const team = await teamSourceDir(page)
 
-  // 1. 生产漂移 A：普通文件在盘外被外部程序修改（台账记录的是旧大小/时间）。
+  // 1. 生产漂移：普通文件在盘外被外部程序修改（台账记录的是旧大小/时间）。
   const driftPath = join(team.dir, 'projects', 'roadmap.md')
   const original = readFileSync(driftPath, 'utf-8')
   writeFileSync(driftPath, `${original}\n<!-- out-of-band edit ${Date.now()} -->`, 'utf-8')
 
-  // 2. 活跃流转任务产生真实托管载荷（经 API 创建 + multipart 上传；服务端会
-  // 初始化带所有权标记的托管根）。套件共享服务器状态：断言一律用基线差值。
-  const baseline = await adminAPI(page, 'GET', '/api/v1/admin/operations/status')
-  const baselineTeam = baseline.body.data.sources.find(
-    (item: { key: string }) => item.key === team.key,
-  )
-  const baselineTransfers = baseline.body.data.transfers
-  const created = await adminAPI(page, 'POST', '/api/v1/transfers', { title: '运维观测包' })
-  expect(created.status).toBe(200)
-  const sendID = created.body.data.send.id
-  const upload = await page.request.fetch(`${baseURL}/api/v1/transfers/${sendID}/files/upload`, {
-    method: 'POST',
-    headers: { cookie: (await adminLogin(page)).cookie, 'X-CSRF-Token': (await adminLogin(page)).csrf },
-    multipart: {
-      relative_path: 'observed.bin',
-      file: { name: 'observed.bin', mimeType: 'application/octet-stream', buffer: Buffer.from('OBSERVED') },
-    },
-  })
-  expect(upload.status()).toBe(200)
-
-  // 3. 生产漂移 B：托管根里出现无台账、无日志的未知目录。
-  // 文件名和年龄不能证明归属；清理必须保留它，而非猜测为中断上传。
-  const managedTmp = join(team.dir, '.omnistore', 'transfer', 'send', 'tr-orphanleftover')
-  mkdirSync(managedTmp, { recursive: true })
-  const tmpFile = join(managedTmp, '.omnistore-upload-orphan1234.tmp')
-  writeFileSync(tmpFile, 'partial upload')
-  const twoHoursAgo = new Date(Date.now() - 2 * 3600_000)
-  utimesSync(tmpFile, twoHoursAgo, twoHoursAgo)
-
-  // 4. 状态聚合：源健康显示物理用量 > 台账用量（漂移未校准前），活跃任务 1。
+  // 2. 状态聚合：源健康显示物理用量 > 台账用量（漂移未校准前）。
   const statusBefore = await adminAPI(page, 'GET', '/api/v1/admin/operations/status')
   expect(statusBefore.status).toBe(200)
   const teamHealth = statusBefore.body.data.sources.find((item: { key: string }) => item.key === team.key)
   expect(teamHealth.root_accessible).toBe(true)
   expect(teamHealth.usage_bytes).toBeGreaterThan(teamHealth.ledger_bytes)
-  expect(teamHealth.active_transfers).toBe(baselineTeam.active_transfers + 1)
-  // 未定稿的包计入草稿（载荷字节照常统计）。
-  expect(statusBefore.body.data.transfers.draft_sends).toBe(baselineTransfers.draft_sends + 1)
-  expect(statusBefore.body.data.transfers.payload_bytes).toBeGreaterThan(0)
+  expect(teamHealth.active_transfers).toBeUndefined()
+  expect(statusBefore.body.data.transfers).toBeUndefined()
   const capabilities = statusBefore.body.data.capabilities.map((item: { capability: string }) => item.capability)
-  for (const capability of ['public_drive', 'image_bed', 'transfer_center']) {
-    expect(capabilities).toContain(capability)
-  }
+  expect(capabilities).toEqual(expect.arrayContaining(['public_drive', 'image_bed']))
+  expect(capabilities).not.toContain('transfer_center')
 
-  // 5. 原运维入口转到仪表盘；完整性检查与健康信息只出现一次。
+  // 3. 原运维入口转到仪表盘；完整性检查与健康信息只出现一次。
   await page.goto('/login')
   await page.getByLabel('用户名').fill('admin')
   await page.getByLabel('密码').fill('OmniStore-Test-Admin!')
@@ -117,21 +85,16 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   await expect(page.getByRole('navigation', { name: '设置分组' }).getByRole('button', { name: '运维中心', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: '存储源健康', exact: true })).toHaveCount(1)
   await expect(page.getByRole('heading', { name: '存储源概览', exact: true })).toHaveCount(0)
-  // 新布局：quick_check 是统计卡内的独立 Badge。
   await expect(page.getByText('quick_check')).toBeVisible()
   await expect(page.getByText('ok', { exact: true })).toBeVisible()
-  // 表格渲染该源且根可访问（活跃流转计数已在 API 断言中核对）。
   await expect(page.getByRole('row', { name: /团队文件/ })).toContainText('可访问')
   await page.getByRole('button', { name: '完整性检查' }).click()
-  // 检查结果以弹窗呈现，关掉后不在页面上留常驻行。
-  // 注：Playwright 不为 term 计算可访问名，所以按文本过滤 role 而不是传 name。
   const integrityReport = page.getByRole('dialog', { name: '完整性检查通过' })
   await expect(integrityReport).toBeVisible({ timeout: 10_000 })
   await expect(integrityReport.getByRole('term').filter({ hasText: 'integrity_check' })).toBeVisible()
   await expect(integrityReport.getByRole('definition').filter({ hasText: 'ok' })).toBeVisible()
   await integrityReport.getByRole('button', { name: '关闭', exact: true }).click()
-  // 退场动画期间弹窗内容必须保持冻结。曾经的 bug：标题在关闭瞬间翻成「清理完成」，
-  // 用户看到的是"关掉一个又闪出另一个"。这里逐帧采样整段动画。
+  // 退场动画期间弹窗内容必须保持冻结。
   const titlesDuringExit = await page.evaluate(async () => {
     const seen: string[] = []
     for (let i = 0; i < 14; i++) {
@@ -143,7 +106,7 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   expect([...new Set(titlesDuringExit)]).toEqual(['完整性检查通过'])
   await expect(integrityReport).toHaveCount(0)
 
-  // 6. 从统一源表校准台账，校准报告和刷新后的健康数据保持一致。
+  // 4. 从统一源表校准台账，校准报告和刷新后的健康数据保持一致。
   const reconcileResponse = page.waitForResponse((response) => response.url().endsWith(`/sources/${team.key}/reconcile`))
   const refreshedOverview = page.waitForResponse((response) => response.url().endsWith('/admin/overview'))
   await page.getByRole('row', { name: /团队文件/ }).getByRole('button', { name: '校准台账', exact: true }).click()
@@ -153,29 +116,19 @@ test('operations status, integrity check and cleanup converge real disk drift', 
   expect(refreshed.ledger_bytes).toBeGreaterThan(teamHealth.ledger_bytes)
   await expect(page.getByRole('status').filter({ hasText: '团队文件 台账已校准' })).toBeVisible()
 
-  // 7. 运行清理后，报告可见、未知文件保持原字节，快照重新获取。
+  // 5. 运行清理后报告可见，且只包含存储与协议维护项。
   const cleanupResponse = page.waitForResponse((response) => response.url().endsWith('/operations/cleanup'))
   const afterCleanup = page.waitForResponse((response) => response.url().endsWith('/admin/overview'))
   await page.getByRole('button', { name: '运行清理', exact: true }).click()
   const cleanup = await (await cleanupResponse).json()
-  expect(cleanup.data.transfer_gc.orphan_temp_removed).toBe(0)
-  expect(cleanup.data.transfer_gc.orphan_dirs_removed).toBe(0)
+  expect(cleanup.data.transfer_gc).toBeUndefined()
   await afterCleanup
   const cleanupReport = page.getByRole('dialog', { name: '清理完成' })
   await expect(cleanupReport.getByText('存储与协议')).toBeVisible()
+  await expect(cleanupReport.getByText('流转中心')).toHaveCount(0)
   await expect(cleanupReport.getByRole('term').filter({ hasText: 'Multipart 上传' })).toBeVisible()
-  await expect(cleanupReport.getByRole('term').filter({ hasText: '孤儿目录' })).toBeVisible()
   await cleanupReport.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(cleanupReport).toHaveCount(0)
-  expect(readFileSync(tmpFile, 'utf-8')).toBe('partial upload')
-
-  // 撤销活跃包 → 载荷目录删除 → 再次清理显示清扫计数。
-  await adminAPI(page, 'DELETE', `/api/v1/transfers/${sendID}`)
-  const cleanup2 = await adminAPI(page, 'POST', '/api/v1/admin/operations/cleanup')
-  expect(cleanup2.body.data.transfer_gc.transfers_swept).toBeGreaterThanOrEqual(1)
-  const ownedPayload = join(team.dir, '.omnistore', 'transfer', 'send', created.body.data.send.public_key, 'observed.bin')
-  expect(() => readFileSync(ownedPayload)).toThrow()
-  expect(readFileSync(tmpFile, 'utf-8')).toBe('partial upload')
 })
 
 async function openDashboard(page: import('@playwright/test').Page) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatDate } from './format'
+import { formatBytes, formatDate, formatRelativeTime } from './format'
 
 describe('formatBytes', () => {
   it.each([
@@ -23,5 +23,25 @@ describe('formatDate', () => {
 
   it('returns a placeholder for invalid input', () => {
     expect(formatDate('not-a-date')).toBe('-')
+  })
+})
+
+describe('formatRelativeTime', () => {
+  const now = new Date(2026, 9, 31, 14, 30)
+
+  it.each([
+    [new Date(2026, 9, 31, 14, 29, 45), '刚刚'],
+    [new Date(2026, 9, 31, 15, 0), '刚刚'],
+    [new Date(2026, 9, 31, 14, 25), '5 分钟前'],
+    [new Date(2026, 9, 31, 9, 5), '今天 09:05'],
+    [new Date(2026, 9, 30, 23, 10), '昨天 23:10'],
+    [new Date(2026, 9, 28, 18, 0), '10月28日'],
+    [new Date(2025, 11, 31, 8, 0), '2025年12月31日'],
+  ])('formats %s as %s', (value, expected) => {
+    expect(formatRelativeTime(value.toISOString(), now)).toBe(expected)
+  })
+
+  it('returns a placeholder for invalid input', () => {
+    expect(formatRelativeTime('not-a-date', now)).toBe('-')
   })
 })

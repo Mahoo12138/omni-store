@@ -129,7 +129,7 @@ export function CreateSourceDialog({
         </>
       }
     >
-      <FormField label="名称" required hint="显示在列表和客户端连接信息中">
+      <FormField label="名称" required>
         <Input
           autoFocus
           value={name}
@@ -196,7 +196,7 @@ function SourcePreflightPreview({ preview }: { preview: SourcePreflight }) {
           ))}
         </div>
       ) : (
-        <p className={css.sourcePreviewEmpty}>目录为空，创建后可以直接上传文件。</p>
+        <p className={css.sourcePreviewEmpty}>目录为空。</p>
       )}
       {preview.warnings.length > 0 ? (
         <ul className={css.sourcePreviewWarnings}>
@@ -327,7 +327,6 @@ export function EditSourceDialog({
             <div className={css.protocolRow}>
               <span className={css.protocolCopy}>
                 <span className={css.protocolName}>WebDAV</span>
-                <span className={css.protocolHint}>凭据访问 · 通过客户端挂载此存储源。</span>
               </span>
               <Checkbox aria-label="启用 WebDAV" checked={webdavEnabled}
                 onChange={(_, data) => { setWebdavOn(!!data.checked); setMsg('') }} />
@@ -335,7 +334,6 @@ export function EditSourceDialog({
             <div className={css.protocolRow}>
               <span className={css.protocolCopy}>
                 <span className={css.protocolName}>S3</span>
-                <span className={css.protocolHint}>凭据访问 · 作为 Path-style Bucket 连接 CLI 或 SDK。</span>
               </span>
               <Checkbox aria-label="启用 S3" checked={s3Enabled}
                 onChange={(_, data) => { setS3On(!!data.checked); setMsg('') }} />
@@ -343,7 +341,6 @@ export function EditSourceDialog({
             <div className={css.protocolRow}>
               <div className={css.protocolCopy}>
                 <span className={css.protocolName}>静态 HTTP</span>
-                <p className={css.protocolHint}>公开访问 · 按固定地址匿名读取指定目录的图片和视频。</p>
               </div>
               <div className={css.protocolControl}>
                 <Button variant="secondary" aria-label={staticExpanded ? '收起静态 HTTP' : '配置静态 HTTP'}

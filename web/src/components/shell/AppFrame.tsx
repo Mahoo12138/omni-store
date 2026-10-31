@@ -98,7 +98,6 @@ export function AppFrame({
     clipboard.clear()
     await logout()
     queryClient.removeQueries({ queryKey: ['me'] })
-    queryClient.removeQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('transfer-') })
     queryClient.setQueryData(['auth-status'], { authenticated: false })
     navigate({ to: '/login' })
   }
@@ -376,7 +375,6 @@ function UserMenu({
                   <>
                     <span className={css.userStack}>
                       <span className={css.userName}>{displayName}</span>
-                      <span className={css.userCaption}>账号与设置</span>
                     </span>
                     <IconChevronDown size={12} className={css.userChevron} />
                   </>

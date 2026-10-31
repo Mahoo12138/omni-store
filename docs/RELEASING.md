@@ -52,7 +52,6 @@ v2.0.0
 
 - Public Drive binding；
 - Image Bed binding；
-- Transfer binding；
 - S3 Source switches。
 
 不得静默把多个 legacy public/image source 任意选一个。
@@ -61,7 +60,7 @@ v2.0.0
 
 进入 RC：
 
-- 不新增 Transfer Feature；
+- 不新增功能；
 - 只修 blocker/security/migration/compatibility/test；
 - 不再次调整核心 Scope。
 
@@ -82,8 +81,6 @@ OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh
 - upgrade install；
 - Public Drive；
 - Image Bed；
-- Transfer Send；
-- Transfer Collect；
 - WebDAV；
 - S3；
 - Backup/Restore；

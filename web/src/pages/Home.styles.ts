@@ -13,11 +13,16 @@ export const useStyles = makeStyles({
   entrySection: {
     'position': 'relative',
     'display': 'grid',
-    // 报头在上、署名带压在版面底边：平铺之后中间的空，是被这两端「夹住」的呼吸，
-    // 而不是一段没用完的卡片内边距。内容比视口高时自然回落成普通流。
-    'gridTemplateRows': 'min-content 1fr',
+    // 报头与署名带两端固定，中间留给正文：copy 在剩余高度里垂直居中，
+    // 事实带压住版面底边。内容比视口高时自然回落成普通流。
+    'gridTemplateRows': '1fr min-content',
     'flexGrow': 1,
     'minWidth': '0px',
+    // 窄屏没有右侧几何场，正文与署名带作为一个整体居中，避免中间留下大段空白。
+    [media.md]: {
+      'gridTemplateRows': 'min-content min-content',
+      'alignContent': 'center',
+    },
   },
 
   // ---- 氛围层：等距晶格 + 品牌光晕 + 巡检扫描带 ----
@@ -138,22 +143,37 @@ export const useStyles = makeStyles({
       'lineHeight': tokens.lineHeightHero700,
     },
   },
-  entryLead: {
-    'color': tokens.colorNeutralForeground2,
+  // 标题与动作之间的主张层：一句品牌主张、一句价值句、一段说明。
+  // 三行共用一次上浮入场，避免正文出现多个并行的时间轴。
+  entryLede: {
+    'display': 'grid',
+    'justifyItems': 'start',
+    'minWidth': '0px',
+    'animation': 'omnistore-rise 460ms cubic-bezier(0.1,0.9,0.2,1) 160ms both',
+  },
+  entryTagline: {
+    ...shorthands.margin('0px'),
+    'color': tokens.colorNeutralForeground1,
     'fontSize': tokens.fontSizeBase500,
     'lineHeight': tokens.lineHeightBase500,
-    'maxWidth': layout.entryCopyMaxWidth,
-    ...shorthands.margin('0px'),
+    'fontWeight': tokens.fontWeightSemibold,
+    'letterSpacing': '-0.01em',
+  },
+  entryValues: {
+    ...shorthands.margin(tokens.spacingVerticalXS, '0px', '0px'),
+    'color': tokens.colorBrandForeground1,
+    'fontSize': tokens.fontSizeBase300,
+    'lineHeight': tokens.lineHeightBase300,
+    'fontWeight': tokens.fontWeightMedium,
+    'letterSpacing': '0.01em',
+  },
+  entryDescription: {
+    ...shorthands.margin(tokens.spacingVerticalL, '0px', '0px'),
+    'maxWidth': '46ch',
+    'color': tokens.colorNeutralForeground2,
+    'fontSize': tokens.fontSizeBase300,
+    'lineHeight': 1.65,
     'textWrap': 'pretty',
-    'animation': 'omnistore-rise 420ms cubic-bezier(0.1,0.9,0.2,1) 120ms both',
-    [media.xl]: {
-      'fontSize': tokens.fontSizeBase400,
-      'lineHeight': tokens.lineHeightBase500,
-    },
-    [media.sm]: {
-      'fontSize': tokens.fontSizeBase300,
-      'lineHeight': tokens.lineHeightBase400,
-    },
   },
   // CTA 的箭头在 hover 时向前送一格。规则挂在行容器上而不是 Button 上：
   // 实测一个只含嵌套选择器的 makeStyles slot，类串解析正常、落在普通 div 上生效，
@@ -167,7 +187,7 @@ export const useStyles = makeStyles({
     'columnGap': tokens.spacingHorizontalL,
     'rowGap': tokens.spacingHorizontalS,
     'marginTop': tokens.spacingVerticalXXXL,
-    'animation': 'omnistore-rise 420ms cubic-bezier(0.1,0.9,0.2,1) 180ms both',
+    'animation': 'omnistore-rise 420ms cubic-bezier(0.1,0.9,0.2,1) 240ms both',
     '& > button svg': {
       'position': 'relative',
       'transition': 'inset-inline-start 260ms cubic-bezier(0.16,1,0.3,1)',
@@ -345,6 +365,16 @@ export const useStyles = makeStyles({
     'width': '30%',
     'height': tokens.fontSizeHero1000,
     'marginBottom': tokens.spacingVerticalM,
+  },
+  skeletonTagline: {
+    'width': '18ch',
+    'height': tokens.lineHeightBase500,
+  },
+  skeletonValues: {
+    'width': '12ch',
+    'height': tokens.lineHeightBase300,
+    'marginTop': tokens.spacingVerticalXS,
+    'marginBottom': tokens.spacingVerticalL,
   },
   skeletonLine: {
     'width': '52ch',

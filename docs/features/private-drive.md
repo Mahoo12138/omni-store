@@ -22,8 +22,7 @@
 - 使用用户 Policy；
 - 不允许访问 `.omnistore`；
 - Site Capability backing Source 不因为绑定关系自动授予普通文件访问权；
-- Transfer Collect 保存到文件时才创建普通 `file_records`；
-- 普通 User Quota只计算普通 durable files/image ownership，不计算 Transfer 临时 payload。
+- 普通 User Quota只计算普通 durable files/image ownership。
 
 ## 静态资源仍是普通文件
 

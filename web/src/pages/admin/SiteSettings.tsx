@@ -23,31 +23,22 @@ import { useStyles as useSiteStyles } from './SiteSettings.styles'
 import { SectionCard } from './SectionCard'
 
 type SiteTab = 'services' | 'general'
-const siteServices: { key: SiteCapability; name: string; description: string; bindingHint: string; icon: ReactElement }[] = [
+const siteServices: { key: SiteCapability; name: string; bindingHint: string; icon: ReactElement }[] = [
   {
     key: 'public_drive', name: '公开网盘', icon: <IconGlobe size={18} />,
-    description: '全站唯一的匿名只读文件空间，可浏览和下载绑定源中的普通文件。',
     bindingHint: '启用后，任何人都可浏览绑定源中的普通文件。更换源会立即切换公开目录。',
   },
   {
     key: 'image_bed', name: '快速图床', icon: <IconImage size={18} />,
-    description: '统一管理登录上传、匿名上传和图片保留策略。',
     bindingHint: '新上传使用绑定源；换源或停用服务不会撤销已有图片地址。',
-  },
-  {
-    key: 'transfer_center', name: '文件中转', icon: <IconCloud size={18} />,
-    description: '通过发件包交付文件，或创建收集任务接收文件。',
-    bindingHint: '新任务使用绑定源；已有任务保留原来的存储位置和有效期。停用服务不等于撤销已有链接。',
   },
 ]
 const fetchAnonymousStatus = () => apiFetch<{ max_file_size_mb: number; enabled: boolean }>('/api/v1/image-bed/anonymous-status')
 
 export function SiteSettingsSection({ tab, onTabChange }: { tab: SiteTab; onTabChange: (tab: SiteTab) => void }) {
-  const css = useStyles()
   const site = useSiteStyles()
   return (
     <div className={site.root}>
-      <p className={css.sectionHint}>管理全站服务、实例信息与配置备份。</p>
       <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as SiteTab)} className={site.tabs}>
         <Tabs.List aria-label="站点配置">
           <Tabs.Tab value="services">站点服务</Tabs.Tab>
@@ -81,7 +72,7 @@ function SiteServicesSection() {
   if (!capabilities.data || !sources.data) {
     const error = capabilities.error || sources.error
     return (
-      <SectionCard icon={<IconCloud size={18} />} tone="brand" hint="站点服务">
+      <SectionCard icon={<IconCloud size={18} />} tone="brand" title="站点服务">
         {error ? <Banner intent="error" action={<Button variant="secondary" onClick={() => { void capabilities.refetch(); void sources.refetch() }}>重试</Button>}>站点服务加载失败：{error.message}</Banner>
           : <span role="status" className={css.kvLabel}>正在加载站点服务…</span>}
       </SectionCard>
@@ -103,7 +94,6 @@ function SiteServicesSection() {
             tone="brand"
             title={service.name}
             titleAs="h3"
-            hint={service.description}
             badge={!binding ? <Badge color="red">配置缺失</Badge>
               : !binding.source_key ? <Badge color="gray">未绑定</Badge>
               : !binding.enabled ? <Badge color="gray">已关闭</Badge>
@@ -225,7 +215,7 @@ function ImageBedOptions({ usable }: { usable: boolean }) {
             onChange={(_, data) => mutation.mutate(!!data.checked)} />
           <p className={site.hint}>{!usable ? '图床服务或绑定源当前不可用，匿名入口暂不可用。'
             : settings.data.enabled ? `任何人都可通过 /upload 上传图片${status.data ? `，单张最大 ${status.data.max_file_size_mb} MB` : ''}。`
-              : '匿名上传已关闭，登录用户仍可使用图床。'}{mutation.isPending ? ' 正在保存…' : ''}</p>
+              : '匿名上传已关闭。'}{mutation.isPending ? ' 正在保存…' : ''}</p>
         </>
       ) : settings.isError ? <Banner intent="error" action={<Button variant="ghost" onClick={() => void settings.refetch()}>重试</Button>}>匿名设置读取失败：{settings.error.message}</Banner>
         : <span className={site.hint}>正在加载匿名上传设置…</span>}
@@ -286,7 +276,6 @@ function SiteRuntimeSection() {
       tone="brand"
       title="运行信息"
       titleAs="h3"
-      hint="实例版本与对外地址。"
     >
       <dl className={site.facts}>
         <div><dt>运行版本</dt><dd>{health.data?.version ?? '—'}</dd></div>
@@ -311,7 +300,6 @@ function BackupSection() {
       tone="brand"
       title="导出系统配置包"
       titleAs="h3"
-      hint="生成当前实例的可迁移配置快照，用于人工备份或故障恢复。"
     >
       <div className={css.exportSummary}>
         <span className={css.exportIcon}><IconDownload size={22} /></span>
@@ -373,7 +361,6 @@ function BrandingSection() {
       title="品牌信息"
       titleId="branding-title"
       titleAs="h3"
-      hint="实例名称显示在公开页与分享页顶部及页脚；清空保存可恢复默认名称 OmniStore。"
       actions={(
         <Button
           variant="secondary" disabled={!branding.data || save.isPending}
@@ -389,7 +376,7 @@ function BrandingSection() {
     >
       {editing ? (
         <form onSubmit={submit} style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-          <FormField label="实例名称" required error={msg} info="1-64 个字符，展示于公开侧页面。">
+          <FormField label="实例名称" required error={msg} info="1-64 个字符；清空保存可恢复默认名称 OmniStore。">
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="OmniStore" autoFocus />
           </FormField>
           <div style={{ display: 'flex', gap: 8 }}>

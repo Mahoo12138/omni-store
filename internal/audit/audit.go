@@ -24,7 +24,6 @@ const (
 	EntryAdmin             = "admin"
 	EntryCLI               = "cli"
 	EntryS3                = "s3"
-	EntryTransfer          = "transfer"
 )
 
 // status 取值。

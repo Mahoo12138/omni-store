@@ -52,11 +52,10 @@ Preview & Sharing 已基本落地：
 1. Capability Scope 重构。
 2. Site Capability 全局单一 Source。
 3. Source Protocol 独立开关。
-4. 完整 Transfer Center。
-5. Operation Center。
-6. Backup & Recovery。
-7. Compatibility Matrix。
-8. 删除旧多公开挂载和用户图床 Source 选择等历史模型。
+4. Operation Center。
+5. Backup & Recovery。
+6. Compatibility Matrix。
+7. 删除旧多公开挂载和用户图床 Source 选择等历史模型。
 
 ## 版本兼容
 
@@ -123,3 +122,19 @@ Web 端新增公开入口 `/transfer`（发送文件/收集文件/收发记录�
 恢复验收：`OMNISTORE_CRASH_ROUNDS=10 ./scripts/verify-crash-recovery.sh` 完整运行成功，十四条路径各十轮，共 140 次真实 SIGKILL。验证文件字节、数据库台账、重复恢复/重试与保存到普通目录的副本；不把一次进程能重启当作数据一致性通过。
 
 下一阶段仍需：完成真实 WebDAV/S3/PicGo 客户端矩阵、MP4 与其他浏览器/生产代理验收、GT-08 实际访客配额压测，以及 Transfer 预览的目标闭环。逐项结果见 [兼容矩阵](design/compatibility-testing.md)；不能以 API 自编请求替代真实客户端通过结论。
+
+## 2026-10-31：未发布的文件中转功能整块移除
+
+未发布的文件中转（Transfer Center）功能已整块移除：前端入口与页面、后端 API 与 `internal/transfers`、访客身份与数据库表、`transfer_center` 能力绑定、运维看板与测试一并删除，`v2.0.0.sql` 中的相关表、能力行与设置 key 同步移除；该功能从未发布，不需要删除迁移。旧链接直接 404。
+
+验证：后端 `go test ./...` 全量通过，旧入口 HTTP 404 有单测覆盖；前端 `tsc -b`、97 项单元测试与生产构建通过；全新临时实例 Chromium E2E 59/59 通过。
+
+## 2026-11-01：2.0 升级迁移语义修正
+
+`v2.0.0.sql` 的存量升级行为与迁移设计、FAQ 和发布规范对齐：
+
+- 存量源迁移保留 1.x 的 S3 可达性（`s3_enabled=1`），fresh 2.0 源仍默认关闭；管理员可逐源关闭。
+- 公开盘与图床只在恰好一个 legacy 候选时自动绑定；零个或多个保持 disabled/unbound，不再按排序、匿名开关或用户偏好猜测目标。
+- 新增 `TestMigrateV2BindingRules` 覆盖 0/1/多候选，并断言存量源 S3 保持、fresh 源默认关闭；补齐 3 个 Go 文件的 gofmt。
+
+验证：`gofmt -l cmd internal migrations` 无输出；`go vet ./...`；`go test -count=1 ./...`；`go test -race -count=1 ./internal/db`；`git diff --check` 均通过；全新临时实例 Chromium E2E 59/59 通过。已有本地 2.0.0-dev 库不会重放已记录的迁移，需要重建测试数据才能验证新规则。未重跑完整 `verify-release.sh`/crashcheck，未发布镜像或标签。

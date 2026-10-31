@@ -3,7 +3,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -125,14 +124,6 @@ func seed(configFile, fixtureRoot string) error {
 	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityImageBed, capabilities.UpdateInput{
 		Enabled: &enabled, StorageSourceKey: &teamSource.Key,
 	}); err != nil {
-		return err
-	}
-	if _, err := capabilityService.UpdateBinding(capabilities.CapabilityTransferCenter, capabilities.UpdateInput{
-		Enabled: &enabled, StorageSourceKey: &teamSource.Key,
-	}); err != nil {
-		return err
-	}
-	if err := capabilityService2Settings(conn); err != nil {
 		return err
 	}
 	imageService, err := imagebed.NewService(conn, cfg.Server.PublicURL,
@@ -296,13 +287,6 @@ func ensureSource(service *sources.Service, name, description, root string, quot
 		QuotaBytes:    &quotaBytes,
 	}
 	return service.Update(source.Key, input)
-}
-
-// capabilityService2Settings 预置流转中心全局设置（E2E 默认 7 天有效期）。
-func capabilityService2Settings(conn *sql.DB) error {
-	_, err := conn.Exec(`INSERT INTO system_settings (key, value, updated_at) VALUES ('transfer_default_expiry_hours', '168', datetime('now'))
-  ON CONFLICT(key) DO NOTHING`)
-	return err
 }
 
 func seedFixtureFiles(publicRoot, teamRoot string) error {

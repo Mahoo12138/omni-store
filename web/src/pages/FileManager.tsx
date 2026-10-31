@@ -704,7 +704,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
       >
       <PageHeader
         title={source.name}
-        description={source.description || '管理此存储源中的文件。'}
+        description={source.description || undefined}
         actions={
           <>
             <Button
@@ -863,9 +863,7 @@ function FileManagerView({ source, sources }: { source: UserSource; sources: Use
               emptyHint={
                 filesQuery.isError
                   ? '请稍后重试'
-                  : canWrite && !filter
-                    ? '点击右上角"上传文件"或"创建文件夹"开始。'
-                    : undefined
+                  : undefined
               }
               onOpenDir={goTo}
               onOpenFile={openOrDownload}
@@ -1369,7 +1367,6 @@ function SelectionToolbar({
     <CommandBar
       label="批量文件操作"
       status={`已选择 ${count} 项`}
-      hint="可下载、创建独立分享，或复制/剪切后粘贴"
       actions={actions}
     />
   )
@@ -1383,7 +1380,6 @@ function NoSourceView() {
     <>
       <PageHeader
         title="文件管理"
-        description="当前账号还没有可用的存储源。"
         actions={<Button onClick={() => navigate({ to: '/app' })}>切换存储源</Button>}
       />
       <StateView

@@ -6,13 +6,13 @@
 
 ## 1. 组合测试夹具
 
-创建一个普通 Source，包含 public.txt、blog-assets 的嵌套媒体、private-notes、图片内部目录、Transfer 内部目录及模拟未知目录。再建立两个用户：一名只有 `blog-assets/member-a` 写权限，一名只有图床使用权限。三个 Site 服务可以全绑定该源，WebDAV/S3/静态 HTTP 均开启，分别验证权限。另建第二个静态发布源，验证同路径内容、CORS、缓存与启停互不影响。
+创建一个普通 Source，包含 public.txt、blog-assets 的嵌套媒体、private-notes、图片内部目录及模拟未知目录。再建立两个用户：一名只有 `blog-assets/member-a` 写权限，一名只有图床使用权限。两个 Site 服务可以全绑定该源，WebDAV/S3/静态 HTTP 均开启，分别验证权限。另建第二个静态发布源，验证同路径内容、CORS、缓存与启停互不影响。
 
 另建一个只读普通源、一个不可访问源、一个同名但不相关的候选发布目录。不要使用真实用户文件或生产 keys。夹具显式生成所需图片/视频，不依赖外网。
 
 ## 2. 表驱动路径测试
 
-输入包括 `.omnistore`、`.omnistore/transfer/x`、`normal/.omnistore/x`、编码点与分隔符、`../`、反斜杠、软链接、大小写变体、双编码、合法 `%` / `_` / 空格 / 中文与 `.omnistore.txt`。
+输入包括 `.omnistore`、`.omnistore/image-bed/x`、`normal/.omnistore/x`、编码点与分隔符、`../`、反斜杠、软链接、大小写变体、双编码、合法 `%` / `_` / 空格 / 中文与 `.omnistore.txt`。
 
 逐一覆盖 REST path/query/body、上传 relative_path、WebDAV Destination、S3 Object Key、Share 源路径和目录 ZIP。断言失败前无 mkdir、临时文件、multipart 状态副作用；HTTP status 是 404 而不是“200 的错误页”。不强制所有 malformed HTTP 返回 404，区分协议解析错误与资源隔离。
 
@@ -28,7 +28,7 @@ Given 静态服务绑定 blog-assets，公开盘关闭；When 通过普通文件
 
 ## 5. 台账与清理
 
-在同一个源中上传普通文件、快速图片、Transfer 文件；跑普通 Reconcile、FTS 重建、quota 汇总、备份和图片/Transfer 清理。验证只处理自己的 scope，普通 blog-assets 不被 TTL GC 触碰，物理字节全部计入源用量，用户图床字节不加两次。
+在同一个源中上传普通文件、快速图片；跑普通 Reconcile、FTS 重建、quota 汇总、备份和图片清理。验证只处理自己的 scope，普通 blog-assets 不被 TTL GC 触碰，物理字节全部计入源用量，用户图床字节不加两次。
 
 ## 6. 公开 HTTP
 
@@ -44,9 +44,7 @@ Given 静态服务绑定 blog-assets，公开盘关闭；When 通过普通文件
 
 ## 9. 2.0 可靠性检查入口（2026-10-18）
 
-- `internal/transfers/recovery_batch_test.go`：收集占位/日志/部分写入/提交后恢复，失败重试、日志归属、托管根变化与幂等恢复。
 - `internal/files/managed_write_test.go`：精确临时路径在写入前校验，配额/读取失败保留原件，临时文件冲突不接管，软链接无写入副作用。
-- `cmd/crashcheck/transfers.go`：真实 SIGKILL 覆盖发送上传/定稿、收集批次、保存到文件、GC，重启后比对文件字节、台账和计数，再验证重试与重复清理。
 - `web/e2e/static-browser-compatibility.spec.ts`：本地第二 origin 的 PNG/JPEG/GIF/WebP 解码、Canvas/fetch、三种 CORS、管理 API 隔离、WebM 解码播放/非零 Range seek、非法类型、公开盘关闭与静态服务启停。
 
 视频夹具在仓库内，生成方式见 `web/e2e/fixtures/generate-static-video.mjs`，不依赖远程媒体。双 origin Chromium 用例不替代 MP4、Safari/Firefox、实际反向代理/CDN 或真实 WebDAV/S3/PicGo 客户端矩阵。

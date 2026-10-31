@@ -9,8 +9,9 @@
 - [ ] Fresh database 可以直接创建 2.0 schema
 - [ ] 1.1.x database 可以升级到 2.0
 - [ ] 已发布 migration 未被修改
-- [ ] 多 legacy Public Source 时不会随机绑定
-- [ ] 多 legacy Image Bed Source 时不会随机绑定
+- [x] 多 legacy Public Source 时不会随机绑定（2026-11-01：0/1/多候选迁移测试）
+- [x] 多 legacy Image Bed Source 时不会随机绑定（2026-11-01：0/1/多候选迁移测试）
+- [x] 存量 Source 升级后保留 1.x S3 可达性；fresh 2.0 源默认关闭（2026-11-01 迁移测试）
 - [ ] 旧 images/shares/file_records 不丢失
 - [ ] 真实 Storage Source 文件不被 migration 移动/删除
 
@@ -18,7 +19,6 @@
 
 - [ ] Public Drive 全站最多一个 binding
 - [ ] Image Bed 全站最多一个 binding
-- [ ] Transfer Center 全站最多一个 binding
 - [ ] 同一 Source 可被多个 Site Capability 复用
 - [ ] WebDAV/S3 为 per-source switch
 - [ ] Source rename 不改变 storage_key
@@ -61,64 +61,27 @@
 - [ ] Multipart 回归
 - [ ] LOCK/UNLOCK 回归
 
-## 7. Transfer Send
-
-- [ ] Local file
-- [ ] Local folder hierarchy
-- [ ] Existing File snapshot
-- [ ] Finalize immutable package
-- [ ] Link
-- [ ] Pickup code
-- [ ] Password
-- [ ] QR
-- [ ] Preview
-- [ ] Single download
-- [ ] Stream ZIP
-- [ ] Expiry
-- [ ] Download limit
-- [ ] Revoke
-- [ ] History
-- [ ] GC
-- [ ] Crash recovery
-
-## 8. Transfer Collect
-
-- [ ] Create collection
-- [ ] upload-only anonymous capability
-- [ ] cannot enumerate other submissions
-- [ ] cannot read other submissions
-- [ ] submitter name/note
-- [ ] type/size/total limits
-- [ ] Inbox
-- [ ] Preview/download
-- [ ] Save to Files
-- [ ] Close/Expire
-- [ ] Rate limit/abuse tests
-- [ ] Crash recovery
-
-## 9. Operation Center
+## 7. Operation Center
 
 - [ ] real system status
 - [ ] Source health
 - [ ] capability health
 - [ ] DB health
-- [ ] transfer usage
 - [ ] reconcile/cleanup/integrity actions audited
 
-## 10. Backup/Restore
+## 8. Backup/Restore
 
 - [ ] Backup manifest/checksum
 - [ ] DB consistent snapshot
 - [ ] config/keys
 - [ ] no Source payload
-- [ ] no Transfer payload
 - [ ] Fresh restore
 - [ ] Source rebind
 - [ ] capability validation
 - [ ] reconcile
 - [ ] restore report
 
-## 11. Quality
+## 9. Quality
 
 - [ ] frontend tests
 - [ ] production build
@@ -131,7 +94,7 @@
 - [ ] crashcheck 10 rounds
 - [ ] real WebDAV/S3/PicGo compatibility matrix
 
-## 12. 静态资源完整验收
+## 10. 静态资源完整验收
 
 - [x] AS-01 每源至多一份静态 HTTP 配置；多源同时发布、内容/CORS/缓存隔离；未配置时不公开（Go 集成测试）
 - [ ] AS-02 公开盘关闭、无 Share、无 image 记录，普通磁盘媒体仍可通过 baseUrl 读取
@@ -146,20 +109,20 @@
 - [ ] AS-11 媒体 seek 返回正确 Range；416 与 HEAD 元数据/无体正确
 - [ ] AS-12 public_origin 不可信输入不生成外链；特殊文件名分段 URL 编码可往返
 - [ ] AS-13 两个真实 origin 的 img/video/fetch/Canvas 工作；管理 API 不因此跨域开放
-- [ ] AS-14 同一源四种 Site 服务+两种协议的组合不会泄漏 `.omnistore/`
+- [ ] AS-14 同一源两项 Site 服务+两种协议的组合不会泄漏 `.omnistore/`
 - [ ] AS-15 备份恢复保留发布 ID 与配置，但核验 Source/发布根前没有自动公开
 
-## 13. 命名空间与图床补充验收
+## 11. 命名空间与图床补充验收
 
 - [ ] NS-08 现存和不存在 `.omnistore` 直接浏览均 404，不以错误内容泄露存在性
-- [ ] NS-09 超级管理员通用文件 API 也不能直接访问，专用图床/Transfer 业务入口可按规则读
+- [ ] NS-09 超级管理员通用文件 API 也不能直接访问，专用图床业务入口可按规则读
 - [ ] NS-10 编码路径、双编码、反斜杠、query、Destination、S3 key 与 multipart 均无旁路
 - [ ] NS-11 `.omnistore.txt` 不因完整段规则误伤，旧 temp 前缀继续保留
 - [ ] NS-12 Unknown namespace collision 不被自动接管/删除
 - [ ] NS-13 file_records.scope + FTS + Reconcile 组合不会把托管图当 missing，也不公开内部路径
 - [ ] IMG-07 匿名默认关闭；保留天数变更不追溯删图；expires_at 与响应 freshness 一致
-- [ ] IMG-08 静态资源原件没有 Transfer TTL，不进入快速图床历史，源物理/用户用量不重复
+- [ ] IMG-08 静态资源原件不受图床保留期影响，不进入快速图床历史，源物理/用户用量不重复
 
-## 14. 给 Agent 的证据要求
+## 12. 给 Agent 的证据要求
 
 测试报告需附版本 SHA、命令、退出码、实际场景和失败信息。文档路径/链接检查不等同于 Go、前端、E2E、迁移或 crashcheck 通过。以上勾选只有在代码与测试实际完成后才能更改。

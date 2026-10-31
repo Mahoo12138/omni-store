@@ -65,20 +65,19 @@ type systemStatusFlag struct {
 }
 
 type systemStatusResponse struct {
-	S3             systemStatusFlag `json:"s3"`
-	WebDAV         systemStatusFlag `json:"webdav"`
-	FilePreview    systemStatusFlag `json:"file_preview"`
-	Anonymous      systemStatusFlag `json:"anonymous"`
-	PublicDrive    systemStatusFlag `json:"public_drive"`
-	ImageBed       systemStatusFlag `json:"image_bed"`
-	TransferCenter systemStatusFlag `json:"transfer_center"`
-	Version        string           `json:"version"`
-	PublicURL      string           `json:"public_url"`
-	InstanceName   string           `json:"instance_name"`
+	S3           systemStatusFlag `json:"s3"`
+	WebDAV       systemStatusFlag `json:"webdav"`
+	FilePreview  systemStatusFlag `json:"file_preview"`
+	Anonymous    systemStatusFlag `json:"anonymous"`
+	PublicDrive  systemStatusFlag `json:"public_drive"`
+	ImageBed     systemStatusFlag `json:"image_bed"`
+	Version      string           `json:"version"`
+	PublicURL    string           `json:"public_url"`
+	InstanceName string           `json:"instance_name"`
 }
 
 // siteServiceStatus 描述当前绑定是否可用，状态不泄露源身份、路径或底层错误。
-// 它只反映当前服务入口；已有图床文件与流转任务继续使用各自记录中的源。
+// 它只反映当前服务入口；已有图床文件继续使用各自记录中的源。
 func (s *Server) siteServiceStatus(capability, availableHint string) systemStatusFlag {
 	binding, err := s.capabilities.GetBinding(capability)
 	if err != nil {
@@ -127,7 +126,6 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 
 	out.PublicDrive = s.siteServiceStatus(capabilities.CapabilityPublicDrive, "可匿名浏览和下载公开文件")
 	out.ImageBed = s.siteServiceStatus(capabilities.CapabilityImageBed, "登录用户可上传图片")
-	out.TransferCenter = s.siteServiceStatus(capabilities.CapabilityTransferCenter, "访客和登录用户均可创建发件包和收集任务；已有链接按各自授权访问")
 
 	// 匿名上传还依赖图床当前绑定可用，不能把保存的入口开关当作可上传状态。
 	anonymous, err := s.imagebed.GetAnonymousSettings()

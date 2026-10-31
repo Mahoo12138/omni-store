@@ -23,7 +23,7 @@ File
 - audio/video；
 - unsupported -> download。
 
-Transfer Center 必须复用该 Renderer，不创建第三套预览系统。
+各业务入口必须复用该 Renderer，不创建额外预览系统。
 
 安全：
 

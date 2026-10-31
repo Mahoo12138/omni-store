@@ -1,7 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAuthStatus } from '../../api/auth'
-import { IconCloud, IconFolder, IconGrid, IconImage, IconUser } from '../ui/Icon'
+import { IconFolder, IconGrid, IconImage, IconUser } from '../ui/Icon'
 import { useStyles } from './PublicNavigation.styles'
 
 // 公开侧页面共用同一组入口、同一套账号状态与同一组链接样式。
@@ -10,14 +10,12 @@ export function PublicNavigation() {
   const { pathname } = useLocation()
   const disk = pathname === '/' || pathname.startsWith('/public/')
   const upload = pathname === '/upload'
-  const transfer = pathname === '/transfer' || pathname.startsWith('/pickup/') || pathname.startsWith('/collect/')
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: fetchAuthStatus, retry: false, staleTime: 60_000 })
 
   return (
     <nav className={css.navigation} aria-label="主导航">
       <Link to="/" activeOptions={{ exact: true }} className={css.link} aria-current={disk ? 'page' : undefined}><IconFolder size={14} />公开网盘</Link>
       <Link to="/upload" activeOptions={{ exact: true }} className={css.link} aria-current={upload ? 'page' : undefined}><IconImage size={14} />匿名图床</Link>
-      <Link to="/transfer" search={{ view: 'send' }} activeOptions={{ exact: true }} className={css.link} aria-current={transfer ? 'page' : undefined}><IconCloud size={14} />文件中转</Link>
       {auth.isPending ? (
         <span className={`${css.link} ${css.accountPending}`} role="status" aria-label="正在检查登录状态"><IconUser size={14} />检查登录</span>
       ) : auth.data?.authenticated ? (

@@ -1,27 +1,36 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { mergeClasses } from '@fluentui/react-components'
 import { ApiRequestError } from '../api/client'
 import { fetchMe } from '../api/auth'
 import { downloadFileUrl, fetchMySources, type UserSource } from '../api/sources'
 import { fetchRecentFiles, type RecentFile } from '../api/recentFiles'
 import { AppFrame } from '../components/shell/AppFrame'
-import { StateView } from '../components/shell/StateView'
 import { Banner } from '../components/shell/Banner'
 import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
 import { openSearchDialog } from '../components/search/SearchDialog'
 import {
+  EntryIcon,
   IconChevronRight,
   IconDownload,
-  IconFile,
   IconFolder,
   IconFolderFilled,
   IconSearch,
 } from '../components/ui/Icon'
-import { formatBytes, formatDate } from '../utils/format'
-import { useStyles } from './Dashboard.styles'
+import { formatBytes, formatDate, formatRelativeTime } from '../utils/format'
+import { layout } from '../styles/layout'
+import { useStyles } from './AppHome.styles'
 
-// /app 首页：存储源与最近文件单列堆叠。
+// /app 首页：报头（日期 / 问候 / 命令搜索 / 等距几何）+ 01 存储源目录牌
+// + 02 最近文件台账。无存储源时换成整页引导，不展示注定为空的台账。
+//
+// 约定：存储源行的可访问名固定为「打开存储源 {name}」，最近文件 section 由
+// 「最近文件」h2 命名，行内保留文件名按钮、位置按钮与「下载 {name}」链接，
+// e2e 与键盘路径都靠这三条语义定位。
+
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
 export function AppHomePage() {
   const css = useStyles()
   const navigate = useNavigate()
@@ -33,6 +42,10 @@ export function AppHomePage() {
   const isAdmin = me.data?.role === 'super_admin'
   const now = new Date()
   const displayName = me.data?.display_name
+  const onboarding = sources.isSuccess && sourceList.length === 0
+  // 1–4 个源用编目台式双栏；超过 4 个源改走全宽密度目录，
+  // 否则每张 200px 高的目录牌会把最近文件推到几屏之外。
+  const dense = sourceList.length > 4
 
   function openSource(sourceKey: string) {
     navigate({
@@ -55,67 +68,118 @@ export function AppHomePage() {
     <AppFrame title="文件">
       <header className={css.pageHeader}>
         <div className={css.headerCopy}>
-          <time className={css.welcomeDate} dateTime={now.toISOString()}>{formatWelcomeDate(now)}</time>
-          <h1 className={css.pageTitle}>{displayName ? `${timeGreeting(now)}，${displayName}` : '我的文件'}</h1>
+          <p className={mergeClasses(css.kicker, css.riseKicker)}>
+            <time dateTime={now.toISOString()}>{formatKickerDate(now)}</time>
+          </p>
+          <span className={css.titleMask}>
+            <h1 className={css.pageTitle}>{displayName ? `${timeGreeting(now)}，${displayName}` : '我的文件'}</h1>
+          </span>
+          <button
+            type="button"
+            className={css.commandBar}
+            aria-label="搜索文件与目录"
+            aria-haspopup="dialog"
+            onClick={openSearchDialog}
+          >
+            <IconSearch size={16} />
+            <span className={css.commandText}>搜索文件与目录</span>
+            <kbd className={css.commandKbd} aria-hidden="true">{IS_MAC ? '⌘ K' : 'Ctrl K'}</kbd>
+          </button>
         </div>
-        <Button variant="secondary" onClick={openSearchDialog} icon={<IconSearch size={16} />}>搜索</Button>
+        <DriveConstellation className={css.stage} />
       </header>
 
-      <div className={css.workspace}>
-        <section className={css.cardSection} aria-labelledby="sources-title">
-          <div className={css.sectionHeader}>
-            <h2 id="sources-title" className={css.sectionTitle}>存储源</h2>
-            {sources.isSuccess && sourceList.length > 0 && (
-              <span className={css.sectionMeta}>{sourceList.length} 个可用</span>
-            )}
-          </div>
-
-          {sources.isPending ? (
-            <SourceListLoading />
-          ) : sources.isError ? (
-            <Banner
-              intent="error"
-              title="无法加载存储源"
-              action={<Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>}
-            >请检查网络连接后重试。</Banner>
-          ) : sourceList.length === 0 ? (
-            <NoSourceView isAdmin={isAdmin} />
-          ) : (
-            <div className={css.sourceList}>
-              {sourceList.map((source) => (
-                <button
-                  type="button"
-                  key={source.key}
-                  className={css.sourceRow}
-                  onClick={() => openSource(source.key)}
-                  aria-label={`打开存储源 ${source.name}`}
-                >
-                  <span className={css.sourceIdentity}>
-                    <span className={css.sourceIcon}><IconFolderFilled size={28} /></span>
-                    <span className={css.sourceText}>
-                      <strong>{source.name}</strong>
-                      <span>{source.description || '本地目录'}</span>
+      {onboarding ? (
+        <NoSourcePanel isAdmin={isAdmin} />
+      ) : (
+        <div className={css.workspace} data-dense={dense ? '' : undefined}>
+          <section className={css.section} aria-labelledby="sources-title">
+            <SectionHeading
+              index="01"
+              title="存储源"
+              titleId="sources-title"
+              meta={sources.isSuccess ? `${sourceList.length} 个可用` : undefined}
+            />
+            {sources.isPending ? (
+              <SourceListLoading />
+            ) : sources.isError ? (
+              <Banner
+                intent="error"
+                title="无法加载存储源"
+                action={<Button variant="secondary" onClick={() => sources.refetch()}>重新加载</Button>}
+              >请检查网络连接后重试。</Banner>
+            ) : (
+              <div className={css.sourceList} data-dense={dense ? '' : undefined}>
+                {sourceList.map((source, index) => (
+                  <button
+                    type="button"
+                    key={source.key}
+                    className={css.sourcePlate}
+                    data-dense={dense ? '' : undefined}
+                    style={{ animationDelay: `${140 + Math.min(index, 8) * 60}ms` }}
+                    onClick={() => openSource(source.key)}
+                    aria-label={`打开存储源 ${source.name}`}
+                    title={dense ? source.name : undefined}
+                  >
+                    <span className={css.sourceTop}>
+                      <span className={css.sourceGlyph} data-source-glyph aria-hidden="true">
+                        <IconFolderFilled size={dense ? 20 : 24} />
+                      </span>
+                      <span className={css.sourceIndex} data-source-index aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
                     </span>
-                  </span>
-                  <span className={css.sourceCapabilities}>{capabilities(source)}</span>
-                  <span className={css.openAction}>
-                    打开 <IconChevronRight size={16} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+                    <span className={css.sourceName} data-source-name>{source.name}</span>
+                    <span
+                      className={mergeClasses(css.sourceDescription, 'omnistore-clamp-2')}
+                      data-source-desc
+                    >
+                      {source.description || '本地目录'}
+                    </span>
+                    <span className={css.sourceFoot} data-source-foot>
+                      <span className={css.sourceCaps}>{capabilities(source)}</span>
+                      <span className={css.openAction} data-open-action>
+                        打开 <IconChevronRight size={dense ? 12 : 14} />
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
 
-        <RecentFilesPanel
-          files={recent.data}
-          pending={recent.isPending}
-          error={recent.error}
-          onRetry={() => recent.refetch()}
-          onOpenParent={openRecentParent}
-        />
-      </div>
+          <RecentFilesPanel
+            files={recent.data}
+            pending={recent.isPending}
+            error={recent.error}
+            onRetry={() => recent.refetch()}
+            onOpenParent={openRecentParent}
+          />
+        </div>
+      )}
     </AppFrame>
+  )
+}
+
+function SectionHeading({
+  index,
+  title,
+  titleId,
+  meta,
+}: {
+  index: string
+  title: string
+  titleId: string
+  meta?: string
+}) {
+  const css = useStyles()
+  return (
+    <div className={css.sectionHeader}>
+      <span className={css.sectionIndex} aria-hidden="true">{index}</span>
+      <h2 id={titleId} className={css.sectionTitle}>{title}</h2>
+      <span className={css.sectionRule} aria-hidden="true" />
+      {meta ? <span className={css.sectionMeta}>{meta}</span> : null}
+    </div>
   )
 }
 
@@ -130,39 +194,48 @@ function SourceListLoading() {
   const css = useStyles()
   return (
     <div className={css.sourceList} role="status" aria-busy="true" aria-label="正在加载存储源">
-      {[0, 1, 2].map((item) => (
-        <div className={css.sourceSkeleton} key={item} aria-hidden="true">
-          <span className={css.skeletonIcon} />
-          <span className={css.skeletonText}>
-            <i />
-            <i />
-          </span>
-          <span className={css.skeletonMeta} />
+      {[0, 1].map((item) => (
+        <div className={css.sourceSkeletonPlate} key={item} aria-hidden="true">
+          <span className={css.skeletonGlyph} />
+          <span className={css.skeletonName} />
+          <span className={css.skeletonLine} />
+          <span className={css.skeletonFoot} />
         </div>
       ))}
     </div>
   )
 }
 
-function NoSourceView({ isAdmin }: { isAdmin: boolean }) {
+function NoSourcePanel({ isAdmin }: { isAdmin: boolean }) {
   const css = useStyles()
   return (
-    <div className={css.emptyState}>
-      <span className={css.emptyIcon}><IconFolderFilled size={34} /></span>
-      <div>
-        <h3>{isAdmin ? '创建第一个存储源' : '还没有可用的存储源'}</h3>
-        <p>{isAdmin ? '连接服务器上的目录后，就可以上传、整理和共享文件。' : '请联系系统管理员分配访问权限。'}</p>
+    <section className={css.section} aria-labelledby="sources-title">
+      <SectionHeading
+        index="01"
+        title="存储源"
+        titleId="sources-title"
+        meta={isAdmin ? '尚未配置' : '暂无可用'}
+      />
+      <div className={css.onboardingPanel}>
+        <div className={css.onboardingCopy}>
+          <h3 className={css.onboardingTitle}>
+            {isAdmin ? '创建第一个存储源' : '还没有可用的存储源'}
+          </h3>
+          {isAdmin ? null : (
+            <p className={css.onboardingText}>请联系系统管理员分配访问权限。</p>
+          )}
+          {isAdmin ? (
+            <div className={css.onboardingActions}>
+              <LinkButton to="/app/admin" search={{ section: 'sources' }} size="large">配置存储源</LinkButton>
+            </div>
+          ) : null}
+        </div>
+        <EmptyTray className={css.onboardingArt} />
       </div>
-      {isAdmin && (
-        <LinkButton to="/app/admin" search={{ section: 'sources' }} variant="secondary">
-          配置存储源
-        </LinkButton>
-      )}
-    </div>
+    </section>
   )
 }
 
-// 原独立页面 /app/recent 的内容，迁移为首页右侧面板。
 function RecentFilesPanel({
   files,
   pending,
@@ -179,17 +252,20 @@ function RecentFilesPanel({
   const css = useStyles()
   const items = files ?? []
   return (
-    <section className={css.recentPanel} aria-labelledby="recent-title">
-      <div className={css.recentHeader}>
-        <h2 id="recent-title" className={css.sectionTitle}>最近文件</h2>
-        {items.length > 0 && <span className={css.sectionMeta}>最多显示 50 个</span>}
-      </div>
+    <section className={css.section} aria-labelledby="recent-title">
+      <SectionHeading
+        index="02"
+        title="最近文件"
+        titleId="recent-title"
+        meta={pending || error ? undefined : `${items.length} / 50`}
+      />
       {pending ? (
         <div className={css.recentList} role="status" aria-busy="true" aria-label="正在读取最近文件">
           {[0, 1, 2, 3].map((item) => (
-            <div className={css.recentSkeleton} key={item} aria-hidden="true">
-              <i className={css.recentSkeletonIcon} />
+            <div className={css.recentSkeletonRow} key={item} aria-hidden="true">
+              <span className={css.recentSkeletonIcon} />
               <span className={css.recentSkeletonLines}><i /><i /></span>
+              <span className={css.recentSkeletonMeta} />
             </div>
           ))}
         </div>
@@ -200,38 +276,42 @@ function RecentFilesPanel({
           action={<Button variant="secondary" onClick={onRetry}>重新加载</Button>}
         >{error instanceof ApiRequestError ? error.message : '请检查连接后重试。'}</Banner>
       ) : items.length === 0 ? (
-        <StateView
-          layout="plain"
-          kind="empty"
-          title="还没有最近文件"
-          description="上传、下载或整理文件后，它们会出现在这里。"
-        />
+        <RecentEmpty />
       ) : (
         <div className={css.recentList}>
-          {items.map((file) => {
+          {items.map((file, index) => {
             const parent = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : ''
             return (
-              <article className={css.recentRow} key={`${file.source_key}:${file.path}`}>
-                <span className={css.recentFileIcon}><IconFile size={19} /></span>
-                <div className={css.recentIdentity}>
-                  <button
-                    type="button"
-                    className={css.recentFileName}
-                    onClick={() => onOpenParent(file.source_key, file.path)}
-                  >
-                    {file.name}
-                  </button>
-                  <button
-                    type="button"
-                    className={css.recentLocation}
-                    onClick={() => onOpenParent(file.source_key, file.path)}
-                  >
-                    <IconFolder size={13} /> {file.source_name} / {parent}
-                  </button>
-                  <span className={css.recentMeta}>
-                    {formatBytes(file.size)} · <time dateTime={file.accessed_at}>最近操作 {formatDate(file.accessed_at)}</time>
-                  </span>
-                </div>
+              <article
+                className={css.recentRow}
+                key={`${file.source_key}:${file.path}`}
+                style={{ animationDelay: `${160 + Math.min(index, 8) * 35}ms` }}
+              >
+                <span className={css.recentIcon} aria-hidden="true">
+                  <EntryIcon name={file.name} type="file" size={layout.appHomeRecentIconPx} />
+                </span>
+                <button
+                  type="button"
+                  className={css.recentFileName}
+                  onClick={() => onOpenParent(file.source_key, file.path)}
+                >
+                  {file.name}
+                </button>
+                <button
+                  type="button"
+                  className={css.recentLocation}
+                  onClick={() => onOpenParent(file.source_key, file.path)}
+                >
+                  <IconFolder size={12} />
+                  <span className={css.recentSource}>{file.source_name}</span>
+                  {parent ? <span className={css.recentPath}>/{parent}</span> : null}
+                </button>
+                <span className={css.recentMeta}>
+                  <span className={css.recentSize}>{formatBytes(file.size)}</span>
+                  <time dateTime={file.accessed_at} title={formatDate(file.accessed_at)}>
+                    最近操作 {formatRelativeTime(file.accessed_at)}
+                  </time>
+                </span>
                 <a
                   className={css.recentDownload}
                   href={downloadFileUrl(file.source_key, `/${file.path}`)}
@@ -239,7 +319,7 @@ function RecentFilesPanel({
                   aria-label={`下载 ${file.name}`}
                   title={`下载 ${file.name}`}
                 >
-                  <IconDownload size={17} />
+                  <IconDownload size={16} />
                 </a>
               </article>
             )
@@ -247,6 +327,209 @@ function RecentFilesPanel({
         </div>
       )}
     </section>
+  )
+}
+
+function RecentEmpty() {
+  const css = useStyles()
+  return (
+    <div className={css.recentEmpty}>
+      <EmptyTray className={css.emptyArt} />
+      <p className={css.emptyTitle}>还没有最近文件</p>
+    </div>
+  )
+}
+
+// 等距收件盘：空态与无存储源引导共用。两张纸停在盘口上方，虚线与漂浮
+// 把「文件会落到这里」画出来；纯装饰，不进读屏。
+function EmptyTray({ className }: { className: string }) {
+  const css = useStyles()
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 220 160"
+      fill="none"
+      stroke="currentColor"
+      strokeOpacity="0.46"
+      fillOpacity="0.06"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g className={css.sheetA}>
+        <path
+          className={css.ink}
+          pathLength={1}
+          d="M82 12 116 29 82 46 48 29Z"
+          fill="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </g>
+      <g className={css.sheetB}>
+        <path
+          className={css.ink}
+          pathLength={1}
+          d="M142 2 170 16 142 30 114 16Z"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </g>
+      <path
+        d="M96 50v6M110 52v6M126 46v6"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeDasharray="2 4"
+      />
+      <path
+        className={css.ink}
+        pathLength={1}
+        d="M110 58 182 94 110 130 38 94Z"
+        fill="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path
+        className={css.ink}
+        pathLength={1}
+        d="M38 94v24l72 36 72-36V94M110 130v24"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path
+        className={css.ink}
+        pathLength={1}
+        d="M110 72 166 100 110 128 54 100Z"
+        strokeWidth="1"
+        strokeOpacity="0.55"
+        strokeLinejoin="round"
+      />
+      <path
+        className={css.ink}
+        pathLength={1}
+        d="M110 58v14M38 94 54 100M182 94 166 100"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <circle className={css.vertex} cx="38" cy="94" r="2" fill="currentColor" fillOpacity="0.5" />
+      <circle className={css.vertex} cx="182" cy="94" r="2" fill="currentColor" fillOpacity="0.5" />
+    </svg>
+  )
+}
+
+// 报头右侧的等距几何：三只逐级升高的箱体，由两段虚线轨道串起来。
+// 与公开首页的立方体场是同一母题，但排成「一排」——读起来是工作台上的存储位。
+// 纯装饰，不进读屏；漂浮与自绘关键帧全部来自 global.css。
+function DriveConstellation({ className }: { className: string }) {
+  const css = useStyles()
+  return (
+    <div className={className} aria-hidden="true">
+      <span className={css.stageGlow} />
+      <svg className={css.stageLattice} strokeOpacity="0.14" aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id="omnistore-apphome-lattice" width="88" height="50" patternUnits="userSpaceOnUse">
+            <path d="M44 0 88 25 44 50 0 25Z" fill="none" stroke="currentColor" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#omnistore-apphome-lattice)" />
+      </svg>
+      <div className={css.stageField}>
+        <svg
+          className={css.constellation}
+          viewBox="0 0 340 240"
+          fill="none"
+          strokeOpacity="0.38"
+          fillOpacity="0.045"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <g className={css.bobA}>
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M54 150 94 170 54 190 14 170Z"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M14 170v46l40 20 40-20v-46M54 190v46"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            <circle className={css.vertex} cx="54" cy="150" r="2" fill="currentColor" fillOpacity="0.5" />
+          </g>
+          <g className={css.bobB}>
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M168 110 218 135 168 160 118 135Z"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M118 135v56l50 25 50-25v-56M168 160v56"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            <circle className={css.vertex} cx="168" cy="110" r="2.2" fill="currentColor" fillOpacity="0.5" />
+            <circle className={css.vertex} cx="218" cy="135" r="2" fill="currentColor" fillOpacity="0.5" />
+          </g>
+          <g className={css.bobC}>
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M280 70 336 98 280 126 224 98Z"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M224 98v64l56 28 56-28V98M280 126v64"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
+            <path
+              className={css.ink}
+              pathLength={1}
+              d="M280 84 314 101 280 118 246 101Z"
+              stroke="currentColor"
+              strokeWidth="1.1"
+              strokeLinejoin="round"
+              strokeOpacity="0.34"
+            />
+            <circle className={css.vertex} cx="280" cy="70" r="2.4" fill="currentColor" fillOpacity="0.5" />
+            <circle className={css.vertex} cx="336" cy="98" r="2" fill="currentColor" fillOpacity="0.5" />
+          </g>
+          <path
+            className={css.rail}
+            d="M94 170 118 135"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+          <path
+            className={css.rail}
+            d="M218 135 224 98"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+    </div>
   )
 }
 
@@ -259,10 +542,9 @@ function timeGreeting(date: Date): string {
   return '晚上好'
 }
 
-function formatWelcomeDate(date: Date): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  }).format(date)
+function formatKickerDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(date)
+  return `${date.getFullYear()}.${month}.${day} · ${weekday}`
 }

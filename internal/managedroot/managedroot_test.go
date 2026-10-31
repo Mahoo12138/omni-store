@@ -66,7 +66,7 @@ func TestEnsureConcurrentServicesInitializeSameColdRoot(t *testing.T) {
 	const serviceCount = 8
 	services := make([]*Service, serviceCount)
 	for i := range services {
-		// Image bed and transfers construct separate managedroot services for one DB.
+		// Image bed and file recovery construct separate managedroot services for one DB.
 		services[i] = NewService(service.db)
 	}
 	start := make(chan struct{})

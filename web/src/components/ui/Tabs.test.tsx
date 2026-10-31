@@ -2,22 +2,22 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Tabs } from './Tabs'
 
-// keepMounted 是产品要求：中转草稿切走 Tab 时标题/说明/已选文件不能丢
+// keepMounted 是产品要求：编辑草稿切走 Tab 时标题/说明/已填内容不能丢
 // （docs/DESIGN_SYSTEM.md §4）。Fluent TabList 不托管 panel，这层语义由本组件负责。
 describe('Tabs', () => {
   it('keeps an inactive keepMounted panel in the DOM but hidden', () => {
     const html = renderToStaticMarkup(
-      <Tabs.Root value="send">
-        <Tabs.List aria-label="中转功能">
-          <Tabs.Tab value="send">发送文件</Tabs.Tab>
-          <Tabs.Tab value="collect">收集文件</Tabs.Tab>
+      <Tabs.Root value="recent">
+        <Tabs.List aria-label="文件视图">
+          <Tabs.Tab value="recent">最近文件</Tabs.Tab>
+          <Tabs.Tab value="favorites">收藏</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel keepMounted value="send"><input aria-label="发件包标题" /></Tabs.Panel>
-        <Tabs.Panel keepMounted value="collect"><input aria-label="收集任务标题" /></Tabs.Panel>
+        <Tabs.Panel keepMounted value="recent"><input aria-label="最近文件筛选" /></Tabs.Panel>
+        <Tabs.Panel keepMounted value="favorites"><input aria-label="收藏筛选" /></Tabs.Panel>
       </Tabs.Root>,
     )
-    expect(html).toContain('发件包标题')
-    expect(html).toContain('收集任务标题')
+    expect(html).toContain('最近文件筛选')
+    expect(html).toContain('收藏筛选')
     expect(html).toMatch(/role="tabpanel"[^>]*hidden/)
   })
 
@@ -38,11 +38,11 @@ describe('Tabs', () => {
 
   it('lets Fluent own the tab semantics', () => {
     const html = renderToStaticMarkup(
-      <Tabs.Root value="send">
-        <Tabs.List aria-label="中转功能">
-          <Tabs.Tab value="send">发送文件</Tabs.Tab>
+      <Tabs.Root value="recent">
+        <Tabs.List aria-label="文件视图">
+          <Tabs.Tab value="recent">最近文件</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="send">正文</Tabs.Panel>
+        <Tabs.Panel value="recent">正文</Tabs.Panel>
       </Tabs.Root>,
     )
     expect(html).toContain('role="tab"')

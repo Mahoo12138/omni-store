@@ -18,9 +18,9 @@ describe('PageHeader', () => {
 
   it('keeps actions out of the heading element', () => {
     const html = renderToStaticMarkup(
-      <PageHeader title="流转中心" actions={<button type="button">新建</button>} />,
+      <PageHeader title="文件管理" actions={<button type="button">新建</button>} />,
     )
-    expect(html).toMatch(/<h1[^>]*>流转中心<\/h1>/)
+    expect(html).toMatch(/<h1[^>]*>文件管理<\/h1>/)
     expect(html).toContain('新建')
   })
 })

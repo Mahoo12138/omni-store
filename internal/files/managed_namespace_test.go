@@ -117,10 +117,10 @@ func TestManagedNamespaceReadsAndWritesReturnNotFound(t *testing.T) {
 func TestManagedNamespaceHiddenFromListingsButCountedInUsage(t *testing.T) {
 	service, source, _, root := newManagedNamespaceService(t)
 	firstRoot := filepath.Join(root, "first")
-	if err := os.MkdirAll(filepath.Join(firstRoot, security.ManagedNamespaceSegment, "transfer", "send"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(firstRoot, security.ManagedNamespaceSegment, "image-bed", "send"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(firstRoot, security.ManagedNamespaceSegment, "transfer", "send", "pack.bin"), []byte("packpack"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(firstRoot, security.ManagedNamespaceSegment, "image-bed", "send", "pack.bin"), []byte("packpack"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(firstRoot, ".omnistore.txt"), []byte("plain"), 0o600); err != nil {
@@ -333,7 +333,7 @@ func TestSearchFiltersManagedNamespaceRows(t *testing.T) {
 	_, err = service.db.Exec(`INSERT INTO file_records
 	  (storage_source_id, relative_path, size, owner_type, mtime_unix_nano, record_status, created_at, updated_at)
 	  VALUES (?, ?, ?, ?, 0, ?, datetime('now'), datetime('now'))`,
-		source.ID, security.ManagedNamespaceSegment+"/transfer/send/secret-report.txt", 3, models.FileOwnerUser, models.FileRecordActive)
+		source.ID, security.ManagedNamespaceSegment+"/image-bed/secret-report.txt", 3, models.FileOwnerUser, models.FileRecordActive)
 	if err != nil {
 		t.Fatal(err)
 	}

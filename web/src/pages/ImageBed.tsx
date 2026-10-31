@@ -16,7 +16,8 @@ import { AppFrame } from '../components/shell/AppFrame'
 import { PageHeader } from '../components/shell/PageHeader'
 import { ViewSwitcher } from '../components/shell/ViewSwitcher'
 import { StateView } from '../components/shell/StateView'
-import { Badge, Image, mergeClasses } from '@fluentui/react-components'
+import { Image, mergeClasses } from '@fluentui/react-components'
+import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
 import { DialogWrap } from '../components/ui/Dialog'
@@ -173,9 +174,8 @@ function ImageBedContent({ status }: { status: StatusData }) {
     <AppFrame title="图床">
       <PageHeader
         title="图床"
-        description={`拖拽或点击上传图片，自动生成外链。当前绑定 ${status.source_name || '已绑定存储源'}。`}
         actions={<>
-          <Badge appearance="tint" color="success">正常</Badge>
+          <Badge color="green">正常</Badge>
           <Button variant="ghost" icon={<IconInfo size={16} />} onClick={() => setInfoOpen(true)}>图床信息</Button>
         </>}
       />
@@ -259,7 +259,6 @@ function ImageBedContent({ status }: { status: StatusData }) {
                     kind="empty"
                     icon={<IconImage size={22} />}
                     title="还没有上传过图片"
-                    description="上传后的图片会出现在这里，方便复制链接和管理。"
                   />
                 )
                 : <StateView kind="filtered" icon={<IconImage size={22} />} title="这个时间范围内没有图片" />
@@ -309,7 +308,7 @@ function ImageBedContent({ status }: { status: StatusData }) {
                 <span className={css.targetSummaryIcon}><IconImage size={18} /></span>
                 <div className={css.targetSummaryText}>
                   <strong>{status.source_name || '已绑定存储源'}</strong>
-                  <span>由管理员在「站点服务」中统一绑定，全站唯一</span>
+                  <span>全站唯一</span>
                 </div>
                 <span className={css.statusBadge}>正常</span>
               </div>

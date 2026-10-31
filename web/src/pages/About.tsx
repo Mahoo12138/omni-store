@@ -78,7 +78,6 @@ const sourceEndpoints = [
 const accessEndpoints = [
   { label: '网页', Icon: IconGlobe },
   { label: 'WebDAV', Icon: IconCloud },
-  { label: '文件中转', Icon: IconCloud },
   { label: 'S3', Icon: IconServer },
 ] as const
 
@@ -111,7 +110,6 @@ export function AboutPage() {
                 浏览公开网盘
               </LinkButton>
               <LinkButton to="/upload" size="large" variant="secondary">图床入口</LinkButton>
-              <LinkButton to="/transfer" search={{ view: 'send' }} size="large" variant="secondary">文件中转</LinkButton>
             </div>
           </div>
 

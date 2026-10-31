@@ -11,7 +11,7 @@ func TestValidateUserRelPathRejectsManagedNamespaceSegments(t *testing.T) {
 		want  error
 	}{
 		{".omnistore", ErrManagedNamespace},
-		{".omnistore/transfer/x", ErrManagedNamespace},
+		{".omnistore/internal/x", ErrManagedNamespace},
 		{"normal/.omnistore/x", ErrManagedNamespace},
 		{"a/b/.omnistore", ErrManagedNamespace},
 		{".OMNISTORE", ErrManagedNamespace},
