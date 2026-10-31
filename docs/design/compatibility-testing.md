@@ -91,3 +91,21 @@ minimal repro
 ## 2026-11-01 RC 候选
 
 `v2.0.0-rc.1` 的 Release Gate 与 crashcheck 已通过；本表真实客户端仍未执行，RC 不将 API 测试或 Chromium 结果外推为客户端兼容通过。2.0.0 正式发布前仍需补齐上述 WebDAV/S3/PicGo 真实客户端与 MP4、Safari/Firefox、生产代理验收。
+
+## 2026-11-01 真实客户端实测
+
+环境：macOS 26.6.2 / arm64，独立临时实例与动态端口，不经过生产反向代理。
+
+| 客户端/场景 | 结果 | 边界 |
+| --- | --- | --- |
+| rclone 1.75.2 WebDAV：list、upload、overwrite、Range、Unicode rename、download、delete | passed | 使用 Basic Auth；未覆盖 Windows 客户端 |
+| macOS mount_webdav：mount、list、upload、read、Unicode rename、delete | passed | Finder 使用同一系统 WebDAV 客户端；未做 GUI 交互 |
+| AWS CLI 2.39.3 S3：ListBuckets、HeadBucket、put/get/head、overwrite、Unicode、presign、12 MB multipart、delete | passed | 直连本地 HTTP endpoint，未经 CDN |
+| rclone 1.75.2 S3：list、upload、overwrite、Unicode、download、12 MB multipart、delete | passed（需 `--s3-list-version 2 --s3-no-check-bucket`） | 默认配置使用 ListObjects V1 并触发 CreateBucket，均返回 501；是 GA 阻塞项 |
+| s3cmd 2.4.0：ListBuckets、put、get、info（HEAD）、delete | partial | 桶内列举被 GetBucketLocation 501 阻断 |
+| MinIO Client 2025-08-13：ListBuckets | failed | 对象列举/上传/删除均被 GetBucketLocation 501 阻断 |
+| PicGo 3.2.0 CLI + web-uploader 1.1.1：上传、直链读取 | passed | 上传返回 200，直链为 image/png 且字节一致；CLI 进程未自行退出，上传完成后被终止 |
+| Windows Explorer、Cyberduck、WinSCP、RaiDrive、Mountain Duck | not-tested | 需要 Windows 环境 |
+| MP4、Safari/Firefox、生产反向代理/CDN | not-tested | Chromium WebM 结果不外推 |
+
+GA 前需要补：S3 `GetBucketLocation`、ListObjects V1 或明确要求客户端配置；然后重跑上述 S3 客户端。
